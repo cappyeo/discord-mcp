@@ -9,7 +9,13 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "inputs": ["src/**", "test/**", "test-fixtures/**", "vitest.config.ts", "vitest.global-setup.ts"]
+      "inputs": [
+        "src/**",
+        "test/**",
+        "test-fixtures/**",
+        "vitest.config.ts",
+        "vitest.global-setup.ts"
+      ]
     },
     "bench": {
       "outputs": [],

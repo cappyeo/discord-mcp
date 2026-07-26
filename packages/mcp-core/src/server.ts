@@ -1055,12 +1055,28 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     const tools: McpTool[] = [];
     for (const tool of toolStore.values()) {
       const inputSchema = z.object(tool.inputSchema);
+      const jsonSchema = z.toJSONSchema(inputSchema, {
+        target: 'draft-2020-12',
+      }) as McpTool['inputSchema'];
+      // `__confirm` is deliberately absent from every tool's zod inputSchema
+      // (it is an authorization flag, not a handler parameter — handlers must
+      // never see it). But z.toJSONSchema emits `additionalProperties: false`,
+      // so a spec-conforming client cannot legally send it, and an agent
+      // reading tools/list has no way to discover it. Advertise it here, on
+      // the gated tools only, without it ever entering the zod parse path.
+      if (tool.preconditions.includes('confirm_required')) {
+        jsonSchema.properties ??= {};
+        (jsonSchema.properties as Record<string, unknown>).__confirm = {
+          type: 'boolean',
+          description:
+            'Set true to authorize this destructive operation. Also requires the server ' +
+            'to run with MCP_DRY_RUN=false; otherwise a DRY_RUN_PREVIEW is returned.',
+        };
+      }
       tools.push({
         name: tool.name,
         description: tool.description,
-        inputSchema: z.toJSONSchema(inputSchema, {
-          target: 'draft-2020-12',
-        }) as McpTool['inputSchema'],
+        inputSchema: jsonSchema,
         annotations: tool.annotations,
       });
     }
@@ -1136,6 +1152,12 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       meta: new Map<string, unknown>([
         ['toolPiece', tool],
         ['toolPreconditions', tool.preconditions],
+        // Pre-validation payload. validateMiddleware replaces ctx.args with
+        // the zod-parsed object, which strips keys no inputSchema declares —
+        // including the `__confirm` authorization flag. This is the only
+        // surviving copy, and it also covers mcp_pipeline (which re-enters
+        // invokeTool per step). Read by ConfirmRequired.
+        ['rawArgs', args ?? {}],
       ]),
     };
     const dispatch = compose(middlewares, async (c) => {

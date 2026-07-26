@@ -29,10 +29,6 @@ export default defineTool({
       .max(512)
       .optional()
       .describe('Reason recorded in audit log (X-Audit-Log-Reason header)'),
-    confirm: z
-      .boolean()
-      .optional()
-      .describe('Must be true to actually perform the destructive action'),
   },
   outputSchema: {
     deleted: z.literal(true),

@@ -32,13 +32,16 @@ const bulkCommandShape = z.object({
 export default defineTool({
   name: 'commands_bulk_overwrite_global',
   category: 'commands',
+  preconditions: ['confirm_required'] as const,
   description: [
     '**Purpose**: Atomically REPLACE the entire global command registry. Any commands not in `commands` are deleted.',
     '',
     '**When to use**:',
     '- CI deploy: re-sync the canonical command list from source-of-truth.',
     '',
-    '**Caution**: this is a wholesale replace — call `commands_list_global` first to confirm scope.',
+    '**Caution**: this is a wholesale replace — call `commands_list_global` first to confirm scope. An EMPTY array deletes every global command.',
+    '',
+    '**Security**: gated by `ConfirmRequired`. Pass `__confirm:true` AND set `MCP_DRY_RUN=false` to actually apply the replace.',
     '',
     '**Returns**: `{commands:[{id, name, type}], count}`.',
   ].join('\n'),
@@ -46,7 +49,9 @@ export default defineTool({
     application_id: ApplicationId.describe('Bot/app application ID'),
     commands: z
       .array(bulkCommandShape)
-      .describe('Full set of commands to register globally (replaces existing registry).'),
+      .describe(
+        'Full set of commands to register globally (REPLACES the existing registry; an empty array deletes every command).',
+      ),
   },
   outputSchema: {
     commands: z.array(z.object({ id: z.string(), name: z.string(), type: z.number().int() })),
@@ -54,7 +59,7 @@ export default defineTool({
   },
   annotations: {
     readOnlyHint: false,
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
     openWorldHint: true,
   },

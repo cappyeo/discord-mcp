@@ -23,10 +23,6 @@ export default defineTool({
   inputSchema: {
     application_id: ApplicationId.describe('Application owning the emoji'),
     emoji_id: EmojiId.describe('Emoji to delete'),
-    confirm: z
-      .boolean()
-      .optional()
-      .describe('Must be true to actually perform the destructive action'),
   },
   outputSchema: {
     deleted: z.literal(true),

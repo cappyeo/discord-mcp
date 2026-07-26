@@ -18,7 +18,12 @@ export class ConfirmRequired extends Precondition {
   public override async run(ctx: MiddlewareContext<unknown>): Promise<void> {
     const dryRunActive = this.env.MCP_DRY_RUN !== 'false';
     const args = ctx.args as Record<string, unknown>;
-    const confirmed = args.__confirm === true;
+    // `__confirm` is not declared by any tool inputSchema, so validateMiddleware
+    // (which runs first and replaces ctx.args with the zod-parsed object) strips
+    // it. server.ts stashes the pre-validation payload under `rawArgs`; fall back
+    // to ctx.args for direct run() calls that bypass the middleware chain.
+    const raw = (ctx.meta.get('rawArgs') as Record<string, unknown> | undefined) ?? args;
+    const confirmed = raw.__confirm === true;
 
     if (dryRunActive || !confirmed) {
       const preview: Record<string, unknown> = {};

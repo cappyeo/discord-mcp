@@ -20,7 +20,7 @@ export default defineTool({
     '- Single message → use `messages_delete`.',
     '- Messages older than 14 days — Discord rejects with 400.',
     '',
-    '**Example**: `{channel_id:"111122223333444455", message_ids:["m1","m2",...], confirm:true, __confirm:true}`',
+    '**Example**: `{channel_id:"111122223333444455", message_ids:["m1","m2",...], __confirm:true}`',
     '',
     '**Returns**: `{deleted, channel_id, count}`.',
     '',
@@ -39,10 +39,6 @@ export default defineTool({
       .max(512)
       .optional()
       .describe('Reason recorded in audit log (X-Audit-Log-Reason header)'),
-    confirm: z
-      .boolean()
-      .optional()
-      .describe('Must be true to actually perform the destructive action'),
   },
   outputSchema: {
     deleted: z.literal(true),
