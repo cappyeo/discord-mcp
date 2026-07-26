@@ -133,13 +133,17 @@ use the dedicated bulk tool for that resource instead.
              "error": { "code": "DISCORD_403", "message": "Missing MANAGE_EVENTS", "retriable": false },
              "duration_ms": 88
            },
-           { "id": "grant", "tool": "members_add_role", "status": "skipped", "duration_ms": 0 }
          ],
          "variables": { "announce": { "message_id": "888899990000111122" } },
          "total_duration_ms": 230,
          "aborted": true
        }
        ```
+
+       Note that `grant` is **absent**, not `"skipped"`. On an abort the
+       executor breaks out of the loop, so steps after the failing one are
+       never dispatched and never appear in `steps`. `"skipped"` is emitted
+       only for a step whose `if` condition evaluated falsy.
      </TabItem>
    </Tabs>
 
@@ -147,9 +151,10 @@ use the dedicated bulk tool for that resource instead.
 
 ## Error handling
 
-- **Default abort-on-error.** When a step returns an error, subsequent steps are
-  marked `skipped` and `aborted: true`. The agent sees exactly which step
-  blew up and what the partial state is.
+- **Default abort-on-error.** When a step returns an error, the pipeline sets
+  `aborted: true` and stops immediately. Subsequent steps are not dispatched
+  and do **not** appear in `steps` — the array simply ends at the failing step.
+  The agent sees exactly which step blew up and what the partial state is.
 - **Continue past errors.** Set `continue_on_error: true` on a step to keep
   going. Use sparingly — it implies later steps must tolerate missing
   interpolation values.

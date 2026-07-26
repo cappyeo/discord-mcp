@@ -1,6 +1,6 @@
 ---
 title: Sampling
-description: How discord-mcp uses MCP sampling to call back into the client's LLM. The 5 intelligence tools, the host_llm_should_process fallback, the prompt-injection defense.
+description: How discord-mcp uses MCP sampling to call back into the client's LLM. The 5 intelligence tools — summarization, classification, entity extraction, moderation, reply drafting — the host_llm_should_process fallback, the prompt-injection defense.
 sidebar:
   order: 8
 ---
@@ -13,8 +13,9 @@ MCP "sampling" is the capability that lets a server **call the client's LLM**.
 It inverts the usual flow: instead of "client asks LLM, LLM picks tool, tool
 runs," it's "tool runs, tool asks client to ask its LLM, tool uses the
 answer." discord-mcp uses sampling for the **5 intelligence tools** —
-summarization, sentiment, topic extraction, etc. — so the operator gets
-LLM-grade output without the server having any LLM API key of its own.
+summarization, classification, entity extraction, moderation, and reply
+drafting — so the operator gets LLM-grade output without the server having
+any LLM API key of its own.
 
 ## Why sampling
 
@@ -39,11 +40,11 @@ operator already chose.
 
 | Tool | What it does |
 | ---- | ------------ |
-| `intelligence_summarize_messages` | Compress recent channel history into a paragraph. |
-| `intelligence_classify_sentiment` | Tag messages as positive / neutral / negative. |
-| `intelligence_extract_topics` | Pull out 3–5 dominant topics from a message batch. |
-| `intelligence_detect_threats` | Flag potential moderation concerns (toxicity, spam, raid signals). |
-| `intelligence_compose_reply` | Draft a context-aware reply for the operator to review. |
+| `intelligence_summarize_channel` | Compress recent channel history into a paragraph. |
+| `intelligence_classify_messages` | Multi-label classification of a message batch. |
+| `intelligence_extract_entities` | Pull structured entities out of a message batch. |
+| `intelligence_moderate_content` | Policy-aware moderation assessment of content. |
+| `intelligence_draft_response` | Draft a context-aware reply for the operator to review. |
 
 All 5 follow the same shape:
 

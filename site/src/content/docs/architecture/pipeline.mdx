@@ -25,7 +25,7 @@ sequenceDiagram
   participant Pipeline as mcp_pipeline
   participant ToolA as messages_send
   participant ToolB as events_create
-  participant ToolC as roles_add
+  participant ToolC as members_add_role
   participant Discord
 
   Agent->>Pipeline: tools/call mcp_pipeline (3 steps)
@@ -33,7 +33,7 @@ sequenceDiagram
   ToolA->>Discord: POST /messages
   Discord-->>ToolA: {id: "111122223333444455", ...}
   ToolA-->>Pipeline: result
-  Pipeline->>Pipeline: interpolate {{step1.id}} into step 2
+  Pipeline->>Pipeline: interpolate {{step_0.id}} into step 2
   Pipeline->>ToolB: step 2
   ToolB->>Discord: POST /scheduled-events
   Discord-->>ToolB: {id: "...", ...}
@@ -42,11 +42,11 @@ sequenceDiagram
   ToolC->>Discord: PUT /members/.../roles/...
   Discord-->>ToolC: 204
   ToolC-->>Pipeline: result
-  Pipeline-->>Agent: { results: [step1, step2, step3] }
+  Pipeline-->>Agent: { steps: [...], variables, total_duration_ms, aborted }
 ```
 
 Sequential by default. Each step can read **any earlier step's output** via
-the `{{stepN.path}}` syntax; later steps see the resolved values.
+the `{{step_id.path}}` syntax; later steps see the resolved values.
 
 See [`pipeline-multistep` recipe](/discord-mcp/recipes/pipeline-multistep/)
 for a worked example.
@@ -55,20 +55,44 @@ for a worked example.
 
 Source: [`packages/mcp-core/src/pipeline/interpolate.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/pipeline/interpolate.ts)
 
+Every step has an **id**. Give it one explicitly with `"id": "announce"`, and
+reference it as `{{announce.field}}`. If you omit `id`, the executor assigns
+`step_<index>` using a **0-based** index — the first step is `step_0`, the
+second `step_1`.
+
+<Aside type="caution">
+There is no `step1`. A template like `{{step1.field}}` resolves to nothing
+and, because it is a whole-string template, the arg becomes `undefined` —
+which is then sent to Discord (or dropped by the tool's zod schema). Name your
+steps explicitly; it is the only readable way to write a pipeline.
+</Aside>
+
 Syntax:
 
-- `{{stepN.field}}` — read field on the Nth step's result (1-indexed).
-- `{{stepN.field.subfield}}` — dotted path traversal.
-- `{{stepN.array[0]}}` — bracket index for arrays.
-- `{{stepN.array[0].id}}` — combine.
+- `{{announce.field}}` — read a field on the step whose id is `announce`.
+- `{{announce.field.subfield}}` — dotted path traversal.
+- `{{announce.array[0]}}` — bracket index for arrays.
+- `{{announce.array[0].id}}` — combine.
+- `save_as: "alias"` on a step also publishes its result under `alias`.
 
-Resolution happens at **dispatch time** for each step: the args are deep-cloned,
-every string is scanned for `{{...}}`, and matches are replaced from the
-results map. Resolution failures (path not found, wrong type) raise an
-`INTERPOLATION_FAILED` error and abort the pipeline; nothing else runs.
+Resolution happens at **dispatch time** for each step: the args are walked
+recursively and every string is scanned for `{{...}}`.
 
-Resolved values keep their type — `{{step1.count}}` evaluating to a number
-yields a real number in the next step's args, not the string `"42"`.
+Unresolvable paths do **not** raise and do **not** abort. Two behaviors,
+depending on the shape of the string:
+
+- **Whole-string template** (`"{{missing.path}}"`) — the arg becomes
+  `undefined`.
+- **Embedded template** (`"see {{missing.path}} now"`) — the literal
+  `{{missing.path}}` text is left in place.
+
+Either way the step still runs, so a typo'd path surfaces as a downstream
+validation error or as literal braces posted into Discord — not as an
+interpolation error.
+
+Resolved values keep their type — `{{announce.count}}` evaluating to a number
+yields a real number in the next step's args, not the string `"42"`, as long
+as the template is the whole string.
 
 ## Recursion guard
 
@@ -99,7 +123,7 @@ Three reasons:
    child spans) in OTel. Audit emits **one event per leaf**, but the parent
    span correlates them so you can reconstruct the workflow trivially.
 
-3. **Captured intermediate state**: `step1.id` gets passed into step 2
+3. **Captured intermediate state**: `announce.message_id` gets passed into step 2
    without the agent ever seeing it. Reduces token usage on the agent side
    (no need to round-trip "what's the message ID? OK now use it") and
    eliminates whole classes of "agent dropped a snowflake mid-prompt"
@@ -107,34 +131,54 @@ Three reasons:
 
 ## Failure behavior
 
-Three failure modes:
+Two failure modes:
 
-- **Pre-dispatch**: an interpolation pointing at a missing path. Raised as
-  `INTERPOLATION_FAILED` before any tool runs. No partial state.
 - **Mid-pipeline**: step N fails (validation, precondition, REST error).
-  The pipeline captures the error in the results array, marks the pipeline
-  as failed, and **does not run subsequent steps**. Earlier steps' Discord
-  side effects already happened — the result envelope tells you exactly
-  what completed.
+  The pipeline records the error on that step in the `steps` array, sets
+  `aborted: true`, and **breaks** — subsequent steps are never dispatched and
+  never appear in `steps` at all. Earlier steps' Discord side effects already
+  happened; the `steps` array tells you exactly what completed. Set
+  `continue_on_error: true` on a step to keep going past its failure instead.
 - **Bulkhead saturation**: if a leaf fails with `bulkhead_saturated`, the
   pipeline propagates it. There is no automatic retry of the saturated
   step inside the pipeline (cockatiel's retry already ran for that step).
+
+Interpolation is not a failure mode — see
+[Variable interpolation](#variable-interpolation) for what an unresolvable
+path does instead.
 
 The result envelope shape:
 
 ```json
 {
-  "results": [
-    { "step": 1, "tool": "messages_send", "ok": true, "data": { ... } },
-    { "step": 2, "tool": "events_create", "ok": true, "data": { ... } },
-    { "step": 3, "tool": "roles_add", "ok": false, "error": { "code": "..." } }
+  "steps": [
+    { "id": "announce", "tool": "messages_send", "status": "success", "result": { "...": "..." }, "duration_ms": 142 },
+    { "id": "event", "tool": "events_create", "status": "error", "error": { "code": "DISCORD_PERMISSION", "message": "...", "retriable": false }, "duration_ms": 88 }
   ],
-  "summary": { "total": 3, "succeeded": 2, "failed": 1 }
+  "variables": { "announce": { "...": "..." } },
+  "total_duration_ms": 230,
+  "aborted": true
 }
 ```
 
-The agent can use `summary.failed > 0` as the single boolean to decide
-whether to retry / surface to the human.
+Per-step `status` is `"success"`, `"error"`, or `"skipped"` (an `if` condition
+that evaluated falsy). `result` is present only on success, `error` only on
+error. `variables` is the interpolation namespace at completion — successful
+steps only.
+
+To decide whether to retry / surface to the human, branch on:
+
+```js
+const failed = result.aborted === true
+  || result.steps.some((s) => s.status === 'error');
+```
+
+<Aside type="caution">
+There is no `summary` object and no `ok` field on a step. Code that branches
+on `summary.failed > 0` reads `undefined > 0`, which is `false`, so **every
+pipeline — including one that aborted on its first step — looks successful.**
+Use `aborted` or scan `steps` for `status === 'error'`.
+</Aside>
 
 ## Source map
 

@@ -1,6 +1,6 @@
 ---
 title: Environment variables
-description: Full reference for the 23+ environment variables that drive discord-mcp at runtime — token, logging, telemetry, retry/timeout, circuit/bulkhead, audit.
+description: Full reference for the 27 environment variables that drive discord-mcp at runtime — token, safety, logging, gateway, telemetry, retry/timeout, circuit/bulkhead, audit.
 sidebar:
   order: 2
 ---
@@ -10,13 +10,21 @@ import { Aside } from '@astrojs/starlight/components';
 # Environment variables
 
 discord-mcp's runtime behavior is **fully controlled by environment variables**.
-There are no config files. There is no mutable runtime state. The Zod schema
-in [`packages/mcp-core/src/config.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/config.ts)
-is the single source of truth — every value below comes from there.
+There are no config files. There is no mutable runtime state.
 
+Most variables come from the Zod schema in
+[`packages/mcp-core/src/config.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/config.ts).
 The schema parses `process.env` at startup. Invalid values cause `serve` to
 exit `1` with a per-issue error list; `doctor`'s `env-vars` check is the
 canonical reporter.
+
+<Aside type="caution">
+**One variable is NOT in the schema.** `MCP_DRY_RUN` is read straight off
+`process.env` by the `ConfirmRequired` precondition, so it is never parsed,
+never range-checked, and never reported by `doctor`. It is documented under
+[Safety](#safety) below, with the failure modes that follow from being
+unvalidated.
+</Aside>
 
 <Aside type="note">
 **Boolean strings**: most flags accept the literal strings `1`, `true`, `yes`
@@ -34,6 +42,50 @@ literal string `false` (including unset) keeps them on.
 - **Description**: Discord bot token used to authenticate against the REST API. Accepts both `Bot <token>` and a bare token. Treated as a credential — never logged, redacted from audit events.
 - **Example**: `DISCORD_TOKEN="MTQwOTU3NjE..."` or `DISCORD_TOKEN="Bot MTQwOTU3NjE..."`
 - **Related**: This is the only required variable. Everything else has defaults.
+
+## Safety
+
+### `MCP_DRY_RUN`
+
+- **Type**: literal string comparison — the check is `env.MCP_DRY_RUN !== 'false'`
+- **Default**: dry-run **ON** (unset counts as on)
+- **Description**: The operator half of the [confirmation gate](/discord-mcp/architecture/confirmation/). Read by `ConfirmRequired`, which is attached to **29 destructive tools**. While dry-run is on, those 29 tools throw `DRY_RUN_PREVIEW` with their redacted arguments instead of executing. Set the literal string `false` to allow them to run — they additionally require `__confirm:true` per call.
+- **Example**: `MCP_DRY_RUN=false`
+- **Related**: `MCP_DRY_RUN` has **no effect on the other 163 tools**. `messages_send`, `members_add_role`, `webhooks_execute` and every other non-gated mutation execute regardless of this setting. It is not a global read-only switch.
+
+<Aside type="danger">
+**`doctor` does not validate `MCP_DRY_RUN`.** It is not in the Zod schema, so
+the `env-vars` check never sees it and no typo is ever reported.
+
+The comparison is against the literal string `false` and nothing else, so
+`MCP_DRY_RUN=fasle`, `MCP_DRY_RUN=0`, `MCP_DRY_RUN=no`, and
+`MCP_DRY_RUN=disabled` all leave dry-run **ON**. That direction is
+deliberate — a typo fails closed, and a deployment that meant to enable
+real execution loudly does nothing instead of quietly deleting things.
+
+The cost is the mirror image: an operator who believes they enabled
+execution gets a server where every destructive tool no-ops, with no
+diagnostic pointing at the typo. If destructive tools keep returning
+`DRY_RUN_PREVIEW`, check this value byte-for-byte first.
+</Aside>
+
+### `MCP_CATEGORIES`
+
+- **Type**: comma-separated string of tool category names
+- **Default**: (unset — every category allowed)
+- **Description**: Allowlist of tool categories the server will execute. Enforced by `categoryMiddleware`, which runs on every call — it is not a per-tool opt-in. When unset or empty, no filtering happens. When set, tools outside the list are omitted from `tools/list` entirely, and a direct call to one is rejected with `SCOPE_REJECTED` naming the missing category and the granted list. Entries are trimmed and empty entries are ignored, so `" messages , , channels "` is equivalent to `messages,channels`.
+- **Example**: `MCP_CATEGORIES=messages,channels,members`
+- **Related**: Category names are the 28 directory names under `packages/mcp-core/src/tools/` — see the [tools index](/discord-mcp/tools/). The `meta` category is always reachable so `mcp_pipeline` never disappears from a scoped deployment. Unknown names **fail fast**: the server refuses to boot and lists the real categories, rather than silently disabling a whole surface.
+
+## Gateway
+
+### `GATEWAY`
+
+- **Type**: boolean string (`1`, `true`, `yes` are truthy; everything else, including unset, is false)
+- **Default**: `false`
+- **Description**: Enable the Discord Gateway WebSocket client and its resource subscriptions. When true the server lazy-imports `discord.js`, opens a Gateway connection, and accepts `resources/subscribe` on the [five subscribable URIs](/discord-mcp/architecture/gateway/). When false the server is REST-only and pays no `discord.js` import cost.
+- **Example**: `GATEWAY=1`
+- **Related**: `discord-mcp serve --gateway` is exactly equivalent — the CLI flag sets `GATEWAY=1` and nothing else. Use the env var when your MCP client config sets `env` but not `args`.
 
 ## Logging
 
@@ -166,15 +218,9 @@ Plan 8 Phase C. The retry policy wraps every Discord REST verb via cockatiel.
 
 - **Type**: integer, 1000–120000 (ms)
 - **Default**: `30000`
-- **Description**: Per-call timeout for ordinary tool invocations. Includes the full middleware chain plus the Discord REST call.
+- **Description**: Timeout for a **single Discord REST request**. The policy built by `buildPolicy` wraps only the five `@discordjs/rest` verbs (`get`, `post`, `patch`, `put`, `delete`), so this budget covers the HTTP call and nothing else — no middleware, no validation, no precondition, and not the tool handler around the call. A tool that issues two REST calls gets this budget twice, and a tool that issues none is not timed at all.
 - **Example**: `MCP_TIMEOUT_DEFAULT_MS=10000`
-
-### `MCP_TIMEOUT_LONG_MS`
-
-- **Type**: integer, 1000–300000 (ms)
-- **Default**: `60000`
-- **Description**: Timeout for tools tagged "long" (intelligence sampling, bulk operations). Longer than `MCP_TIMEOUT_DEFAULT_MS` because LLM-backed sampling can legitimately take 30+ seconds.
-- **Example**: `MCP_TIMEOUT_LONG_MS=120000`
+- **Related**: this is the only timeout variable. There is no separate long-operation budget.
 
 ## Resilience — Circuit breaker + Bulkhead
 
@@ -245,6 +291,11 @@ A minimal production-ish env file:
 ```bash
 # Required
 DISCORD_TOKEN="Bot MTQwOTU3NjE..."
+
+# Allow the 29 confirm-gated tools to actually execute. Without this line
+# every one of them returns DRY_RUN_PREVIEW forever, even with __confirm:true.
+# The literal string `false` is the only value that works.
+MCP_DRY_RUN=false
 
 # Tighter retry, bulkhead at 50
 MCP_RETRY_MAX_ATTEMPTS=5

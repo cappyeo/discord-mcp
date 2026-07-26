@@ -29,10 +29,12 @@ Run `discord-mcp migrate --list` to see all adapters, or `discord-mcp migrate --
 # 1. Install
 npm install -g @discord-mcp/cli  # or use npx
 
-# 2. Bootstrap config for your MCP client
-discord-mcp init --client claude-desktop --token "Bot YOUR.BOT.TOKEN"
+# 2. Print a config snippet for your MCP client, then merge it into that
+#    client's config file yourself (init writes nothing without --output)
+discord-mcp init --client claude-desktop --token "YOUR.BOT.TOKEN"
 
-# 3. Verify configuration
+# 3. Verify configuration (doctor reads process.env, not the client config)
+export DISCORD_TOKEN="YOUR.BOT.TOKEN"
 discord-mcp doctor --online
 
 # 4. Run (or let your MCP client launch it)
@@ -66,7 +68,7 @@ Bootstrap configuration + generate MCP client config snippet.
 **Flags**:
 - `--token <token>` — Discord bot token (or `${env:DISCORD_TOKEN}` placeholder)
 - `--client <id>` — Client: `claude-desktop`, `claude-code`, `cursor`, or `generic`
-- `--output <path>` — Write snippet to file (default: stdout)
+- `--output <path>` — Write snippet to file (default: stdout). The snippet is a **complete** top-level JSON document and truncates the target, so never point this at an existing `claude_desktop_config.json` — it would drop your other MCP servers. Merge by hand.
 - `--force` — Overwrite existing output file
 - `--gateway` — Enable Discord Gateway in generated config
 - `--json` — JSON output for CI
@@ -78,9 +80,12 @@ When stdin is a TTY and flags are missing, init runs an interactive wizard.
 Migrate from another Discord/MCP setup. Exits 0 (all mapped), 1 (some unmapped), 2 (errors).
 
 **Flags**:
-- `--from <adapter>` — Source adapter id (run without `--from` to list)
+- `--list` — List every registered adapter. Informational — always exits 0, so it is the form to use in CI.
+- `--from <adapter>` — Source adapter id
 - `--source <path>` — Path to source repo (default: cwd)
 - `--json` — JSON output
+
+A bare `discord-mcp migrate` also prints the adapter list, but it is the legacy "missing `--from`" error path and exits 2. Use `--list` for discovery.
 
 **Available adapters**: `hubdustry-go-mcp` (reference), `pasympa`, `quadslab`, `discord-ops`. Run `discord-mcp migrate --list` for the live registry.
 

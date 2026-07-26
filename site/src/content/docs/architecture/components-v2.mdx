@@ -35,16 +35,22 @@ Nesting rules are enforced by the validator — see below.
 | `components_v2_build_container` | yes | Build a Container scaffold. |
 | `components_v2_build_section` | yes | Build a Section scaffold with optional accessory. |
 | `components_v2_build_media_gallery` | yes | Build a MediaGallery from URLs. |
-| `components_v2_build_action_row` | yes | Build an ActionRow with up to 5 components. |
 | `components_v2_validate` | yes | Run the schema validator against a built tree. |
 | `components_v2_preview` | yes | Render a client-side text preview of the tree. |
 | `components_v2_send` | no | Send a message with a V2 component tree. |
+| `components_v2_edit` | no | Edit an existing message's V2 component tree (`destructiveHint: false`). |
 | `components_v2_send_from_template` | no | Send from one of 5 pre-built templates. |
+
+There is no **build_action_row** tool. ActionRow nodes are passed
+in hand-written, as entries in the `components` array of
+`components_v2_build_container` (or of `components_v2_send` directly) — they
+have no dedicated builder.
 
 The `build_*` tools are pure construction helpers — they don't hit Discord;
 they just produce well-shaped JSON the agent can stitch together. `validate`
-and `preview` are also Discord-free. Only `send` and
-`send_from_template` make REST calls.
+and `preview` are also Discord-free. Three tools make REST calls: `send` and
+`send_from_template` (`POST /channels/:id/messages`) and `edit`
+(`PATCH /channels/:id/messages/:id`).
 
 See [`components-v2-announcement` recipe](/discord-mcp/recipes/components-v2-announcement/)
 for an end-to-end example.
@@ -140,4 +146,4 @@ mutually exclusive with the legacy embed path.
 
 - [`components-v2-announcement` recipe](/discord-mcp/recipes/components-v2-announcement/) — full end-to-end build + validate + send.
 - [Architecture → Pipeline](/discord-mcp/architecture/pipeline/) — atomically chain a V2 send with role grants and event creation.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — `components_v2_send` is destructive (writes to the channel) and requires `__confirm:true`.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — note that `components_v2_send` / `_edit` / `_send_from_template` are **not** confirm-gated: they write to the channel on the first call, with no `__confirm` and regardless of `MCP_DRY_RUN`.

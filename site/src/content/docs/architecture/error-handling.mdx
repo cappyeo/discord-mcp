@@ -26,7 +26,7 @@ DiscordMcpError                   (base — all custom errors extend this)
 │  ├─ DiscordAuthError            (DISCORD_AUTH_INVALID)
 │  ├─ DiscordCloudflareBlocked    (DISCORD_CLOUDFLARE_BLOCKED)
 │  ├─ ScopeRejectedError          (SCOPE_REJECTED)
-│  ├─ GuildNotAllowedError        (GUILD_NOT_ALLOWED)
+│  ├─ GuildNotAllowedError        (GUILD_NOT_ALLOWED)   ← never constructed
 │  ├─ DryRunPreview               (DRY_RUN_PREVIEW)
 │  └─ CancelledError              (CANCELLED)
 └─ DiscordServerError             (server's fault — 5xx-equivalent)
@@ -40,6 +40,13 @@ Source:
 [`errors/base.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts),
 [`errors/client.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts),
 [`errors/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts).
+
+`GuildNotAllowedError` is defined and formatted but **no code path ever
+constructs it**. There is no guild allowlist: no `ALLOWED_GUILDS` env var is
+read anywhere, and no layer compares a guild id against one. An agent can act
+on every guild the bot has joined. Per-guild restriction is **deferred
+post-1.0** — the class and its `GUILD_NOT_ALLOWED` code are reserved for that
+work. Treat this row as a placeholder, not a control you can rely on.
 
 The split mirrors HTTP semantics: client errors are deterministic (the same
 input will fail the same way; the agent must change the input or the

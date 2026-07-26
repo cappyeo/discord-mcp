@@ -47,37 +47,44 @@
     "postpack": "node -e \"try{require('node:fs').unlinkSync('README.md');require('node:fs').unlinkSync('LICENSE');}catch{}\""
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.12"
   },
   "dependencies": {
-    "@discordjs/rest": "^2.4.0",
-    "@modelcontextprotocol/sdk": "^1.20.0",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/api-logs": "^0.216.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.216.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
-    "@opentelemetry/resources": "^2.0.0",
-    "@opentelemetry/sdk-metrics": "^2.0.0",
-    "@opentelemetry/sdk-trace-base": "^2.0.0",
+    "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.34.0",
-    "@sapphire/pieces": "^4.4.1",
     "cockatiel": "^3.2.1",
     "discord-api-types": "^0.38.0",
-    "pino": "^9.5.0",
+    "pino": "^9.5.0"
+  },
+  "peerDependencies": {
+    "@discordjs/rest": "^2.4.0",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "@sapphire/pieces": "^4.4.1",
+    "discord.js": "^14.16.3",
     "zod": "^4.0.0"
   },
-  "optionalDependencies": {
-    "discord.js": "^14.16.3"
+  "peerDependenciesMeta": {
+    "discord.js": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@discord-mcp/server-mocks": "workspace:*",
+    "@discordjs/rest": "^2.4.0",
+    "@modelcontextprotocol/sdk": "^1.20.0",
     "@mswjs/interceptors": "^0.41.3",
     "@opentelemetry/context-async-hooks": "^2.0.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@sapphire/pieces": "^4.4.1",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "3.2.4",
+    "discord.js": "^14.16.3",
     "msw": "^2.7.0",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "zod": "^4.0.0"
   }
 }

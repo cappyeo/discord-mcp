@@ -3,7 +3,7 @@ title: Quickstart
 description: Get discord-mcp running with Claude Desktop in 5 minutes.
 ---
 
-import { Steps } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
 # Quickstart
 
@@ -25,35 +25,76 @@ You will need:
    This puts a `discord-mcp` binary on your `$PATH`. Use `pnpm add -g` or `yarn global add` if
    you prefer; see [Installation](/discord-mcp/start/installation/) for details.
 
-2. **Generate your client config.**
+2. **Generate your client config snippet and merge it by hand.**
 
    ```bash
-   discord-mcp init --client claude-desktop --token "Bot YOUR.TOKEN.HERE"
+   discord-mcp init --client claude-desktop --token "YOUR.TOKEN.HERE"
    ```
 
-   The `init` subcommand writes a snippet into Claude Desktop's
-   `claude_desktop_config.json`, registering `discord-mcp` as an MCP server with stdio
-   transport. The token is stored in the `mcpServers.discord-mcp.env.DISCORD_TOKEN` field.
+   `init` **prints** a snippet to stdout. It does not touch any file unless you
+   pass `--output`. Copy the `mcpServers` entry it prints into Claude Desktop's
+   config, merging it with whatever is already there:
 
-   Your token must include the `Bot` prefix. Tokens without it are rejected at startup.
+   | OS | Path |
+   | -- | ---- |
+   | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+   | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+   | Linux | `~/.config/Claude/claude_desktop_config.json` |
 
-3. **Verify the install with `doctor`.**
+   If the file does not exist yet, create it with the printed content as-is.
+
+   <Aside type="danger">
+   Do **not** point `--output` at `claude_desktop_config.json`. `init` writes a
+   complete top-level JSON document containing only the `discord-mcp` entry and
+   truncates the target file — so `--output <your config> --force` **deletes
+   every other MCP server you have configured**. Merge by hand.
+   </Aside>
+
+   The `Bot ` prefix is optional. `discord.js` adds it when it is missing;
+   `doctor` emits a warning if you leave it off, not a failure. Passing a token
+   that already starts with `Bot ` is equally fine.
+
+3. **Export the token into your shell.**
+
+   ```bash
+   export DISCORD_TOKEN="YOUR.TOKEN.HERE"          # macOS / Linux
+   ```
+
+   ```powershell
+   $env:DISCORD_TOKEN = "YOUR.TOKEN.HERE"          # Windows PowerShell
+   ```
+
+   `doctor` reads `process.env`, not the config file you just wrote and not the
+   `--token` you passed to `init`. Without this step the next command fails with
+   `DISCORD_TOKEN is not set`.
+
+4. **Verify the install with `doctor`.**
 
    ```bash
    discord-mcp doctor --online
    ```
 
-   `doctor` checks Node version, token format, network reachability, and (with `--online`)
-   issues a `GET /users/@me` against Discord. A clean exit code zero means you're ready.
+   `doctor` checks Node version, token format, env-var parse, audit sink, client
+   capabilities, and (with `--online`) issues a `GET /users/@me` against Discord.
 
-4. **Restart Claude Desktop.**
+   The exit code is tri-state:
+
+   | Code | Meaning |
+   | ---- | ------- |
+   | `0` | Every check passed. |
+   | `1` | At least one warning, no failures — safe to continue. |
+   | `2` | At least one check failed — fix it before going further. |
+
+   A missing `Bot ` prefix produces exit `1`, which is fine.
+
+5. **Restart Claude Desktop.**
 
    Fully quit the app (the menu-bar icon, not just the window) and reopen it. On launch,
    Claude reads `claude_desktop_config.json` and spawns the `discord-mcp` server as a
    subprocess. You should see "discord-mcp" in the MCP server list under Settings →
    Developer (or via the slashed-tools indicator in the chat input).
 
-5. **Ask Claude to post a message.**
+6. **Ask Claude to post a message.**
 
    In a Claude conversation, try:
 
@@ -67,7 +108,8 @@ You will need:
 
 ## What just happened
 
-- `discord-mcp init` registered the server with Claude Desktop.
+- `discord-mcp init` printed a config snippet; you merged it into
+  `claude_desktop_config.json` yourself.
 - On launch, Claude spawned `discord-mcp` over **stdio** (no port, no daemon).
 - The first `tools/list` returned 192 tool definitions, each with a four-section
   description (`Purpose / When to use / When NOT to use / Returns`).

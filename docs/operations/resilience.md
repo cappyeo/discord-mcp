@@ -38,7 +38,7 @@ headroom on a request that will never succeed.
   `MCP_RETRY_MAX_DELAY_MS=20000`. Higher attempt count + longer cap
   protects against extended Discord outages without thrashing.
 - **Long-running bulk operations** (e.g. bulk-ban, archive sweep):
-  consider raising `MCP_TIMEOUT_LONG_MS` rather than retry count —
+  consider raising `MCP_TIMEOUT_DEFAULT_MS` rather than retry count —
   the operation that's already in flight is more valuable than
   starting over.
 
@@ -73,12 +73,11 @@ attempts to 1 turns 429 retry off (the call surfaces immediately).
 
 ## Timeouts
 
-Two budgets:
+One budget:
 
 | Var | Default | Range | Description |
 | --- | ------- | ----- | ----------- |
 | `MCP_TIMEOUT_DEFAULT_MS` | `30000` | 1000–120000 | Per-call ceiling for the standard REST path. |
-| `MCP_TIMEOUT_LONG_MS` | `60000` | 1000–300000 | For tools annotated as `long-running` (bulk/sweep ops). |
 
 Timeout fires AFTER retry — i.e. each individual attempt can take up
 to the timeout, then the policy retries (until `MAX_ATTEMPTS` is

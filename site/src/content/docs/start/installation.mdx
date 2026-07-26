@@ -9,8 +9,8 @@ discord-mcp ships as a single npm package (`@discord-mcp/cli`) that bundles the 
 
 ## Requirements
 
-- **Node.js 20.11 or newer.** The server uses native `fetch`, the `node:test` runner in
-  CI, and the AsyncLocalStorage shape stabilized in 20.11.
+- **Node.js 20.11 or newer.** The server uses native `fetch` and the
+  AsyncLocalStorage shape stabilized in 20.11.
 - A Discord bot token with the appropriate scopes for the tools you call.
 
 Check your Node version with `node --version`. If you're below 20.11, upgrade via
@@ -35,23 +35,63 @@ pnpm add -g @discord-mcp/cli
 yarn global add @discord-mcp/cli
 ```
 
-After install, `discord-mcp --version` should print the package version and `discord-mcp --help`
-should list four subcommands: `init`, `doctor`, `start`, `version`.
+## Verify the install
+
+`--version` is a **global flag**, not a subcommand:
+
+```bash
+discord-mcp --version    # prints the package version and exits
+discord-mcp --help       # prints the subcommand list
+```
+
+:::caution
+There is no `version` subcommand. `serve` is registered as commander's
+**default** subcommand, so an unrecognized first argument falls through to it —
+`discord-mcp version` does not print anything, it **boots a stdio MCP server**
+that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
+:::
+
+`discord-mcp --help` lists four subcommands:
+
+| Subcommand | What it does |
+| ---------- | ------------ |
+| `serve` | Start the stdio MCP server. **Default** — a bare `discord-mcp` runs this. |
+| `doctor` | Diagnose config, token shape, and (with `--online`) connectivity. |
+| `init` | Print an MCP client config snippet for Claude Desktop / Claude Code / Cursor / generic. |
+| `migrate` | Map another Discord MCP server's tools onto discord-mcp's. |
+
+There is no `start` subcommand either — it is `serve`. See
+[Reference → CLI](/discord-mcp/reference/cli/) for every flag.
 
 ## Optional: Gateway mode
 
 The default transport is REST-only — every tool call hits the Discord HTTP API.
-For real-time events (message creation, presence updates, voice state changes),
-discord-mcp can subscribe to the **Gateway** WebSocket via `discord.js`.
+For real-time events (presence updates, voice state changes, typing, guild
+updates), discord-mcp can subscribe to the **Gateway** WebSocket via
+`discord.js`.
 
-`discord.js` is declared as an `optionalDependency` so REST users do not pay for it.
-To enable Gateway:
+`discord.js` is not installed by default so REST users do not pay for it. It is
+lazy-imported, and it must be resolvable **from the same install as the CLI** —
+a separately global-installed package is not on another global package's module
+resolution path. Install both together:
 
 ```bash
-npm install -g discord.js
-discord-mcp start --gateway
+npm install -g @discord-mcp/cli discord.js
+discord-mcp serve --gateway
 ```
 
-When `--gateway` is set, the server lazy-imports `discord.js`, opens a Gateway connection,
-and exposes resource subscriptions (`presences`, `voice_states`, `messages` live feeds).
-See [Architecture → Gateway](/discord-mcp/architecture/) for the full integration model.
+When `--gateway` is set, the server sets `GATEWAY=1`, lazy-imports `discord.js`,
+opens a Gateway connection, and accepts `resources/subscribe` on five URIs:
+
+- `discord://guild/{id}/info`
+- `discord://voice/{guild_id}/state`
+- `discord://channel/{id}/typing`
+- `discord://guild/{id}/members/online`
+- `discord://guild/{id}/audit-log`
+
+Note that **message events are not among them** — there is no message handler,
+so the Gateway does not push message creations, edits, or deletions. Read
+messages with the `messages_*` REST tools.
+
+See [Architecture → Gateway](/discord-mcp/architecture/gateway/) for the full
+integration model.

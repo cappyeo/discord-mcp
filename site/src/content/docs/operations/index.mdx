@@ -29,7 +29,7 @@ own page describing defaults, override knobs, and the observability surface.
   />
   <LinkCard
     title="Resilience"
-    description="The composite policy chain — bulkhead, circuit breaker, retry, timeout. 11 environment variables; 429-aware backoff; pipeline interactions."
+    description="The composite policy chain — bulkhead, circuit breaker, retry, timeout. 10 environment variables; 429-aware backoff; pipeline interactions."
     href="/discord-mcp/operations/resilience/"
   />
   <LinkCard
@@ -51,9 +51,10 @@ it's the one set of knobs that affects every Discord call the server makes.
 Telemetry is opt-in (`OTEL_ENABLED=false` by default, zero overhead) and
 audit is on by default but can be tuned per-sink.
 
-For per-tool environment variables (token, scopes, allowed guilds, dry-run
-mode), see the [Reference → Environment variables](/discord-mcp/reference/)
-section once Phase E lands.
+For the remaining environment variables (token, category allowlist, dry-run
+mode), see [Reference → Environment variables](/discord-mcp/reference/config/).
+Note that there is **no guild allowlist** — `ALLOWED_GUILDS` is not read by
+any code path and per-guild restriction is deferred post-1.0.
 
 ## Looking for something else?
 

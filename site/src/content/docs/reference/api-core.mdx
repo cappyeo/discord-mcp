@@ -13,11 +13,22 @@ import { Aside } from '@astrojs/starlight/components';
 consumer; you can build others — custom transports, alternative CLIs,
 extensions that ship their own tools — on top of the same exports.
 
-This page covers the supported public surface. Anything not listed here
-(everything under `_lib/`, internal middleware glue) is treated as private
-and may change between minor versions.
+## Scope
 
-Source: [`packages/mcp-core/src/index.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/index.ts).
+The authoritative public surface is **everything re-exported from
+[`packages/mcp-core/src/index.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/index.ts)**.
+That barrel is the contract v1.0.0 freezes.
+
+This page documents the most commonly used of those exports with prose and
+examples. It is a guided tour, not an inventory: **absence from this page does
+not make an export private.** Roughly half the barrel — stores, middleware,
+capability router, pipeline internals, telemetry conventions, pagination and
+response helpers — is public and stable without having a section here. Read
+the barrel for the full list.
+
+What *is* private: **deep imports into subpaths**. Importing from
+`@discord-mcp/core/dist/tools/_lib/...` or any path other than the package
+root is unsupported and may break in any release, including a patch.
 
 ## Tool authoring
 
@@ -45,18 +56,17 @@ instantiating the tool.
 | `def.scopes`     | `readonly string[]` (default `[]`)                                              | Required MCP scopes (informational v1).                                                            |
 | `def.inputSchema`| `Record<string, z.ZodTypeAny>`                                                  | Zod object shape — validated by `validateMiddleware` before the handler runs.                    |
 | `def.outputSchema`| `Record<string, z.ZodTypeAny>` (optional)                                      | Optional output schema for tools that emit structured content.                                    |
-| `def.annotations`| `ToolAnnotations`                                                               | MCP tool annotations (`destructive`, `idempotent`, `openWorld`, etc.).                            |
-| `def.idempotent` | `boolean` (default `false`)                                                     | Whether the tool is safe to retry. Used by retry middleware.                                       |
-| `def.handler`    | `(args, ctx: ToolRunContext) => Promise<O>`                                     | The actual implementation. Receives parsed args + a context with `signal`, `invoke`, sampling.   |
+| `def.annotations`| `ToolAnnotations`                                                               | MCP tool annotations. The four keys are `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` — all optional booleans. |
+| `def.idempotent` | `boolean` (default `false`)                                                     | Carried into `MiddlewareContext.tool`, emitted as the `mcp.tool.idempotent` telemetry attribute, and used by `auditMiddleware` to **skip** audit emission (`true` = read-only, no audit event). It does **not** drive retry — retry lives in the cockatiel REST policy and is keyed on error classification, not on this flag. |
+| `def.handler`    | `(args, ctx: ToolRunContext) => Promise<O>`                                     | The actual implementation. Receives parsed args plus a context carrying `signal`.                |
 
 **Returns**: `typeof Tool` — a concrete subclass attaching `__toolMetadata` for build-time introspection.
 
 **Example**:
 
 ```ts
-import { defineTool } from '@discord-mcp/core';
+import { ChannelId, defineTool } from '@discord-mcp/core';
 import { z } from 'zod';
-import { ChannelId } from '@discord-mcp/core';
 
 export default defineTool({
   name: 'channel_describe',
@@ -65,14 +75,33 @@ export default defineTool({
   inputSchema: {
     channel_id: ChannelId,
   },
-  annotations: { destructive: false, idempotent: true, openWorld: false },
+  outputSchema: {
+    summary: z.string(),
+  },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   idempotent: true,
   async handler({ channel_id }, ctx) {
-    const ch = await ctx.invoke('channels_get', { channel_id }, ctx.signal);
-    return { summary: `#${(ch as { name: string }).name}` };
+    // ctx carries `signal` and nothing else. Pass it to anything abortable.
+    const res = await fetch(`https://example.internal/channels/${channel_id}`, {
+      signal: ctx.signal,
+    });
+    const ch = (await res.json()) as { name: string };
+    return { summary: `#${ch.name}` };
   },
 });
 ```
+
+<Aside type="note">
+The handler context is `ToolRunContext`, which is `{ signal: AbortSignal }` —
+that is the whole interface. There is no `ctx.invoke` and no sampling handle
+on it. Tool-to-tool calls go through `mcp_pipeline` at the protocol level
+rather than through a handler-side helper.
+</Aside>
 
 Source: [`packages/mcp-core/src/tools/_lib/defineTool.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/_lib/defineTool.ts).
 
@@ -111,7 +140,7 @@ handlers, and the subscription registry already wired.
 
 **Returns** a `BuildServerResult`. The `server` is unstarted — connect a
 transport (stdio, HTTP) yourself. The `auditSink` is surfaced so the
-transport can flush/close it on `SIGTERM`.
+transport can flush it via `shutdown()` on `SIGTERM`.
 
 **Example**:
 
@@ -135,10 +164,26 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 
 process.on('SIGTERM', async () => {
-  await auditSink.close?.();
+  await auditSink.shutdown?.();
   process.exit(0);
 });
 ```
+
+<Aside type="danger">
+The method is **`shutdown()`**, not `close()`. `AuditSink` declares
+`shutdown?(): Promise<void>` and nothing named `close`.
+
+Because the call site is optional-chained, `auditSink.close?.()` does not
+throw — it resolves to `undefined` and the process exits immediately. The
+result is that `FileAuditSink` never flushes: every audit record still sitting
+in the write stream's buffer is lost on **every** shutdown, silently. That
+directly breaks the durability guarantee in
+[Operations → Audit](/discord-mcp/operations/audit/).
+
+Optional chaining is correct here — `shutdown` is genuinely optional on the
+interface, and `StderrAuditSink` does not implement it — but it means a typo
+in the method name fails silently rather than loudly. Check the spelling.
+</Aside>
 
 Source: [`packages/mcp-core/src/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/server.ts).
 
@@ -258,10 +303,26 @@ resilience-related ones) with a stable `code` field, a `retriable` flag, a
 | `DiscordServerError`          | `DISCORD_SERVER`      | yes       | `errors/index.ts`                                                                              |
 | `ValidationError`             | `VALIDATION`          | no        | `errors/index.ts`                                                                              |
 | `ScopeRejectedError`          | `SCOPE_REJECTED`      | no        | `errors/index.ts`                                                                              |
-| `GuildNotAllowedError`        | `GUILD_NOT_ALLOWED`   | no        | `errors/index.ts`                                                                              |
+| `GuildNotAllowedError`        | `GUILD_NOT_ALLOWED`   | no        | `errors/index.ts` — **never thrown, see below**                                                |
 | `DryRunPreview`               | `DRY_RUN_PREVIEW`     | no        | `errors/index.ts`                                                                              |
 | `CancelledError`              | `CANCELLED`           | no        | `errors/index.ts`                                                                              |
 | `InternalError`               | `INTERNAL_ERROR`      | yes       | `errors/index.ts`                                                                              |
+
+<Aside type="caution" title="`GUILD_NOT_ALLOWED` is not implemented">
+`GuildNotAllowedError` is exported and formatted, but **nothing constructs
+it**. There is no guild allowlist at any layer: no `ALLOWED_GUILDS`
+environment variable is read by any code path, and no precondition,
+middleware, or tool checks a guild id against one. A deployment can call
+every tool against every guild the bot is in.
+
+The error's own `recoveryHint` says "Add guild `<id>` to `ALLOWED_GUILDS`
+env" — that hint is aspirational and unreachable. Do not build an access
+model on it.
+
+Per-guild restriction is **deferred post-1.0**. Today the only real limits
+are the bot's own Discord permissions and, for coarse-grained tool gating,
+[`MCP_CATEGORIES`](/discord-mcp/reference/config/#mcp_categories).
+</Aside>
 
 ### `formatErrorForUser`
 

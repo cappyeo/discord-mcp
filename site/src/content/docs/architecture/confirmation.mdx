@@ -1,6 +1,6 @@
 ---
 title: Confirmation
-description: The __confirm:true + MCP_DRY_RUN=false contract that gates every destructive tool. Why double-underscore, why safe-by-default, the recovery hint shape.
+description: The __confirm:true + MCP_DRY_RUN=false contract that gates the 29 destructive tools that declare it. Why double-underscore, why safe-by-default, the recovery hint shape.
 sidebar:
   order: 7
 ---
@@ -9,8 +9,11 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Confirmation
 
-discord-mcp's confirmation contract is the **load-bearing safety primitive**:
-no destructive tool fires unless **both** of these hold at the same time:
+discord-mcp's confirmation contract is the **load-bearing safety primitive**
+for irreversible operations. A tool that declares the `confirm_required`
+precondition — **29 of the 192 tools**, listed
+[below](#which-tools-require-it) — does not fire unless **both** of these
+hold at the same time:
 
 1. The operator launched the server with `MCP_DRY_RUN=false`.
 2. The agent passed `__confirm:true` in the tool's arguments.
@@ -18,6 +21,10 @@ no destructive tool fires unless **both** of these hold at the same time:
 If either is missing, the tool throws a `DRY_RUN_PREVIEW` error carrying the
 redacted arguments instead of executing. The agent (or human) sees what
 *would* have happened, then decides whether to commit.
+
+Tools that do **not** declare the precondition — including ordinary mutations
+like `messages_send` and `members_add_role` — are unaffected by both halves
+and execute immediately.
 
 Source: [`packages/mcp-core/src/preconditions/ConfirmRequired.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts).
 
@@ -56,17 +63,18 @@ Agent (re-issues with __confirm:true)
 ```
 
 The middleware never inspects what the tool *does*; it only checks the two
-halves and either passes through or raises. This means **the same gate
-applies uniformly** to every destructive tool, with no per-tool override
-risk.
+halves and either passes through or raises. The gate therefore behaves
+identically everywhere it is attached — but **it only runs on tools that
+declare it**. See [Which tools require it](#which-tools-require-it) for the
+exact list, and do not assume a tool is covered because it mutates Discord.
 
 ## Why double-underscore
 
-`__confirm` is **not part of any tool's zod schema**. It's pulled from
-the raw arg payload **before** the validate middleware runs:
+`__confirm` is **not part of any tool's zod `inputSchema`**. It is an
+authorization flag, not a handler parameter — handlers must never see it:
 
-- If it were in the schema, you'd document it on every destructive tool's
-  page (cluttering 60+ tool pages with a cross-cutting concern).
+- If it were in a tool's zod shape, every destructive handler would receive
+  it as a business argument and each one would have to remember to ignore it.
 - If it were a single-underscore key (`_confirm`), it would clash with
   legitimate tool args (e.g. some Discord fields use leading underscores).
 - If it were a positional flag, you couldn't pass it through clients that
@@ -76,18 +84,39 @@ Double-underscore signals "this is a meta-level argument, not part of the
 business payload." The same convention is used elsewhere in the MCP
 ecosystem for transport-level metadata.
 
-The extraction happens in `ConfirmRequired.run` *after* validate runs in
-the chain, but reads `args.__confirm` directly because zod stripped
-unknown keys by default. Specifically: the precondition reads the raw
-JSON-RPC `arguments` field via the chain's untyped accessor, not the
-validated typed args. This is the **one** place we accept pre-validation
-state — and it's narrowly scoped to one boolean.
+### It IS advertised in `tools/list`
+
+`z.toJSONSchema` emits `additionalProperties: false` for every tool, so a
+spec-conforming client could not legally send an undeclared key, and an
+agent reading `tools/list` would have no way to discover the flag at all.
+So `server.ts` injects `__confirm` into the **published JSON Schema of the
+29 gated tools only**, after the zod → JSON Schema conversion:
+
+```ts
+// From server.ts — ListTools handler
+if (tool.preconditions.includes('confirm_required')) {
+  jsonSchema.properties ??= {};
+  jsonSchema.properties.__confirm = { type: 'boolean', description: '...' };
+}
+```
+
+Two consequences worth being precise about:
+
+- Agents can **discover** the flag, and schema-validating clients can **send**
+  it, on exactly the tools where it does something.
+- It still never enters the zod parse path and never reaches a handler.
+  `validateMiddleware` parses against the zod shape, which does not declare
+  `__confirm`, so the parsed args that handlers receive have it stripped.
+  `server.ts` stashes the pre-validation payload in `ctx.meta` under
+  `rawArgs`, and `ConfirmRequired` reads the boolean from there. That is the
+  **one** place we accept pre-validation state — narrowly scoped to one
+  boolean.
 
 <Aside type="caution">
-Tools that have `__confirm` in their visible schema would let an agent
-"pass schema validation" without ever providing the gate. The hidden-key
-design is intentional: the gate is at the precondition layer, not the
-schema layer.
+Advertising the key is not the same as enforcing it in the schema. A client
+that sends `__confirm:true` still gets `DRY_RUN_PREVIEW` unless the operator
+also set `MCP_DRY_RUN=false`. The gate lives at the precondition layer; the
+schema entry exists only so the flag is discoverable and transmissible.
 </Aside>
 
 ## DRY_RUN default: safe by default
@@ -129,21 +158,62 @@ for which clients have elicitation today.
 
 ## Which tools require it
 
-Every tool with `idempotent: false` runs `ConfirmRequired` as a
-precondition. That's roughly **70 tools** across these categories:
+There is **no automatic rule**. `confirm_required` is attached explicitly,
+per tool, in each tool's own `defineTool({ preconditions: ['confirm_required'] })`
+call. A tool is gated if and only if it names the precondition itself.
 
-- `messages_*` (send, edit, delete, bulk_delete, react, …)
-- `members_*` (ban, kick, timeout, role_add, role_remove, …)
-- `channels_*` (create, delete, update, archive, …)
-- `webhooks_*` (create, execute, delete, …)
-- `events_*` (create, update, cancel, …)
-- `components_v2_*` (send, edit, send_from_template — the build/validate/preview helpers are idempotent)
-- `roles_*`, `threads_*`, `pins_*`, `voice_*` mutating subsets
+As of v0.12.0 that is exactly **29 tools** out of 192 — every irreversible
+delete, plus ban / kick / prune / leave-guild and the two command
+bulk-overwrites (which replace a guild's entire command set in one call):
 
-Read-only tools (`*_read`, `*_get`, `*_list`, `*_search`, …) skip the
-precondition entirely. The `idempotent: true` flag on the tool definition
-is the single source of truth — `ConfirmRequired` is only attached to
-tools where it's `false`.
+| Category | Gated tools |
+| -------- | ----------- |
+| `app_emojis` | `app_emojis_delete` |
+| `automod` | `automod_delete_rule` |
+| `channels` | `channels_delete` |
+| `commands` | `commands_bulk_overwrite_global`, `commands_bulk_overwrite_guild`, `commands_delete_global`, `commands_delete_guild` |
+| `emojis` | `emojis_delete` |
+| `events` | `events_delete` |
+| `guild` | `guild_begin_prune`, `guild_delete_integration` |
+| `interactions` | `interactions_delete_followup`, `interactions_delete_original_response` |
+| `invites` | `invites_delete` |
+| `members` | `members_ban`, `members_bulk_ban`, `members_kick` |
+| `messages` | `messages_bulk_delete`, `messages_delete` |
+| `monetization` | `entitlements_delete_test` |
+| `reactions` | `reactions_delete_all` |
+| `roles` | `roles_delete` |
+| `soundboard` | `soundboard_delete_guild_sound` |
+| `stage_instances` | `stage_instances_delete` |
+| `stickers` | `stickers_delete_guild_sticker` |
+| `users` | `users_leave_guild` |
+| `webhooks` | `webhooks_delete`, `webhooks_delete_message`, `webhooks_delete_with_token` |
+
+Every auto-generated [tool reference page](/discord-mcp/tools/) carries a
+**Confirmation required** row in its Annotations table, which is rendered
+from the same `__toolMetadata.preconditions` array. That table is the
+authoritative per-tool answer; the list above is the roll-up.
+
+<Aside type="danger">
+**These mutating tools are NOT gated.** They write to Discord and they run
+on the first call, in dry-run mode or not, with no `__confirm` required:
+
+- `messages_send`
+- `messages_edit`
+- `channels_create_guild_channel`
+- `webhooks_execute`
+- `roles_create`
+- `members_add_role`
+- `components_v2_send`
+
+That list is not exhaustive — it is the set operators most often assume is
+covered. The confirmation gate protects against **irreversible destruction**,
+not against mutation in general. `MCP_DRY_RUN=true` does **not** put the
+server into a global read-only mode: a tool with no `confirm_required`
+precondition never consults `MCP_DRY_RUN` at all.
+
+If you need "this deployment cannot write to Discord," the gate for that is
+the bot's own Discord permissions, not this precondition.
+</Aside>
 
 ## Bypass for tests
 

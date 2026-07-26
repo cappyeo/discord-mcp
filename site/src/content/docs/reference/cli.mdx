@@ -185,44 +185,63 @@ discord-mcp init --client generic --json | jq .data.content
 ## `migrate`
 
 ```bash
-discord-mcp migrate [--from <adapter>] [--source <path>] [--json]
+discord-mcp migrate --list [--json]
+discord-mcp migrate --from <adapter> [--source <path>] [--json]
 ```
 
-Migrate from another Discord MCP setup. Plan 9 Phase E ships one adapter
-(`hubdustry-go-mcp`) and the framework is extensible — new adapters land
-in subsequent plans.
+Migrate from another Discord MCP setup. **Four adapters ship** today:
 
-Run without `--from` to list available adapters and exit.
+| Adapter id         | Source                                                | Tools |
+| ------------------ | ----------------------------------------------------- | ----- |
+| `pasympa`          | PaSympa Discord MCP (TypeScript)                      | ~91   |
+| `quadslab`         | quadslab Discord MCP (`@quadslab.io`, TypeScript)     | ~139  |
+| `discord-ops`      | discord-ops by bookedsolidtech (TypeScript)           | ~49   |
+| `hubdustry-go-mcp` | Hubdustry Go MCP — **non-Discord reference adapter**  | 8     |
+
+`hubdustry-go-mcp` exists as the adapter-authoring example. Its tools are not
+Discord tools, so running it against a real Hubdustry tree produces "0 mapped,
+8 unmapped" by design. Use one of the other three for an actual migration.
 
 | Flag             | Type    | Default | Description                                                                                                       |
 | ---------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `--from <id>`    | string  | (none)  | Source adapter id. Run without this flag to list registered adapters.                                              |
+| `--list`         | boolean | `false` | List every registered adapter with its description, languages, tool-count estimate, and homepage. Informational — **always exits `0`**. Takes precedence over `--from`. |
+| `--from <id>`    | string  | (none)  | Source adapter id — one of the four above. Required to run a migration.                                            |
 | `--source <path>`| string  | `cwd`   | Path to the source repo to migrate from. Defaults to the current working directory.                               |
 | `--json`         | boolean | `false` | Emit machine-readable JSON instead of pretty output.                                                              |
+
+<Aside type="caution">
+A bare `discord-mcp migrate` with no flags also prints the adapter list, but
+it is the legacy "missing `--from`" **error** path and exits `2`. Use
+`--list` for discovery — it is the only form that exits `0`, which is what a
+CI step needs.
+</Aside>
 
 ### Examples
 
 ```bash
-# List available adapters (exits 2 — no --from given).
-discord-mcp migrate
+# Discover adapters — exits 0, safe in CI.
+discord-mcp migrate --list
 
-# Migrate from a Hubdustry Go MCP repo at the current directory.
-discord-mcp migrate --from hubdustry-go-mcp
+# Same, machine-readable.
+discord-mcp migrate --list --json | jq '.data.adapters[].id'
+
+# Migrate from a PaSympa checkout in the current directory.
+discord-mcp migrate --from pasympa
 
 # Migrate from a sibling directory.
-discord-mcp migrate --from hubdustry-go-mcp --source ../hubdustry-go-mcp
+discord-mcp migrate --from quadslab --source ../quadslab-discord-mcp
 
 # JSON output for tooling — capture the full migration report.
-discord-mcp migrate --from hubdustry-go-mcp --json > migrate-report.json
+discord-mcp migrate --from discord-ops --json > migrate-report.json
 ```
 
 ### Exit codes
 
 | Code | Meaning                                                                                                                            |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Adapter ran AND every source tool was mapped cleanly (no unmapped, no manual review).                                              |
+| `0`  | `--list` (always), OR an adapter ran AND every source tool was mapped cleanly (no unmapped, no manual review).                     |
 | `1`  | Adapter ran but produced unmapped tools or items needing manual review. Successful run with work left — hand-edit the output.      |
-| `2`  | Couldn't run — missing/unknown `--from`, source not detected at `--source`, IO failure.                                            |
+| `2`  | Couldn't run — bare `migrate` with no flags, unknown `--from`, source not detected at `--source`, IO failure.                      |
 
 ### See also
 

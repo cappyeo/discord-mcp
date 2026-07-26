@@ -111,9 +111,11 @@ Released **2026-05-01**. Tag commit:
 Plan 8 added the production-grade observability and resilience surface that
 makes discord-mcp safe to run in front of a real Discord guild.
 
-- OpenTelemetry traces + the six built-in metrics (`mcp.requests`,
-  `mcp.errors`, `mcp.duration`, `mcp.retries`, `mcp.circuit_state`,
-  `mcp.bulkhead_inflight`). 9 `OTEL_*` env vars.
+- OpenTelemetry traces + the six built-in metrics (`mcp.tool.duration_ms`,
+  `mcp.tool.calls`, `mcp.tool.errors`, `mcp.circuit.transitions`,
+  `mcp.bulkhead.rejected.count`, `mcp.deadletter.count`). There is no retry
+  metric and no gauge for circuit state or bulkhead in-flight depth.
+  9 `OTEL_*` env vars.
 - Cockatiel composite policy: retry (with jitter strategies), per-call
   timeout, circuit breaker, bulkhead. 11 `MCP_RETRY_/TIMEOUT_/CIRCUIT_/BULKHEAD_*`
   env vars.
@@ -146,8 +148,9 @@ events as MCP resources via the `subscribe` capability.
 
 - `createGatewayClient` lazy-imports `discord.js` so cold start without
   `--gateway` stays minimal (`serve` doesn't pay the import cost).
-- 5 Gateway event handlers wired to `MessageCreate`, `MessageUpdate`,
-  `MessageDelete`, `MessageReactionAdd`, `MessageReactionRemove`.
+- 5 Gateway event handlers — `guild_update`, `voice_state_update`,
+  `typing_start`, `presence_update`, `audit_log_poll`. Message events are not
+  among them; there is no message handler.
 - `SubscriptionRegistry` tracks active resource URIs and fires
   `notifyResource(uri)` when relevant events arrive.
 - `--gateway` CLI flag on `serve` toggles the whole subsystem.

@@ -122,9 +122,16 @@ the histograms useless.
 
 | Metric | Type | Description |
 | ------ | ---- | ----------- |
-| `mcp.circuit.transitions` | Counter | Circuit breaker state transitions (closed → open, open → half-open, half-open → closed). Labelled by `from`, `to`, `route`. |
-| `mcp.bulkhead.rejected.count` | Counter | Calls fast-rejected because the bulkhead semaphore was full. Labelled by `route`. |
-| `mcp.deadletter.count` | Counter | Calls that exhausted retries / circuit-rejected and surfaced to the client as a structured error. Labelled by `tool`, `category`, `error_code`. |
+| `mcp.circuit.transitions` | Counter | Circuit breaker state transitions. One label: `to_state` ∈ `{open, half-open, closed}`. There is no `from` label — the destination state alone identifies the transition. |
+| `mcp.bulkhead.rejected.count` | Counter | Calls fast-rejected because the bulkhead semaphore was full. **No labels.** |
+| `mcp.deadletter.count` | Counter | Calls that exhausted retries / were circuit-rejected and surfaced to the client as a structured error. One label: `error.type`. |
+
+The three resilience metrics carry **no per-tool or per-route dimension**,
+by construction. They are emitted from the cockatiel policy built once per
+process by `buildPolicy`, and cockatiel's `onBreak` / `onReset` /
+rejection hooks receive no per-call context to attribute them with. Slice
+tool-level behavior with the tool metrics above, or with spans; treat
+these three as process-wide health counters.
 
 ### Spans
 
@@ -157,9 +164,16 @@ For Grafana + Prometheus, useful starter queries:
 - **p95 tool latency**:
   `histogram_quantile(0.95, sum by (mcp.tool.name, le) (rate(mcp_tool_duration_ms_bucket[5m])))`
 - **Circuit open events**:
-  `sum by (route) (rate(mcp_circuit_transitions_total{to="open"}[1h]))`
+  `sum(rate(mcp_circuit_transitions_total{to_state="open"}[1h]))`
 - **Bulkhead saturation**:
-  `sum by (route) (rate(mcp_bulkhead_rejected_count_total[5m]))`
+  `sum(rate(mcp_bulkhead_rejected_count_total[5m]))`
+- **Dead letters by cause**:
+  `sum by (error_type) (rate(mcp_deadletter_count_total[5m]))`
+
+The label is `to_state`, not `to` — a query written as `{to="open"}`
+matches nothing and silently reports a permanently healthy circuit.
+Neither the bulkhead nor the circuit metric has a `route` label to group
+by.
 
 For Honeycomb, useful starting BubbleUp / triggers:
 

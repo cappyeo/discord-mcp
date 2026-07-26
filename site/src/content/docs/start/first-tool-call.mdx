@@ -49,7 +49,7 @@ candidates without hallucinating one that does not exist.
 
 The tool's return value is **always structured JSON**, not free-form text. Claude
 re-uses fields like `id` from the response in follow-up tool calls, e.g. to add a
-reaction (`reactions_add`) or pin the message (`messages_pin`). This is why
+reaction (`reactions_create`) or pin the message (`messages_pin`). This is why
 discord-mcp ships every endpoint as a tool rather than an ad-hoc shell.
 
 ## Next
