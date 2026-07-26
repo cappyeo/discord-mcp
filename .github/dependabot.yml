@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Workflow `uses:` are pinned to commit SHAs. Without this ecosystem those
+  # pins silently rot — dependabot rewrites the SHA and the `# vX.Y.Z` comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
