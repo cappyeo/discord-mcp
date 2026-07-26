@@ -24,39 +24,39 @@ afterEach(() => {
 describe('nodeVersionCheck', () => {
   it('has the correct id, description, and online flag', () => {
     expect(nodeVersionCheck.id).toBe('node-version');
-    expect(nodeVersionCheck.description).toBe('Node.js >= 20.11');
+    expect(nodeVersionCheck.description).toBe('Node.js >= 22.12');
     expect(nodeVersionCheck.online).toBe(false);
   });
 
-  it('returns ok when running >=20.11.0 (exact match)', async () => {
-    setNodeVersion('20.11.0');
+  it('returns ok when running >=22.12.0 (exact match)', async () => {
+    setNodeVersion('22.12.0');
     const r = await nodeVersionCheck.run(null);
     expect(r.status).toBe('ok');
-    expect(r.details).toEqual({ running: '20.11.0', required: '>=20.11.0' });
+    expect(r.details).toEqual({ running: '22.12.0', required: '>=22.12.0' });
   });
 
-  it('returns ok for higher minor (20.12.0)', async () => {
-    setNodeVersion('20.12.5');
-    const r = await nodeVersionCheck.run(null);
-    expect(r.status).toBe('ok');
-  });
-
-  it('returns ok for higher major (22.0.0)', async () => {
-    setNodeVersion('22.0.0');
+  it('returns ok for higher minor (22.13.0)', async () => {
+    setNodeVersion('22.13.5');
     const r = await nodeVersionCheck.run(null);
     expect(r.status).toBe('ok');
   });
 
-  it('returns fail for lower minor (20.10.0)', async () => {
-    setNodeVersion('20.10.0');
+  it('returns ok for higher major (24.0.0)', async () => {
+    setNodeVersion('24.0.0');
+    const r = await nodeVersionCheck.run(null);
+    expect(r.status).toBe('ok');
+  });
+
+  it('returns fail for lower minor (22.11.0)', async () => {
+    setNodeVersion('22.11.0');
     const r = await nodeVersionCheck.run(null);
     expect(r.status).toBe('fail');
-    expect(r.message).toContain('20.10.0');
-    expect(r.message).toContain('>=20.11.0');
+    expect(r.message).toContain('22.11.0');
+    expect(r.message).toContain('>=22.12.0');
   });
 
-  it('returns fail for lower major (18.20.0)', async () => {
-    setNodeVersion('18.20.0');
+  it('returns fail for lower major (20.19.0)', async () => {
+    setNodeVersion('20.19.0');
     const r = await nodeVersionCheck.run(null);
     expect(r.status).toBe('fail');
   });

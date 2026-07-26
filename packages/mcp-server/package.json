@@ -16,7 +16,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.12"
   },
   "os": [
     "darwin",
@@ -31,6 +31,13 @@
     "claude",
     "cursor"
   ],
+  "license": "MIT",
+  "homepage": "https://cappylab.github.io/discord-mcp/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cappylab/discord-mcp.git",
+    "directory": "packages/mcp-server"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -47,16 +54,18 @@
     "@discord-mcp/core": "workspace:*",
     "@discordjs/rest": "^2.4.0",
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "@sapphire/pieces": "^4.4.1",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.216.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
-    "@opentelemetry/resources": "^2.0.0",
-    "@opentelemetry/sdk-metrics": "^2.0.0",
-    "@opentelemetry/instrumentation-pino": "^0.62.0",
-    "@opentelemetry/instrumentation-undici": "^0.26.0",
-    "@opentelemetry/sdk-node": "^0.216.0",
-    "@opentelemetry/sdk-trace-base": "^2.0.0",
-    "commander": "^12.1.0"
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/instrumentation-pino": "^0.67.0",
+    "@opentelemetry/instrumentation-undici": "^0.31.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "commander": "^12.1.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@discord-mcp/server-mocks": "workspace:*",

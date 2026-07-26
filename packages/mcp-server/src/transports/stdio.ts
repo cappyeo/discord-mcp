@@ -9,9 +9,20 @@ import {
 } from '@discord-mcp/core';
 import { REST } from '@discordjs/rest';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { type OtelHandle, startOtel } from '../otel.js';
 
-export async function startStdio(): Promise<void> {
+/**
+ * @param opts.transport Transport to connect the MCP server to. Defaults to a
+ *   real `StdioServerTransport`; tests pass an in-memory pair so the whole
+ *   boot chain runs for real.
+ * @param opts.registerSignalHandlers Register the SIGINT/SIGTERM shutdown
+ *   hooks. Defaults to true; tests disable it because the handlers call
+ *   `process.exit(0)` and would outlive the test process.
+ */
+export async function startStdio(
+  opts: { transport?: Transport; registerSignalHandlers?: boolean } = {},
+): Promise<void> {
   const config = loadConfig();
   const logger = createLogger(config);
 
@@ -72,7 +83,7 @@ export async function startStdio(): Promise<void> {
     'discord-mcp ready (stdio)',
   );
 
-  const transport = new StdioServerTransport();
+  const transport = opts.transport ?? new StdioServerTransport();
   await server.connect(transport);
 
   // Graceful shutdown.
@@ -107,6 +118,8 @@ export async function startStdio(): Promise<void> {
     }
     process.exit(0);
   };
-  process.on('SIGINT', () => void shutdown('SIGINT'));
-  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  if (opts.registerSignalHandlers !== false) {
+    process.on('SIGINT', () => void shutdown('SIGINT'));
+    process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  }
 }

@@ -1,21 +1,21 @@
 /**
  * `node-version` check — Plan 9 Phase B.
  *
- * Verifies the running Node.js >= 20.11.0. The package.json `engines.node`
- * field declares `">=20.11"` (Node 20 LTS minimum that ships ESM JSON
- * import assertions and stable fetch). We enforce this at runtime via
+ * Verifies the running Node.js >= 22.12.0. The package.json `engines.node`
+ * field declares `">=22.12"` (Node 22 LTS minimum, and the lowest version
+ * CI verifies). We enforce this at runtime via
  * doctor so users get a clear actionable error instead of a cryptic
  * import or syntax failure later.
  *
- * Implementation reads `process.versions.node` (e.g. "20.11.1") and
+ * Implementation reads `process.versions.node` (e.g. "22.12.1") and
  * does a manual semver compare on the major/minor/patch tuple — we
  * don't pull in the `semver` package because that would violate the
  * "no new runtime deps" rule for Phase B.
  */
 import type { DoctorCheck } from './index.js';
 
-const REQUIRED_MAJOR = 20;
-const REQUIRED_MINOR = 11;
+const REQUIRED_MAJOR = 22;
+const REQUIRED_MINOR = 12;
 const REQUIRED_PATCH = 0;
 
 function parseNodeVersion(v: string): [number, number, number] | null {
@@ -49,7 +49,7 @@ function meetsRequirement(parsed: [number, number, number]): boolean {
 
 export const nodeVersionCheck: DoctorCheck = {
   id: 'node-version',
-  description: 'Node.js >= 20.11',
+  description: 'Node.js >= 22.12',
   online: false,
   async run() {
     const running = process.versions.node;

@@ -21,5 +21,9 @@ export default defineConfig({
     // enough that only a genuine hang trips it.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Shuffle so no suite can pass by source ordering alone. The seed is
+    // pinned rather than left to the per-run default so a shuffle-induced
+    // failure reproduces locally instead of vanishing on the next run.
+    sequence: { shuffle: { tests: true, files: true }, seed: 77 },
   },
 });

@@ -102,8 +102,17 @@ function buildInstrumentations(): (UndiciInstrumentation | PinoInstrumentation)[
         // Tag Discord REST calls with a normalized route so dashboards
         // can group by `discord.route` without spinning up a per-id
         // metric series. `req.origin` is a string per undici types.
+        //
+        // The standard `url.full` / `url.path` attributes are OVERWRITTEN,
+        // not merely supplemented: webhook and interaction tokens live in
+        // the Discord path, so the raw values would ship credentials to the
+        // tracing backend. requestHook runs after the span is started with
+        // its initial attributes, so this write wins.
         if (req.origin.includes('discord.com/api')) {
-          span.setAttribute('discord.route', `${req.method} ${redactRoute(req.path)}`);
+          const route = redactRoute(req.path);
+          span.setAttribute('discord.route', `${req.method} ${route}`);
+          span.setAttribute('url.full', `${req.origin}${route}`);
+          span.setAttribute('url.path', route);
         }
       },
     }),

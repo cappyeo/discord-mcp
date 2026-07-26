@@ -39,7 +39,10 @@ const undiciInstrumentation = new UndiciInstrumentation({
     // discord.com so the test simulates the origin via a custom header.
     const headersStr = Array.isArray(req.headers) ? req.headers.join('') : String(req.headers);
     if (headersStr.includes('x-fake-discord-origin')) {
-      span.setAttribute('discord.route', `${req.method} ${redactRoute(req.path)}`);
+      const route = redactRoute(req.path);
+      span.setAttribute('discord.route', `${req.method} ${route}`);
+      span.setAttribute('url.full', `${req.origin}${route}`);
+      span.setAttribute('url.path', route);
     }
   },
 });
@@ -114,6 +117,25 @@ describe('UndiciInstrumentation integration (Plan 8 B.5)', () => {
     const client = spanExporter.getFinishedSpans().find((s) => s.kind === 2);
     expect(client).toBeDefined();
     expect(client?.attributes['discord.route']).toBe('GET /channels/:id/messages/:id');
+  });
+
+  it('keeps webhook tokens out of every span attribute (B2-04)', async () => {
+    // Webhook tokens are bearer credentials living in the URL PATH, so the
+    // standard url.full / url.path attributes would ship them to the tracing
+    // backend verbatim. The requestHook must overwrite them, not just add
+    // discord.route alongside.
+    const token = 'S3cr3tWebhookTokenDoNotLeak';
+    const res = await fetch(`${baseUrl}/api/v10/webhooks/123456789012345678/${token}`, {
+      headers: { 'x-fake-discord-origin': '1' },
+    });
+    await res.text();
+
+    const client = spanExporter.getFinishedSpans().find((s) => s.kind === 2);
+    expect(client).toBeDefined();
+    for (const [key, value] of Object.entries((client as ReadableSpan).attributes)) {
+      expect(String(value), `span attribute ${key} leaked the webhook token`).not.toContain(token);
+    }
+    expect(client?.attributes['url.path']).toBe('/api/v10/webhooks/:id/:token');
   });
 
   it('respects ignoreRequestHook=true to suppress self-traces', async () => {

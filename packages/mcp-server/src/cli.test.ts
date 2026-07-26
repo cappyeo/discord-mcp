@@ -1,3 +1,4 @@
+import type { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock startStdio so `serve` is a no-op. Hoisted before cli.ts loads.
@@ -8,7 +9,7 @@ vi.mock('./transports/stdio.js', () => ({
 }));
 
 // Now import cli — its top-level auto-parse is gated behind VITEST=true.
-const { program } = await import('./cli.js');
+const { buildProgram } = await import('./cli.js');
 const { startStdio } = await import('./transports/stdio.js');
 
 import packageJson from '../package.json' with { type: 'json' };
@@ -17,8 +18,13 @@ const originalGateway = process.env.GATEWAY;
 const originalExitCode = process.exitCode;
 
 let stdoutWrites: string[] = [];
+// Commander keeps parsed option values on the Command instance forever, so
+// a shared program leaks flags (e.g. doctor --json) into later tests. Build
+// a fresh tree per test instead.
+let program: Command;
 
 beforeEach(() => {
+  program = buildProgram();
   stdoutWrites = [];
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown): boolean => {
     stdoutWrites.push(typeof chunk === 'string' ? chunk : String(chunk));
@@ -167,6 +173,12 @@ describe('cli — doctor sub-command (Plan 9 Phase B)', () => {
     // (offline checks have online: false; --online just lifts the filter).
     await runCli(['doctor', '--online']);
     expect(process.exitCode).toBe(2);
+    // --online alone must take the PRETTY path. With a shared program this
+    // asserted nothing: the previous `doctor --json` case left json: true on
+    // the sub-command and the output was still JSON.
+    const out = stdoutOutput();
+    expect(out).toContain('token-format');
+    expect(() => JSON.parse(out)).toThrow();
   });
 });
 
