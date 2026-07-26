@@ -38,7 +38,6 @@ function cfg(partial: Partial<Config> = {}): Config {
     MCP_RETRY_MAX_DELAY_MS: 500,
     MCP_RETRY_JITTER: 'none',
     MCP_TIMEOUT_DEFAULT_MS: 5000,
-    MCP_TIMEOUT_LONG_MS: 60000,
     MCP_CIRCUIT_ENABLED: true,
     MCP_CIRCUIT_FAILURE_THRESHOLD: 3,
     // Long enough that we don't half-open during a single test.

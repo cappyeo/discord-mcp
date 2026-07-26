@@ -1,3 +1,5 @@
+import packageJson from '../package.json' with { type: 'json' };
+
 // AsyncLocalStorage
 export { getCtx, runWithCtx, type ToolRequestContext, tryGetCtx } from './als/context.js';
 // Audit (Plan 8 Phase E)
@@ -107,4 +109,12 @@ export {
   wrapUntrusted,
 } from './tools/_lib/untrusted.js';
 
-export const VERSION = '0.0.0';
+/**
+ * Package version, derived from package.json — the single source of truth.
+ *
+ * The explicit `: string` annotation is load-bearing: without it the emitted
+ * .d.ts bakes a string *literal* type into the about-to-be-frozen public
+ * surface, and a consumer writing `if (VERSION !== '1.0.0')` gets TS2367
+ * (comparison appears unintentional) instead of a boolean.
+ */
+export const VERSION: string = packageJson.version;

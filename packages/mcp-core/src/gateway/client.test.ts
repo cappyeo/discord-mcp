@@ -86,4 +86,26 @@ describe('createGatewayClient', () => {
     expect(notify).toHaveBeenCalledWith('discord://voice/g_456/state');
     await gateway.stop();
   });
+
+  it('unwinds listeners, poll interval and client when login() rejects', async () => {
+    const registry = new SubscriptionRegistry();
+    registry.subscribe('discord://guild/123/audit-log/recent');
+    const fakeClient = makeFakeClient();
+    fakeClient.login = vi.fn().mockRejectedValue(new Error('DisallowedIntents'));
+
+    const gateway = createGatewayClient({
+      token: 'fake-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      registry,
+      notifyResource: vi.fn(),
+      clientFactory: () => fakeClient,
+    });
+
+    await expect(gateway.start()).rejects.toThrow('DisallowedIntents');
+    expect(fakeClient.destroy).toHaveBeenCalled();
+
+    // The 60s audit-log poller must be gone — no REST traffic after the failure.
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(fakeClient.rest.get).not.toHaveBeenCalled();
+    expect(fakeClient.listenerCount('guildUpdate')).toBe(0);
+  });
 });

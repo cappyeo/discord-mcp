@@ -8,6 +8,7 @@ import {
   ExponentialBackoff,
   fullJitterGenerator,
   handleType,
+  type IBackoff,
   type IPolicy,
   type IRetryBackoffContext,
   noJitterGenerator,
@@ -79,8 +80,11 @@ import { DiscordRetryableError } from './errors.js';
 export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   const timeoutPolicy = timeout(config.MCP_TIMEOUT_DEFAULT_MS, TimeoutStrategy.Aggressive);
 
-  // Pre-build an exponential backoff using the configured jitter strategy.
-  // We sample its `next()` for the no-Retry-After branch in the delegate.
+  // Pre-build an exponential backoff FACTORY using the configured jitter
+  // strategy.  `ExponentialBackoff` is an `IBackoffFactory`: its `next()`
+  // always returns a FIRST-attempt `IBackoff`.  The growing chain lives on
+  // the returned instance, so we thread that instance through the
+  // `DelegateBackoff` state channel below.
   const exponential = (() => {
     if (config.MCP_RETRY_JITTER === 'decorrelated') {
       return new ExponentialBackoff({
@@ -99,15 +103,19 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   })();
 
   // Custom backoff: prefer Retry-After when known, otherwise delegate to
-  // exponential.
-  const customBackoff = new DelegateBackoff<IRetryBackoffContext<unknown>>((ctx) => {
-    const err = 'error' in ctx.result ? ctx.result.error : undefined;
-    if (err instanceof DiscordRetryableError && err.retryAfterMs !== null) {
-      return { delay: err.retryAfterMs, state: undefined };
-    }
-    const gen = exponential.next();
-    return { delay: gen.duration, state: undefined };
-  });
+  // exponential.  The exponential instance is advanced (and returned as
+  // `state`) on EVERY attempt — including the Retry-After branch — so a 429
+  // followed by a 5xx does not reset the chain back to the initial delay.
+  const customBackoff = new DelegateBackoff<IRetryBackoffContext<unknown>, IBackoff<unknown>>(
+    (ctx, state) => {
+      const next = state ? state.next(ctx) : exponential.next();
+      const err = 'error' in ctx.result ? ctx.result.error : undefined;
+      if (err instanceof DiscordRetryableError && err.retryAfterMs !== null) {
+        return { delay: err.retryAfterMs, state: next };
+      }
+      return { delay: next.duration, state: next };
+    },
+  );
 
   const retryPolicy = retry(handleType(DiscordRetryableError), {
     maxAttempts: config.MCP_RETRY_MAX_ATTEMPTS,

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { __SENSITIVE_KEYS_BY_TOOL_FOR_TESTS, redactArgs } from './redact.js';
 
 describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
@@ -27,6 +30,21 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
       const out = redactArgs({ TOKEN: 'x', Bearer_Token: 'yy' }, 'tool');
       expect(out.TOKEN).toBe('[REDACTED:1ch]');
       expect(out.Bearer_Token).toBe('[REDACTED:2ch]');
+    });
+
+    it('redacts interaction_token (live Discord interaction credential)', () => {
+      const out = redactArgs({ interaction_token: 'x'.repeat(20) }, 'interactions_create_followup');
+      expect(out.interaction_token).toBe('[REDACTED:20ch]');
+    });
+
+    it('redacts unknown credential-shaped keys (*_token, *_secret, *password*)', () => {
+      const out = redactArgs(
+        { future_token: 'a', client_secret: 'bb', user_password_hash: 'ccc' },
+        'unknown_future_tool',
+      );
+      expect(out.future_token).toBe('[REDACTED:1ch]');
+      expect(out.client_secret).toBe('[REDACTED:2ch]');
+      expect(out.user_password_hash).toBe('[REDACTED:3ch]');
     });
 
     it('redacts globally sensitive keys nested deep inside objects', () => {
@@ -268,5 +286,55 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
       expect(redactArgs(42, 'tool')).toEqual({});
       expect(redactArgs([1, 2, 3], 'tool')).toEqual({});
     });
+  });
+});
+
+/**
+ * Registry-wide guard: no credential-shaped arg on any tool may survive
+ * `redactArgs` verbatim. Per-tool unit tests structurally cannot catch a new
+ * tool that ships a `*_token` arg nobody added to the redaction sets.
+ */
+describe('redactArgs vs. the live tool registry', () => {
+  const TOOLS_DIR = fileURLToPath(new URL('../tools/', import.meta.url));
+  const CREDENTIAL_KEY_RE = /token|secret|password/i;
+
+  const credentialArgs: Array<{ tool: string; key: string }> = [];
+
+  beforeAll(async () => {
+    const categories = readdirSync(TOOLS_DIR, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('_'))
+      .map((e) => e.name);
+
+    for (const category of categories) {
+      const dir = join(TOOLS_DIR, category);
+      const files = readdirSync(dir).filter(
+        (f) =>
+          f.endsWith('.ts') &&
+          !f.endsWith('.test.ts') &&
+          !f.endsWith('.bench.ts') &&
+          !f.startsWith('_'),
+      );
+      for (const file of files) {
+        const mod = await import(`file://${join(dir, file).replace(/\\/g, '/')}`);
+        const meta = (
+          mod.default as
+            | { __toolMetadata?: { name: string; inputSchema: Record<string, unknown> } }
+            | undefined
+        )?.__toolMetadata;
+        if (meta === undefined) continue;
+        for (const key of Object.keys(meta.inputSchema)) {
+          if (CREDENTIAL_KEY_RE.test(key)) credentialArgs.push({ tool: meta.name, key });
+        }
+      }
+    }
+  });
+
+  it('redacts every credential-shaped arg name in the registry', () => {
+    expect(credentialArgs.length).toBeGreaterThan(0);
+    const leaked = credentialArgs.filter(({ tool, key }) => {
+      const out = redactArgs({ [key]: 'x'.repeat(20) }, tool);
+      return out[key] !== '[REDACTED:20ch]';
+    });
+    expect(leaked).toEqual([]);
   });
 });

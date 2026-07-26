@@ -86,7 +86,7 @@ export class ScopeRejectedError extends DiscordClientError {
     public readonly granted: readonly string[],
   ) {
     super(`Tool ${tool} requires scope '${required}', granted: [${granted.join(', ')}]`);
-    this.recoveryHint = `Re-launch server with MCP_SCOPES including '${required}'`;
+    this.recoveryHint = `Re-launch server with MCP_CATEGORIES including '${required}'`;
   }
 }
 

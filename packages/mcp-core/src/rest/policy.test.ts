@@ -28,7 +28,6 @@ function cfg(partial: Partial<Config> = {}): Config {
     MCP_RETRY_MAX_DELAY_MS: 500,
     MCP_RETRY_JITTER: 'none',
     MCP_TIMEOUT_DEFAULT_MS: 5000,
-    MCP_TIMEOUT_LONG_MS: 60000,
     MCP_CIRCUIT_ENABLED: false,
     MCP_CIRCUIT_FAILURE_THRESHOLD: 10,
     MCP_CIRCUIT_HALF_OPEN_AFTER_MS: 60000,
@@ -164,8 +163,60 @@ describe('buildPolicy (Plan 8 C.1)', () => {
     });
     expect(result).toBe('ok');
     expect(attempts).toBe(2);
-    // Backoff capped by MCP_RETRY_MAX_DELAY_MS so total run < 1500ms.
-    expect(Date.now() - start).toBeLessThan(1500);
+    // A single full-jitter backoff off a 50ms base draws from [0, 50) — the
+    // whole run must finish well inside 200ms (100ms+ of scheduler slack).
+    expect(Date.now() - start).toBeLessThan(200);
+  });
+
+  it('grows the backoff across retries (50ms → 100ms with jitter=none)', async () => {
+    const policy = buildPolicy(
+      cfg({
+        MCP_RETRY_MAX_ATTEMPTS: 3,
+        MCP_RETRY_BASE_DELAY_MS: 50,
+        MCP_RETRY_MAX_DELAY_MS: 10000,
+        MCP_RETRY_JITTER: 'none',
+      }),
+    );
+
+    const stamps: number[] = [];
+    await expect(
+      policy.execute(async () => {
+        stamps.push(Date.now());
+        throw new DiscordRetryableError(new Error('5xx'), null);
+      }),
+    ).rejects.toBeInstanceOf(DiscordRetryableError);
+    expect(stamps).toHaveLength(4);
+
+    const gap1 = (stamps[1] as number) - (stamps[0] as number);
+    const gap2 = (stamps[2] as number) - (stamps[1] as number);
+    // Expected 50 → 100. A flat chain (the bug) yields 50 → 50.
+    expect(gap2).toBeGreaterThanOrEqual(gap1 + 30);
+  });
+
+  it('clamps the grown backoff at MCP_RETRY_MAX_DELAY_MS', async () => {
+    const policy = buildPolicy(
+      cfg({
+        MCP_RETRY_MAX_ATTEMPTS: 3,
+        MCP_RETRY_BASE_DELAY_MS: 200,
+        MCP_RETRY_MAX_DELAY_MS: 500,
+        MCP_RETRY_JITTER: 'none',
+      }),
+    );
+
+    const stamps: number[] = [];
+    await expect(
+      policy.execute(async () => {
+        stamps.push(Date.now());
+        throw new DiscordRetryableError(new Error('5xx'), null);
+      }),
+    ).rejects.toBeInstanceOf(DiscordRetryableError);
+    expect(stamps).toHaveLength(4);
+
+    // Uncapped the third gap would be 200 * 2**2 = 800ms; the cap pins it to
+    // 500ms. A flat chain (the bug) would leave it at 200ms.
+    const gap3 = (stamps[3] as number) - (stamps[2] as number);
+    expect(gap3).toBeGreaterThanOrEqual(450);
+    expect(gap3).toBeLessThan(720);
   });
 });
 

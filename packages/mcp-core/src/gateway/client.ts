@@ -48,27 +48,37 @@ export function createGatewayClient(deps: GatewayClientDeps): GatewayClient {
     async start() {
       client =
         deps.clientFactory !== undefined ? deps.clientFactory() : await defaultClientFactory();
-      const handlerDeps = {
-        client: client as never,
-        registry: deps.registry,
-        notifyResource: deps.notifyResource,
-      };
-      teardowns.push(bindGuildUpdateHandler(handlerDeps));
-      teardowns.push(bindVoiceStateUpdateHandler(handlerDeps));
-      teardowns.push(bindTypingStartHandler(handlerDeps));
-      teardowns.push(bindPresenceUpdateHandler(handlerDeps));
-      teardowns.push(
-        bindAuditLogPollHandler({
+      try {
+        const handlerDeps = {
+          client: client as never,
           registry: deps.registry,
           notifyResource: deps.notifyResource,
-          fetchAuditLog: async (guildId: string) =>
-            (await client!.rest.get(`/guilds/${guildId}/audit-logs?limit=1`)) as {
-              audit_log_entries: Array<{ id: string }>;
-            },
-          pollIntervalMs: 60_000,
-        }),
-      );
-      await client.login(deps.token);
+        };
+        teardowns.push(bindGuildUpdateHandler(handlerDeps));
+        teardowns.push(bindVoiceStateUpdateHandler(handlerDeps));
+        teardowns.push(bindTypingStartHandler(handlerDeps));
+        teardowns.push(bindPresenceUpdateHandler(handlerDeps));
+        teardowns.push(
+          bindAuditLogPollHandler({
+            registry: deps.registry,
+            notifyResource: deps.notifyResource,
+            fetchAuditLog: async (guildId: string) =>
+              (await client!.rest.get(`/guilds/${guildId}/audit-logs?limit=1`)) as {
+                audit_log_entries: Array<{ id: string }>;
+              },
+            pollIntervalMs: 60_000,
+          }),
+        );
+        await client.login(deps.token);
+      } catch (err) {
+        // Unwind listeners + poll interval before dropping the client — the
+        // fetchAuditLog closure dereferences `client`.
+        for (const td of teardowns) td();
+        teardowns.length = 0;
+        await client!.destroy().catch(() => {});
+        client = null;
+        throw err;
+      }
     },
     async stop() {
       for (const td of teardowns) td();

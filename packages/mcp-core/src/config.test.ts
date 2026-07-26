@@ -273,28 +273,6 @@ describe('loadConfig', () => {
         } as NodeJS.ProcessEnv),
       ).toThrow();
     });
-
-    it('MCP_TIMEOUT_LONG_MS defaults to 60000 and rejects out-of-range', () => {
-      const def = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
-      expect(def.MCP_TIMEOUT_LONG_MS).toBe(60000);
-      const overridden = loadConfig({
-        DISCORD_TOKEN: VALID_TOKEN,
-        MCP_TIMEOUT_LONG_MS: '120000',
-      } as NodeJS.ProcessEnv);
-      expect(overridden.MCP_TIMEOUT_LONG_MS).toBe(120000);
-      expect(() =>
-        loadConfig({
-          DISCORD_TOKEN: VALID_TOKEN,
-          MCP_TIMEOUT_LONG_MS: '999',
-        } as NodeJS.ProcessEnv),
-      ).toThrow();
-      expect(() =>
-        loadConfig({
-          DISCORD_TOKEN: VALID_TOKEN,
-          MCP_TIMEOUT_LONG_MS: '300001',
-        } as NodeJS.ProcessEnv),
-      ).toThrow();
-    });
   });
 
   describe('Circuit breaker + bulkhead fields (Plan 8 Phase D)', () => {

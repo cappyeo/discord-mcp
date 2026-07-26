@@ -7,13 +7,8 @@
       "type": 17,
       "accent_color": 5793266,
       "components": [
-        {
-          "type": 9,
-          "components": [
-            { "type": 10, "content": "## {{title}}" },
-            { "type": 10, "content": "{{body}}" }
-          ]
-        },
+        { "type": 10, "content": "## {{title}}" },
+        { "type": 10, "content": "{{body}}" },
         { "type": 14, "divider": true, "spacing": 1 },
         {
           "type": 1,

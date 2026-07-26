@@ -4,6 +4,7 @@ import { dualResult } from '../_lib/response.js';
 import { wrapUntrusted } from '../_lib/untrusted.js';
 import {
   buildSamplingPrompt,
+  FallbackMeta,
   fallbackData,
   parseLLMJsonResponse,
   type SamplingMessage,
@@ -39,11 +40,16 @@ export default defineTool({
       .default('Reject hate speech, doxxing, spam, and explicit content.')
       .describe('Moderation policy in plain language'),
   },
+  // Analysed fields are optional: without the client `sampling` capability the
+  // tool returns the raw payload plus `_meta` instead. See FallbackMeta.
   outputSchema: {
-    decision: z.enum(['allow', 'flag', 'block']),
-    reasons: z.array(z.string()),
-    confidence: z.number().min(0).max(1),
-    sampling_used: z.boolean(),
+    decision: z.enum(['allow', 'flag', 'block']).optional(),
+    reasons: z.array(z.string()).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    sampling_used: z.boolean().optional(),
+    content: z.string().optional(),
+    policy: z.string().optional(),
+    _meta: FallbackMeta,
   },
   annotations: {
     readOnlyHint: true,

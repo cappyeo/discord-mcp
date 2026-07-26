@@ -1,4 +1,4 @@
-import { createDebouncer } from '../debounce.js';
+import { createKeyedDebouncer } from '../debounce.js';
 import type { SubscriptionRegistry } from '../subscription_registry.js';
 
 export interface HandlerDeps {
@@ -11,13 +11,17 @@ export interface HandlerDeps {
 }
 
 export function bindTypingStartHandler(deps: HandlerDeps): () => void {
-  const debouncedNotify = createDebouncer<[string]>((uri) => {
+  const debouncer = createKeyedDebouncer((uri) => {
     if (deps.registry.has(uri)) void deps.notifyResource(uri);
   }, 5000);
   const handler = (typing: { channel: { id: string } }): void => {
     const uri = `discord://channel/${typing.channel.id}/typing`;
-    debouncedNotify(uri);
+    if (!deps.registry.has(uri)) return;
+    debouncer.call(uri);
   };
   deps.client.on('typingStart', handler as never);
-  return () => deps.client.off('typingStart', handler as never);
+  return () => {
+    deps.client.off('typingStart', handler as never);
+    debouncer.cancelAll();
+  };
 }

@@ -26,6 +26,16 @@
  *
  *   redactRoute('/guilds/111/regions?limit=10')
  *   // → '/guilds/:id/regions'
+ *
+ * Two Discord routes carry a **credential** in the path rather than an ID:
+ * `/webhooks/{id}/{token}` and `/interactions/{id}/{token}`. Those tokens are
+ * bearer credentials — anyone holding one can execute the webhook or respond
+ * to the interaction without the bot token. They are not snowflakes, so the
+ * digit-only rule above leaves them intact. They are collapsed positionally.
+ *
+ * @example
+ *   redactRoute('/webhooks/123456789012345678/A_SECRET_TOKEN/messages/@original')
+ *   // → '/webhooks/:id/:token/messages/@original'
  */
 export function redactRoute(path: string): string {
   // Strip query string first; everything after `?` is operator-tunable
@@ -36,5 +46,33 @@ export function redactRoute(path: string): string {
   // Replace any sequence of 17–20 digits (Discord snowflake range) with
   // `:id`. We do NOT touch `@me` / `@original` because they have no
   // digits and the regex is digit-only by construction.
-  return withoutQuery.replace(/\d{17,20}/g, ':id');
+  const idsCollapsed = withoutQuery.replace(/\d{17,20}/g, ':id');
+
+  // Collapse the credential segment positionally — by where it sits in the
+  // route, not by what it looks like. A webhook token has no fixed character
+  // class, so any pattern-based rule would miss some of them.
+  const segs = idsCollapsed.split('/');
+  for (let i = 0; i < segs.length; i++) {
+    if ((segs[i] === 'webhooks' || segs[i] === 'interactions') && segs[i + 1] === ':id') {
+      if (segs[i + 2] !== undefined && segs[i + 2] !== '') {
+        segs[i + 2] = ':token';
+      }
+    }
+  }
+  return segs.join('/');
+}
+
+/**
+ * Scrub Discord bearer credentials out of a free-text string (an error
+ * message, a stack frame, a URL).
+ *
+ * `redactRoute` is for a known-clean path with a known shape. This is for text
+ * that merely *contains* a URL — `DiscordAPIError.message`, `err.url`, an
+ * exception thrown by fetch. It targets the two path-embedded credentials and
+ * strips query strings, which is where Discord puts CDN signatures.
+ */
+export function redactCredentialUrl(text: string): string {
+  return text
+    .replace(/\/(webhooks|interactions)\/(\d{17,20})\/[^/?#\s]+/g, '/$1/$2/:token')
+    .replace(/\?[^\s]*/g, '');
 }

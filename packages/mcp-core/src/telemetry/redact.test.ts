@@ -18,8 +18,33 @@ describe('redactRoute', () => {
 
   it('preserves the @original literal (interactions edge case)', () => {
     expect(redactRoute('/webhooks/123456789012345678/abc/messages/@original')).toBe(
-      '/webhooks/:id/abc/messages/@original',
+      '/webhooks/:id/:token/messages/@original',
     );
+  });
+
+  it('collapses the webhook token — it is a bearer credential, not an ID', () => {
+    // Anyone holding this segment can execute the webhook without the bot
+    // token. It is not a snowflake, so the digit rule alone leaves it intact.
+    const out = redactRoute(
+      '/webhooks/123456789012345678/xN8s-QK_secretTokenValue.aBcDeF/messages/987654321098765432',
+    );
+    expect(out).toBe('/webhooks/:id/:token/messages/:id');
+    expect(out).not.toContain('secretTokenValue');
+  });
+
+  it('collapses the interaction token', () => {
+    const out = redactRoute('/interactions/123456789012345678/aW50ZXJhY3Rpb25Ub2tlbg/callback');
+    expect(out).toBe('/interactions/:id/:token/callback');
+    expect(out).not.toContain('aW50ZXJhY3Rpb25Ub2tlbg');
+  });
+
+  it('leaves a bare /webhooks/:id route alone', () => {
+    expect(redactRoute('/webhooks/123456789012345678')).toBe('/webhooks/:id');
+  });
+
+  it('does not invent a token segment for non-credential routes', () => {
+    // `webhooks` only carries a token when it directly follows the id.
+    expect(redactRoute('/channels/123456789012345678/webhooks')).toBe('/channels/:id/webhooks');
   });
 
   it('strips query strings entirely', () => {

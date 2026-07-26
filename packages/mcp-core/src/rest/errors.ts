@@ -38,6 +38,16 @@ const RETRYABLE_NETWORK_CODES = new Set([
 ]);
 
 /**
+ * Network codes that fire AFTER the request may already have reached Discord —
+ * the response, not the request, is what was lost.  Replaying these on a
+ * non-idempotent verb duplicates the side effect (double message, double ban,
+ * double webhook execution).  The remaining codes (`ECONNREFUSED`,
+ * `ENOTFOUND`, `EAI_AGAIN`) fail before a single byte is sent, so they stay
+ * retryable for every verb.
+ */
+const AMBIGUOUS_NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENETUNREACH']);
+
+/**
  * Inspect an arbitrary thrown value and decide whether it represents a
  * retryable upstream condition.  Returns a `DiscordRetryableError` (so
  * cockatiel matches via `orType`) or `null` for non-retryable errors
@@ -52,8 +62,19 @@ const RETRYABLE_NETWORK_CODES = new Set([
  *  3. `HTTPError` (low-level fetch failure with a status, e.g. transparent
  *     proxy 502s) when status is 5xx.
  *  4. Plain `Error` whose `code` matches a known retryable network code.
+ *
+ * `opts.method` is the HTTP verb the call was made with.  For `post` the
+ * AMBIGUOUS classes — 5xx and the post-send network codes — are reported as
+ * non-retryable, because a POST whose response was lost may already have
+ * created the resource.  429 and the pre-send network codes are explicit
+ * rejections with no duplicate risk and stay retryable for POST too.
  */
-export function classifyDiscordError(err: unknown): DiscordRetryableError | null {
+export function classifyDiscordError(
+  err: unknown,
+  opts?: { method?: string },
+): DiscordRetryableError | null {
+  const isPost = opts?.method === 'post';
+
   // --- 429: rate limit ---
   if (err instanceof RateLimitError) {
     // RateLimitError.retryAfter is in milliseconds per @discordjs/rest 2.x docs.
@@ -62,7 +83,7 @@ export function classifyDiscordError(err: unknown): DiscordRetryableError | null
 
   // --- DiscordAPIError: only 5xx are retryable ---
   if (err instanceof DiscordAPIError) {
-    if (err.status >= 500 && err.status < 600) {
+    if (!isPost && err.status >= 500 && err.status < 600) {
       return new DiscordRetryableError(err, null);
     }
     // Some Discord 4xx responses include a 429 status — handle defensively.
@@ -77,23 +98,28 @@ export function classifyDiscordError(err: unknown): DiscordRetryableError | null
 
   // --- HTTPError: low-level fetch / proxy failure ---
   if (err instanceof HTTPError) {
-    if (err.status >= 500 && err.status < 600) {
+    if (!isPost && err.status >= 500 && err.status < 600) {
       return new DiscordRetryableError(err, null);
     }
     return null;
   }
 
   // --- Network-level: ECONNRESET / ETIMEDOUT / ENOTFOUND / etc ---
+  const isRetryableCode = (code: unknown): boolean =>
+    typeof code === 'string' &&
+    RETRYABLE_NETWORK_CODES.has(code) &&
+    !(isPost && AMBIGUOUS_NETWORK_CODES.has(code));
+
   if (err instanceof Error) {
     const code = (err as Error & { code?: unknown }).code;
-    if (typeof code === 'string' && RETRYABLE_NETWORK_CODES.has(code)) {
+    if (isRetryableCode(code)) {
       return new DiscordRetryableError(err, null);
     }
     // undici wraps low-level errors in `cause` — peek one level deep.
     const inner = (err as Error & { cause?: unknown }).cause;
     if (inner instanceof Error) {
       const innerCode = (inner as Error & { code?: unknown }).code;
-      if (typeof innerCode === 'string' && RETRYABLE_NETWORK_CODES.has(innerCode)) {
+      if (isRetryableCode(innerCode)) {
         return new DiscordRetryableError(err, null);
       }
     }

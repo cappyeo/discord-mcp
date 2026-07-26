@@ -24,10 +24,11 @@ function stripTags(content: string, tagPattern: RegExp): string {
   return content.replace(tagPattern, '[FILTERED_TAG]');
 }
 
+const outerRe = /<\/?untrusted_discord_[a-z_]*[^>]*>/gi;
+
 export function wrapUntrusted(content: string, kind: UntrustedKind): string {
   const tag = `untrusted_discord_${kind}`;
-  const tagRe = new RegExp(`</?${tag}[^>]*>`, 'gi');
-  const safe = stripTags(content, tagRe);
+  const safe = stripTags(content, outerRe);
   const n = nonce();
   return [
     `<${tag} nonce="${n}">`,
@@ -50,7 +51,7 @@ export function wrapMessages(messages: readonly MessageForWrap[], channelId: str
     .map(
       (m) =>
         `<msg id="${escapeAttr(m.id)}" author="${escapeAttr(m.author)}">` +
-        `${stripTags(m.content, msgTagRe)}` +
+        `${stripTags(stripTags(m.content, msgTagRe), outerRe)}` +
         `</msg>`,
     )
     .join('\n');

@@ -170,4 +170,23 @@ describe('executePipeline', () => {
     expect(result.steps).toHaveLength(0);
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it('stops before the next step when the signal aborts mid-pipeline', async () => {
+    const ac = new AbortController();
+    const invoke = vi.fn().mockImplementation(async () => {
+      ac.abort();
+      return ok({ ok: true });
+    });
+    const result = await executePipeline(
+      [
+        { id: 'a', tool: 'messages_send', args: { content: 'x' } },
+        { id: 'b', tool: 'messages_send', args: { content: 'y' } },
+      ],
+      invoke,
+      { signal: ac.signal },
+    );
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(result.aborted).toBe(true);
+    expect(result.steps).toHaveLength(1);
+  });
 });

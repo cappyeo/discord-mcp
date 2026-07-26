@@ -37,7 +37,6 @@ function cfg(partial: Partial<Config> = {}): Config {
     MCP_RETRY_MAX_DELAY_MS: 500,
     MCP_RETRY_JITTER: 'none',
     MCP_TIMEOUT_DEFAULT_MS: 5000,
-    MCP_TIMEOUT_LONG_MS: 60000,
     MCP_CIRCUIT_ENABLED: false,
     MCP_CIRCUIT_FAILURE_THRESHOLD: 10,
     MCP_CIRCUIT_HALF_OPEN_AFTER_MS: 60000,
@@ -136,5 +135,96 @@ describe('resilience retry integration (Plan 8 C.5)', () => {
     await expect(rest.get('/channels/123')).rejects.toBeDefined();
     // maxAttempts: 2 retries → 3 total tries.
     expect(requestCount).toBe(3);
+  });
+});
+
+/**
+ * A POST that reached Discord but whose RESPONSE was lost must NOT be
+ * replayed — that duplicates the message / ban / webhook execution.  Only the
+ * ambiguous classes (5xx + post-send network codes) are affected; explicit
+ * rejections (429) and pre-send network failures (ECONNREFUSED) still retry.
+ */
+describe('resilience retry integration: POST is not replayed on ambiguous failures', () => {
+  /** REST whose transport always fails with the given network `code`. */
+  function buildNetworkFailingRest(code: string): REST {
+    return new REST({
+      version: '10',
+      api: baseUrl,
+      retries: 0,
+      makeRequest: async () => {
+        requestCount++;
+        throw Object.assign(new TypeError('fetch failed'), {
+          cause: Object.assign(new Error('socket failure'), { code }),
+        });
+      },
+    }).setToken('fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  }
+
+  it('does NOT retry POST on 503 — single request', async () => {
+    scriptedResponses = Array.from({ length: 6 }, () => ({
+      status: 503,
+      body: '{"message":"service unavailable"}',
+    }));
+    const rest = wrapRestWithResilience(buildRest(), buildPolicy(cfg()));
+
+    await expect(
+      rest.post('/channels/123/messages', { body: { content: 'x' } }),
+    ).rejects.toBeDefined();
+    expect(requestCount).toBe(1);
+  });
+
+  it('does NOT retry POST on ECONNRESET — single request', async () => {
+    const rest = wrapRestWithResilience(buildNetworkFailingRest('ECONNRESET'), buildPolicy(cfg()));
+
+    await expect(
+      rest.post('/channels/123/messages', { body: { content: 'x' } }),
+    ).rejects.toBeDefined();
+    expect(requestCount).toBe(1);
+  });
+
+  it('DOES retry POST on ECONNREFUSED — the request never left the host', async () => {
+    const rest = wrapRestWithResilience(
+      buildNetworkFailingRest('ECONNREFUSED'),
+      buildPolicy(cfg({ MCP_RETRY_MAX_ATTEMPTS: 2 })),
+    );
+
+    await expect(
+      rest.post('/channels/123/messages', { body: { content: 'x' } }),
+    ).rejects.toBeDefined();
+    expect(requestCount).toBe(3);
+  });
+
+  it('DOES retry POST on 429 — an explicit rejection carries no duplicate risk', async () => {
+    scriptedResponses = [
+      {
+        status: 429,
+        body: JSON.stringify({
+          code: 0,
+          message: 'rate limited',
+          retry_after: 0.05,
+          global: false,
+        }),
+        headers: { 'retry-after': '0.05' },
+      },
+      { status: 200, body: '{"id":"recovered"}' },
+    ];
+    const rest = wrapRestWithResilience(buildRest(), buildPolicy(cfg()));
+
+    const result = (await rest.post('/channels/123/messages', { body: { content: 'x' } })) as {
+      id: string;
+    };
+    expect(result).toEqual({ id: 'recovered' });
+    expect(requestCount).toBe(2);
+  });
+
+  it('still retries GET on 503 — idempotent verbs are unaffected', async () => {
+    scriptedResponses = [
+      { status: 503, body: '{"message":"down"}' },
+      { status: 200, body: '{"id":"ok"}' },
+    ];
+    const rest = wrapRestWithResilience(buildRest(), buildPolicy(cfg()));
+
+    await expect(rest.get('/channels/123')).resolves.toEqual({ id: 'ok' });
+    expect(requestCount).toBe(2);
   });
 });

@@ -55,6 +55,11 @@ export async function executePipeline(
     const step = steps[i]!;
     const id = step.id ?? `step_${i}`;
 
+    if (ctx.signal.aborted) {
+      aborted = true;
+      break;
+    }
+
     if (step.if !== undefined) {
       if (!evalCondition(step.if, variables)) {
         results.push({ id, tool: step.tool, status: 'skipped', duration_ms: 0 });

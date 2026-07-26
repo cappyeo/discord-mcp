@@ -1,4 +1,4 @@
-import { ComponentTypeId } from './schema.js';
+import { ComponentsV2Array, ComponentTypeId } from './schema.js';
 
 export interface ValidatorIssue {
   readonly path: string;
@@ -16,7 +16,7 @@ interface Node {
   type?: number;
   components?: Node[];
   items?: unknown[];
-  accessory?: { type?: number };
+  accessory?: Node;
   custom_id?: string;
   url?: string;
   style?: number;
@@ -40,9 +40,55 @@ function toNodes(input: unknown): Node[] {
   return input as Node[];
 }
 
+const KNOWN_TYPES = new Set<number>(Object.values(ComponentTypeId));
+
+/**
+ * Collect nodes carrying a type id the schema does not know. Reported as their
+ * own soft issue instead of letting the zod union blow up with a wall of
+ * unrelated branch errors — a component type Discord ships later should not
+ * make the tool unusable until the schema is bumped.
+ */
+function collectUnknownTypes(nodes: readonly Node[], path: string, out: ValidatorIssue[]): void {
+  nodes.forEach((node, idx) => {
+    const here = `${path}[${idx}]`;
+    if (typeof node.type === 'number' && !KNOWN_TYPES.has(node.type)) {
+      out.push({
+        path: here,
+        code: 'UNKNOWN_TYPE',
+        message: `Unknown component type ${node.type}.`,
+        fix_hint:
+          'Use a documented Components V2 type; if Discord shipped a new one, upgrade discord-mcp.',
+      });
+    }
+    if (Array.isArray(node.components)) {
+      collectUnknownTypes(node.components, `${here}.components`, out);
+    }
+    if (node.accessory !== undefined) {
+      collectUnknownTypes([node.accessory], `${here}.accessory`, out);
+    }
+  });
+}
+
 export function validateComponentsV2(input: unknown): ValidatorResult {
   const issues: ValidatorIssue[] = [];
   const components = toNodes(input);
+
+  const unknownTypes: ValidatorIssue[] = [];
+  collectUnknownTypes(components, 'components', unknownTypes);
+  if (unknownTypes.length > 0) {
+    issues.push(...unknownTypes);
+  } else {
+    const parsed = ComponentsV2Array.safeParse(input);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        issues.push({
+          path: ['components', ...issue.path].join('.'),
+          code: `SCHEMA_${issue.code}`,
+          message: issue.message,
+        });
+      }
+    }
+  }
 
   const total = countRecursive(components);
   if (total > 40) {
@@ -101,14 +147,25 @@ export function validateComponentsV2(input: unknown): ValidatorResult {
         });
       }
 
-      if (node.type === ComponentTypeId.Section && node.accessory !== undefined) {
-        const at = node.accessory.type;
-        if (at !== ComponentTypeId.Thumbnail && at !== ComponentTypeId.Button) {
+      if (node.type === ComponentTypeId.Section) {
+        if (node.accessory === undefined) {
           issues.push({
-            path: `${here}.accessory`,
-            code: 'INVALID_ACCESSORY',
-            message: `Section accessory must be Thumbnail (11) or Button (2); got type ${at}.`,
+            path: here,
+            code: 'SECTION_NO_ACCESSORY',
+            message: 'Section requires an accessory; Discord rejects a Section without one.',
+            fix_hint:
+              'Add a Thumbnail (11) or Button (2) accessory, or drop the Section and put its TextDisplay children directly in the parent.',
           });
+        } else {
+          const at = node.accessory.type;
+          if (at !== ComponentTypeId.Thumbnail && at !== ComponentTypeId.Button) {
+            issues.push({
+              path: `${here}.accessory`,
+              code: 'INVALID_ACCESSORY',
+              message: `Section accessory must be Thumbnail (11) or Button (2); got type ${at}.`,
+            });
+          }
+          walk([node.accessory], `${here}.accessory`, ComponentTypeId.Section);
         }
       }
 

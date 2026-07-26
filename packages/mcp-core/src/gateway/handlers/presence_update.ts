@@ -1,4 +1,4 @@
-import { createDebouncer } from '../debounce.js';
+import { createKeyedDebouncer } from '../debounce.js';
 import type { SubscriptionRegistry } from '../subscription_registry.js';
 
 export interface HandlerDeps {
@@ -11,13 +11,17 @@ export interface HandlerDeps {
 }
 
 export function bindPresenceUpdateHandler(deps: HandlerDeps): () => void {
-  const debouncedNotify = createDebouncer<[string]>((uri) => {
+  const debouncer = createKeyedDebouncer((uri) => {
     if (deps.registry.has(uri)) void deps.notifyResource(uri);
   }, 1000);
   const handler = (_old: unknown, newPresence: { guild: { id: string } }): void => {
     const uri = `discord://guild/${newPresence.guild.id}/members/online`;
-    debouncedNotify(uri);
+    if (!deps.registry.has(uri)) return;
+    debouncer.call(uri);
   };
   deps.client.on('presenceUpdate', handler as never);
-  return () => deps.client.off('presenceUpdate', handler as never);
+  return () => {
+    deps.client.off('presenceUpdate', handler as never);
+    debouncer.cancelAll();
+  };
 }

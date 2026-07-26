@@ -2,6 +2,7 @@ import { REST } from '@discordjs/rest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import packageJson from '../package.json' with { type: 'json' };
 import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
 import { buildServer } from './server.js';
@@ -15,13 +16,16 @@ describe('MCP protocol contract', () => {
   const logger = createLogger(config);
 
   let client: Client;
+  let subscriptions: Awaited<ReturnType<typeof buildServer>>['subscriptions'];
 
   beforeAll(async () => {
     // Construct REST inside beforeAll so the `fetch` reference is captured AFTER msw has
     // patched globalThis.fetch in the setupFiles beforeAll hook.
     const rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const { server } = await buildServer({ rest, logger, config });
+    const built = await buildServer({ rest, logger, config });
+    const { server } = built;
+    subscriptions = built.subscriptions;
     client = new Client({ name: 'contract-test', version: '0.0.0' }, { capabilities: {} });
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   });
@@ -181,6 +185,27 @@ describe('MCP protocol contract', () => {
     expect(r.structuredContent).toMatchObject({ code: 'DRY_RUN_PREVIEW', tool: 'messages_delete' });
   });
 
+  it('reports the real package version in the initialize handshake', () => {
+    // Was hardcoded '0.0.0'. Clients use this for compatibility gating and
+    // bug reports, so a stale value silently misroutes both.
+    expect(client.getServerVersion()).toMatchObject({
+      name: 'discord-mcp',
+      version: packageJson.version,
+    });
+  });
+
+  it('sends instructions that describe the actual tool surface', () => {
+    // Was 'v0/Plan-1 — only messages_send available', injected into the
+    // agent's system context on a 192-tool server — actively steering the
+    // model away from 191 of them.
+    const instructions = client.getInstructions() ?? '';
+    expect(instructions).not.toContain('only messages_send');
+    expect(instructions).not.toContain('Plan-1');
+    expect(instructions).toContain('192 tools');
+    expect(instructions).toContain('__confirm');
+    expect(instructions).toContain('untrusted');
+  });
+
   it('advertises __confirm in the JSON Schema of confirm-gated tools only', async () => {
     const { tools } = await client.listTools();
     const gated = tools.find((t) => t.name === 'messages_delete');
@@ -193,6 +218,33 @@ describe('MCP protocol contract', () => {
     // Ungated tools must not advertise it.
     const ungated = tools.find((t) => t.name === 'messages_send');
     expect(ungated?.inputSchema.properties).not.toHaveProperty('__confirm');
+  });
+
+  it('publishes outputSchema for every tool that declares one', async () => {
+    // 191 of 192 tools declared an outputSchema that tools/list never emitted,
+    // so clients could not use it and nothing validated against it.
+    const { tools } = await client.listTools();
+    const withOutput = tools.filter((t) => t.outputSchema !== undefined);
+    expect(withOutput.length).toBeGreaterThanOrEqual(191);
+    const send = tools.find((t) => t.name === 'messages_send');
+    expect(send?.outputSchema).toMatchObject({ type: 'object' });
+    // Union with the error envelope, so a validating client accepts an
+    // isError result instead of throwing on it.
+    const arms = (send?.outputSchema as { anyOf?: unknown[] }).anyOf;
+    expect(Array.isArray(arms)).toBe(true);
+    expect(arms).toHaveLength(2);
+  });
+
+  it('returns an error result that satisfies the published error arm', async () => {
+    // The regression this guards: emitting only the success schema turns every
+    // isError result into a client-side McpError throw on SDK >= 1.20.
+    const r = await client.callTool({ name: 'messages_send', arguments: {} });
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent).toMatchObject({
+      code: expect.any(String),
+      retriable: expect.any(Boolean),
+      category: expect.stringMatching(/^(client|server)$/),
+    });
   });
 
   it('lists 6 V2 resources via MCP resources/list', async () => {
@@ -212,10 +264,16 @@ describe('MCP protocol contract', () => {
     expect(parsed.name).toBe('announcement');
   });
 
-  it('handles resources/subscribe + resources/unsubscribe roundtrip', async () => {
+  it('registers and deregisters the URI on subscribe/unsubscribe', async () => {
+    // Previously the only assertion-free test in the suite: it awaited both
+    // calls and verified solely that the SDK did not reject, so gutting the
+    // unsubscribe handler to a no-op still passed.
     const uri = 'discord://guild/999000999000999000/info';
+    expect(subscriptions.has(uri)).toBe(false);
     await client.subscribeResource({ uri });
+    expect(subscriptions.has(uri)).toBe(true);
     await client.unsubscribeResource({ uri });
+    expect(subscriptions.has(uri)).toBe(false);
   });
 });
 

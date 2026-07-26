@@ -9,7 +9,10 @@ describe('components_v2_build_section', () => {
       { name: 'components_v2_build_section', enabled: true },
     );
     const r = (await t.run(
-      { text: ['line 1', 'line 2'] },
+      {
+        text: ['line 1', 'line 2'],
+        accessory: { type: 11, media: { url: 'https://example.com/img.png' } },
+      },
       { signal: new AbortController().signal },
     )) as {
       isError: boolean;
@@ -37,5 +40,23 @@ describe('components_v2_build_section', () => {
       { signal: new AbortController().signal },
     )) as { isError: boolean; structuredContent: { component: { accessory?: { type: number } } } };
     expect(r.structuredContent.component.accessory?.type).toBe(11);
+  });
+
+  it('accessory is required and a Button accessory needs custom_id or url', () => {
+    const meta = (
+      buildSection as unknown as {
+        __toolMetadata: {
+          inputSchema: { accessory: { safeParse: (v: unknown) => { success: boolean } } };
+        };
+      }
+    ).__toolMetadata;
+    expect(meta.inputSchema.accessory.safeParse(undefined).success).toBe(false);
+    expect(meta.inputSchema.accessory.safeParse({ type: 2, style: 1, label: 'x' }).success).toBe(
+      false,
+    );
+    expect(
+      meta.inputSchema.accessory.safeParse({ type: 2, style: 1, label: 'x', custom_id: 'go' })
+        .success,
+    ).toBe(true);
   });
 });

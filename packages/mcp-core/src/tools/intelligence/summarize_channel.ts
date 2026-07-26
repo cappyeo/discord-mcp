@@ -7,8 +7,10 @@ import { ChannelId } from '../_lib/snowflake.js';
 import { wrapMessages } from '../_lib/untrusted.js';
 import {
   buildSamplingPrompt,
+  FallbackMeta,
   fallbackData,
   parseLLMJsonResponse,
+  RawMessagePayload,
   type SamplingMessage,
 } from './_lib/sampling.js';
 
@@ -50,12 +52,18 @@ export default defineTool({
       .describe('Messages to consider (10-100, default 50)'),
     style: z.enum(['bullet', 'paragraph', 'executive']).default('bullet').describe('Summary style'),
   },
+  // Analysed fields are optional: without the client `sampling` capability the
+  // tool returns the raw payload plus `_meta` instead. See FallbackMeta.
   outputSchema: {
-    summary: z.string(),
-    key_topics: z.array(z.string()),
-    action_items: z.array(z.string()),
+    summary: z.string().optional(),
+    key_topics: z.array(z.string()).optional(),
+    action_items: z.array(z.string()).optional(),
     message_count_used: z.number(),
-    sampling_used: z.boolean(),
+    sampling_used: z.boolean().optional(),
+    raw_messages: RawMessagePayload.optional(),
+    channel_id: z.string().optional(),
+    style: z.string().optional(),
+    _meta: FallbackMeta,
   },
   annotations: {
     readOnlyHint: true,

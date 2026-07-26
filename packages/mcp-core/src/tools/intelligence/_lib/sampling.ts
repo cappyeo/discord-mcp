@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface SamplingMessage {
   role: 'user' | 'assistant';
   content: { type: 'text'; text: string };
@@ -56,6 +58,37 @@ export function parseLLMJsonResponse<T>(raw: string): ParseLLMResult<T> {
   }
   return { ok: false, raw, error: 'unbalanced braces' };
 }
+
+/**
+ * The `_meta` envelope every fallback result carries.
+ *
+ * When the MCP client does not advertise the `sampling` capability, these
+ * tools cannot call an LLM, so they return the raw Discord payload for the
+ * host model to process instead of the analysed shape. That is a genuinely
+ * different result shape, and it is the shape MOST clients get — sampling is
+ * still rare. Each tool therefore declares its analysed fields as optional and
+ * includes this envelope, so the published outputSchema describes both arms
+ * rather than only the one that needs a sampling-capable client.
+ *
+ * Branch on `_meta.fallback === 'host_llm_should_process'`.
+ */
+export const FallbackMeta = z
+  .object({
+    fallback: z.literal('host_llm_should_process'),
+    intent: z.string(),
+    sampling_used: z.literal(false),
+  })
+  .optional()
+  .describe(
+    'Present ONLY when the client lacks the sampling capability. When present, the analysed ' +
+      'fields are absent and the raw Discord payload is returned instead for the host model ' +
+      'to process.',
+  );
+
+/** The raw Discord payload shape returned on the fallback path. */
+export const RawMessagePayload = z.array(
+  z.object({ id: z.string(), author: z.string(), content: z.string() }),
+);
 
 export function fallbackData<T extends Record<string, unknown>>(
   data: T,

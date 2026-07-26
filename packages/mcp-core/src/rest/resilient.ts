@@ -3,8 +3,16 @@ import { BrokenCircuitError, BulkheadRejectedError, type IPolicy } from 'cockati
 import { BulkheadFullError, CircuitOpenError } from '../errors/server.js';
 import { classifyDiscordError, DiscordRetryableError } from './errors.js';
 
-/** Function deciding whether a thrown error is retryable. */
-export type ClassifierFn = (err: unknown) => DiscordRetryableError | null;
+/**
+ * Function deciding whether a thrown error is retryable.  `opts.method` is the
+ * HTTP verb of the originating call so the classifier can refuse to retry
+ * ambiguous failures on non-idempotent verbs.  The second parameter is
+ * optional, so one-arg classifiers remain assignable.
+ */
+export type ClassifierFn = (
+  err: unknown,
+  opts?: { method?: string },
+) => DiscordRetryableError | null;
 
 /** Options passed to {@link wrapRestWithResilience}. */
 export interface WrapResilienceOptions {
@@ -63,7 +71,7 @@ export function wrapRestWithResilience(
         try {
           return await original(...args);
         } catch (err) {
-          const retryable = classifier(err);
+          const retryable = classifier(err, { method: verb });
           if (retryable !== null) {
             throw retryable;
           }

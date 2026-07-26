@@ -7,13 +7,8 @@
       "type": 17,
       "accent_color": 65280,
       "components": [
-        {
-          "type": 9,
-          "components": [
-            { "type": 10, "content": "# Release {{version}}" },
-            { "type": 10, "content": "{{headline}}" }
-          ]
-        },
+        { "type": 10, "content": "# Release {{version}}" },
+        { "type": 10, "content": "{{headline}}" },
         { "type": 14, "divider": true, "spacing": 1 },
         { "type": 10, "content": "{{changelog}}" },
         {

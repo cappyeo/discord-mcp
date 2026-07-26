@@ -20,7 +20,7 @@ export const ComponentTypeId = {
 
 const Emoji = z.object({
   id: z.string().optional(),
-  name: z.string(),
+  name: z.string().optional(),
   animated: z.boolean().optional(),
 });
 
@@ -31,7 +31,7 @@ const ButtonBase = z.object({
   emoji: Emoji.optional(),
   disabled: z.boolean().optional(),
 });
-const Button = z.union([
+export const Button = z.union([
   ButtonBase.extend({ custom_id: z.string().min(1).max(100), url: z.never().optional() }),
   ButtonBase.extend({ url: z.string().url(), custom_id: z.never().optional() }),
 ]);
@@ -78,7 +78,7 @@ const Thumbnail = z.object({
 const Section = z.object({
   type: z.literal(9),
   components: z.array(TextDisplay).min(1).max(3),
-  accessory: z.union([Thumbnail, Button]).optional(),
+  accessory: z.union([Thumbnail, Button]),
 });
 
 const MediaGalleryItem = z.object({
@@ -126,7 +126,7 @@ const Container: z.ZodType<unknown> = z.lazy(() =>
       .array(z.union([Section, TextDisplay, MediaGallery, File, Separator, ActionRow]))
       .min(1)
       .max(10),
-    accent_color: z.number().int().min(0).max(0xffffff).optional(),
+    accent_color: z.number().int().min(0).max(0xffffff).nullish(),
     spoiler: z.boolean().optional(),
   }),
 );

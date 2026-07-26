@@ -49,6 +49,30 @@ describe('ComponentV2 discriminated union', () => {
     expect(r.success).toBe(true);
   });
 
+  it('accepts a Container with accent_color null', () => {
+    const r = ComponentV2.safeParse({
+      type: 17,
+      accent_color: null,
+      components: [{ type: 10, content: 'hi' }],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts a Button emoji given by id alone', () => {
+    const r = ComponentV2.safeParse({
+      type: 2,
+      style: 1,
+      custom_id: 'x',
+      emoji: { id: '112233445566778899' },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects a Section without an accessory', () => {
+    const r = ComponentV2.safeParse({ type: 9, components: [{ type: 10, content: 'hi' }] });
+    expect(r.success).toBe(false);
+  });
+
   it('rejects unknown type id', () => {
     const r = ComponentV2.safeParse({ type: 99, content: 'oops' });
     expect(r.success).toBe(false);

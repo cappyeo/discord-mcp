@@ -7,8 +7,10 @@ import { ChannelId, MessageId } from '../_lib/snowflake.js';
 import { wrapMessages } from '../_lib/untrusted.js';
 import {
   buildSamplingPrompt,
+  FallbackMeta,
   fallbackData,
   parseLLMJsonResponse,
+  RawMessagePayload,
   type SamplingMessage,
 } from './_lib/sampling.js';
 
@@ -69,17 +71,25 @@ export default defineTool({
       .default(['decision', 'action_item'])
       .describe('Entity types to extract'),
   },
+  // Analysed fields are optional: without the client `sampling` capability the
+  // tool returns the raw payload plus `_meta` instead. See FallbackMeta.
   outputSchema: {
-    entities: z.array(
-      z.object({
-        type: z.string(),
-        value: z.string(),
-        source_message_id: MessageId.optional(),
-        context: z.string().optional(),
-      }),
-    ),
-    count: z.number(),
-    sampling_used: z.boolean(),
+    entities: z
+      .array(
+        z.object({
+          type: z.string(),
+          value: z.string(),
+          source_message_id: MessageId.optional(),
+          context: z.string().optional(),
+        }),
+      )
+      .optional(),
+    count: z.number().optional(),
+    sampling_used: z.boolean().optional(),
+    raw_messages: RawMessagePayload.optional(),
+    entity_types: z.array(z.string()).optional(),
+    channel_id: z.string().optional(),
+    _meta: FallbackMeta,
   },
   annotations: {
     readOnlyHint: true,

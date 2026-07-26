@@ -18,7 +18,9 @@ export default defineTool({
     '**When to use**:',
     '- Estimate impact before calling `guild_begin_prune`.',
     '',
-    '**`days`** (1..30) is the inactivity threshold. **`include_roles`** scopes prune to members holding ALL listed roles (max 100).',
+    '**`days`** (1..30) is the inactivity threshold.',
+    '',
+    '**`include_roles`** WIDENS the prune (does not narrow it). An inactive member is pruned only if ALL of their roles appear in this list; a member holding ANY role not listed is never pruned. Members with no roles are always pruned regardless. Max 100.',
     '',
     '**Returns**: `{pruned}` (estimated kick count).',
   ].join('\n'),
@@ -35,7 +37,9 @@ export default defineTool({
       .array(RoleId)
       .max(100)
       .optional()
-      .describe('Members must have ALL these roles to be eligible'),
+      .describe(
+        'WIDENS the prune (does not narrow it). An inactive member is pruned only if ALL of their roles appear in this list; a member holding ANY role not listed is never pruned. Members with no roles are always pruned regardless. Max 100.',
+      ),
   },
   outputSchema: {
     pruned: z.number().int(),

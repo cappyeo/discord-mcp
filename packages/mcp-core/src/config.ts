@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import packageJson from '../package.json' with { type: 'json' };
 
 // Helper for truthy env strings — matches Plan 8 §5 boolean env-string convention.
 const boolish = (def = false) =>
@@ -13,11 +14,19 @@ const ConfigSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   GATEWAY: boolish(false),
 
+  // --- Least privilege ---
+  // Comma-separated allowlist of tool categories. Unset (the default) means
+  // every category is reachable. Names are validated against the categories
+  // that actually exist when the server boots, so a typo fails fast with the
+  // real options rather than silently disabling a whole surface.
+  // The `meta` category is always reachable.
+  MCP_CATEGORIES: z.string().optional(),
+
   // --- OpenTelemetry (Plan 8 Phase A) ---
   // Master switch. When false, mcp-server skips SDK boot entirely (default behavior).
   OTEL_ENABLED: boolish(false),
   OTEL_SERVICE_NAME: z.string().default('discord-mcp'),
-  OTEL_SERVICE_VERSION: z.string().default('0.12.0'),
+  OTEL_SERVICE_VERSION: z.string().default(packageJson.version),
   // OTLP collector endpoint (e.g. http://localhost:4318). Optional — when unset
   // the SDK still boots (if OTEL_CONSOLE_EXPORTER=true) or stays inert.
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
@@ -52,7 +61,6 @@ const ConfigSchema = z.object({
   MCP_RETRY_MAX_DELAY_MS: z.coerce.number().int().min(500).max(60000).default(10000),
   MCP_RETRY_JITTER: z.enum(['none', 'full', 'decorrelated']).default('full'),
   MCP_TIMEOUT_DEFAULT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
-  MCP_TIMEOUT_LONG_MS: z.coerce.number().int().min(1000).max(300000).default(60000),
 
   // --- Resilience: circuit breaker + bulkhead (Plan 8 Phase D) ---
   // Circuit is ON by default. Same `!== 'false'` semantics as MCP_RETRY_ENABLED:

@@ -7,8 +7,10 @@ import { ChannelId } from '../_lib/snowflake.js';
 import { wrapMessages } from '../_lib/untrusted.js';
 import {
   buildSamplingPrompt,
+  FallbackMeta,
   fallbackData,
   parseLLMJsonResponse,
+  RawMessagePayload,
   type SamplingMessage,
 } from './_lib/sampling.js';
 
@@ -50,10 +52,17 @@ export default defineTool({
     intent: z.string().min(5).max(500).describe('What the response should accomplish'),
     tone: z.enum(['friendly', 'formal', 'concise', 'detailed']).default('friendly'),
   },
+  // Analysed fields are optional: without the client `sampling` capability the
+  // tool returns the raw payload plus `_meta` instead. See FallbackMeta.
   outputSchema: {
-    draft: z.string(),
-    reasoning: z.string(),
-    sampling_used: z.boolean(),
+    draft: z.string().optional(),
+    reasoning: z.string().optional(),
+    sampling_used: z.boolean().optional(),
+    raw_context: RawMessagePayload.optional(),
+    intent: z.string().optional(),
+    tone: z.string().optional(),
+    channel_id: z.string().optional(),
+    _meta: FallbackMeta,
   },
   annotations: {
     readOnlyHint: true,

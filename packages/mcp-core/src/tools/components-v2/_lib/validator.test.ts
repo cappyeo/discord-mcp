@@ -6,11 +6,67 @@ describe('validateComponentsV2', () => {
     const r = validateComponentsV2([
       {
         type: 17,
-        components: [{ type: 9, components: [{ type: 10, content: 'hi' }] }],
+        components: [
+          {
+            type: 9,
+            components: [{ type: 10, content: 'hi' }],
+            accessory: { type: 11, media: { url: 'https://x/y.png' } },
+          },
+        ],
       },
     ]);
     expect(r.valid).toBe(true);
     expect(r.issues).toEqual([]);
+  });
+
+  it('rejects a Section with no accessory', () => {
+    const r = validateComponentsV2([{ type: 9, components: [{ type: 10, content: 'hi' }] }]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.some((i) => i.code === 'SECTION_NO_ACCESSORY')).toBe(true);
+  });
+
+  it('does not flag a Thumbnail used as a Section accessory', () => {
+    const r = validateComponentsV2([
+      {
+        type: 9,
+        components: [{ type: 10, content: 'hi' }],
+        accessory: { type: 11, media: { url: 'https://x/y.png' } },
+      },
+    ]);
+    expect(r.issues.some((i) => i.code === 'THUMBNAIL_STANDALONE')).toBe(false);
+    expect(r.valid).toBe(true);
+  });
+
+  it('rejects a Button accessory missing both custom_id and url', () => {
+    const r = validateComponentsV2([
+      {
+        type: 9,
+        components: [{ type: 10, content: 'hi' }],
+        accessory: { type: 2, style: 1, label: 'broken' } as never,
+      },
+    ]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.some((i) => i.code === 'BUTTON_NO_ID_OR_URL')).toBe(true);
+  });
+
+  it('rejects a TextDisplay over the schema content cap', () => {
+    const r = validateComponentsV2([{ type: 10, content: 'x'.repeat(6000) }]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.some((i) => i.code.startsWith('SCHEMA_'))).toBe(true);
+  });
+
+  it('rejects an ActionRow containing a TextDisplay', () => {
+    const r = validateComponentsV2([
+      { type: 1, components: [{ type: 10, content: 'not a button' } as never] },
+    ]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.some((i) => i.code.startsWith('SCHEMA_'))).toBe(true);
+  });
+
+  it('reports an unknown component type as a single UNKNOWN_TYPE issue', () => {
+    const r = validateComponentsV2([{ type: 99 } as never]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.map((i) => i.code)).toEqual(['UNKNOWN_TYPE']);
   });
 
   it('rejects Container nested inside Container', () => {

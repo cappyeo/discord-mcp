@@ -21,6 +21,8 @@ export default defineTool({
     '',
     '**`compute_prune_count`** (default true) returns the actual count; set `false` for large guilds (returns null) to avoid timeouts.',
     '',
+    '**`include_roles`** WIDENS the prune (does not narrow it). An inactive member is pruned only if ALL of their roles appear in this list; a member holding ANY role not listed is never pruned. Members with no roles are always pruned regardless. Max 100.',
+    '',
     '**Returns**: `{pruned, guild_id}` — `pruned` is null if `compute_prune_count` was false.',
     '',
     '**Security**: gated by `ConfirmRequired`. Pass `__confirm:true` AND set `MCP_DRY_RUN=false` to actually prune.',
@@ -42,7 +44,9 @@ export default defineTool({
       .array(RoleId)
       .max(100)
       .optional()
-      .describe('Members must have ALL these roles to be eligible'),
+      .describe(
+        'WIDENS the prune (does not narrow it). An inactive member is pruned only if ALL of their roles appear in this list; a member holding ANY role not listed is never pruned. Members with no roles are always pruned regardless. Max 100.',
+      ),
     audit_reason: z
       .string()
       .min(1)

@@ -23,7 +23,28 @@
  * suffix `...[TRUNCATED]`. Caps message bodies, embed JSON, long IDs.
  */
 
-const SENSITIVE_KEYS_GLOBAL = new Set(['token', 'bearer_token', 'auth', 'password', 'secret']);
+const SENSITIVE_KEYS_GLOBAL = new Set([
+  'token',
+  'bearer_token',
+  'interaction_token',
+  'auth',
+  'password',
+  'secret',
+]);
+
+/**
+ * Shape-aware fallback for credential-looking keys the global set does not
+ * name explicitly (`*_token`, `*_secret`, `*password*`). Keeps a newly added
+ * tool arg from leaking a live credential before anyone updates the set.
+ */
+function isSensitiveKey(lk: string): boolean {
+  return (
+    SENSITIVE_KEYS_GLOBAL.has(lk) ||
+    lk.endsWith('_token') ||
+    lk.endsWith('_secret') ||
+    lk.includes('password')
+  );
+}
 
 /**
  * Per-tool sensitive-key map (allowlist).
@@ -79,8 +100,8 @@ function redactionMarker(value: unknown): string {
 /**
  * Recursive walker. Descends into plain objects and arrays. For each
  * key/value pair:
- *   1. If the key matches the global sensitive set OR the per-tool set,
- *      replace with `redactionMarker(value)`.
+ *   1. If the key matches `isSensitiveKey` OR the per-tool set, replace
+ *      with `redactionMarker(value)`.
  *   2. Otherwise, descend into the value (recurse on objects/arrays,
  *      truncate strings, pass other scalars through).
  *
@@ -99,7 +120,7 @@ function walk(value: unknown, perToolKeys: ReadonlySet<string>): unknown {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     const lk = k.toLowerCase();
-    if (SENSITIVE_KEYS_GLOBAL.has(lk) || perToolKeys.has(lk) || perToolKeys.has(k)) {
+    if (isSensitiveKey(lk) || perToolKeys.has(lk) || perToolKeys.has(k)) {
       out[k] = redactionMarker(v);
       continue;
     }

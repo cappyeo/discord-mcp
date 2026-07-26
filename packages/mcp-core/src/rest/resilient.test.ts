@@ -95,12 +95,14 @@ describe('wrapRestWithResilience (Plan 8 C.3)', () => {
       { code: 0, message: 'upstream' },
       0,
       500,
-      'POST',
+      'GET',
       'https://discord.com/api/v10/x',
       REQ_BODY,
     );
+    // GET, not POST: 5xx on a POST is ambiguous (the write may have landed)
+    // and is deliberately non-retryable — see classifyDiscordError.
     const { rest } = buildFakeRest({
-      post: () => {
+      get: () => {
         count++;
         if (count < 2) throw apiErr500;
         return { id: 'ok' };
@@ -108,7 +110,7 @@ describe('wrapRestWithResilience (Plan 8 C.3)', () => {
     });
     const wrapped = wrapRestWithResilience(rest, fastRetryPolicy());
 
-    const result = await wrapped.post('/channels/1/messages', { body: { content: 'hi' } });
+    const result = await wrapped.get('/channels/1');
     expect(result).toEqual({ id: 'ok' });
     expect(count).toBe(2);
   });

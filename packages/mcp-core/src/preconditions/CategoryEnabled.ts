@@ -2,6 +2,17 @@ import { ScopeRejectedError } from '../errors/client.js';
 import type { MiddlewareContext } from '../middleware/compose.js';
 import { Precondition } from '../pieces/Precondition.js';
 
+/**
+ * Per-tool form of the `MCP_CATEGORIES` gate.
+ *
+ * The gate is enforced for real by `categoryMiddleware`, which runs on every
+ * call regardless of what a tool declares — a per-tool precondition puts the
+ * control in the hands of whoever writes the next tool, and for the first 12
+ * releases zero tools declared it, so the variable restricted nothing. This
+ * class is kept because it is part of the public export surface and behaves
+ * correctly if a tool does declare `preconditions: ['category_enabled']`;
+ * it is not the enforcement point.
+ */
 export class CategoryEnabled extends Precondition {
   public override readonly identifier = 'category_enabled';
   private readonly env: Record<string, string | undefined>;

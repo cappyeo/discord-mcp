@@ -9,6 +9,7 @@
  * for MCP yet. We keep the shape close to the OTel rpc.* conventions for
  * forward compatibility.
  */
+import packageJson from '../../package.json' with { type: 'json' };
 
 // --- Tool / call attributes ---
 export const ATTR_MCP_TOOL_NAME = 'mcp.tool.name';
@@ -39,4 +40,4 @@ export const ATTR_ERROR_TYPE = 'error.type';
 
 // --- Tracer / Meter identity (also used by middleware) ---
 export const TELEMETRY_INSTRUMENTATION_NAME = '@discord-mcp/core';
-export const TELEMETRY_INSTRUMENTATION_VERSION = '0.12.0';
+export const TELEMETRY_INSTRUMENTATION_VERSION: string = packageJson.version;
