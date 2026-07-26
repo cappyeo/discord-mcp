@@ -74,6 +74,7 @@
     "@mswjs/interceptors": "^0.41.3",
     "@opentelemetry/context-async-hooks": "^2.0.0",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "3.2.4",
     "msw": "^2.7.0",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.0",
