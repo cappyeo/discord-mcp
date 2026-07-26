@@ -168,8 +168,47 @@ describe('buildPolicy (Plan 8 C.1)', () => {
     expect(Date.now() - start).toBeLessThan(200);
   });
 
-  it('grows the backoff across retries (50ms → 100ms with jitter=none)', async () => {
-    const policy = buildPolicy(
+  /**
+   * Record the delays the retry policy ASKS for, rather than the gaps we
+   * observe. Measuring wall-clock gaps makes the assertion load-sensitive:
+   * under parallel CPU pressure a 50ms sleep can be observed as 90ms, which
+   * is exactly the flakiness this suite exists to catch elsewhere. The
+   * requested delay is the property under test and is deterministic.
+   */
+  async function recordRetryDelays(config: Config): Promise<number[]> {
+    const delays: number[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      fn: () => void,
+      ms?: number,
+      ...rest: unknown[]
+    ) => {
+      if (typeof ms === 'number' && ms > 0) delays.push(ms);
+      // Collapse the wait so the test does not actually sleep, but keep the
+      // async boundary the policy depends on.
+      return (realSetTimeout as typeof setTimeout)(fn, 0, ...(rest as []));
+    }) as typeof setTimeout);
+    try {
+      await expect(
+        buildPolicy(config).execute(async () => {
+          throw new DiscordRetryableError(new Error('5xx'), null);
+        }),
+      ).rejects.toBeInstanceOf(DiscordRetryableError);
+    } finally {
+      spy.mockRestore();
+    }
+    // buildPolicy also wraps a timeout policy, which arms its own timer per
+    // attempt at MCP_TIMEOUT_DEFAULT_MS. Drop those; what is under test is the
+    // retry backoff chain.
+    return delays.filter((d) => d !== config.MCP_TIMEOUT_DEFAULT_MS);
+  }
+
+  it('grows the backoff geometrically across retries', async () => {
+    // The bug: `exponential` is an IBackoffFactory, so calling .next() fresh
+    // each attempt always returned an attempt-0 instance and the delay never
+    // grew — every retry waited the base delay and MCP_RETRY_MAX_DELAY_MS was
+    // inert. A flat chain yields [50, 50, 50].
+    const delays = await recordRetryDelays(
       cfg({
         MCP_RETRY_MAX_ATTEMPTS: 3,
         MCP_RETRY_BASE_DELAY_MS: 50,
@@ -177,24 +216,12 @@ describe('buildPolicy (Plan 8 C.1)', () => {
         MCP_RETRY_JITTER: 'none',
       }),
     );
-
-    const stamps: number[] = [];
-    await expect(
-      policy.execute(async () => {
-        stamps.push(Date.now());
-        throw new DiscordRetryableError(new Error('5xx'), null);
-      }),
-    ).rejects.toBeInstanceOf(DiscordRetryableError);
-    expect(stamps).toHaveLength(4);
-
-    const gap1 = (stamps[1] as number) - (stamps[0] as number);
-    const gap2 = (stamps[2] as number) - (stamps[1] as number);
-    // Expected 50 → 100. A flat chain (the bug) yields 50 → 50.
-    expect(gap2).toBeGreaterThanOrEqual(gap1 + 30);
+    expect(delays).toEqual([50, 100, 200]);
   });
 
   it('clamps the grown backoff at MCP_RETRY_MAX_DELAY_MS', async () => {
-    const policy = buildPolicy(
+    // Uncapped the third delay would be 200 * 2**2 = 800ms.
+    const delays = await recordRetryDelays(
       cfg({
         MCP_RETRY_MAX_ATTEMPTS: 3,
         MCP_RETRY_BASE_DELAY_MS: 200,
@@ -202,21 +229,7 @@ describe('buildPolicy (Plan 8 C.1)', () => {
         MCP_RETRY_JITTER: 'none',
       }),
     );
-
-    const stamps: number[] = [];
-    await expect(
-      policy.execute(async () => {
-        stamps.push(Date.now());
-        throw new DiscordRetryableError(new Error('5xx'), null);
-      }),
-    ).rejects.toBeInstanceOf(DiscordRetryableError);
-    expect(stamps).toHaveLength(4);
-
-    // Uncapped the third gap would be 200 * 2**2 = 800ms; the cap pins it to
-    // 500ms. A flat chain (the bug) would leave it at 200ms.
-    const gap3 = (stamps[3] as number) - (stamps[2] as number);
-    expect(gap3).toBeGreaterThanOrEqual(450);
-    expect(gap3).toBeLessThan(720);
+    expect(delays).toEqual([200, 400, 500]);
   });
 });
 

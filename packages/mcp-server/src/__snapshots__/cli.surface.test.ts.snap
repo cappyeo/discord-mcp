@@ -1,0 +1,48 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CLI surface > matches the frozen snapshot 1`] = `
+{
+  "commands": [
+    {
+      "isDefault": false,
+      "name": "doctor",
+      "options": [
+        "--json",
+        "--online",
+      ],
+    },
+    {
+      "isDefault": false,
+      "name": "init",
+      "options": [
+        "--client <id>",
+        "--force",
+        "--gateway",
+        "--json",
+        "--output <path>",
+        "--token <token>",
+      ],
+    },
+    {
+      "isDefault": false,
+      "name": "migrate",
+      "options": [
+        "--from <adapter>",
+        "--json",
+        "--list",
+        "--source <path>",
+      ],
+    },
+    {
+      "isDefault": true,
+      "name": "serve",
+      "options": [
+        "--gateway",
+      ],
+    },
+  ],
+  "globalOptions": [
+    "-V, --version",
+  ],
+}
+`;

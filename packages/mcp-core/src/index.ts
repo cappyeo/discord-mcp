@@ -78,7 +78,11 @@ export { ConfirmRequired } from './preconditions/ConfirmRequired.js';
 // REST resilience (Plan 8 Phase C)
 export { classifyDiscordError, DiscordRetryableError } from './rest/errors.js';
 export { buildPolicy } from './rest/policy.js';
-export { type ClassifierFn, wrapRestWithResilience } from './rest/resilient.js';
+export {
+  type ClassifierFn,
+  type WrapResilienceOptions,
+  wrapRestWithResilience,
+} from './rest/resilient.js';
 export { type BuildServerDeps, type BuildServerResult, buildServer } from './server.js';
 export { PreconditionStore } from './stores/PreconditionStore.js';
 // Stores

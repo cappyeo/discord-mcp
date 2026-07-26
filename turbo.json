@@ -7,7 +7,13 @@
       "inputs": ["src/**", "package.json", "tsconfig.json", "tsdown.config.ts"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      // `build` (self), not just `^build` (dependencies): cli.smoke.test.ts
+      // spawns this package's own dist/cli.js as a subprocess. With only
+      // `^build`, a change to the package itself — a version bump, a new CLI
+      // flag — left dist stale and the smoke test asserted against the
+      // previous build. vitest.global-setup.ts only rebuilds when dist is
+      // absent, so it did not catch this either.
+      "dependsOn": ["^build", "build"],
       "outputs": ["coverage/**"],
       "inputs": [
         "src/**",

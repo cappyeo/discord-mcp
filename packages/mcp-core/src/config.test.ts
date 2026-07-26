@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import packageJson from '../package.json' with { type: 'json' };
 import { loadConfig } from './config.js';
 
 const VALID_TOKEN = 'Bot fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -43,9 +44,12 @@ describe('loadConfig', () => {
       expect(overridden.OTEL_SERVICE_NAME).toBe('custom');
     });
 
-    it('OTEL_SERVICE_VERSION defaults to "0.12.0" and accepts override', () => {
+    it('OTEL_SERVICE_VERSION defaults to the package version and accepts override', () => {
+      // Was asserted against a hardcoded '0.12.0'. A literal here is the same
+      // bug class that let the server advertise 0.0.0 for twelve releases:
+      // the test passes while the value is stale.
       const def = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
-      expect(def.OTEL_SERVICE_VERSION).toBe('0.12.0');
+      expect(def.OTEL_SERVICE_VERSION).toBe(packageJson.version);
       const overridden = loadConfig({
         DISCORD_TOKEN: VALID_TOKEN,
         OTEL_SERVICE_VERSION: '1.2.3',

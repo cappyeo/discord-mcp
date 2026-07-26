@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`config surface > resolves to the frozen set of keys and defaults 1`] = `
+{
+  "GATEWAY": false,
+  "LOG_LEVEL": "info",
+  "MCP_AUDIT_ENABLED": true,
+  "MCP_AUDIT_SINK": "stderr",
+  "MCP_BULKHEAD_LIMIT": 100,
+  "MCP_CIRCUIT_ENABLED": true,
+  "MCP_CIRCUIT_FAILURE_THRESHOLD": 10,
+  "MCP_CIRCUIT_HALF_OPEN_AFTER_MS": 60000,
+  "MCP_RETRY_BASE_DELAY_MS": 200,
+  "MCP_RETRY_ENABLED": true,
+  "MCP_RETRY_JITTER": "full",
+  "MCP_RETRY_MAX_ATTEMPTS": 3,
+  "MCP_RETRY_MAX_DELAY_MS": 10000,
+  "MCP_TIMEOUT_DEFAULT_MS": 30000,
+  "OTEL_CONSOLE_EXPORTER": false,
+  "OTEL_ENABLED": false,
+  "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+  "OTEL_SERVICE_NAME": "discord-mcp",
+  "OTEL_TRACES_SAMPLER": "parentbased_always_on",
+  "OTEL_TRACES_SAMPLER_ARG": 1,
+}
+`;

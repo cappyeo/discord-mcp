@@ -10,33 +10,19 @@
 import { PassThrough } from 'node:stream';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
-import { redactCredentialUrl } from './telemetry/redact.js';
+import { createLogger, serializeErr } from './logger.js';
 
-/** Mirrors createLogger's serializer against a capturable destination. */
+/**
+ * Drives the REAL serializer from logger.ts against a capturable destination.
+ * `createLogger` writes to fd 2, which vitest does not capture, so the
+ * serializer is wired into a PassThrough here — the code under test is the
+ * exported function itself, not a copy of it.
+ */
 function captureLogger(): { logger: pino.Logger; output: () => string } {
   const chunks: string[] = [];
   const stream = new PassThrough();
   stream.on('data', (c) => chunks.push(String(c)));
-  // Rebuild the same serializer wiring createLogger uses. Importing
-  // createLogger directly would write to fd 2, which vitest does not capture.
-  const logger = pino(
-    {
-      level: 'warn',
-      serializers: {
-        err: (err: Error) => {
-          const base = pino.stdSerializers.err(err) as unknown as Record<string, unknown>;
-          delete base.requestBody;
-          delete base.rawError;
-          delete base.body;
-          for (const key of ['url', 'message', 'stack'] as const) {
-            if (typeof base[key] === 'string') base[key] = redactCredentialUrl(base[key]);
-          }
-          return base;
-        },
-      },
-    },
-    stream,
-  );
+  const logger = pino({ level: 'warn', serializers: { err: serializeErr } }, stream);
   return { logger, output: () => chunks.join('') };
 }
 
@@ -82,6 +68,17 @@ describe('logger err serializer', () => {
     expect(parsed.err.status).toBe(401);
     expect(parsed.err.code).toBe(50027);
     expect(parsed.err.message).toContain('Invalid Webhook Token');
+  });
+
+  it('is the serializer createLogger actually installs', () => {
+    // Guards the seam: if createLogger stops wiring serializeErr, the tests
+    // above would keep passing against a function nothing uses.
+    const logger = createLogger({ LOG_LEVEL: 'warn' } as never);
+    // pino exposes the resolved serializers on the instance symbol table.
+    const serializers = (logger as unknown as { [k: symbol]: unknown })[
+      Symbol.for('pino.serializers')
+    ] as Record<string, unknown>;
+    expect(serializers.err).toBe(serializeErr);
   });
 
   it('strips interaction tokens and query strings too', () => {

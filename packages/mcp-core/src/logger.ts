@@ -15,7 +15,7 @@ import { redactCredentialUrl } from './telemetry/redact.js';
  * this exists so that the next time someone does log `{ err }`, it is not a
  * credential disclosure.
  */
-function serializeErr(err: Error): Record<string, unknown> {
+export function serializeErr(err: Error): Record<string, unknown> {
   const base = pino.stdSerializers.err(err) as unknown as Record<string, unknown>;
   // The two carriers of request payloads on @discordjs/rest errors.
   delete base.requestBody;

@@ -14,6 +14,98 @@ the merge commit of the plan's PR into `main`.
 For PR-level history, see the [GitHub releases](https://github.com/cappylab/discord-mcp/releases)
 page. Tag dates and SHAs below come from `git for-each-ref refs/tags/v0.*`.
 
+## v0.13.0 — Correctness audit: the confirmation gate, the category gate, and 58 verified defects
+
+Released **2026-07-27**.
+
+A seven-dimension audit of the v0.12.0 tree (runtime, tools, tests, security,
+docs, packaging, API surface) produced 58 independently-verified defects. This
+release fixes them. Three were load-bearing.
+
+### Breaking
+
+- **Destructive tools were unusable.** `validateMiddleware` runs before
+  `preconditionMiddleware` and replaces `ctx.args` with the zod-parsed object.
+  Zod strips unknown keys and no tool declared `__confirm`, so by the time
+  `ConfirmRequired` read the flag it was gone — every confirm-gated tool
+  returned `DRY_RUN_PREVIEW` forever, regardless of `MCP_DRY_RUN`. The wire
+  half was broken too: `additionalProperties: false` meant a spec-conforming
+  client could not legally send the flag, and an agent reading `tools/list`
+  had no way to discover it. Both halves fixed. **If you depended on
+  destructive tools never executing, note that they now can** — the
+  `MCP_DRY_RUN=false` + `__confirm:true` contract works as documented.
+- `@discordjs/rest`, `@modelcontextprotocol/sdk`, `zod` and `@sapphire/pieces`
+  moved from `dependencies` to `peerDependencies` on `@discord-mcp/core`. Each
+  crosses the public `.d.ts` surface nominally, so a consumer with a duplicate
+  copy could not call `buildServer` at all. `@discord-mcp/cli` users are
+  unaffected.
+- `discord.js` moved from `optionalDependencies` to an optional peer.
+  `optionalDependencies` are installed by default, so every REST-only user was
+  paying for a WebSocket stack.
+- `engines` floor raised to Node >= 22.12 — the lowest version CI verifies.
+- `MCP_TIMEOUT_LONG_MS` removed: validated and documented, read by no code path.
+
+### Security
+
+- `MCP_CATEGORIES` was a dead control. It is documented as a least-privilege
+  gate, but the `category_enabled` precondition implementing it was declared by
+  zero of 192 tools, so setting it restricted nothing. Now enforced as
+  middleware plus a `tools/list` filter, with unknown category names failing at
+  boot.
+- Webhook and interaction tokens are bearer credentials that live in the URL
+  *path*. They reached OTel spans via `url.full`, and reached stderr via pino's
+  default `err` serializer along with unredacted request bodies. Both closed.
+- `interaction_token` was in no redaction key set, so live tokens were written
+  into audit records.
+- Discord message content containing `</untrusted_discord_messages>` escaped
+  the untrusted-content boundary, after which the remainder was presented to
+  the agent as trusted text.
+- 27 high advisories in the production dependency tree cleared; `pnpm audit
+  --audit-level=high --prod` exits 0.
+
+### Correctness
+
+- Retry backoff never grew — `MCP_RETRY_MAX_DELAY_MS` and the exponent were
+  inert, and every retry waited the base delay.
+- POST was retried on ambiguous failures, so a POST that reached Discord with a
+  lost response was replayed: duplicate messages, duplicate bans.
+- One shared debouncer per gateway handler meant subscribers to different URIs
+  cancelled each other; with N subscribed channels only the most recently
+  active one was notified.
+- `mcp_pipeline` sampled the abort signal once before its loop, so cancelling
+  mid-run still executed every remaining step.
+- Components V2 `Section.accessory` is required by Discord but optional in both
+  the builder and the validator, so `components_v2_validate` returned
+  `valid: true` for layouts that always 400. Four shipped templates were
+  themselves broken; repaired.
+- The server advertised version `0.0.0` and instructions reading *"v0/Plan-1 —
+  only messages_send available"* — injected into the agent's system context on
+  a 192-tool server.
+- `commands_bulk_overwrite_global` / `_guild` wipe the entire command registry
+  and shipped `destructiveHint: false` with no confirmation gate.
+- `outputSchema` is now published for all 191 declaring tools and enforced
+  against handler results under test. That immediately caught real drift: all
+  five `intelligence_*` tools declared a schema their fallback path never
+  satisfied — and the fallback is the path every client without sampling
+  capability takes.
+
+### Documentation
+
+Corrected every false claim the audit found, including a confirmation page that
+overstated the gated set by ~2.4x, five fabricated intelligence tool names, two
+invented CLI subcommands, a quickstart whose documented steps produce a
+non-working install, a pipeline result envelope that does not exist, and six
+metric names with the dashboard queries built on them. Added drift guards so
+tool names, metric names, gateway handler names, and the gated-tool list are
+now checked against the code at test time.
+
+### Tests
+
+909 → 1005, with a coverage gate on `@discord-mcp/core` (98.9% statements) and
+snapshot freezes on the public exports, the CLI flag set, and the config
+surface. Load-sensitive tests fixed: the suite now passes on consecutive
+cold-cache runs under full parallel load, not only in isolation.
+
 ## v0.12.0 — Test infra hardening + v1.0.0 readiness polish
 
 Released **2026-05-01**. Tag: [`v0.12.0`](https://github.com/cappylab/discord-mcp/releases/tag/v0.12.0).

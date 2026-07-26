@@ -2,7 +2,7 @@
 
 Production-grade Model Context Protocol server exposing the full Discord REST API to AI agents.
 
-**Status**: v0.12.0 · 192 tools · OTel-instrumented · Cockatiel-resilient · Audit-logged
+**Status**: v0.13.0 · 192 tools · OTel-instrumented · Cockatiel-resilient · Audit-logged
 
 **Stability**: pre-1.0, polish complete. See [v1.0.0 readiness](docs/v1.0.0-readiness.md) for the path to a stable major.
 
