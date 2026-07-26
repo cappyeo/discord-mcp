@@ -5,6 +5,7 @@ import { REST } from '@discordjs/rest';
 import { http, passthrough } from 'msw';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Config } from '../config.js';
+import { CircuitOpenError } from '../errors/server.js';
 import { buildPolicy } from './policy.js';
 import { wrapRestWithResilience } from './resilient.js';
 
@@ -171,6 +172,74 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
       rest.post('/channels/123/messages', { body: { content: 'x' } }),
     ).rejects.toBeDefined();
     expect(requestCount).toBe(1);
+  });
+
+  it('still opens the circuit on repeated POST 5xx even though it never retries', async () => {
+    // The regression this guards: making ambiguous POST failures
+    // "non-retryable" by classifying them as `null` also hid them from the
+    // circuit breaker, which only counts DiscordRetryableError. A POST-heavy
+    // workload against a fully-down Discord would then hammer it forever,
+    // because nothing ever incremented the consecutive-failure counter.
+    // Replay-safety and upstream-failure accounting are separate concerns.
+    scriptedResponses = Array.from({ length: 10 }, () => ({
+      status: 503,
+      body: '{"message":"service unavailable"}',
+    }));
+    const rest = wrapRestWithResilience(
+      buildRest(),
+      buildPolicy(
+        cfg({
+          MCP_CIRCUIT_ENABLED: true,
+          MCP_CIRCUIT_FAILURE_THRESHOLD: 3,
+          MCP_CIRCUIT_HALF_OPEN_AFTER_MS: 300_000,
+        }),
+      ),
+    );
+
+    for (let i = 0; i < 3; i++) {
+      await expect(
+        rest.post('/channels/123/messages', { body: { content: 'x' } }),
+      ).rejects.toBeDefined();
+    }
+    // Exactly 3 requests: each POST failed once and was never replayed.
+    expect(requestCount).toBe(3);
+
+    // The 4th is short-circuited by the open breaker — no request reaches
+    // Discord at all.
+    await expect(
+      rest.post('/channels/123/messages', { body: { content: 'x' } }),
+    ).rejects.toBeInstanceOf(CircuitOpenError);
+    expect(requestCount).toBe(3);
+  });
+
+  it('does not let non-retryable 4xx trip the circuit', async () => {
+    // policy.ts documents this explicitly: a validation 4xx is the caller's
+    // fault, not an upstream outage, and must never contribute to shedding
+    // load. Asserted here because the 5xx test above cannot distinguish
+    // "the breaker counts upstream failures" from "the breaker counts
+    // everything".
+    scriptedResponses = Array.from({ length: 10 }, () => ({
+      status: 400,
+      body: '{"message":"invalid form body"}',
+    }));
+    const rest = wrapRestWithResilience(
+      buildRest(),
+      buildPolicy(
+        cfg({
+          MCP_CIRCUIT_ENABLED: true,
+          MCP_CIRCUIT_FAILURE_THRESHOLD: 3,
+          MCP_CIRCUIT_HALF_OPEN_AFTER_MS: 300_000,
+        }),
+      ),
+    );
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        rest.post('/channels/123/messages', { body: { content: 'x' } }),
+      ).rejects.not.toBeInstanceOf(CircuitOpenError);
+    }
+    // All five reached Discord: the breaker never opened.
+    expect(requestCount).toBe(5);
   });
 
   it('does NOT retry POST on ECONNRESET — single request', async () => {

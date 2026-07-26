@@ -12,17 +12,26 @@ import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
  *  - `retryAfterMs`: when the upstream signaled a specific wait (e.g. a
  *    Discord 429 with `Retry-After`), in milliseconds.  `null` for 5xx
  *    and network errors where we fall back to exponential backoff.
+ *  - `replaySafe`: whether the call may actually be re-sent.  Separating this
+ *    from "is an upstream failure" matters: an ambiguous POST failure (5xx or
+ *    a post-send network reset) must NOT be replayed — the write may already
+ *    have landed — but it is still an upstream failure and must feed the
+ *    circuit breaker.  Classifying it as non-retryable by returning `null`
+ *    instead would leave a POST-heavy workload hammering a fully-down Discord
+ *    forever, because the breaker only counts `DiscordRetryableError`.
  */
 export class DiscordRetryableError extends Error {
   public override readonly cause: unknown;
   public readonly retryAfterMs: number | null;
+  public readonly replaySafe: boolean;
 
-  public constructor(cause: unknown, retryAfterMs: number | null) {
+  public constructor(cause: unknown, retryAfterMs: number | null, replaySafe = true) {
     const causeMsg = cause instanceof Error ? cause.message : String(cause);
     super(`Retryable upstream error: ${causeMsg}`);
     this.name = 'DiscordRetryableError';
     this.cause = cause;
     this.retryAfterMs = retryAfterMs;
+    this.replaySafe = replaySafe;
   }
 }
 
@@ -83,8 +92,9 @@ export function classifyDiscordError(
 
   // --- DiscordAPIError: only 5xx are retryable ---
   if (err instanceof DiscordAPIError) {
-    if (!isPost && err.status >= 500 && err.status < 600) {
-      return new DiscordRetryableError(err, null);
+    if (err.status >= 500 && err.status < 600) {
+      // POST: surface it (the breaker must count it) but mark it un-replayable.
+      return new DiscordRetryableError(err, null, !isPost);
     }
     // Some Discord 4xx responses include a 429 status — handle defensively.
     if (err.status === 429) {
@@ -98,29 +108,30 @@ export function classifyDiscordError(
 
   // --- HTTPError: low-level fetch / proxy failure ---
   if (err instanceof HTTPError) {
-    if (!isPost && err.status >= 500 && err.status < 600) {
-      return new DiscordRetryableError(err, null);
+    if (err.status >= 500 && err.status < 600) {
+      return new DiscordRetryableError(err, null, !isPost);
     }
     return null;
   }
 
   // --- Network-level: ECONNRESET / ETIMEDOUT / ENOTFOUND / etc ---
-  const isRetryableCode = (code: unknown): boolean =>
-    typeof code === 'string' &&
-    RETRYABLE_NETWORK_CODES.has(code) &&
-    !(isPost && AMBIGUOUS_NETWORK_CODES.has(code));
+  const isNetworkFailure = (code: unknown): boolean =>
+    typeof code === 'string' && RETRYABLE_NETWORK_CODES.has(code);
+  /** Ambiguous only for POST: the request may already have reached Discord. */
+  const replaySafeFor = (code: unknown): boolean =>
+    !(isPost && typeof code === 'string' && AMBIGUOUS_NETWORK_CODES.has(code));
 
   if (err instanceof Error) {
     const code = (err as Error & { code?: unknown }).code;
-    if (isRetryableCode(code)) {
-      return new DiscordRetryableError(err, null);
+    if (isNetworkFailure(code)) {
+      return new DiscordRetryableError(err, null, replaySafeFor(code));
     }
     // undici wraps low-level errors in `cause` — peek one level deep.
     const inner = (err as Error & { cause?: unknown }).cause;
     if (inner instanceof Error) {
       const innerCode = (inner as Error & { code?: unknown }).code;
-      if (isRetryableCode(innerCode)) {
-        return new DiscordRetryableError(err, null);
+      if (isNetworkFailure(innerCode)) {
+        return new DiscordRetryableError(err, null, replaySafeFor(innerCode));
       }
     }
   }

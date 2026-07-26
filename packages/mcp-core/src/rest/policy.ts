@@ -8,6 +8,7 @@ import {
   ExponentialBackoff,
   fullJitterGenerator,
   handleType,
+  handleWhen,
   type IBackoff,
   type IPolicy,
   type IRetryBackoffContext,
@@ -117,10 +118,17 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
     },
   );
 
-  const retryPolicy = retry(handleType(DiscordRetryableError), {
-    maxAttempts: config.MCP_RETRY_MAX_ATTEMPTS,
-    backoff: customBackoff,
-  });
+  // `replaySafe` — not just the type — because an ambiguous POST failure is a
+  // genuine upstream failure (the breaker below must count it) that must never
+  // be re-sent: the write may already have landed at Discord and only the
+  // response was lost.
+  const retryPolicy = retry(
+    handleWhen((e) => e instanceof DiscordRetryableError && e.replaySafe),
+    {
+      maxAttempts: config.MCP_RETRY_MAX_ATTEMPTS,
+      backoff: customBackoff,
+    },
+  );
 
   // --- Telemetry: shared meter + counters (Plan 8 D.1 / D.3 / D.5) ---
   // OTel falls back to a no-op meter when no SDK is registered, so this is
@@ -137,10 +145,11 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   });
 
   // --- Circuit breaker (Plan 8 D.1) ---
-  // Built only when MCP_CIRCUIT_ENABLED. The breaker filter mirrors the
-  // retry filter — `handleType(DiscordRetryableError)` — so non-retryable
-  // 4xx bubbles through WITHOUT incrementing the consecutive-failure
-  // counter. This matches Plan 8 §13: "Non-retryable Discord errors (4xx)
+  // Built only when MCP_CIRCUIT_ENABLED. The breaker matches the TYPE, while
+  // retry additionally requires `replaySafe`. That gap is deliberate: an
+  // ambiguous POST failure must count toward opening the circuit without ever
+  // being re-sent. Non-retryable 4xx is not wrapped at all, so it still
+  // bubbles through WITHOUT incrementing the consecutive-failure counter. This matches Plan 8 §13: "Non-retryable Discord errors (4xx)
   // bubble through breaker WITHOUT incrementing failure count."
   // (Spec called for `handleAll.orType(DiscordRetryableError)` but that
   // would treat every error as a circuit failure — including validation
