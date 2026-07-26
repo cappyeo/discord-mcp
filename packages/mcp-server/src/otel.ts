@@ -94,27 +94,38 @@ function isOtlpSelfTrace(url: string): boolean {
   return url.includes('/v1/traces') || url.includes('/v1/metrics') || url.includes('/v1/logs');
 }
 
+/**
+ * Undici span decorator for Discord REST calls.
+ *
+ * Exported so tests exercise THIS function rather than a copy of its body.
+ * The assertion it carries is credential-disclosure prevention: a test that
+ * re-declares the hook inline passes even after this one regresses.
+ *
+ * Two jobs:
+ *  - tag the call with a normalized `discord.route` so dashboards can group by
+ *    route shape without a per-id metric series;
+ *  - OVERWRITE the standard `url.full` / `url.path` attributes, not merely
+ *    supplement them. Webhook and interaction tokens live in the Discord URL
+ *    *path*, so the raw values ship bearer credentials to the tracing backend.
+ *    `requestHook` runs after the span is started with its initial attributes,
+ *    so this write wins.
+ */
+export function discordRequestHook(
+  span: { setAttribute: (k: string, v: string) => unknown },
+  req: { origin: string; path: string; method: string },
+): void {
+  if (!req.origin.includes('discord.com/api')) return;
+  const route = redactRoute(req.path);
+  span.setAttribute('discord.route', `${req.method} ${route}`);
+  span.setAttribute('url.full', `${req.origin}${route}`);
+  span.setAttribute('url.path', route);
+}
+
 function buildInstrumentations(): (UndiciInstrumentation | PinoInstrumentation)[] {
   return [
     new UndiciInstrumentation({
       ignoreRequestHook: (req) => isOtlpSelfTrace(`${req.origin}${req.path}`),
-      requestHook: (span, req) => {
-        // Tag Discord REST calls with a normalized route so dashboards
-        // can group by `discord.route` without spinning up a per-id
-        // metric series. `req.origin` is a string per undici types.
-        //
-        // The standard `url.full` / `url.path` attributes are OVERWRITTEN,
-        // not merely supplemented: webhook and interaction tokens live in
-        // the Discord path, so the raw values would ship credentials to the
-        // tracing backend. requestHook runs after the span is started with
-        // its initial attributes, so this write wins.
-        if (req.origin.includes('discord.com/api')) {
-          const route = redactRoute(req.path);
-          span.setAttribute('discord.route', `${req.method} ${route}`);
-          span.setAttribute('url.full', `${req.origin}${route}`);
-          span.setAttribute('url.path', route);
-        }
-      },
+      requestHook: discordRequestHook,
     }),
     // Pino correlation: when a span is active, every pino log line
     // emitted under it gains trace_id/span_id fields, so traces and

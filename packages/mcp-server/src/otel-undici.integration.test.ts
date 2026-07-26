@@ -1,6 +1,5 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { redactRoute } from '@discord-mcp/core';
 import { metrics, trace } from '@opentelemetry/api';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { MeterProvider } from '@opentelemetry/sdk-metrics';
@@ -11,6 +10,7 @@ import {
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { discordRequestHook } from './otel.js';
 
 /**
  * Phase B integration: assert that wiring UndiciInstrumentation with the
@@ -35,14 +35,21 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 const undiciInstrumentation = new UndiciInstrumentation({
   ignoreRequestHook: () => false,
   requestHook: (span, req) => {
-    // Mirrors mcp-server/src/otel.ts. The local server cannot answer on
-    // discord.com so the test simulates the origin via a custom header.
+    // Delegates to the REAL hook exported by mcp-server/src/otel.ts rather
+    // than re-declaring its body. A mirrored copy keeps passing after the
+    // production hook regresses, which would make the credential-leak
+    // assertions below silently vacuous.
+    //
+    // The local server cannot answer on discord.com, so the test marks the
+    // request with a header and presents the hook the origin it would see in
+    // production while keeping the real path.
     const headersStr = Array.isArray(req.headers) ? req.headers.join('') : String(req.headers);
     if (headersStr.includes('x-fake-discord-origin')) {
-      const route = redactRoute(req.path);
-      span.setAttribute('discord.route', `${req.method} ${route}`);
-      span.setAttribute('url.full', `${req.origin}${route}`);
-      span.setAttribute('url.path', route);
+      discordRequestHook(span, {
+        origin: 'https://discord.com/api',
+        path: req.path,
+        method: req.method,
+      });
     }
   },
 });

@@ -118,6 +118,71 @@ describe('hand-written docs only reference registered tools', () => {
   }, 60_000);
 });
 
+/**
+ * The prose guard above strips fenced blocks wholesale, which is right for
+ * migration guides and hypothetical snippets — but it also blinded it to the
+ * two places a wrong tool name does the most damage: the `"tool"` field of a
+ * pipeline example, and a mermaid sequence diagram. `roles_add` (which has
+ * never existed; the real name is `members_add_role`) lived in exactly those
+ * two spots in `architecture/pipeline.mdx` and the prose guard could not see
+ * either one.
+ *
+ * These are copy-paste surfaces: an agent reading a pipeline example will
+ * reproduce the tool name verbatim.
+ */
+describe('tool names inside code examples', () => {
+  /** `"tool": "x"` — the pipeline step schema. Unambiguous, no false positives. */
+  const PIPELINE_TOOL_FIELD = /"tool"\s*:\s*"([a-z0-9_]+)"/g;
+
+  it('every `"tool": "..."` in a worked example is a real tool', async () => {
+    const tools = await loadAllTools();
+    const registered = new Set(tools.map((t) => t.name));
+    const files = DOC_ROOTS.flatMap((d) => walk(d));
+
+    const bad: string[] = [];
+    for (const file of files) {
+      const src = readFileSync(file, 'utf8');
+      for (const m of src.matchAll(PIPELINE_TOOL_FIELD)) {
+        const id = m[1]!;
+        if (registered.has(id)) continue;
+        bad.push(`${relative(ROOT, file).replace(/\\/g, '/')}: "tool": "${id}"`);
+      }
+    }
+    expect(bad.sort(), 'pipeline examples reference tools that do not exist').toEqual([]);
+  }, 60_000);
+
+  it('every tool-shaped identifier in a mermaid diagram is a real tool', async () => {
+    const tools = await loadAllTools();
+    const registered = new Set(tools.map((t) => t.name));
+    const prefixes = new Set(
+      tools.filter((t) => t.name.startsWith(`${t.category}_`)).map((t) => t.category),
+    );
+    const extras = buildExtras();
+    // `guild_id`, `message_ids`, `channel_id` … are argument names that share a
+    // category prefix. They are not tools and must not be flagged.
+    const isToolLike = (id: string): boolean =>
+      [...prefixes].some((p) => id.startsWith(`${p}_`)) && !extras.has(id) && !/_ids?$/.test(id);
+
+    const MERMAID = /^```mermaid\n([\s\S]*?)^```/gm;
+    const IDENT = /\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
+
+    const bad: string[] = [];
+    for (const file of DOC_ROOTS.flatMap((d) => walk(d))) {
+      const src = readFileSync(file, 'utf8');
+      for (const block of src.matchAll(MERMAID)) {
+        for (const m of block[1]!.matchAll(IDENT)) {
+          const id = m[1]!;
+          if (!isToolLike(id) || registered.has(id)) continue;
+          bad.push(`${relative(ROOT, file).replace(/\\/g, '/')}: ${id}`);
+        }
+      }
+    }
+    expect([...new Set(bad)].sort(), 'mermaid diagrams reference tools that do not exist').toEqual(
+      [],
+    );
+  }, 60_000);
+});
+
 describe('gateway handler names in prose match the handlers directory', () => {
   const handlers = readdirSync(GATEWAY_HANDLERS_DIR)
     .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
