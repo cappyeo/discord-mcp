@@ -8,10 +8,12 @@ import { wrapUntrusted } from '../_lib/untrusted.js';
 
 interface RawChannelDetail {
   id: string;
-  name: string;
+  // `null` for DM channels, absent on partials — never assume a string.
+  name?: string | null;
   type: number;
-  position: number;
-  parent_id: string | null;
+  // Only sortable guild channels carry `position`/`parent_id`; threads and DMs omit them.
+  position?: number;
+  parent_id?: string | null;
   nsfw?: boolean;
   topic?: string | null;
   rate_limit_per_user?: number;
@@ -22,16 +24,16 @@ export default defineTool({
   name: 'channels_get',
   category: 'channels',
   description:
-    '**Purpose**: Fetch full metadata for a single Discord channel.\n\n**When to use**: inspect topic, slowmode, nsfw of a known channel.\n\n**Returns**: `{id, name, type, position, parent_id, nsfw, topic, rate_limit_per_user, guild_id}`. `topic` wrapped in `<untrusted_discord_channel_topic>` (user-controlled).',
+    '**Purpose**: Fetch full metadata for a single Discord channel.\n\n**When to use**: inspect topic, slowmode, nsfw of a known channel.\n\n**Returns**: `{id, name, type, nsfw, topic, rate_limit_per_user, position?, parent_id?, guild_id?}`. `name` is `null` for DMs. `position` and `parent_id` are guild-channel-only — both are absent for threads and DMs. `topic` wrapped in `<untrusted_discord_channel_topic>` (user-controlled).',
   inputSchema: {
     channel_id: ChannelId.describe('Target channel ID'),
   },
   outputSchema: {
     id: ChannelId,
-    name: z.string(),
+    name: z.string().nullable(),
     type: z.number().int(),
-    position: z.number().int(),
-    parent_id: ChannelId.nullable(),
+    position: z.number().int().optional(),
+    parent_id: ChannelId.nullable().optional(),
     nsfw: z.boolean(),
     topic: z.string().nullable(),
     rate_limit_per_user: z.number().int(),
@@ -52,17 +54,19 @@ export default defineTool({
         : '_(no topic)_';
     const data: Record<string, unknown> = {
       id: c.id,
-      name: c.name,
+      name: c.name ?? null,
       type: c.type,
-      position: c.position,
-      parent_id: c.parent_id,
       nsfw: c.nsfw ?? false,
       topic: c.topic ?? null,
       rate_limit_per_user: c.rate_limit_per_user ?? 0,
     };
+    if (c.position !== undefined) data.position = c.position;
+    if (c.parent_id !== undefined) data.parent_id = c.parent_id;
     if (c.guild_id !== undefined) data.guild_id = c.guild_id;
+    const label =
+      c.name !== null && c.name !== undefined ? `**#${c.name}**` : '_(unnamed channel)_';
     return dualResult({
-      text: `**#${c.name}** (\`channel:${c.id}\`, type ${c.type})\nTopic: ${topicWrapped}\nSlowmode: ${data.rate_limit_per_user}s`,
+      text: `${label} (\`channel:${c.id}\`, type ${c.type})\nTopic: ${topicWrapped}\nSlowmode: ${data.rate_limit_per_user}s`,
       data,
     });
   },

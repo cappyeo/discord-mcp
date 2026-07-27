@@ -12,7 +12,8 @@ interface RawSound {
   volume: number;
   emoji_id: string | null;
   emoji_name: string | null;
-  guild_id: string;
+  // Optional on APISoundboardSound.
+  guild_id?: string;
   available: boolean;
 }
 
@@ -58,7 +59,7 @@ export default defineTool({
         volume: s.volume,
         emoji_id: s.emoji_id,
         emoji_name: s.emoji_name,
-        guild_id: s.guild_id,
+        guild_id: s.guild_id ?? args.guild_id,
         available: s.available,
         untrusted_text: wrapped,
       },

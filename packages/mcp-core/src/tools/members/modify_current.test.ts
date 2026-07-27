@@ -16,7 +16,7 @@ describe('members_modify_current', () => {
         const body = (await request.json()) as { nick?: string };
         expect(body.nick).toBe('Bot McBotface');
         return HttpResponse.json({
-          user: { id: 'bot1', username: 'discord-mcp-bot' },
+          user: { id: '655629772673939112', username: 'discord-mcp-bot' },
           nick: 'Bot McBotface',
         });
       }),

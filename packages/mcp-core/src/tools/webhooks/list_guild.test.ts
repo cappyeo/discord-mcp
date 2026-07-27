@@ -15,7 +15,7 @@ describe('webhooks_list_guild', () => {
       http.get(`${DISCORD_API}/guilds/:gid/webhooks`, () => {
         return HttpResponse.json([
           {
-            id: 'wh1',
+            id: '164383424266383145',
             type: 1,
             name: 'CI Notifier',
             avatar: null,
@@ -23,7 +23,7 @@ describe('webhooks_list_guild', () => {
             application_id: null,
           },
           {
-            id: 'wh2',
+            id: '471186398113900843',
             type: 1,
             name: 'Cross-poster',
             avatar: null,
@@ -47,6 +47,6 @@ describe('webhooks_list_guild', () => {
     };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.count).toBe(2);
-    expect(r.structuredContent.webhooks[0]!.id).toBe('wh1');
+    expect(r.structuredContent.webhooks[0]!.id).toBe('164383424266383145');
   });
 });

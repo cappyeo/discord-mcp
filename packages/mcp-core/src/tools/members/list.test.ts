@@ -19,7 +19,7 @@ describe('members_list', () => {
           {
             user: { id: '111122223333444401', username: 'alice', global_name: 'Alice' },
             nick: 'al',
-            roles: ['r1'],
+            roles: ['204183353402423336'],
             joined_at: '2026-01-15T10:00:00.000+00:00',
             premium_since: null,
             pending: false,

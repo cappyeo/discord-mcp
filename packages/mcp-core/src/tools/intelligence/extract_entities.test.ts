@@ -23,7 +23,7 @@ describe('intelligence_extract_entities', () => {
       role: 'assistant',
       content: {
         type: 'text',
-        text: '{"entities":[{"type":"decision","value":"Ship Plan 5 by Friday","source_message_id":"msg_1"},{"type":"action_item","value":"Update README","source_message_id":"msg_2"}]}',
+        text: '{"entities":[{"type":"decision","value":"Ship Plan 5 by Friday","source_message_id":"100000101795321187"},{"type":"action_item","value":"Update README","source_message_id":"100000101795322164"}]}',
       },
     });
     const r = (await t.run(

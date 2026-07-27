@@ -147,13 +147,17 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
       expect(out.components).toBe('[REDACTED:value]');
     });
 
-    it('components_v2_send_from_template redacts variables', () => {
+    // The tool's input field is `vars` (see tools/components-v2/send-from-template.ts);
+    // an entry naming `variables` matched nothing and logged the rendered
+    // message text verbatim.
+    it('components_v2_send_from_template redacts vars (the real arg name)', () => {
       const out = redactArgs(
-        { template_id: 'tpl', variables: { name: 'value' } },
+        { channel_id: '111', template: 'announcement', vars: { body: 'sensitive-body' } },
         'components_v2_send_from_template',
       );
-      expect(out.template_id).toBe('tpl');
-      expect(out.variables).toBe('[REDACTED:value]');
+      expect(out.channel_id).toBe('111');
+      expect(out.vars).toBe('[REDACTED:value]');
+      expect(JSON.stringify(out)).not.toContain('sensitive-body');
     });
 
     it('intelligence_summarize_channel redacts messages / channel_messages', () => {
@@ -222,6 +226,28 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
       expect(out.components).toBe('[REDACTED:value]');
     });
 
+    it('interactions_create_followup redacts content / embeds / components', () => {
+      const out = redactArgs(
+        { application_id: 'a1', content: 'hello', embeds: [{}], components: [{}] },
+        'interactions_create_followup',
+      );
+      expect(out.application_id).toBe('a1');
+      expect(out.content).toBe('[REDACTED:5ch]');
+      expect(out.embeds).toBe('[REDACTED:value]');
+      expect(out.components).toBe('[REDACTED:value]');
+    });
+
+    it('interactions_edit_followup redacts content / embeds / components', () => {
+      const out = redactArgs(
+        { message_id: '222', content: 'hello', embeds: [{}], components: [{}] },
+        'interactions_edit_followup',
+      );
+      expect(out.message_id).toBe('222');
+      expect(out.content).toBe('[REDACTED:5ch]');
+      expect(out.embeds).toBe('[REDACTED:value]');
+      expect(out.components).toBe('[REDACTED:value]');
+    });
+
     it('every entry in SENSITIVE_KEYS_BY_TOOL has at least one assertion above', () => {
       // Sanity: catch a future contributor adding a tool to the map and
       // forgetting to add a corresponding test. Compare to the explicit
@@ -242,10 +268,109 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
         'intelligence_extract_entities',
         'interactions_create_response',
         'interactions_edit_original_response',
+        'interactions_create_followup',
+        'interactions_edit_followup',
       ]);
       const declared = new Set(Object.keys(__SENSITIVE_KEYS_BY_TOOL_FOR_TESTS));
       // Sets must be equal — no orphans either way.
       expect([...declared].sort()).toEqual([...exercised].sort());
+    });
+  });
+
+  // `payload_json` is an opaque JSON string carrying the same body as the
+  // redacted `content`/`embeds`/… fields. Without an entry the same user
+  // content was redacted under one key and logged in the clear under another.
+  describe('payload_json (R2-RED-03)', () => {
+    const PAYLOAD = JSON.stringify({ content: 'top-secret-body' });
+
+    for (const tool of [
+      'webhooks_execute',
+      'webhooks_edit_message',
+      'interactions_edit_original_response',
+      'interactions_create_followup',
+      'interactions_edit_followup',
+    ]) {
+      it(`${tool} redacts payload_json wholesale`, () => {
+        const out = redactArgs({ channel_id: '111', payload_json: PAYLOAD }, tool);
+        expect(out.channel_id).toBe('111');
+        expect(out.payload_json).toBe(`[REDACTED:${PAYLOAD.length}ch]`);
+        expect(JSON.stringify(out)).not.toContain('top-secret-body');
+      });
+    }
+  });
+
+  // `mcp_pipeline` args are `{steps:[{tool, args}]}` — the nested args belong
+  // to the inner tools and must get the inner tools' redaction.
+  describe('mcp_pipeline nested step args (R2-RED-05)', () => {
+    it('applies the inner tool rules to steps[].args', () => {
+      const out = redactArgs(
+        {
+          steps: [
+            { id: 'list', tool: 'channels_list', args: { guild_id: '123' } },
+            {
+              id: 'send',
+              tool: 'messages_send',
+              args: { channel_id: '456', content: 'top-secret-body' },
+            },
+          ],
+        },
+        'mcp_pipeline',
+      );
+      const steps = out.steps as Array<Record<string, unknown>>;
+      // Non-sensitive step args survive: the pipeline stays auditable.
+      expect(steps[0].tool).toBe('channels_list');
+      expect((steps[0].args as Record<string, unknown>).guild_id).toBe('123');
+      // Inner-tool sensitive args are redacted exactly as a direct call.
+      expect(steps[1].id).toBe('send');
+      expect((steps[1].args as Record<string, unknown>).channel_id).toBe('456');
+      expect((steps[1].args as Record<string, unknown>).content).toBe('[REDACTED:15ch]');
+      expect(JSON.stringify(out)).not.toContain('top-secret-body');
+    });
+
+    it('drops step args wholesale when the step tool name is not a string', () => {
+      const out = redactArgs(
+        { steps: [{ tool: 42, args: { content: 'top-secret-body' } }] },
+        'mcp_pipeline',
+      );
+      const steps = out.steps as Array<Record<string, unknown>>;
+      expect(steps[0].args).toBe('[REDACTED:value]');
+      expect(JSON.stringify(out)).not.toContain('top-secret-body');
+    });
+
+    it('keeps redacting later steps when an earlier step is malformed', () => {
+      const out = redactArgs(
+        {
+          steps: [
+            'oops',
+            null,
+            { tool: 'messages_send' },
+            { tool: 'messages_send', args: { content: 'top-secret-body' } },
+          ],
+          token: 'creds',
+        },
+        'mcp_pipeline',
+      );
+      const steps = out.steps as unknown[];
+      expect(out.token).toBe('[REDACTED:5ch]');
+      expect(steps.slice(0, 3)).toEqual(['oops', null, { tool: 'messages_send' }]);
+      expect((steps[3] as { args: Record<string, unknown> }).args.content).toBe('[REDACTED:15ch]');
+    });
+
+    it('redacts a nested mcp_pipeline step recursively', () => {
+      const out = redactArgs(
+        {
+          steps: [
+            {
+              tool: 'mcp_pipeline',
+              args: {
+                steps: [{ tool: 'messages_send', args: { content: 'top-secret-body' } }],
+              },
+            },
+          ],
+        },
+        'mcp_pipeline',
+      );
+      expect(JSON.stringify(out)).not.toContain('top-secret-body');
     });
   });
 

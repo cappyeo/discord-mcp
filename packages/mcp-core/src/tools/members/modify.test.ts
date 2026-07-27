@@ -18,7 +18,7 @@ describe('members_modify', () => {
         return HttpResponse.json({
           user: { id: params.uid, username: 'alice' },
           nick: 'newnick',
-          roles: ['r1', 'r2'],
+          roles: ['204183353402423336', '655826858834335716'],
         });
       }),
     );
@@ -33,6 +33,6 @@ describe('members_modify', () => {
     )) as { isError: boolean; structuredContent: { nick: string | null; roles: string[] } };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.nick).toBe('newnick');
-    expect(r.structuredContent.roles).toEqual(['r1', 'r2']);
+    expect(r.structuredContent.roles).toEqual(['204183353402423336', '655826858834335716']);
   });
 });

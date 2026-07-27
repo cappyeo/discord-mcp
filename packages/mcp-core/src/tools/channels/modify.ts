@@ -8,7 +8,8 @@ import { ChannelId } from '../_lib/snowflake.js';
 
 interface RawChannel {
   id: string;
-  name: string;
+  // `null` when the modified channel is a DM / unnamed group DM.
+  name?: string | null;
   type: number;
   parent_id?: string | null;
 }
@@ -28,7 +29,7 @@ export default defineTool({
     '',
     '**Field applicability** mirrors `channels_create_guild_channel`. Discord ignores fields that do not apply to the channel type.',
     '',
-    '**Returns**: `{id, name, type, parent_id}`.',
+    '**Returns**: `{id, name, type, parent_id}`. `name` is `null` for DM / unnamed group DM channels.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel to modify'),
@@ -99,7 +100,7 @@ export default defineTool({
   },
   outputSchema: {
     id: ChannelId,
-    name: z.string(),
+    name: z.string().nullable(),
     type: z.number().int(),
     parent_id: ChannelId.nullable(),
   },
@@ -140,9 +141,11 @@ export default defineTool({
       body,
       reason: args.audit_reason,
     })) as RawChannel;
+    const label =
+      c.name !== null && c.name !== undefined ? `**#${c.name}**` : '_(unnamed channel)_';
     return dualResult({
-      text: `Modified channel **#${c.name}** (\`channel:${c.id}\`).`,
-      data: { id: c.id, name: c.name, type: c.type, parent_id: c.parent_id ?? null },
+      text: `Modified channel ${label} (\`channel:${c.id}\`).`,
+      data: { id: c.id, name: c.name ?? null, type: c.type, parent_id: c.parent_id ?? null },
     });
   },
 });

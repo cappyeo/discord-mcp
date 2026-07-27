@@ -14,7 +14,7 @@ describe('webhooks_get', () => {
     server.use(
       http.get(`${DISCORD_API}/webhooks/:wid`, () => {
         return HttpResponse.json({
-          id: 'wh1',
+          id: '164383424266383145',
           type: 1,
           name: 'CI',
           avatar: null,
@@ -37,7 +37,7 @@ describe('webhooks_get', () => {
       structuredContent: Record<string, unknown>;
     };
     expect(r.isError).toBe(false);
-    expect(r.structuredContent.id).toBe('wh1');
+    expect(r.structuredContent.id).toBe('164383424266383145');
     expect(r.structuredContent.token).toBeUndefined();
     expect(r.structuredContent.untrusted_name).toContain('untrusted_discord_username');
   });

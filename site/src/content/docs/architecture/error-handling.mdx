@@ -109,7 +109,7 @@ would have run**:
   "code": "DRY_RUN_PREVIEW",
   "retriable": false,
   "message": "Dry-run: would call messages_send with the given args",
-  "recovery_hint": "Set MCP_DRY_RUN=false AND pass __confirm:true (or use elicitation flow) to actually execute",
+  "recovery_hint": "Set MCP_DRY_RUN=false AND pass __confirm:true to actually execute",
   "preview": { "channel_id": "111122223333444455", "content": "..." }
 }
 ```
@@ -119,8 +119,9 @@ either:
 
 1. Re-issues the call with `__confirm:true` (and the operator has
    `MCP_DRY_RUN=false` in env), or
-2. Surfaces the preview as "this is what I would do, are you sure?" via
-   elicitation if the client supports it.
+2. Surfaces the preview to its own human as "this is what I would do, are
+   you sure?" and re-issues with `__confirm:true` only once approved. That
+   prompt is entirely client-side — the server never initiates one.
 
 Either way, **no Discord call ever fires** until both halves of the
 contract are satisfied. See [Confirmation](/discord-mcp/architecture/confirmation/)

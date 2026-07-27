@@ -18,7 +18,7 @@ describe('events_create', () => {
         expect(body.entity_type).toBe(2);
         expect(body.privacy_level).toBe(2);
         return HttpResponse.json({
-          id: 'ev99',
+          id: '762014852510723514',
           guild_id: params.guildId,
           name: body.name,
           description: null,
@@ -27,7 +27,7 @@ describe('events_create', () => {
           status: 1,
           entity_type: body.entity_type,
           channel_id: body.channel_id ?? null,
-          creator_id: 'u1',
+          creator_id: '394302850041909017',
         });
       }),
     );
@@ -50,7 +50,7 @@ describe('events_create', () => {
       structuredContent: { id: string; name: string };
     };
     expect(r.isError).toBe(false);
-    expect(r.structuredContent.id).toBe('ev99');
+    expect(r.structuredContent.id).toBe('762014852510723514');
     expect(r.structuredContent.name).toBe('Office Hours');
   });
 });

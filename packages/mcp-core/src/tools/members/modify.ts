@@ -7,7 +7,7 @@ import { ChannelId, GuildId, RoleId, UserId } from '../_lib/snowflake.js';
 
 interface RawMember {
   user: { id: string; username: string };
-  nick: string | null;
+  nick?: string | null;
   roles: string[];
 }
 
@@ -84,7 +84,7 @@ export default defineTool({
     })) as RawMember;
     return dualResult({
       text: `Modified member \`${m.user.id}\` in guild \`${args.guild_id}\`.`,
-      data: { user_id: m.user.id, nick: m.nick, roles: m.roles },
+      data: { user_id: m.user.id, nick: m.nick ?? null, roles: m.roles },
     });
   },
 });

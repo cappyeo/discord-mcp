@@ -10,6 +10,7 @@
  * driven per-test via small in-memory shims so we don't need real
  * temp files. Read paths still hit the real fs (none used here).
  */
+import * as nodePath from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mocked fs — set per-test by reassigning the impl variables. Default
@@ -26,7 +27,7 @@ vi.mock('node:fs', async () => {
   };
 });
 
-const { initAction } = await import('./init.js');
+const { initAction, resolveCliPath } = await import('./init.js');
 
 const originalStdinTTY = process.stdin.isTTY;
 const originalStdoutTTY = process.stdout.isTTY;
@@ -98,6 +99,31 @@ interface ParsedSnippet {
   };
 }
 
+describe('resolveCliPath', () => {
+  // `import.meta.url` of a real checkout can't contain the interesting
+  // characters, so these drive the resolver with synthetic module URLs.
+  const SPACED_MODULE_URL = 'file:///C:/Users/n%C3%B6el%20user/discord-mcp/commands/init.js';
+
+  it('decodes percent-encoded spaces and non-ASCII segments', () => {
+    const p = resolveCliPath(SPACED_MODULE_URL);
+    expect(p).not.toContain('%');
+    expect(p).toContain('nöel user');
+  });
+
+  it('resolves to the cli.js sibling of commands/', () => {
+    const p = resolveCliPath(SPACED_MODULE_URL);
+    expect(p.endsWith(`${nodePath.sep}cli.js`)).toBe(true);
+    expect(p).not.toContain('commands');
+  });
+
+  it('produces a native path the OS accepts verbatim', () => {
+    // A URL pathname on Windows is `/C:/...` — absolute-looking but not a
+    // real path; `path.resolve` rewrites it, so round-tripping catches it.
+    const p = resolveCliPath('file:///C:/Program%20Files/discord-mcp/commands/init.js');
+    expect(nodePath.resolve(p)).toBe(p);
+  });
+});
+
 describe('initAction — non-interactive defaults', () => {
   it('with no flags defaults to client=generic and the env-var token placeholder', async () => {
     await initAction({ json: true });
@@ -109,6 +135,15 @@ describe('initAction — non-interactive defaults', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal placeholder, not JS interpolation
     expect(snippet.mcpServers['discord-mcp'].env.DISCORD_TOKEN).toBe('${env:DISCORD_TOKEN}');
     expect(parsed.data?.gateway).toBe(false);
+  });
+
+  it('emits a spawnable native path as the first arg', async () => {
+    await initAction({ json: true });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    const cliArg = snippet.mcpServers['discord-mcp'].args[0] as string;
+    expect(cliArg).not.toContain('%');
+    expect(nodePath.resolve(cliArg)).toBe(cliArg);
   });
 
   it('summary mentions the displayName when generated to stdout', async () => {

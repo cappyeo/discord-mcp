@@ -20,7 +20,7 @@ describe('guild_get_widget', () => {
           name: 'My Server',
           instant_invite: 'https://discord.gg/abc',
           channels: [{ id: '111122223333444401', name: 'general', position: 0 }],
-          members: [{ id: 'u1', username: 'alice', status: 'online' }],
+          members: [{ id: '394302850041909017', username: 'alice', status: 'online' }],
           presence_count: 5,
         });
       }),

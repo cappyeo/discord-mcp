@@ -14,9 +14,9 @@ describe('members_get_current_user', () => {
     server.use(
       http.get(`${DISCORD_API}/users/@me/guilds/:gid/member`, () => {
         return HttpResponse.json({
-          user: { id: 'bot1', username: 'discord-mcp-bot' },
+          user: { id: '655629772673939112', username: 'discord-mcp-bot' },
           nick: 'BotNick',
-          roles: ['r1'],
+          roles: ['204183353402423336'],
           joined_at: '2026-01-15T10:00:00.000+00:00',
           premium_since: null,
         });
@@ -35,8 +35,8 @@ describe('members_get_current_user', () => {
       structuredContent: { user_id: string; nick: string | null; roles: string[] };
     };
     expect(r.isError).toBe(false);
-    expect(r.structuredContent.user_id).toBe('bot1');
+    expect(r.structuredContent.user_id).toBe('655629772673939112');
     expect(r.structuredContent.nick).toBe('BotNick');
-    expect(r.structuredContent.roles).toEqual(['r1']);
+    expect(r.structuredContent.roles).toEqual(['204183353402423336']);
   });
 });

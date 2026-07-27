@@ -133,11 +133,21 @@ export default defineTool({
     const parsed = parseLLMJsonResponse<ClassifyOutput>(sampled.content.text);
 
     if (parsed.ok) {
+      // Reconcile the model's output against the messages we actually fetched.
+      // `message_id` here is echoed by the LLM from untrusted channel content,
+      // not read from a Discord response — a hallucinated or reformatted id
+      // would be handed to the agent as a verified snowflake, and the agent
+      // may then act on the wrong message. Anything not in the batch we sent
+      // is dropped rather than passed through.
+      const fetched = new Set(raw.map((m) => m.id));
+      const classifications = parsed.data.classifications.filter((cl) =>
+        fetched.has(cl.message_id),
+      );
       return dualResult({
-        text: `Classified ${parsed.data.classifications.length} message(s).`,
+        text: `Classified ${classifications.length} message(s).`,
         data: {
-          classifications: parsed.data.classifications,
-          count: parsed.data.classifications.length,
+          classifications,
+          count: classifications.length,
           sampling_used: true,
         },
       });

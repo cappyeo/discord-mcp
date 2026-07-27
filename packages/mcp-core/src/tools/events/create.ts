@@ -13,13 +13,14 @@ interface RawEvent {
   id: string;
   guild_id: string;
   name: string;
-  description: string | null;
+  description?: string | null;
   scheduled_start_time: string;
   scheduled_end_time: string | null;
   status: number;
   entity_type: number;
   channel_id: string | null;
-  creator_id: string | null;
+  // Omitted for events created before October 2021 (APIGuildScheduledEventBase).
+  creator_id?: string | null;
 }
 
 export default defineTool({
@@ -33,7 +34,7 @@ export default defineTool({
     '',
     '**Entity types**: 1=STAGE_INSTANCE, 2=VOICE, 3=EXTERNAL. STAGE/VOICE require `channel_id`. EXTERNAL requires `entity_metadata.location` and `scheduled_end_time`.',
     '',
-    '**Returns**: `{id, name, scheduled_start_time, status, entity_type, channel_id, creator_id}`.',
+    '**Returns**: `{id, name, scheduled_start_time, status, entity_type, channel_id, description?, creator_id?}`. `creator_id` is absent for events created before October 2021.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to create the event in'),
@@ -78,13 +79,13 @@ export default defineTool({
     id: ScheduledEventId,
     guild_id: GuildId,
     name: z.string(),
-    description: z.string().nullable(),
+    description: z.string().nullable().optional(),
     scheduled_start_time: z.string(),
     scheduled_end_time: z.string().nullable(),
     status: z.number().int(),
     entity_type: z.number().int(),
     channel_id: ChannelId.nullable(),
-    creator_id: UserId.nullable(),
+    creator_id: UserId.nullable().optional(),
   },
   annotations: {
     readOnlyHint: false,
@@ -109,20 +110,21 @@ export default defineTool({
       body,
       reason: args.audit_reason,
     })) as RawEvent;
+    const data: Record<string, unknown> = {
+      id: ev.id,
+      guild_id: ev.guild_id,
+      name: ev.name,
+      scheduled_start_time: ev.scheduled_start_time,
+      scheduled_end_time: ev.scheduled_end_time,
+      status: ev.status,
+      entity_type: ev.entity_type,
+      channel_id: ev.channel_id,
+    };
+    if (ev.description !== undefined) data.description = ev.description;
+    if (ev.creator_id !== undefined) data.creator_id = ev.creator_id;
     return dualResult({
       text: `Created scheduled event \`${ev.id}\` in guild \`${ev.guild_id}\` (starts ${ev.scheduled_start_time}).`,
-      data: {
-        id: ev.id,
-        guild_id: ev.guild_id,
-        name: ev.name,
-        description: ev.description,
-        scheduled_start_time: ev.scheduled_start_time,
-        scheduled_end_time: ev.scheduled_end_time,
-        status: ev.status,
-        entity_type: ev.entity_type,
-        channel_id: ev.channel_id,
-        creator_id: ev.creator_id,
-      },
+      data,
     });
   },
 });

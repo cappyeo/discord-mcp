@@ -20,7 +20,7 @@ describe('channels_list_public_archived_threads', () => {
               name: 'archived feature chat',
               type: 11,
               parent_id: '111122223333444401',
-              owner_id: 'u_owner_1',
+              owner_id: '537711014240270104',
               thread_metadata: { archived: true, archive_timestamp: '2026-04-01T00:00:00Z' },
             },
           ],

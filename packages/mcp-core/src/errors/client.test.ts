@@ -140,6 +140,8 @@ describe('DryRunPreview', () => {
     expect(e.preview).toEqual({ user_id: '5678' });
     expect(e.recoveryHint).toMatch(/MCP_DRY_RUN=false/);
     expect(e.recoveryHint).toMatch(/__confirm/);
+    // No server-side elicitation exists; the hint must not advertise one.
+    expect(e.recoveryHint).not.toMatch(/elicit/i);
   });
 });
 

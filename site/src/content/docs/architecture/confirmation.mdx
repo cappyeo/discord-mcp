@@ -142,19 +142,16 @@ const dryRunActive = this.env.MCP_DRY_RUN !== 'false';
 When `DryRunPreview` fires, its `recovery_hint` is the exact string the
 agent needs to act on:
 
-> Set MCP_DRY_RUN=false AND pass `__confirm:true` (or use elicitation flow)
-> to actually execute
+> Set MCP_DRY_RUN=false AND pass `__confirm:true` to actually execute
 
 Note the **AND** — it's load-bearing, telling the agent both halves are
 required. Without it, an agent might re-issue the call with `__confirm`
 alone and get the same error, then loop forever.
 
-The "or use elicitation flow" tail is for clients that support MCP
-elicitation: the server can prompt the human mid-tool, then re-issue
-with confirmation server-side. Clients without elicitation fall back to
-the explicit `__confirm` path. See
-[Operations → Client capability matrix](/discord-mcp/operations/clients/)
-for which clients have elicitation today.
+Re-issuing with `__confirm:true` is the **only** path through
+`ConfirmRequired`: server-initiated MCP elicitation is not implemented, so
+any "are you sure?" prompt has to be raised by the client itself before it
+re-issues the call.
 
 ## Which tools require it
 
@@ -242,5 +239,5 @@ and production.
 
 - [Architecture → Error handling](/discord-mcp/architecture/error-handling/) — `DRY_RUN_PREVIEW` is the most-thrown error in the hierarchy.
 - [Architecture → Middleware chain](/discord-mcp/architecture/middleware-chain/) — where preconditions sit in the chain.
-- [Operations → Client capability matrix](/discord-mcp/operations/clients/) — elicitation support varies by client; the `__confirm` fallback is universal.
+- [Operations → Client capability matrix](/discord-mcp/operations/clients/) — what each client supports; the `__confirm` contract is universal.
 - [`moderation-bulk-ban` recipe](/discord-mcp/recipes/moderation-bulk-ban/) — worked example using the `__confirm:true` flow on a high-impact tool.

@@ -7,7 +7,7 @@ import { GuildId } from '../_lib/snowflake.js';
 
 interface RawMember {
   user: { id: string; username: string };
-  nick: string | null;
+  nick?: string | null;
 }
 
 export default defineTool({
@@ -49,7 +49,7 @@ export default defineTool({
     })) as RawMember;
     return dualResult({
       text: `Modified own member nick in guild \`${args.guild_id}\` → ${m.nick ?? '(cleared)'}.`,
-      data: { nick: m.nick },
+      data: { nick: m.nick ?? null },
     });
   },
 });

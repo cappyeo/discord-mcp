@@ -60,18 +60,27 @@ const SENSITIVE_KEYS_BY_TOOL: Record<string, ReadonlySet<string>> = {
   // length only, no IDs leaked — the redactor will replace the array
   // with `[REDACTED:${arr.length}ch]`-style marker via the value path.
   messages_bulk_delete: new Set(['message_ids']),
-  webhooks_execute: new Set(['content', 'embeds', 'components', 'attachments']),
-  webhooks_edit_message: new Set(['content', 'embeds', 'components']),
+  // `payload_json` carries the same body as `content`/`embeds`/… as an opaque
+  // JSON string. Redacted wholesale rather than parsed: parsing an attacker-
+  // shaped blob to redact its fields would be more code and more failure modes
+  // than dropping the value, and the audit record only needs the size signal.
+  webhooks_execute: new Set(['content', 'embeds', 'components', 'attachments', 'payload_json']),
+  webhooks_edit_message: new Set(['content', 'embeds', 'components', 'payload_json']),
   components_v2_send: new Set(['content', 'components']),
   components_v2_edit: new Set(['components']),
-  components_v2_send_from_template: new Set(['variables']),
+  components_v2_send_from_template: new Set(['vars']),
   intelligence_summarize_channel: new Set(['messages', 'channel_messages']),
   intelligence_classify_messages: new Set(['messages']),
   intelligence_draft_response: new Set(['conversation', 'context']),
   intelligence_moderate_content: new Set(['content', 'text']),
   intelligence_extract_entities: new Set(['text', 'content']),
   interactions_create_response: new Set(['data']),
-  interactions_edit_original_response: new Set(['content', 'embeds', 'components']),
+  interactions_edit_original_response: new Set(['content', 'embeds', 'components', 'payload_json']),
+  interactions_create_followup: new Set(['content', 'embeds', 'components', 'payload_json']),
+  interactions_edit_followup: new Set(['content', 'embeds', 'components', 'payload_json']),
+  // `mcp_pipeline` is deliberately absent: its sensitive values live in
+  // `steps[].args`, which `redactPipelineArgs` redacts under each step's own
+  // tool rules. A flat key set here could not do that.
 };
 
 const MAX_LEN = 200;
@@ -130,6 +139,39 @@ function walk(value: unknown, perToolKeys: ReadonlySet<string>): unknown {
 }
 
 /**
+ * `mcp_pipeline` args are `{steps:[{tool, args}]}`, where each step's `args`
+ * are another tool's arguments. Walking them under the pipeline's own key set
+ * would audit them in full — `messages_send` run through a pipeline would log
+ * the content a direct call redacts. So each step's `args` is re-redacted
+ * under its own `tool`'s rules; a step whose `tool` is not a string (malformed
+ * input, rejected later by validation) has its `args` dropped wholesale.
+ *
+ * Recursion terminates: `redactArgs` only re-enters here for a nested
+ * `mcp_pipeline` step, and nesting is bounded by the finite input depth.
+ */
+function redactPipelineArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const noKeys = new Set<string>();
+  const out = walk(args, noKeys) as Record<string, unknown>;
+  if (!Array.isArray(args.steps)) return out;
+
+  out.steps = args.steps.map((step: unknown) => {
+    if (step === null || typeof step !== 'object' || Array.isArray(step)) {
+      return walk(step, noKeys);
+    }
+    const entries = step as Record<string, unknown>;
+    const redactedStep = walk(entries, noKeys) as Record<string, unknown>;
+    if ('args' in entries) {
+      redactedStep.args =
+        typeof entries.tool === 'string'
+          ? redactArgs(entries.args, entries.tool)
+          : redactionMarker(entries.args);
+    }
+    return redactedStep;
+  });
+  return out;
+}
+
+/**
  * Redact tool args for inclusion in audit records or span events.
  *
  * @param args     Tool arguments as received by the middleware (already
@@ -141,6 +183,9 @@ function walk(value: unknown, perToolKeys: ReadonlySet<string>): unknown {
 export function redactArgs(args: unknown, toolName: string): Record<string, unknown> {
   if (args === null || typeof args !== 'object' || Array.isArray(args)) {
     return {};
+  }
+  if (toolName === 'mcp_pipeline') {
+    return redactPipelineArgs(args as Record<string, unknown>);
   }
   const perToolKeys = SENSITIVE_KEYS_BY_TOOL[toolName] ?? new Set<string>();
   const walked = walk(args, perToolKeys) as Record<string, unknown>;

@@ -37,6 +37,7 @@ import { PreconditionStore } from './stores/PreconditionStore.js';
 import { ResourceStore } from './stores/ResourceStore.js';
 import { ToolStore } from './stores/ToolStore.js';
 import { redactCredentialUrl } from './telemetry/redact.js';
+import { OutputSchemaViolation } from './tools/_lib/defineTool.js';
 import AppEmojisCreate from './tools/app_emojis/create.js';
 import AppEmojisDelete from './tools/app_emojis/delete.js';
 import AppEmojisGet from './tools/app_emojis/get.js';
@@ -265,15 +266,6 @@ const ERROR_ENVELOPE_JSON_SCHEMA = {
   },
   required: ['code', 'retriable', 'category'],
 } as const;
-
-/**
- * Under vitest, assert every successful result matches the tool's declared
- * outputSchema. 191 hand-written schemas were previously unenforced, so a
- * handler could drift from its contract silently and the published schema
- * would be a lie. Test-only: a production call must never fail because of a
- * schema mismatch we can fix in a patch.
- */
-const ENFORCE_OUTPUT_SCHEMA = process.env.VITEST === 'true';
 
 export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
   container.rest = deps.rest;
@@ -1262,23 +1254,12 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       } as never);
     });
     try {
-      const result = (await dispatch(middlewareCtx)) as CallToolResult;
-      if (
-        ENFORCE_OUTPUT_SCHEMA &&
-        result.isError !== true &&
-        tool.outputSchema !== undefined &&
-        result.structuredContent !== undefined
-      ) {
-        const parsed = z.looseObject(tool.outputSchema).safeParse(result.structuredContent);
-        if (!parsed.success) {
-          throw new Error(
-            `[outputSchema] ${tool.name} returned structuredContent that violates its declared ` +
-              `outputSchema: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
-          );
-        }
-      }
-      return result;
+      return (await dispatch(middlewareCtx)) as CallToolResult;
     } catch (e) {
+      // outputSchema violations are asserted in defineTool (test-only) and must
+      // escape to the runner rather than be reshaped into a plausible-looking
+      // INTERNAL_ERROR that no assertion would notice.
+      if (e instanceof OutputSchemaViolation) throw e;
       // Whitelisted projection — never `{ err: e }`. A DiscordAPIError carries
       // `requestBody` and the full request URL, so the default pino serializer
       // writes webhook/interaction tokens (which live in the URL path) and the

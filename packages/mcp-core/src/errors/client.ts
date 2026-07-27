@@ -107,8 +107,7 @@ export class DryRunPreview extends DiscordClientError {
     public readonly preview: unknown,
   ) {
     super(`Dry-run: would call ${tool} with the given args`);
-    this.recoveryHint =
-      'Set MCP_DRY_RUN=false AND pass __confirm:true (or use elicitation flow) to actually execute';
+    this.recoveryHint = 'Set MCP_DRY_RUN=false AND pass __confirm:true to actually execute';
   }
 }
 

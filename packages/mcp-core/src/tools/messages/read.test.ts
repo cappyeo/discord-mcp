@@ -29,7 +29,7 @@ describe('messages_read', () => {
     expect(text).toMatch(
       /<untrusted_discord_messages nonce="[0-9a-f]{16}" channel_id="112233445566778899" count="3">/,
     );
-    expect(text).toContain('<msg id="msg_1" author="User 1">message 1 content</msg>');
+    expect(text).toContain('<msg id="100000101795321187" author="User 1">message 1 content</msg>');
   });
 
   it('rejects limit out of range via zod', async () => {

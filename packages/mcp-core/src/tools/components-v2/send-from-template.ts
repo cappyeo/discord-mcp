@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
@@ -10,10 +7,8 @@ import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 import { interpolateTemplate } from './_lib/interpolate.js';
 import { validateComponentsV2 } from './_lib/validator.js';
+import { TEMPLATES } from './templates/index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const TEMPLATES_DIR = join(__dirname, 'templates');
 const IS_COMPONENTS_V2 = 1 << 15;
 
 const KNOWN_TEMPLATES = [
@@ -56,14 +51,12 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args) => {
-    const path = join(TEMPLATES_DIR, `${args.template}.json`);
-    let raw: string;
-    try {
-      raw = await readFile(path, 'utf8');
-    } catch {
+    // Registry lookup, not a filesystem read: the JSON is bundled into the
+    // published artifact, where the old `__dirname`-relative path did not exist.
+    if (!Object.hasOwn(TEMPLATES, args.template)) {
       throw new DiscordNotFoundError('template', args.template);
     }
-    const parsed = JSON.parse(raw) as TemplateFile;
+    const parsed = TEMPLATES[args.template] as TemplateFile;
     const components = interpolateTemplate(parsed.components, args.vars);
     const validation = validateComponentsV2(components);
     if (!validation.valid) {

@@ -6,7 +6,8 @@ import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId, UserId } from '../_lib/snowflake.js';
 
 interface RawVoiceState {
-  guild_id: string;
+  // Optional on APIVoiceState — Discord may omit it on guild-scoped lookups.
+  guild_id?: string;
   channel_id: string | null;
   user_id: string;
   session_id: string;
@@ -58,11 +59,11 @@ export default defineTool({
       Routes.guildVoiceState(args.guild_id, args.user_id),
     )) as RawVoiceState;
     return dualResult({
-      text: `Voice state for user \`${r.user_id}\` in guild \`${r.guild_id}\` (channel ${
+      text: `Voice state for user \`${r.user_id}\` in guild \`${args.guild_id}\` (channel ${
         r.channel_id ?? 'none'
       }).`,
       data: {
-        guild_id: r.guild_id,
+        guild_id: r.guild_id ?? args.guild_id,
         channel_id: r.channel_id,
         user_id: r.user_id,
         session_id: r.session_id,

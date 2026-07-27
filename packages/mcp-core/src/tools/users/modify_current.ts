@@ -10,7 +10,8 @@ interface RawUser {
   username: string;
   global_name: string | null;
   avatar: string | null;
-  banner: string | null;
+  // Optional on APIUser — omitted (not null) when the account has no banner.
+  banner?: string | null;
   bot?: boolean;
 }
 
@@ -66,7 +67,7 @@ export default defineTool({
         username: u.username,
         global_name: u.global_name,
         avatar: u.avatar,
-        banner: u.banner,
+        banner: u.banner ?? null,
       },
     });
   },

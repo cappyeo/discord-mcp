@@ -59,14 +59,23 @@ const TOKEN_PLACEHOLDER = '${env:DISCORD_TOKEN}';
  * `import.meta.dirname` would be slightly cleaner but tsdown's bundle
  * output may reshape directory layout; resolving via URL is portable
  * across both source-mode (vitest) and bundled-mode (production).
+ *
+ * `fileURLToPath` — NOT `URL.pathname`. A pathname is percent-encoded
+ * (a path with a space or a non-ASCII segment comes out as `%20` /
+ * `%C3%B6`) and on Windows it carries a leading slash with forward
+ * slashes (`/C:/Users/...`). Both forms are unspawnable by the MCP
+ * client we are generating the config for.
+ *
+ * `moduleUrl` is a parameter only so tests can exercise this against
+ * paths the repo checkout doesn't have; production always uses the
+ * default.
  */
-function resolveCliPath(): string {
-  // import.meta.url points to the running .js file (or .ts under vitest).
+export function resolveCliPath(moduleUrl: string = import.meta.url): string {
+  // moduleUrl points to the running .js file (or .ts under vitest).
   // For source mode we want the cli.js sibling to commands/; the user
   // will manually adjust if they install via npx.
-  const here = fileURLToPath(new URL('.', import.meta.url));
   // commands/init.js → ../cli.js
-  return new URL('../cli.js', `file://${here}/`).pathname;
+  return fileURLToPath(new URL('../cli.js', moduleUrl));
 }
 
 export async function initAction(opts: InitOptions): Promise<void> {

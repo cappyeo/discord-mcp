@@ -14,9 +14,10 @@ interface RawMember {
     avatar?: string | null;
     bot?: boolean;
   };
-  nick: string | null;
+  nick?: string | null;
   roles: string[];
-  joined_at: string;
+  // Nullable per APIGuildMemberJoined.
+  joined_at: string | null;
   premium_since?: string | null;
   pending?: boolean;
 }
@@ -58,7 +59,7 @@ export default defineTool({
         global_name: z.string().nullable(),
         nick: z.string().nullable(),
         roles: z.array(RoleId),
-        joined_at: z.string(),
+        joined_at: z.string().nullable(),
       }),
     ),
     count: z.number().int(),
@@ -83,7 +84,7 @@ export default defineTool({
       user_id: m.user.id,
       username: m.user.username,
       global_name: m.user.global_name ?? null,
-      nick: m.nick,
+      nick: m.nick ?? null,
       roles: m.roles,
       joined_at: m.joined_at,
     }));
@@ -92,7 +93,7 @@ export default defineTool({
         raw.map((m) => ({
           username: m.user.username,
           global_name: m.user.global_name ?? null,
-          nick: m.nick,
+          nick: m.nick ?? null,
         })),
       ),
       'channel_topic',

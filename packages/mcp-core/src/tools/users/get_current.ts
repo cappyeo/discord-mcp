@@ -10,7 +10,8 @@ interface RawUser {
   username: string;
   global_name: string | null;
   avatar: string | null;
-  bot: boolean;
+  // Optional on APIUser — absent means "not a bot".
+  bot?: boolean;
   verified?: boolean;
 }
 
@@ -42,7 +43,7 @@ export default defineTool({
       username: u.username,
       global_name: u.global_name,
       avatar: u.avatar,
-      bot: u.bot,
+      bot: u.bot ?? false,
     };
     if (u.verified !== undefined) data.verified = u.verified;
     return dualResult({

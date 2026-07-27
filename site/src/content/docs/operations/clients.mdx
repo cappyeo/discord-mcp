@@ -11,7 +11,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 The MCP specification covers five capabilities that affect what discord-mcp can
 do once connected: `tools`, `resources`, `resources/subscribe`, `sampling`, and
-`elicitation`. Not every client implements all five. This page is the
+`elicitation` — the last of which discord-mcp does not use today. Not every
+client implements all five. This page is the
 operator's quick-reference for what works where, as of the Plan 10 cut
 (2026-Q2).
 
@@ -31,7 +32,7 @@ to a fallback.
 | `resources` (read) | yes | yes | yes | varies | List + read URIs. Cursor exposes them in the MCP panel; Claude products surface them inline. |
 | `resources/subscribe` | yes | yes | no | varies | Push notifications via `notifications/resources/updated`. Cursor lacks this as of 2026-Q2; fall back to REST polling. See [`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/). |
 | `sampling` | yes | yes | yes (since 0.42) | varies | Lets the server call back into the client's LLM. Required by the 5 intelligence tools. See [Architecture → Sampling](/discord-mcp/architecture/sampling/). |
-| `elicitation` | yes | yes | no | rare | Mid-tool human-in-the-loop confirmation. discord-mcp uses it for destructive ops; falls back to the `__confirm` contract when absent. |
+| `elicitation` | yes | yes | no | rare | Mid-tool human-in-the-loop confirmation. **Not used by discord-mcp today** — the server never elicits, and every gated tool goes through the `__confirm` contract regardless of client support. |
 
 ## Per-client notes
 
@@ -59,8 +60,9 @@ to a fallback.
 
 - **Min version**: 0.42 for stable sampling support; resource subscriptions
   remain unsupported as of the Plan 10 cut.
-- **Known limitations**: no `resources/subscribe` and no `elicitation` —
-  destructive tools fall back to the `__confirm:true` contract (see
+- **Known limitations**: no `resources/subscribe`. The missing `elicitation`
+  support costs nothing here — discord-mcp never elicits, so destructive
+  tools use the `__confirm:true` contract on every client (see
   [Architecture → Confirmation](/discord-mcp/architecture/confirmation/)).
 - **Best for**: in-editor agent workflows where Discord is one of several
   MCP servers in scope. Tools and resources both render in the MCP panel.
@@ -105,4 +107,4 @@ feature is invisible.
 - [Get started → Client setup](/discord-mcp/start/client-setup/) — concrete config snippets per client.
 - [`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/) — the workflow that exercises subscriptions.
 - [`intelligence-summarize` recipe](/discord-mcp/recipes/intelligence-summarize/) — the workflow that exercises sampling.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — fallback when a client lacks elicitation.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the `__confirm` contract that gates destructive tools on every client.

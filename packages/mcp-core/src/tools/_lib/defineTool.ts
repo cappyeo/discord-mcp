@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import { Tool, type ToolAnnotations, type ToolRunContext } from '../../pieces/Tool.js';
 
 const TOOL_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/;
@@ -38,6 +38,48 @@ export interface ToolMetadataStatic {
   preconditions: readonly string[];
 }
 
+/**
+ * Under vitest, assert a handler's `structuredContent` matches the tool's own
+ * declared `outputSchema`.
+ *
+ * This lives HERE, at the point the result is produced, rather than in
+ * `server.ts`'s `invokeTool`. When it lived in invokeTool it validated only the
+ * handful of tools reachable through the MCP contract test — the other ~190
+ * tool tests instantiate the tool class and call `.run()` directly, bypassing
+ * the dispatcher entirely. A guard that covers 7 of 191 tools reports safety it
+ * does not provide.
+ *
+ * Test-only: a production call must never fail because of a schema mismatch
+ * that can be corrected in a patch. Since v0.13.0 publishes these schemas and
+ * SDK >= 1.20 clients validate against them, a mismatch is now a client-side
+ * throw on a successful call — which is exactly why it must be caught here.
+ */
+const ENFORCE_OUTPUT_SCHEMA = process.env.VITEST === 'true';
+
+/** Distinct type so callers can rethrow it past their generic error handling. */
+export class OutputSchemaViolation extends Error {
+  public override readonly name = 'OutputSchemaViolation';
+}
+
+function assertMatchesOutputSchema(
+  toolName: string,
+  outputSchema: Record<string, z.ZodTypeAny>,
+  result: unknown,
+): void {
+  const structured =
+    (result as { structuredContent?: unknown; isError?: boolean } | undefined) ?? {};
+  // Error results carry the error envelope, not the success shape.
+  if (structured.isError === true || structured.structuredContent === undefined) return;
+  const parsed = z.looseObject(outputSchema).safeParse(structured.structuredContent);
+  if (parsed.success) return;
+  throw new OutputSchemaViolation(
+    `[outputSchema] ${toolName} returned structuredContent that violates its declared ` +
+      `outputSchema: ${parsed.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; ')}`,
+  );
+}
+
 export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
   def: ToolDefinition<I, O>,
 ): typeof Tool {
@@ -66,7 +108,11 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
     }
 
     public override async run(args: unknown, ctx: ToolRunContext): Promise<unknown> {
-      return def.handler(args as { [K in keyof I]: z.infer<I[K]> }, ctx);
+      const result = await def.handler(args as { [K in keyof I]: z.infer<I[K]> }, ctx);
+      if (ENFORCE_OUTPUT_SCHEMA && def.outputSchema !== undefined) {
+        assertMatchesOutputSchema(def.name, def.outputSchema, result);
+      }
+      return result;
     }
   }
 

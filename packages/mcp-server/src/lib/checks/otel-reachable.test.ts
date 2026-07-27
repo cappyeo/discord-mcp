@@ -190,6 +190,60 @@ describe('otelReachableCheck', () => {
     expect(r.details?.headers_configured).toBe(1);
   });
 
+  it('NEVER includes inline basic-auth credentials from the endpoint in details', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await otelReachableCheck.run(
+      makeConfig({
+        OTEL_ENABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector:s3cret-api-key@otlp.example.com:4318',
+      }),
+    );
+    const dump = JSON.stringify(r);
+    expect(dump).not.toContain('s3cret-api-key');
+    expect(dump).not.toContain('collector:');
+    // Host and port stay visible — that's the diagnostically useful part.
+    expect(r.details?.endpoint).toContain('otlp.example.com:4318');
+  });
+
+  it('still sends the credentials on the wire even though they are redacted in details', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await otelReachableCheck.run(
+      makeConfig({
+        OTEL_ENABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector:s3cret-api-key@otlp.example.com:4318',
+      }),
+    );
+    const [url] = fetchMock.mock.calls[0] as [string, unknown];
+    expect(url).toBe('https://collector:s3cret-api-key@otlp.example.com:4318/v1/traces');
+  });
+
+  it('redacts credentials on the unreachable path too', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await otelReachableCheck.run(
+      makeConfig({
+        OTEL_ENABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector:s3cret-api-key@otlp.example.com:4318',
+      }),
+    );
+    expect(r.status).toBe('fail');
+    expect(JSON.stringify(r)).not.toContain('s3cret-api-key');
+  });
+
+  it('leaves a credential-free endpoint byte-identical in details', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await otelReachableCheck.run(
+      makeConfig({
+        OTEL_ENABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318',
+      }),
+    );
+    expect(r.details?.endpoint).toBe('http://localhost:4318');
+  });
+
   it('counts comma-separated headers correctly', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

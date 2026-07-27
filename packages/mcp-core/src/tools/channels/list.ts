@@ -10,7 +10,8 @@ interface RawChannel {
   name: string;
   type: number;
   position: number;
-  parent_id: string | null;
+  // Optional on APIGuildChannel — absent (not null) for top-level channels.
+  parent_id?: string | null;
   nsfw?: boolean;
 }
 
@@ -49,7 +50,7 @@ export default defineTool({
       name: c.name,
       type: c.type,
       position: c.position,
-      parent_id: c.parent_id,
+      parent_id: c.parent_id ?? null,
       nsfw: c.nsfw ?? false,
     }));
     return dualResult({

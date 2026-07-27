@@ -2,6 +2,20 @@ import { HttpResponse, http } from 'msw';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
+/**
+ * Deterministic snowflake for fixtures.
+ *
+ * Discord ids are 17-20 digit strings. Fixtures previously used readable
+ * tokens (`msg_1`, `user_2`, `111`), which meant every schema declaring a
+ * snowflake was never actually exercised — the tools' published outputSchemas
+ * drifted from reality and nothing failed.
+ */
+function snowflake(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return String(100000000000000000n + BigInt(h) * 977n);
+}
+
 export const handlers = [
   // Default: messages_send happy path
   http.post(`${DISCORD_API}/channels/:channelId/messages`, async ({ params, request }) => {
@@ -17,7 +31,7 @@ export const handlers = [
       content: body.content ?? '',
       tts: body.tts ?? false,
       timestamp: '2026-04-28T12:00:00.000000+00:00',
-      author: { id: '111', username: 'TestBot', global_name: 'TestBot', bot: true },
+      author: { id: snowflake('bot'), username: 'TestBot', global_name: 'TestBot', bot: true },
       type: 0,
       ...(body.flags !== undefined && { flags: body.flags }),
       ...(body.components !== undefined && { components: body.components }),
@@ -28,11 +42,11 @@ export const handlers = [
     const url = new URL(request.url);
     const limit = Number(url.searchParams.get('limit') ?? 50);
     const items = Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
-      id: `msg_${i + 1}`,
+      id: snowflake(`msg_${i + 1}`),
       channel_id: params.channelId,
       content: `message ${i + 1} content`,
       author: {
-        id: `user_${i + 1}`,
+        id: snowflake(`user_${i + 1}`),
         username: `user${i + 1}`,
         global_name: `User ${i + 1}`,
         bot: false,
@@ -100,7 +114,7 @@ export const handlers = [
         bot: false,
       },
       nick: 'alice the dev',
-      roles: ['role1', 'role2'],
+      roles: [snowflake('role1'), snowflake('role2')],
       joined_at: '2026-01-15T10:00:00.000000+00:00',
       premium_since: null,
       pending: false,
@@ -113,7 +127,11 @@ export const handlers = [
     return HttpResponse.json({
       members: Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
         member: {
-          user: { id: `u_${i + 1}`, username: `match${i + 1}`, global_name: `Match ${i + 1}` },
+          user: {
+            id: snowflake(`u_${i + 1}`),
+            username: `match${i + 1}`,
+            global_name: `Match ${i + 1}`,
+          },
           nick: null,
           roles: [],
           joined_at: '2026-01-15T10:00:00.000000+00:00',
@@ -127,7 +145,7 @@ export const handlers = [
   http.get(`${DISCORD_API}/guilds/:guildId/roles`, async () => {
     return HttpResponse.json([
       {
-        id: 'r1',
+        id: '204183353402423336',
         name: '@everyone',
         color: 0,
         position: 0,
@@ -137,7 +155,7 @@ export const handlers = [
         managed: false,
       },
       {
-        id: 'r2',
+        id: '655826858834335716',
         name: 'Moderator',
         color: 16711680,
         position: 5,
@@ -152,16 +170,16 @@ export const handlers = [
   http.get(`${DISCORD_API}/guilds/:guildId/scheduled-events`, async () => {
     return HttpResponse.json([
       {
-        id: 'ev1',
+        id: '189909354696691942',
         guild_id: '999000999000999000',
         name: 'Office Hours',
         scheduled_start_time: '2026-05-01T15:00:00Z',
         scheduled_end_time: '2026-05-01T16:00:00Z',
         status: 1,
         entity_type: 2,
-        channel_id: 'voice1',
+        channel_id: '433622438342072208',
         description: null,
-        creator_id: 'u1',
+        creator_id: '394302850041909017',
       },
     ]);
   }),
@@ -171,7 +189,7 @@ export const handlers = [
       id: params.guildId,
       name: 'My Test Server',
       icon: 'icon_hash',
-      owner_id: 'owner1',
+      owner_id: '596957598085728712',
       member_count: 42,
       description: 'A test guild for discord-mcp',
       premium_tier: 2,
@@ -182,7 +200,7 @@ export const handlers = [
   // users_get_current — @me is percent-encoded as %40me in the actual request URL
   http.get(`${DISCORD_API}/users/%40me`, async () => {
     return HttpResponse.json({
-      id: 'bot_id_123456789012345',
+      id: snowflake('bot_self'),
       username: 'discord-mcp-bot',
       global_name: 'Discord MCP Bot',
       bot: true,
@@ -208,7 +226,7 @@ export const handlers = [
   http.get(`${DISCORD_API}/channels/:channelId/webhooks`, async ({ params }) => {
     return HttpResponse.json([
       {
-        id: 'wh1',
+        id: '164383424266383145',
         name: 'CI Notifier',
         type: 1,
         channel_id: params.channelId,
@@ -246,9 +264,9 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? 50);
     return HttpResponse.json({
       audit_log_entries: Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
-        id: `entry_${i + 1}`,
-        target_id: `target_${i + 1}`,
-        user_id: `mod_${i + 1}`,
+        id: snowflake(`entry_${i + 1}`),
+        target_id: snowflake(`target_${i + 1}`),
+        user_id: snowflake(`mod_${i + 1}`),
         action_type: 20 + i,
         reason: `reason ${i + 1}`,
         changes: [],

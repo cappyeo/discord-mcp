@@ -16,7 +16,7 @@ describe('webhooks_create', () => {
         const body = (await request.json()) as { name: string };
         expect(body.name).toBe('CI');
         return HttpResponse.json({
-          id: 'wh1',
+          id: '164383424266383145',
           type: 1,
           name: body.name,
           avatar: null,
@@ -39,7 +39,7 @@ describe('webhooks_create', () => {
       structuredContent: { id: string; token?: string; untrusted_name: string };
     };
     expect(r.isError).toBe(false);
-    expect(r.structuredContent.id).toBe('wh1');
+    expect(r.structuredContent.id).toBe('164383424266383145');
     expect(r.structuredContent.token).toBe('a'.repeat(70));
     expect(r.structuredContent.untrusted_name).toContain('untrusted_discord_username');
   });

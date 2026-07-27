@@ -16,7 +16,8 @@ interface RawEvent {
   status: number;
   entity_type: number;
   channel_id: string | null;
-  creator_id: string | null;
+  // Omitted for events created before October 2021 (APIGuildScheduledEventBase).
+  creator_id?: string | null;
   entity_metadata: { location?: string | null } | null;
   user_count?: number;
 }
@@ -30,7 +31,7 @@ export default defineTool({
     '**When to use**:',
     '- Inspect a specific event before modifying or deleting.',
     '',
-    '**Returns**: projected event shape with optional `user_count`. `name`/`description`/`entity_metadata.location` wrapped untrusted.',
+    '**Returns**: projected event shape with optional `user_count`. `creator_id` is absent for events created before October 2021. `name`/`description`/`entity_metadata.location` wrapped untrusted.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild that owns the event'),
@@ -45,7 +46,7 @@ export default defineTool({
     status: z.number().int(),
     entity_type: z.number().int(),
     channel_id: ChannelId.nullable(),
-    creator_id: UserId.nullable(),
+    creator_id: UserId.nullable().optional(),
     user_count: z.number().int().optional(),
     untrusted_text: z.string(),
   },
@@ -80,9 +81,9 @@ export default defineTool({
       status: ev.status,
       entity_type: ev.entity_type,
       channel_id: ev.channel_id,
-      creator_id: ev.creator_id,
       untrusted_text: wrapped,
     };
+    if (ev.creator_id !== undefined) data.creator_id = ev.creator_id;
     if (ev.user_count !== undefined) data.user_count = ev.user_count;
     return dualResult({
       text: `Event \`${ev.id}\` in guild \`${ev.guild_id}\` (status=${ev.status}). Name/description wrapped untrusted.`,

@@ -16,7 +16,7 @@ describe('stickers_list_packs', () => {
         HttpResponse.json({
           sticker_packs: [
             {
-              id: 'p1',
+              id: '353648979511735946',
               name: 'Pack 1',
               sku_id: 'sku1',
               description: 'desc',

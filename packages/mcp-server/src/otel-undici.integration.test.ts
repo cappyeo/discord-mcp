@@ -45,8 +45,13 @@ const undiciInstrumentation = new UndiciInstrumentation({
     // production while keeping the real path.
     const headersStr = Array.isArray(req.headers) ? req.headers.join('') : String(req.headers);
     if (headersStr.includes('x-fake-discord-origin')) {
+      // `https://discord.com` — scheme+host only, EXACTLY the shape undici
+      // produces (it reconstructs the URL as `new URL(path, origin)`).
+      // Passing 'https://discord.com/api' here is what let a gate of
+      // `origin.includes('discord.com/api')` — which can never match in
+      // production — sail through this suite.
       discordRequestHook(span, {
-        origin: 'https://discord.com/api',
+        origin: 'https://discord.com',
         path: req.path,
         method: req.method,
       });

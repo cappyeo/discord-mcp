@@ -90,7 +90,7 @@ function buildMetricReader(config: Config): IMetricReader | null {
  * Match is substring-based to cover both /v1/traces and any collector
  * proxy variants (e.g. with prefix paths).
  */
-function isOtlpSelfTrace(url: string): boolean {
+export function isOtlpSelfTrace(url: string): boolean {
   return url.includes('/v1/traces') || url.includes('/v1/metrics') || url.includes('/v1/logs');
 }
 
@@ -109,12 +109,35 @@ function isOtlpSelfTrace(url: string): boolean {
  *    *path*, so the raw values ship bearer credentials to the tracing backend.
  *    `requestHook` runs after the span is started with its initial attributes,
  *    so this write wins.
+ *
+ * MATCHING IS ON HOST OR PATH SHAPE, NEVER ON `origin + path`. undici's
+ * `request.origin` is scheme://host with NO path — upstream reconstructs the
+ * URL as `new URL(request.path, request.origin)`. An earlier version of this
+ * gate tested `origin.includes('discord.com/api')`, which can never be true,
+ * so the hook silently did nothing in production while its test passed by
+ * handing it an origin undici never produces.
+ *
+ * The path-shape arm also covers `DISCORD_API_BASE_URL` pointing at a
+ * self-hosted proxy: the credential is in the path either way, so a
+ * host-only rule would fail open exactly where the operator is least likely
+ * to notice.
  */
+const DISCORD_HOST = /(^|\.)discord(app)?\.com$/i;
+/** `/webhooks/{id}/{token}` and `/interactions/{id}/{token}` carry a credential. */
+const CREDENTIAL_PATH = /\/(webhooks|interactions)\/\d{17,20}\/[^/?#]+/i;
+
 export function discordRequestHook(
   span: { setAttribute: (k: string, v: string) => unknown },
   req: { origin: string; path: string; method: string },
 ): void {
-  if (!req.origin.includes('discord.com/api')) return;
+  let isDiscordHost = false;
+  try {
+    isDiscordHost = DISCORD_HOST.test(new URL(req.origin).hostname);
+  } catch {
+    // Non-URL origin (shouldn't happen via undici) — fall back to path shape.
+  }
+  if (!isDiscordHost && !CREDENTIAL_PATH.test(req.path)) return;
+
   const route = redactRoute(req.path);
   span.setAttribute('discord.route', `${req.method} ${route}`);
   span.setAttribute('url.full', `${req.origin}${route}`);

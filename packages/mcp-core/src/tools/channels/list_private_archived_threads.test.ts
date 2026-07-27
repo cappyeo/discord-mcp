@@ -20,7 +20,7 @@ describe('channels_list_private_archived_threads', () => {
               name: 'private staff chat',
               type: 12,
               parent_id: '111122223333444401',
-              owner_id: 'u_owner_2',
+              owner_id: '316342297552091961',
               thread_metadata: { archived: true, archive_timestamp: '2026-03-15T00:00:00Z' },
             },
           ],

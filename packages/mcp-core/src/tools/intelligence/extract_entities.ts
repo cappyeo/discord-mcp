@@ -145,11 +145,21 @@ export default defineTool({
     const parsed = parseLLMJsonResponse<ExtractOutput>(sampled.content.text);
 
     if (parsed.ok) {
+      // `source_message_id` is echoed by the LLM from untrusted channel
+      // content, not read from a Discord response. Keep the entity but drop an
+      // id that is not one we actually fetched, rather than presenting a
+      // hallucinated snowflake as a citation the agent can follow.
+      const fetched = new Set(raw.map((m) => m.id));
+      const entities = parsed.data.entities.map((e) =>
+        e.source_message_id !== undefined && !fetched.has(e.source_message_id)
+          ? { ...e, source_message_id: undefined }
+          : e,
+      );
       return dualResult({
-        text: `Extracted ${parsed.data.entities.length} entit${parsed.data.entities.length === 1 ? 'y' : 'ies'}.`,
+        text: `Extracted ${entities.length} entit${entities.length === 1 ? 'y' : 'ies'}.`,
         data: {
-          entities: parsed.data.entities,
-          count: parsed.data.entities.length,
+          entities,
+          count: entities.length,
           sampling_used: true,
         },
       });

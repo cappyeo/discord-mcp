@@ -53,8 +53,16 @@ describe('mcp_pipeline tool', () => {
     const result = (await t.run(
       {
         steps: [
-          { id: 's1', tool: 'channels_list', args: { guild_id: 'g1' } },
-          { id: 's2', tool: 'roles_list', args: { guild_id: 'g1' } },
+          {
+            id: '115759770816628172',
+            tool: 'channels_list',
+            args: { guild_id: '416150631470215224' },
+          },
+          {
+            id: '637012073593481124',
+            tool: 'roles_list',
+            args: { guild_id: '416150631470215224' },
+          },
         ],
       },
       { signal: new AbortController().signal, invoke } as never,

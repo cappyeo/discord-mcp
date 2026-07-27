@@ -7,7 +7,7 @@ import { GuildId, UserId } from '../_lib/snowflake.js';
 interface SearchMember {
   member: {
     user: { id: string; username: string; global_name?: string | null };
-    nick: string | null;
+    nick?: string | null;
   };
 }
 
@@ -62,7 +62,7 @@ export default defineTool({
       user_id: m.member.user.id,
       username: m.member.user.username,
       global_name: m.member.user.global_name ?? null,
-      nick: m.member.nick,
+      nick: m.member.nick ?? null,
     }));
     return dualResult({
       text:

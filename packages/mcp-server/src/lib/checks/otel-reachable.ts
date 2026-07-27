@@ -9,7 +9,10 @@
  *
  * Privacy: `OTEL_EXPORTER_OTLP_HEADERS` value is NEVER included in the
  * result (it can contain bearer tokens, API keys, etc.). We surface
- * only a count when relevant.
+ * only a count when relevant. The endpoint itself is reported with any
+ * inline basic-auth credentials stripped — collector URLs commonly
+ * carry them (`https://user:APIKEY@otlp.example.com`) and `doctor
+ * --json` is exactly what people paste into issues and CI logs.
  *
  * Skip semantics:
  *   - cfg === null → 'warn' (canonical reporter is env-vars)
@@ -36,6 +39,23 @@ function countHeaders(raw: string | undefined): number {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0).length;
+}
+
+/**
+ * Blank out `user:password@` from an endpoint before it is reported.
+ * Host/port stay visible — that is the diagnostically useful part.
+ * The credential-free case returns the raw string so the reported value
+ * stays byte-identical to what the operator configured (`new URL()`
+ * normalization would otherwise add a trailing slash).
+ */
+function redactEndpoint(raw: string): string {
+  const url = new URL(raw);
+  if (url.username === '' && url.password === '') {
+    return raw;
+  }
+  url.username = '';
+  url.password = '';
+  return url.toString();
 }
 
 export const otelReachableCheck: DoctorCheck = {
@@ -71,6 +91,8 @@ export const otelReachableCheck: DoctorCheck = {
     // Trim trailing slash so `${endpoint}/v1/traces` doesn't double-up.
     const base = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
     const url = `${base}/v1/traces`;
+    // Reported form only — the request itself uses `url`, credentials included.
+    const safeEndpoint = redactEndpoint(endpoint);
     const headersConfigured = countHeaders(config.OTEL_EXPORTER_OTLP_HEADERS);
 
     const ctrl = new AbortController();
@@ -91,7 +113,7 @@ export const otelReachableCheck: DoctorCheck = {
           status: 'ok',
           message: `OTLP endpoint reachable (HEAD → ${res.status})`,
           details: {
-            endpoint,
+            endpoint: safeEndpoint,
             method: 'HEAD',
             status: res.status,
             headers_configured: headersConfigured,
@@ -108,7 +130,7 @@ export const otelReachableCheck: DoctorCheck = {
           status: 'warn',
           message: 'endpoint reachable but rejected — check headers/auth/path',
           details: {
-            endpoint,
+            endpoint: safeEndpoint,
             method: 'HEAD',
             status: res.status,
             headers_configured: headersConfigured,
@@ -123,7 +145,7 @@ export const otelReachableCheck: DoctorCheck = {
           status: 'warn',
           message: `endpoint server error: ${res.status}`,
           details: {
-            endpoint,
+            endpoint: safeEndpoint,
             method: 'HEAD',
             status: res.status,
             headers_configured: headersConfigured,
@@ -137,7 +159,7 @@ export const otelReachableCheck: DoctorCheck = {
         status: 'warn',
         message: `unexpected response: ${res.status}`,
         details: {
-          endpoint,
+          endpoint: safeEndpoint,
           method: 'HEAD',
           status: res.status,
           headers_configured: headersConfigured,
@@ -153,7 +175,7 @@ export const otelReachableCheck: DoctorCheck = {
         status: 'fail',
         message: `OTel endpoint unreachable: ${message}`,
         details: {
-          endpoint,
+          endpoint: safeEndpoint,
           method: 'HEAD',
           headers_configured: headersConfigured,
         },

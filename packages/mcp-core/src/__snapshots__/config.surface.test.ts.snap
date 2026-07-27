@@ -1,5 +1,36 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`config surface > declares the frozen set of schema keys, optional ones included 1`] = `
+[
+  "DISCORD_TOKEN",
+  "GATEWAY",
+  "LOG_LEVEL",
+  "MCP_AUDIT_ENABLED",
+  "MCP_AUDIT_FILE",
+  "MCP_AUDIT_SINK",
+  "MCP_BULKHEAD_LIMIT",
+  "MCP_CATEGORIES",
+  "MCP_CIRCUIT_ENABLED",
+  "MCP_CIRCUIT_FAILURE_THRESHOLD",
+  "MCP_CIRCUIT_HALF_OPEN_AFTER_MS",
+  "MCP_RETRY_BASE_DELAY_MS",
+  "MCP_RETRY_ENABLED",
+  "MCP_RETRY_JITTER",
+  "MCP_RETRY_MAX_ATTEMPTS",
+  "MCP_RETRY_MAX_DELAY_MS",
+  "MCP_TIMEOUT_DEFAULT_MS",
+  "OTEL_CONSOLE_EXPORTER",
+  "OTEL_ENABLED",
+  "OTEL_EXPORTER_OTLP_ENDPOINT",
+  "OTEL_EXPORTER_OTLP_HEADERS",
+  "OTEL_EXPORTER_OTLP_PROTOCOL",
+  "OTEL_SERVICE_NAME",
+  "OTEL_SERVICE_VERSION",
+  "OTEL_TRACES_SAMPLER",
+  "OTEL_TRACES_SAMPLER_ARG",
+]
+`;
+
 exports[`config surface > resolves to the frozen set of keys and defaults 1`] = `
 {
   "GATEWAY": false,

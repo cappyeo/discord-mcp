@@ -10,13 +10,14 @@ interface RawEvent {
   id: string;
   guild_id: string;
   name: string;
-  description: string | null;
+  description?: string | null;
   scheduled_start_time: string;
   scheduled_end_time: string | null;
   status: number;
   entity_type: number;
   channel_id: string | null;
-  creator_id: string | null;
+  // Omitted for events created before October 2021 (APIGuildScheduledEventBase).
+  creator_id?: string | null;
 }
 
 export default defineTool({
@@ -32,13 +33,13 @@ export default defineTool({
       z.object({
         id: z.string(),
         name: z.string(),
-        description: z.string().nullable(),
+        description: z.string().nullable().optional(),
         scheduled_start_time: z.string(),
         scheduled_end_time: z.string().nullable(),
         status: z.number().int(),
         entity_type: z.number().int(),
         channel_id: ChannelId.nullable(),
-        creator_id: UserId.nullable(),
+        creator_id: UserId.nullable().optional(),
       }),
     ),
     count: z.number(),
@@ -57,13 +58,13 @@ export default defineTool({
     const evs = raw.map((e) => ({
       id: e.id,
       name: e.name,
-      description: e.description,
       scheduled_start_time: e.scheduled_start_time,
       scheduled_end_time: e.scheduled_end_time,
       status: e.status,
       entity_type: e.entity_type,
       channel_id: e.channel_id,
-      creator_id: e.creator_id,
+      ...(e.description !== undefined ? { description: e.description } : {}),
+      ...(e.creator_id !== undefined ? { creator_id: e.creator_id } : {}),
     }));
     const lines = evs.map(
       (e) => `- ${wrapUntrusted(e.name, 'username')} starts ${e.scheduled_start_time}`,

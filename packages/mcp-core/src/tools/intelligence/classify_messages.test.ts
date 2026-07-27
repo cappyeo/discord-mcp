@@ -23,7 +23,7 @@ describe('intelligence_classify_messages', () => {
       role: 'assistant',
       content: {
         type: 'text',
-        text: '{"classifications":[{"message_id":"msg_1","author":"user1","category":"greeting","confidence":0.9},{"message_id":"msg_2","author":"user2","category":"question","confidence":0.7},{"message_id":"msg_3","author":"user3","category":"greeting","confidence":0.85}]}',
+        text: '{"classifications":[{"message_id":"100000101795321187","author":"user1","category":"greeting","confidence":0.9},{"message_id":"100000101795322164","author":"user2","category":"question","confidence":0.7},{"message_id":"100000101795323141","author":"user3","category":"greeting","confidence":0.85}]}',
       },
     });
     const r = (await t.run(

@@ -20,7 +20,7 @@ describe('channels_list_joined_private_archived_threads', () => {
               name: 'bot joined chat',
               type: 12,
               parent_id: '111122223333444401',
-              owner_id: 'u_owner_3',
+              owner_id: '974357766999796051',
               thread_metadata: { archived: true, archive_timestamp: '2026-02-15T00:00:00Z' },
             },
           ],

@@ -15,13 +15,14 @@ interface RawEvent {
   id: string;
   guild_id: string;
   name: string;
-  description: string | null;
+  description?: string | null;
   scheduled_start_time: string;
   scheduled_end_time: string | null;
   status: number;
   entity_type: number;
   channel_id: string | null;
-  creator_id: string | null;
+  // Omitted for events created before October 2021 (APIGuildScheduledEventBase).
+  creator_id?: string | null;
   entity_metadata: { location?: string | null } | null;
 }
 
@@ -36,7 +37,7 @@ export default defineTool({
     '',
     '**Status**: 1=SCHEDULED, 2=ACTIVE, 3=COMPLETED, 4=CANCELED. Status transitions are server-validated.',
     '',
-    '**Returns**: projected event shape. `name`/`description`/`entity_metadata.location` wrapped untrusted.',
+    '**Returns**: projected event shape. `creator_id` is absent for events created before October 2021. `name`/`description`/`entity_metadata.location` wrapped untrusted.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild that owns the event'),
@@ -81,7 +82,7 @@ export default defineTool({
     status: z.number().int(),
     entity_type: z.number().int(),
     channel_id: ChannelId.nullable(),
-    creator_id: UserId.nullable(),
+    creator_id: UserId.nullable().optional(),
     untrusted_text: z.string(),
   },
   annotations: {
@@ -116,24 +117,25 @@ export default defineTool({
     const wrapped = wrapUntrusted(
       JSON.stringify({
         name: ev.name,
-        description: ev.description,
+        description: ev.description ?? null,
         location: ev.entity_metadata?.location ?? null,
       }),
       'channel_topic',
     );
+    const data: Record<string, unknown> = {
+      id: ev.id,
+      guild_id: ev.guild_id,
+      scheduled_start_time: ev.scheduled_start_time,
+      scheduled_end_time: ev.scheduled_end_time,
+      status: ev.status,
+      entity_type: ev.entity_type,
+      channel_id: ev.channel_id,
+      untrusted_text: wrapped,
+    };
+    if (ev.creator_id !== undefined) data.creator_id = ev.creator_id;
     return dualResult({
       text: `Modified event \`${ev.id}\` (status=${ev.status}). Name/description wrapped untrusted.`,
-      data: {
-        id: ev.id,
-        guild_id: ev.guild_id,
-        scheduled_start_time: ev.scheduled_start_time,
-        scheduled_end_time: ev.scheduled_end_time,
-        status: ev.status,
-        entity_type: ev.entity_type,
-        channel_id: ev.channel_id,
-        creator_id: ev.creator_id,
-        untrusted_text: wrapped,
-      },
+      data,
     });
   },
 });

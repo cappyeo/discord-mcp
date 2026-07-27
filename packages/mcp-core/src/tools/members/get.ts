@@ -14,18 +14,20 @@ interface RawMember {
     avatar: string | null;
     bot?: boolean;
   };
-  nick: string | null;
+  nick?: string | null;
   roles: string[];
-  joined_at: string;
-  premium_since: string | null;
-  pending: boolean;
+  // Nullable per APIGuildMemberJoined; the boost/screening fields are optional
+  // (APIBaseGuildMember) and Discord omits them for members it has no data for.
+  joined_at: string | null;
+  premium_since?: string | null;
+  pending?: boolean;
 }
 
 export default defineTool({
   name: 'members_get',
   category: 'members',
   description:
-    '**Purpose**: Fetch a guild member by user ID.\n\n**When to use**: inspect roles, nick, joined-at of a known user.\n\n**Returns**: `{user_id, username, global_name, nick, roles, joined_at, premium_since, pending}`. `nick` wrapped in `<untrusted_discord_username>`.',
+    '**Purpose**: Fetch a guild member by user ID.\n\n**When to use**: inspect roles, nick, joined-at of a known user.\n\n**Returns**: `{user_id, username, global_name, nick, roles, joined_at, premium_since?, pending?}`. `joined_at` may be `null`; `premium_since` and `pending` are absent when Discord omits them. `nick` wrapped in `<untrusted_discord_username>`.',
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the member'),
     user_id: UserId.describe('Member to fetch'),
@@ -36,9 +38,9 @@ export default defineTool({
     global_name: z.string().nullable(),
     nick: z.string().nullable(),
     roles: z.array(RoleId),
-    joined_at: z.string(),
-    premium_since: z.string().nullable(),
-    pending: z.boolean(),
+    joined_at: z.string().nullable(),
+    premium_since: z.string().nullable().optional(),
+    pending: z.boolean().optional(),
   },
   annotations: {
     readOnlyHint: true,
@@ -51,19 +53,20 @@ export default defineTool({
     const m = (await container.rest.get(
       Routes.guildMember(args.guild_id, args.user_id),
     )) as RawMember;
-    const wrappedNick = m.nick !== null ? wrapUntrusted(m.nick, 'username') : '_(no nick)_';
-    const data = {
+    const wrappedNick =
+      m.nick !== null && m.nick !== undefined ? wrapUntrusted(m.nick, 'username') : '_(no nick)_';
+    const data: Record<string, unknown> = {
       user_id: m.user.id,
       username: m.user.username,
       global_name: m.user.global_name ?? null,
-      nick: m.nick,
+      nick: m.nick ?? null,
       roles: m.roles,
       joined_at: m.joined_at,
-      premium_since: m.premium_since,
-      pending: m.pending,
     };
+    if (m.premium_since !== undefined) data.premium_since = m.premium_since;
+    if (m.pending !== undefined) data.pending = m.pending;
     return dualResult({
-      text: `**${m.user.username}** (\`user:${m.user.id}\`)\nNick: ${wrappedNick}\nRoles: ${m.roles.length}\nJoined: ${m.joined_at}`,
+      text: `**${m.user.username}** (\`user:${m.user.id}\`)\nNick: ${wrappedNick}\nRoles: ${m.roles.length}\nJoined: ${m.joined_at ?? '_(unknown)_'}`,
       data,
     });
   },

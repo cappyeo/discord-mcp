@@ -9,7 +9,8 @@ import { wrapUntrusted } from '../_lib/untrusted.js';
 interface RawCommand {
   id: string;
   application_id: string;
-  guild_id: string;
+  // Optional on APIApplicationCommand.
+  guild_id?: string;
   name: string;
   description: string;
   type: number;
@@ -57,7 +58,7 @@ export default defineTool({
       data: {
         id: c.id,
         application_id: c.application_id,
-        guild_id: c.guild_id,
+        guild_id: c.guild_id ?? args.guild_id,
         name: c.name,
         description: c.description,
         type: c.type,

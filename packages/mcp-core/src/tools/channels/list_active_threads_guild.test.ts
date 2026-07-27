@@ -20,7 +20,7 @@ describe('channels_list_active_threads_guild', () => {
               name: 'release v2 chat',
               type: 11,
               parent_id: '111122223333444401',
-              owner_id: 'u_owner_1',
+              owner_id: '537711014240270104',
               thread_metadata: { archived: false, locked: false },
             },
           ],
