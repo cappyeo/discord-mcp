@@ -63,7 +63,7 @@ export const tokenOnlineCheck: DoctorCheck = {
         method: 'GET',
         headers: {
           Authorization: authHeader(config.DISCORD_TOKEN),
-          'User-Agent': 'discord-mcp-doctor (https://github.com/cappylab/discord-mcp)',
+          'User-Agent': 'discord-mcp-doctor (https://github.com/cappyeo/discord-mcp)',
         },
         signal: ctrl.signal,
       });

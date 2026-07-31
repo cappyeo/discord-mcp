@@ -13,7 +13,7 @@ discord-mcp's runtime behavior is **fully controlled by environment variables**.
 There are no config files. There is no mutable runtime state.
 
 Most variables come from the Zod schema in
-[`packages/mcp-core/src/config.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/config.ts).
+[`packages/mcp-core/src/config.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/config.ts).
 The schema parses `process.env` at startup. Invalid values cause `serve` to
 exit `1` with a per-issue error list; `doctor`'s `env-vars` check is the
 canonical reporter.

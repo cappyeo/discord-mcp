@@ -57,7 +57,7 @@ for an end-to-end example.
 
 ## The validator
 
-Source: [`tools/components-v2/_lib/validator.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/validator.ts)
+Source: [`tools/components-v2/_lib/validator.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/validator.ts)
 
 Enforces Discord's V2 constraints **before** sending, so the agent sees a
 clear `VALIDATION_FAILED` error rather than Discord's terse 400 response:
@@ -76,7 +76,7 @@ to the JSON path where the violation occurred (e.g.
 
 ## The schema
 
-Source: [`tools/components-v2/_lib/schema.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/schema.ts)
+Source: [`tools/components-v2/_lib/schema.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/schema.ts)
 
 A single zod tree describes the entire V2 model. Build tools use it to
 generate their inputs; the validator uses it to validate composed trees.
@@ -86,7 +86,7 @@ tree and skipping the build helpers.
 
 ## The preview
 
-Source: [`tools/components-v2/_lib/preview.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/preview.ts)
+Source: [`tools/components-v2/_lib/preview.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/preview.ts)
 
 Renders a text-only approximation of how the tree will look when Discord
 displays it: container borders as box-drawing characters, sections as
@@ -112,7 +112,7 @@ under `discord://components-v2/templates/{name}`:
 
 Each template accepts variables (e.g. `{{title}}`, `{{accent_color}}`)
 interpolated at send time via
-[`tools/components-v2/_lib/interpolate.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/interpolate.ts).
+[`tools/components-v2/_lib/interpolate.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/interpolate.ts).
 
 `components_v2_send_from_template` accepts a template name + a vars object
 and emits the fully-resolved tree.
@@ -136,11 +136,11 @@ mutually exclusive with the legacy embed path.
 
 | Concern | File |
 | ------- | ---- |
-| Type definitions | [`_lib/schema.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/schema.ts) |
-| Validation | [`_lib/validator.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/validator.ts) |
-| Preview rendering | [`_lib/preview.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/preview.ts) |
-| Variable interpolation | [`_lib/interpolate.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/interpolate.ts) |
-| 8 tool definitions | [`tools/components-v2/`](https://github.com/cappylab/discord-mcp/tree/main/packages/mcp-core/src/tools/components-v2) |
+| Type definitions | [`_lib/schema.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/schema.ts) |
+| Validation | [`_lib/validator.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/validator.ts) |
+| Preview rendering | [`_lib/preview.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/preview.ts) |
+| Variable interpolation | [`_lib/interpolate.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/components-v2/_lib/interpolate.ts) |
+| 8 tool definitions | [`tools/components-v2/`](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-core/src/tools/components-v2) |
 
 ## Related
 

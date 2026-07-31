@@ -16,7 +16,7 @@ extensions that ship their own tools — on top of the same exports.
 ## Scope
 
 The authoritative public surface is **everything re-exported from
-[`packages/mcp-core/src/index.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/index.ts)**.
+[`packages/mcp-core/src/index.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/index.ts)**.
 That barrel is the contract v1.0.0 freezes.
 
 This page documents the most commonly used of those exports with prose and
@@ -103,7 +103,7 @@ on it. Tool-to-tool calls go through `mcp_pipeline` at the protocol level
 rather than through a handler-side helper.
 </Aside>
 
-Source: [`packages/mcp-core/src/tools/_lib/defineTool.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/_lib/defineTool.ts).
+Source: [`packages/mcp-core/src/tools/_lib/defineTool.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/_lib/defineTool.ts).
 
 ## Server construction
 
@@ -185,7 +185,7 @@ interface, and `StderrAuditSink` does not implement it — but it means a typo
 in the method name fails silently rather than loudly. Check the spelling.
 </Aside>
 
-Source: [`packages/mcp-core/src/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/server.ts).
+Source: [`packages/mcp-core/src/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/server.ts).
 
 ## Configuration
 
@@ -229,7 +229,7 @@ try {
 }
 ```
 
-Source: [`packages/mcp-core/src/config.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/config.ts).
+Source: [`packages/mcp-core/src/config.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/config.ts).
 
 ## Resilience
 
@@ -280,7 +280,7 @@ wrapRestWithResilience(rest, policy, {
 });
 ```
 
-Source: [`packages/mcp-core/src/rest/resilient.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts).
+Source: [`packages/mcp-core/src/rest/resilient.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts).
 
 ## Errors
 
@@ -292,9 +292,9 @@ resilience-related ones) with a stable `code` field, a `retriable` flag, a
 
 | Class                         | Code                  | Retriable | Source                                                                                         |
 | ----------------------------- | --------------------- | --------- | ---------------------------------------------------------------------------------------------- |
-| `DiscordRetryableError`       | (internal marker)     | yes       | [`rest/errors.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts) |
-| `CircuitOpenError`            | `CIRCUIT_OPEN`        | yes       | [`errors/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
-| `BulkheadFullError`           | `BULKHEAD_FULL`       | yes       | [`errors/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
+| `DiscordRetryableError`       | (internal marker)     | yes       | [`rest/errors.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts) |
+| `CircuitOpenError`            | `CIRCUIT_OPEN`        | yes       | [`errors/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
+| `BulkheadFullError`           | `BULKHEAD_FULL`       | yes       | [`errors/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
 | `DiscordPermissionError`      | `DISCORD_PERMISSION`  | no        | `errors/index.ts`                                                                              |
 | `DiscordRateLimitError`       | `DISCORD_RATE_LIMIT`  | yes       | `errors/index.ts`                                                                              |
 | `DiscordNotFoundError`        | `DISCORD_NOT_FOUND`   | no        | `errors/index.ts`                                                                              |
@@ -361,7 +361,7 @@ const result = formatErrorForUser(err, { toolName: 'messages_send', transport: '
 // → { isError: true, content: [{ type: 'text', text: '**Permission Denied** ...' }], structuredContent: { code: 'DISCORD_PERMISSION', retriable: false, ... } }
 ```
 
-Source: [`packages/mcp-core/src/errors/format.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts).
+Source: [`packages/mcp-core/src/errors/format.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts).
 
 ## Branded snowflake types
 
@@ -411,7 +411,7 @@ function loadMessage(channel: ChannelIdT, message: string) {
 }
 ```
 
-Source: [`packages/mcp-core/src/tools/_lib/snowflake.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/tools/_lib/snowflake.ts).
+Source: [`packages/mcp-core/src/tools/_lib/snowflake.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/_lib/snowflake.ts).
 
 ## See also
 

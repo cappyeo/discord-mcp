@@ -173,7 +173,7 @@ export function renderToolMdx(tool: ToolMetadata): string {
   const outputTable = renderSchemaTable(tool.outputSchema);
 
   const sourceRelative = relative(ROOT, tool.sourcePath).replace(/\\/g, '/');
-  const ghUrl = `https://github.com/cappylab/discord-mcp/blob/main/${sourceRelative}`;
+  const ghUrl = `https://github.com/cappyeo/discord-mcp/blob/main/${sourceRelative}`;
 
   // Wrap in single quotes (YAML safe-mode) so colons, brackets, and other YAML
   // metacharacters in the description don't break frontmatter parsing.

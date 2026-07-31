@@ -2,7 +2,7 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  site: 'https://cappylab.github.io',
+  site: 'https://cappyeo.github.io',
   base: '/discord-mcp',
   integrations: [
     starlight({
@@ -12,7 +12,7 @@ export default defineConfig({
         {
           icon: 'github',
           label: 'GitHub',
-          href: 'https://github.com/cappylab/discord-mcp',
+          href: 'https://github.com/cappyeo/discord-mcp',
         },
       ],
       sidebar: [

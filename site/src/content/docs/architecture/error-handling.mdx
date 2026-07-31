@@ -37,9 +37,9 @@ DiscordMcpError                   (base — all custom errors extend this)
 ```
 
 Source:
-[`errors/base.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts),
-[`errors/client.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts),
-[`errors/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts).
+[`errors/base.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts),
+[`errors/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts),
+[`errors/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts).
 
 `GuildNotAllowedError` is defined and formatted but **no code path ever
 constructs it**. There is no guild allowlist: no `ALLOWED_GUILDS` env var is
@@ -54,7 +54,7 @@ config); server errors are transient (retry might work).
 
 ## `formatErrorForUser`
 
-Source: [`errors/format.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts).
+Source: [`errors/format.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts).
 
 The single conversion point that turns any thrown error into the wire
 shape returned to the MCP client:
@@ -140,7 +140,7 @@ sees a leaky implementation detail:
 | `BulkheadRejectedError` | `BulkheadFullError` | `BULKHEAD_SATURATED` |
 | `TaskCancelledError` (timeout) | `DiscordTimeoutError` | `DISCORD_TIMEOUT` |
 
-Mapping happens in [`rest/errors.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts)
+Mapping happens in [`rest/errors.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts)
 inside the resilient REST adapter, so all REST callers see the canonical
 codes.
 
@@ -179,11 +179,11 @@ field.
 
 | Concern | File |
 | ------- | ---- |
-| Base classes | [`errors/base.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts) |
-| Client errors | [`errors/client.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts) |
-| Server errors | [`errors/server.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
-| Wire formatter | [`errors/format.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts) |
-| Cockatiel mappings | [`rest/errors.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts) |
+| Base classes | [`errors/base.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts) |
+| Client errors | [`errors/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts) |
+| Server errors | [`errors/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
+| Wire formatter | [`errors/format.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts) |
+| Cockatiel mappings | [`rest/errors.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts) |
 
 ## Related
 

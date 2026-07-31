@@ -34,12 +34,12 @@ the inner chain, runs teardown, returns. The arrows show the call descending
 to the handler then unwinding back out.
 
 The composition primitive is in
-[`packages/mcp-core/src/middleware/compose.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/compose.ts):
+[`packages/mcp-core/src/middleware/compose.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/compose.ts):
 the same Koa-style dispatcher (with the standard "next() called twice" guard).
 
 ## Layer 1: telemetry (outermost)
 
-Source: [`middleware/telemetry.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/telemetry.ts)
+Source: [`middleware/telemetry.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/telemetry.ts)
 
 Wraps the entire call in an OTel SERVER span and emits the three tool-level
 metrics (`mcp.tool.duration_ms`, `mcp.tool.calls`, `mcp.tool.errors`). Always
@@ -53,7 +53,7 @@ exactly the calls that need monitoring.
 
 ## Layer 2: validate
 
-Source: [`middleware/validate.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/validate.ts)
+Source: [`middleware/validate.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/validate.ts)
 
 Runs the tool's zod schema against `arguments`. On failure, throws
 `ValidationError` with a structured `issues` array (each issue has `path`,
@@ -75,14 +75,14 @@ place the chain reads pre-validation args.
 
 ## Layer 3: preconditions
 
-Source: [`middleware/precondition.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/precondition.ts)
+Source: [`middleware/precondition.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/precondition.ts)
 
 Runs every `Precondition` piece declared by the tool. The two built-in
 preconditions are:
 
-- **`ConfirmRequired`** ([`preconditions/ConfirmRequired.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts))
+- **`ConfirmRequired`** ([`preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts))
   — gates destructive tools behind `__confirm:true` + `MCP_DRY_RUN=false`.
-- **`CategoryEnabled`** ([`preconditions/CategoryEnabled.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/preconditions/CategoryEnabled.ts))
+- **`CategoryEnabled`** ([`preconditions/CategoryEnabled.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/CategoryEnabled.ts))
   — gates tools by `MCP_SCOPES` (read, moderate, members, channels, etc.).
 
 Preconditions throw structured errors; the handler never runs if any
@@ -93,7 +93,7 @@ audit the tool body — the tool didn't actually execute.
 
 ## Layer 4: audit (innermost)
 
-Source: [`middleware/audit.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts)
+Source: [`middleware/audit.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts)
 
 Captures the redacted args, the result (success / `tool_error` / thrown), the
 duration, and the OTel trace/span IDs (if active). Emits **once per call** to

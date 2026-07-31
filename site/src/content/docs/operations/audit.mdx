@@ -154,7 +154,7 @@ and we'll consider a `MCP_AUDIT_INCLUDE_READS` toggle for Plan 9+.
 ### PII redaction
 
 Sensitive arg fields are redacted in `args_redacted` before hitting the sink.
-See [`redact.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/audit/redact.ts)
+See [`redact.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/audit/redact.ts)
 for the full policy:
 
 - **Global keys**: `token`, `bearer_token`, `auth`, `password`, `secret`
@@ -218,4 +218,4 @@ wrapper) — the file path itself is the routing.
 - [Telemetry](/discord-mcp/operations/telemetry/) — read patterns are observable here even when audit is off.
 - [Architecture → Middleware chain](/discord-mcp/architecture/middleware-chain/) — where the audit middleware sits in the call path.
 - [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the `__confirm` contract for destructive mutations.
-- Source: [`packages/mcp-core/src/middleware/audit.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts).
+- Source: [`packages/mcp-core/src/middleware/audit.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts).

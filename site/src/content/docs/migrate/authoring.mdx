@@ -32,7 +32,7 @@ on the abandoned project.
 ## The `MigrationSource` interface
 
 Every adapter implements the same interface, exported from
-[`packages/mcp-server/src/lib/migrate-adapters/types.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/types.ts):
+[`packages/mcp-server/src/lib/migrate-adapters/types.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/types.ts):
 
 ```ts
 export interface MigrationSource {
@@ -275,7 +275,7 @@ CI runs both directions; failures here block the merge.
 1. **Fork the repo and create a branch.**
 
    ```bash
-   gh repo fork cappylab/discord-mcp --clone
+   gh repo fork cappyeo/discord-mcp --clone
    cd discord-mcp
    git checkout -b feature/adapter-myname
    ```
@@ -303,7 +303,7 @@ CI runs both directions; failures here block the merge.
 5. **Register in `ALL_ADAPTERS`.**
 
    Edit
-   [`packages/mcp-server/src/lib/migrate-adapters/index.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/index.ts)
+   [`packages/mcp-server/src/lib/migrate-adapters/index.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/index.ts)
    and add your adapter to the array. Order doesn't matter functionally,
    but keep it alphabetical-ish for readability.
 
@@ -336,14 +336,14 @@ CI runs both directions; failures here block the merge.
 
 - [Migration overview](/discord-mcp/migrate/) — what migration means and the
   three-step CLI flow.
-- [`MigrationSource` source](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/types.ts)
+- [`MigrationSource` source](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/types.ts)
   — the canonical interface definition.
 - Shipping adapters — read these for working patterns:
-  - [`hubdustry-go-mcp.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/hubdustry-go-mcp.ts)
+  - [`hubdustry-go-mcp.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/hubdustry-go-mcp.ts)
     — minimal reference (Go, empty NAME_MAP).
-  - [`pasympa.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/pasympa.ts)
+  - [`pasympa.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/pasympa.ts)
     — TypeScript with prefix-based extraction (Pattern A).
-  - [`quadslab.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/quadslab.ts)
+  - [`quadslab.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/quadslab.ts)
     — TypeScript with known-name intersection (Pattern B).
-  - [`discord-ops.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/discord-ops.ts)
+  - [`discord-ops.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/discord-ops.ts)
     — TypeScript with architectural-mismatch warnings.

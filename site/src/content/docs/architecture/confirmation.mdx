@@ -26,7 +26,7 @@ Tools that do **not** declare the precondition — including ordinary mutations
 like `messages_send` and `members_add_role` — are unaffected by both halves
 and execute immediately.
 
-Source: [`packages/mcp-core/src/preconditions/ConfirmRequired.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts).
+Source: [`packages/mcp-core/src/preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts).
 
 ## Why two halves
 
@@ -231,9 +231,9 @@ and production.
 
 | Concern | File |
 | ------- | ---- |
-| Precondition implementation | [`preconditions/ConfirmRequired.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts) |
-| Error class + recovery hint | [`errors/client.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts#L102-L113) |
-| Middleware that runs preconditions | [`middleware/precondition.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/middleware/precondition.ts) |
+| Precondition implementation | [`preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts) |
+| Error class + recovery hint | [`errors/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts#L102-L113) |
+| Middleware that runs preconditions | [`middleware/precondition.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/precondition.ts) |
 
 ## Related
 

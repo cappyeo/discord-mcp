@@ -8,7 +8,7 @@ Production-grade Model Context Protocol server exposing the full Discord REST AP
 
 ## Documentation
 
-**[discord-mcp docs](https://cappylab.github.io/discord-mcp/)** — quickstart, tool reference (auto-generated for all 192 tools), recipes, architecture deep-dives, operations guides.
+**[discord-mcp docs](https://cappyeo.github.io/discord-mcp/)** — quickstart, tool reference (auto-generated for all 192 tools), recipes, architecture deep-dives, operations guides.
 
 See [design spec](docs/superpowers/specs/2026-04-28-discord-mcp-design.md) for architecture.
 
@@ -21,7 +21,7 @@ discord-mcp ships migration adapters for the most-established community Discord 
 - **discord-ops** (`bookedsolidtech/discord-ops`) — multi-guild routing, dry-run mode
 - **Hubdustry** (reference adapter, non-Discord)
 
-Run `discord-mcp migrate --list` to see all adapters, or `discord-mcp migrate --from <id> --source <path>` to get a tool-by-tool mapping report. Full guides at [cappylab.github.io/discord-mcp/migrate](https://cappylab.github.io/discord-mcp/migrate/).
+Run `discord-mcp migrate --list` to see all adapters, or `discord-mcp migrate --from <id> --source <path>` to get a tool-by-tool mapping report. Full guides at [cappyeo.github.io/discord-mcp/migrate](https://cappyeo.github.io/discord-mcp/migrate/).
 
 ## Quick start
 
@@ -150,14 +150,14 @@ Open the Inspector UI at <http://localhost:5173>, click `tools/list`, and you sh
 
 ## More documentation
 
-Full docs published at <https://cappylab.github.io/discord-mcp/>:
+Full docs published at <https://cappyeo.github.io/discord-mcp/>:
 
-- [Quickstart](https://cappylab.github.io/discord-mcp/start/) — install, configure, first tool call
-- [Tool reference](https://cappylab.github.io/discord-mcp/tools/) — auto-generated for all 192 tools
-- [Recipes](https://cappylab.github.io/discord-mcp/recipes/) — common agent flows
-- [Architecture](https://cappylab.github.io/discord-mcp/architecture/) — pipeline, gateway, error handling, components-v2
-- [Operations](https://cappylab.github.io/discord-mcp/operations/) — telemetry, resilience, audit, client capability matrix
-- [Reference](https://cappylab.github.io/discord-mcp/reference/) — CLI, env vars, public API, changelog
+- [Quickstart](https://cappyeo.github.io/discord-mcp/start/) — install, configure, first tool call
+- [Tool reference](https://cappyeo.github.io/discord-mcp/tools/) — auto-generated for all 192 tools
+- [Recipes](https://cappyeo.github.io/discord-mcp/recipes/) — common agent flows
+- [Architecture](https://cappyeo.github.io/discord-mcp/architecture/) — pipeline, gateway, error handling, components-v2
+- [Operations](https://cappyeo.github.io/discord-mcp/operations/) — telemetry, resilience, audit, client capability matrix
+- [Reference](https://cappyeo.github.io/discord-mcp/reference/) — CLI, env vars, public API, changelog
 
 In-repo legacy docs (preserved for compat):
 

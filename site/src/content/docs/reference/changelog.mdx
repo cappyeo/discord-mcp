@@ -11,7 +11,7 @@ discord-mcp follows the **plan-as-release-train** model: each plan number
 maps to one minor release. v0.X.0 corresponds to Plan X. Tags are cut from
 the merge commit of the plan's PR into `main`.
 
-For PR-level history, see the [GitHub releases](https://github.com/cappylab/discord-mcp/releases)
+For PR-level history, see the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases)
 page. Tag dates and SHAs below come from `git for-each-ref refs/tags/v0.*`.
 
 ## v0.13.0 — Correctness audit: the confirmation gate, the category gate, and 58 verified defects
@@ -108,7 +108,7 @@ cold-cache runs under full parallel load, not only in isolation.
 
 ## v0.12.0 — Test infra hardening + v1.0.0 readiness polish
 
-Released **2026-05-01**. Tag: [`v0.12.0`](https://github.com/cappylab/discord-mcp/releases/tag/v0.12.0).
+Released **2026-05-01**. Tag: [`v0.12.0`](https://github.com/cappyeo/discord-mcp/releases/tag/v0.12.0).
 
 Plan 12 is the polish lap before v1.0.0. No new tools, no new runtime
 behavior — the test rig, build pipeline, and release surface all got
@@ -139,7 +139,7 @@ the discord-mcp roadmap (Plans 0-12).
 
 ## v0.11.0 — Migration adapters
 
-Released **2026-05-01**. Tag: [`v0.11.0`](https://github.com/cappylab/discord-mcp/releases/tag/v0.11.0).
+Released **2026-05-01**. Tag: [`v0.11.0`](https://github.com/cappyeo/discord-mcp/releases/tag/v0.11.0).
 
 Plan 11 ships four production migration adapters so teams can move to
 discord-mcp from the most-established community Discord MCP servers
@@ -157,7 +157,7 @@ without re-tooling their agents from scratch.
 - `discord-mcp migrate --list` flag for adapter discovery (TTY + JSON).
 - 4-way cross-detection: every adapter rejects all other adapters'
   fixtures so detection never silently misroutes.
-- Migration docs section at [cappylab.github.io/discord-mcp/migrate](https://cappylab.github.io/discord-mcp/migrate/):
+- Migration docs section at [cappyeo.github.io/discord-mcp/migrate](https://cappyeo.github.io/discord-mcp/migrate/):
   per-adapter guides + adapter authoring guide for community contributors.
 
 ## v0.10.0 — Documentation site
@@ -180,7 +180,7 @@ you're reading now.
 ## v0.9.0 — CLI sub-commands
 
 Released **2026-05-01**. Tag commit:
-[`038c1138`](https://github.com/cappylab/discord-mcp/commit/038c1138).
+[`038c1138`](https://github.com/cappyeo/discord-mcp/commit/038c1138).
 
 Plan 9 split the single binary into four sub-commands routed by commander
 and shipped a structured `emitResult` envelope shared across all of them.
@@ -198,7 +198,7 @@ and shipped a structured `emitResult` envelope shared across all of them.
 ## v0.8.0 — Production hardening
 
 Released **2026-05-01**. Tag commit:
-[`b034bebf`](https://github.com/cappylab/discord-mcp/commit/b034bebf).
+[`b034bebf`](https://github.com/cappyeo/discord-mcp/commit/b034bebf).
 
 Plan 8 added the production-grade observability and resilience surface that
 makes discord-mcp safe to run in front of a real Discord guild.
@@ -218,7 +218,7 @@ makes discord-mcp safe to run in front of a real Discord guild.
 ## v0.7.0 — Bulk REST surface (192 tools)
 
 Released **2026-04-29**. Tag commit:
-[`947269d7`](https://github.com/cappylab/discord-mcp/commit/947269d7).
+[`947269d7`](https://github.com/cappyeo/discord-mcp/commit/947269d7).
 
 Plan 7 brought the tool count from 29 to **192** by mechanically covering
 every Discord REST endpoint that maps cleanly onto a single MCP tool.
@@ -233,7 +233,7 @@ every Discord REST endpoint that maps cleanly onto a single MCP tool.
 ## v0.6.0 — Gateway resource subscriptions
 
 Released **2026-04-28**. Tag commit:
-[`4dbac6ec`](https://github.com/cappylab/discord-mcp/commit/4dbac6ec).
+[`4dbac6ec`](https://github.com/cappyeo/discord-mcp/commit/4dbac6ec).
 
 Plan 6 (USP) made discord-mcp the first MCP server to surface live Gateway
 events as MCP resources via the `subscribe` capability.
@@ -250,7 +250,7 @@ events as MCP resources via the `subscribe` capability.
 ## v0.5.0 — Intelligence sampling
 
 Released **2026-04-28**. Tag commit:
-[`dcd49aa1`](https://github.com/cappylab/discord-mcp/commit/dcd49aa1).
+[`dcd49aa1`](https://github.com/cappyeo/discord-mcp/commit/dcd49aa1).
 
 Plan 5 (USP) introduced the five intelligence tools that delegate reasoning
 back to the agent via MCP sampling.
@@ -266,7 +266,7 @@ back to the agent via MCP sampling.
 ## v0.4.0 — Pipeline executor
 
 Released **2026-04-28**. Tag commit:
-[`07745aa0`](https://github.com/cappylab/discord-mcp/commit/07745aa0).
+[`07745aa0`](https://github.com/cappyeo/discord-mcp/commit/07745aa0).
 
 Plan 4 (USP) shipped `mcp_pipeline` — a single tool that lets the agent
 queue a sequence of dependent tool calls with interpolation and conditional
@@ -281,7 +281,7 @@ execution.
 ## v0.3.0 — Components V2
 
 Released **2026-04-28**. Tag commit:
-[`b7f976e6`](https://github.com/cappylab/discord-mcp/commit/b7f976e6).
+[`b7f976e6`](https://github.com/cappyeo/discord-mcp/commit/b7f976e6).
 
 Plan 3 made Components V2 a first-class category.
 
@@ -296,7 +296,7 @@ Plan 3 made Components V2 a first-class category.
 ## v0.2.0 — Hot-path tools
 
 Released **2026-04-28**. Tag commit:
-[`227dd28a`](https://github.com/cappylab/discord-mcp/commit/227dd28a).
+[`227dd28a`](https://github.com/cappyeo/discord-mcp/commit/227dd28a).
 
 Plan 2 grew the surface from 1 tool to 15 by covering the high-frequency
 day-one operations Discord agents typically need.
@@ -310,7 +310,7 @@ day-one operations Discord agents typically need.
 ## v0.1.0 — Errors + middleware
 
 Released **2026-04-28**. Tag commit:
-[`acec9440`](https://github.com/cappylab/discord-mcp/commit/acec9440).
+[`acec9440`](https://github.com/cappyeo/discord-mcp/commit/acec9440).
 
 Plan 1 established the error hierarchy, middleware composition framework,
 and capability router that every subsequent plan builds on.
@@ -325,7 +325,7 @@ and capability router that every subsequent plan builds on.
 ## v0.0.0 — Project skeleton
 
 Released **2026-04-28**. Tag commit:
-[`3ab74826`](https://github.com/cappylab/discord-mcp/commit/3ab74826).
+[`3ab74826`](https://github.com/cappyeo/discord-mcp/commit/3ab74826).
 
 Plan 0 stood up the monorepo and shipped the smallest viable tool surface.
 
@@ -336,5 +336,5 @@ Plan 0 stood up the monorepo and shipped the smallest viable tool surface.
 
 ## See also
 
-- [GitHub releases](https://github.com/cappylab/discord-mcp/releases) — full release notes per tag.
+- [GitHub releases](https://github.com/cappyeo/discord-mcp/releases) — full release notes per tag.
 - [Architecture → Overview](/discord-mcp/architecture/overview/) — how the pieces from each plan fit together today.

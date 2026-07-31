@@ -21,11 +21,11 @@ underlying state.
 
 | URI | Pushed by Gateway event | Handler |
 | --- | ----------------------- | ------- |
-| `discord://guild/{id}/info` | `GUILD_UPDATE` | [`guild_update.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/guild_update.ts) |
-| `discord://voice/{guild_id}/state` | `VOICE_STATE_UPDATE` | [`voice_state_update.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/voice_state_update.ts) |
-| `discord://channel/{id}/typing` | `TYPING_START` | [`typing_start.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/typing_start.ts) |
-| `discord://guild/{id}/members/online` | `PRESENCE_UPDATE` (debounced) | [`presence_update.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/presence_update.ts) |
-| `discord://guild/{id}/audit-log` | poll-based | [`audit_log_poll.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/audit_log_poll.ts) |
+| `discord://guild/{id}/info` | `GUILD_UPDATE` | [`guild_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/guild_update.ts) |
+| `discord://voice/{guild_id}/state` | `VOICE_STATE_UPDATE` | [`voice_state_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/voice_state_update.ts) |
+| `discord://channel/{id}/typing` | `TYPING_START` | [`typing_start.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/typing_start.ts) |
+| `discord://guild/{id}/members/online` | `PRESENCE_UPDATE` (debounced) | [`presence_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/presence_update.ts) |
+| `discord://guild/{id}/audit-log` | poll-based | [`audit_log_poll.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/audit_log_poll.ts) |
 
 The first four are real Gateway events; the audit-log one is implemented as
 a poll because Discord doesn't push audit-log entries over the Gateway. We
@@ -53,7 +53,7 @@ If `--gateway` is set but `discord.js` isn't installed, the server fails at
 startup with a clear "module not found" error and exits non-zero rather
 than booting in a half-broken state.
 
-Source: [`packages/mcp-core/src/gateway/client.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts).
+Source: [`packages/mcp-core/src/gateway/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts).
 
 ## SubscriptionRegistry
 
@@ -65,7 +65,7 @@ When a client calls `resources/subscribe` on a URI, the server records:
 - **A debounce slot** if the URI is debounce-eligible (currently
   `members/online` only).
 
-Source: [`packages/mcp-core/src/gateway/subscription_registry.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts).
+Source: [`packages/mcp-core/src/gateway/subscription_registry.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts).
 
 When a Gateway event arrives, the matching handler:
 
@@ -95,7 +95,7 @@ The debounce wrapper (300ms window) collapses bursts:
 - After 300ms: the handler reads the **current** online count from the
   djs cache and emits one notification.
 
-Source: [`packages/mcp-core/src/gateway/debounce.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts).
+Source: [`packages/mcp-core/src/gateway/debounce.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts).
 
 The 300ms is hardcoded — not env-configurable on purpose: it's tuned to
 human perception (presence change feels "instant" up to ~400ms, beyond
@@ -111,7 +111,7 @@ fire-hose problem.
 
 ## The `--gateway` CLI flag
 
-Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
+Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
 
 Setting `--gateway`:
 
@@ -131,11 +131,11 @@ re-polling.
 
 | Concern | File |
 | ------- | ---- |
-| Lazy-loaded djs client | [`gateway/client.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts) |
-| Subscription registry | [`gateway/subscription_registry.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts) |
-| Debounce wrapper | [`gateway/debounce.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts) |
-| 5 handlers | [`gateway/handlers/`](https://github.com/cappylab/discord-mcp/tree/main/packages/mcp-core/src/gateway/handlers) |
-| `--gateway` wiring | [`mcp-server/src/cli.ts`](https://github.com/cappylab/discord-mcp/blob/main/packages/mcp-server/src/cli.ts) |
+| Lazy-loaded djs client | [`gateway/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts) |
+| Subscription registry | [`gateway/subscription_registry.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts) |
+| Debounce wrapper | [`gateway/debounce.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts) |
+| 5 handlers | [`gateway/handlers/`](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-core/src/gateway/handlers) |
+| `--gateway` wiring | [`mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts) |
 
 ## Related
 

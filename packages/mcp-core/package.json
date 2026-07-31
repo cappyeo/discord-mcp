@@ -13,10 +13,10 @@
     "cursor"
   ],
   "license": "MIT",
-  "homepage": "https://cappylab.github.io/discord-mcp/",
+  "homepage": "https://cappyeo.github.io/discord-mcp/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cappylab/discord-mcp.git",
+    "url": "git+https://github.com/cappyeo/discord-mcp.git",
     "directory": "packages/mcp-core"
   },
   "publishConfig": {
