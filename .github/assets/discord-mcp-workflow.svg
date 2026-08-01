@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 390" role="img" aria-labelledby="title description">
+  <title id="title">Discord MCP workflow</title>
+  <desc id="description">An AI client connects to discord-mcp over stdio, and discord-mcp connects to the Discord REST API with confirmation gates, reliability controls, and observability.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1200" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#131b33"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="70" y1="0" x2="1130" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5865f2"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-60%" width="180%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="390" rx="24" fill="url(#surface)"/>
+  <rect x="1" y="1" width="1198" height="388" rx="23" fill="none" stroke="#30363d" stroke-width="2"/>
+  <rect x="48" y="42" width="56" height="6" rx="3" fill="url(#accent)"/>
+  <text x="48" y="83" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="25" font-weight="700" letter-spacing="1.3">ONE LOCAL BRIDGE. EVERY DISCORD WORKFLOW.</text>
+  <text x="48" y="112" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">A typed MCP boundary between your AI client and the Discord REST API.</text>
+
+  <path d="M344 214 H422" fill="none" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M410 204 L426 214 L410 224" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="383" y="191" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" text-anchor="middle">MCP / stdio</text>
+
+  <path d="M778 214 H856" fill="none" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M844 204 L860 214 L844 224" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="817" y="191" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" text-anchor="middle">Discord REST API</text>
+
+  <g>
+    <rect x="48" y="154" width="296" height="120" rx="16" fill="#161b22" stroke="#30363d" stroke-width="2"/>
+    <rect x="72" y="178" width="42" height="42" rx="12" fill="#212b5c"/>
+    <path d="M84 191 H102 M84 201 H96" fill="none" stroke="#a5b4fc" stroke-width="3" stroke-linecap="round"/>
+    <text x="132" y="194" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="19" font-weight="700">YOUR AI CLIENT</text>
+    <text x="132" y="218" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">Claude Desktop · Cursor</text>
+    <text x="132" y="240" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">and custom MCP clients</text>
+  </g>
+
+  <g filter="url(#glow)">
+    <rect x="426" y="140" width="352" height="148" rx="18" fill="#18204a" stroke="#7289da" stroke-width="2"/>
+    <rect x="450" y="166" width="54" height="54" rx="14" fill="url(#accent)"/>
+    <path d="M466 182 H488 M466 193 H482 M466 204 H491" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <text x="524" y="187" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="700">discord-mcp</text>
+    <text x="524" y="213" fill="#c7d2fe" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15">Local server · 192 typed tools</text>
+    <text x="524" y="235" fill="#c7d2fe" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15">Predictable errors and contracts</text>
+    <text x="450" y="266" fill="#a5b4fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" font-weight="700" letter-spacing="1.1">THE CONTROL PLANE FOR AI-DRIVEN DISCORD WORK</text>
+  </g>
+
+  <g>
+    <rect x="860" y="154" width="292" height="120" rx="16" fill="#161b22" stroke="#30363d" stroke-width="2"/>
+    <rect x="884" y="178" width="42" height="42" rx="12" fill="#25213d"/>
+    <circle cx="905" cy="199" r="11" fill="none" stroke="#c4b5fd" stroke-width="3"/>
+    <path d="M897 199 H913 M905 191 V207" stroke="#c4b5fd" stroke-width="3" stroke-linecap="round"/>
+    <text x="944" y="194" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="19" font-weight="700">DISCORD</text>
+    <text x="944" y="218" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">Messages · moderation · operations</text>
+    <text x="944" y="240" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">Apps · webhooks · automation</text>
+  </g>
+
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14" font-weight="600">
+    <rect x="48" y="322" width="269" height="36" rx="18" fill="#1b243e" stroke="#303b61"/>
+    <text x="182" y="346" fill="#c7d2fe" text-anchor="middle">Confirmation gates for risky actions</text>
+    <rect x="341" y="322" width="293" height="36" rx="18" fill="#1b243e" stroke="#303b61"/>
+    <text x="487" y="346" fill="#c7d2fe" text-anchor="middle">Retries, rate limits, and circuit breaking</text>
+    <rect x="658" y="322" width="275" height="36" rx="18" fill="#1b243e" stroke="#303b61"/>
+    <text x="796" y="346" fill="#c7d2fe" text-anchor="middle">OpenTelemetry and audit events</text>
+  </g>
+</svg>

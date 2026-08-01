@@ -2,16 +2,32 @@
   <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-banner.jpg" alt="Discord MCP — connect Discord to the Model Context Protocol" width="1200" />
 </p>
 
-# discord-mcp
+<h1 align="center">discord-mcp</h1>
 
-[![CI](https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/%40discord-mcp%2Fcli?label=npm)](https://www.npmjs.com/package/@discord-mcp/cli)
-[![Node.js](https://img.shields.io/node/v/%40discord-mcp%2Fcli)](https://www.npmjs.com/package/@discord-mcp/cli)
-[![License](https://img.shields.io/github/license/cappyeo/discord-mcp)](LICENSE)
+<p align="center">
+  <a href="https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml"><img src="https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://www.npmjs.com/package/@discord-mcp/cli"><img src="https://img.shields.io/npm/v/%40discord-mcp%2Fcli?label=npm" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@discord-mcp/cli"><img src="https://img.shields.io/node/v/%40discord-mcp%2Fcli" alt="Required Node.js version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/cappyeo/discord-mcp" alt="MIT license" /></a>
+</p>
 
-Production-grade [Model Context Protocol](https://modelcontextprotocol.io/) server for Discord. Connect an AI client to Discord through a local stdio process with 192 typed tools for messages, moderation, members, channels, commands, webhooks, and more.
+<p align="center">
+  <strong>Connect your AI client to Discord through a local, typed, production-ready MCP server.</strong><br />
+  192 tools for messages, moderation, members, channels, commands, webhooks, and more.
+</p>
 
-**Install:** `npm install -g @discord-mcp/cli` · **Docs:** [cappyeo.github.io/discord-mcp](https://cappyeo.github.io/discord-mcp/) · **Package:** [@discord-mcp/cli](https://www.npmjs.com/package/@discord-mcp/cli)
+<p align="center">
+  <a href="https://cappyeo.github.io/discord-mcp/start/quickstart/"><strong>Quickstart</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 192 tools</strong></a>
+  · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
+</p>
+
+## How it works
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-workflow.svg" alt="AI client connects to discord-mcp over stdio, then discord-mcp connects to Discord with confirmation gates, reliability controls, and observability." width="1200" />
+</p>
 
 ## Quick start
 
