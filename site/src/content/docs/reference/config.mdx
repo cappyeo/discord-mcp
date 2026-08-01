@@ -1,6 +1,6 @@
 ---
 title: Environment variables
-description: Full reference for the 27 environment variables that drive discord-mcp at runtime — token, safety, logging, gateway, telemetry, retry/timeout, circuit/bulkhead, audit.
+description: Full reference for the 28 environment variables that drive discord-mcp at runtime — token, default guild, safety, logging, gateway, telemetry, retry/timeout, circuit/bulkhead, audit.
 sidebar:
   order: 2
 ---
@@ -42,6 +42,16 @@ literal string `false` (including unset) keeps them on.
 - **Description**: Discord bot token used to authenticate against the REST API. Accepts both `Bot <token>` and a bare token. Treated as a credential — never logged, redacted from audit events.
 - **Example**: `DISCORD_TOKEN="MTQwOTU3NjE..."` or `DISCORD_TOKEN="Bot MTQwOTU3NjE..."`
 - **Related**: This is the only required variable. Everything else has defaults.
+
+## Default guild
+
+### `DISCORD_DEFAULT_GUILD_ID`
+
+- **Type**: Discord snowflake (17–20 digits)
+- **Default**: (unset)
+- **Description**: Optional default for any tool that declares a top-level `guild_id` input. When set, an omitted `guild_id` is injected before validation; `tools/list` advertises that field as optional for this server instance.
+- **Example**: `DISCORD_DEFAULT_GUILD_ID=111122223333444455`
+- **Related**: An explicit `guild_id` always wins. This does not infer a guild from a channel, user, webhook, or message ID, and it does not affect tools without a top-level `guild_id` parameter.
 
 ## Safety
 

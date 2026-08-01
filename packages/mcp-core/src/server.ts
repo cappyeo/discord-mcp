@@ -27,6 +27,7 @@ import {
   parseCategoryAllowlist,
 } from './middleware/category.js';
 import { compose, type MiddlewareContext, type ToolMiddleware } from './middleware/compose.js';
+import { defaultGuildMiddleware } from './middleware/default-guild.js';
 import { preconditionMiddleware } from './middleware/precondition.js';
 import { telemetryMiddleware } from './middleware/telemetry.js';
 import { validateMiddleware } from './middleware/validate.js';
@@ -1072,6 +1073,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   // Order matters:
   //   - telemetry: OUTERMOST so spans cover the entire call (including
   //     validation/precondition errors and middleware overhead).
+  //   - default guild: fills an omitted top-level guild_id before validation.
   //   - validate / precondition: argument and policy gates.
   //   - audit: INNERMOST per plan §10 critical rule 2 — only fires for
   //     actually-attempted operations. Blocked operations are visible
@@ -1080,6 +1082,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   //     sanitized before any policy decision) and before preconditions.
   const middlewares: ToolMiddleware[] = [
     telemetryMiddleware(),
+    defaultGuildMiddleware(deps.config.DISCORD_DEFAULT_GUILD_ID),
     validateMiddleware(),
     categoryMiddleware(categoryAllowlist),
     preconditionMiddleware(preconditionStore),
@@ -1126,6 +1129,16 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       const jsonSchema = z.toJSONSchema(inputSchema, {
         target: 'draft-2020-12',
       }) as McpTool['inputSchema'];
+      // The default is injected before validation, so only advertise guild_id
+      // as optional when this server instance actually has one configured.
+      // Explicit caller input still wins at invocation time.
+      if (
+        deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined &&
+        Object.hasOwn(tool.inputSchema, 'guild_id') &&
+        Array.isArray(jsonSchema.required)
+      ) {
+        jsonSchema.required = jsonSchema.required.filter((field) => field !== 'guild_id');
+      }
       // `__confirm` is deliberately absent from every tool's zod inputSchema
       // (it is an authorization flag, not a handler parameter — handlers must
       // never see it). But z.toJSONSchema emits `additionalProperties: false`,

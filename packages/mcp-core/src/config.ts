@@ -11,6 +11,10 @@ const boolish = (def = false) =>
 
 const ConfigSchema = z.object({
   DISCORD_TOKEN: z.string().min(50, 'DISCORD_TOKEN appears too short to be a valid bot token'),
+  DISCORD_DEFAULT_GUILD_ID: z
+    .string()
+    .regex(/^\d{17,20}$/, 'DISCORD_DEFAULT_GUILD_ID must be a 17-20 digit Discord snowflake')
+    .optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   GATEWAY: boolish(false),
 

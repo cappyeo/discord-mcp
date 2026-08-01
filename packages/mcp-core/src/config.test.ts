@@ -12,8 +12,23 @@ describe('loadConfig', () => {
 
   it('returns defaults when only DISCORD_TOKEN provided', () => {
     const c = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
+    expect(c.DISCORD_DEFAULT_GUILD_ID).toBeUndefined();
     expect(c.LOG_LEVEL).toBe('info');
     expect(c.GATEWAY).toBe(false);
+  });
+
+  it('accepts a valid default guild ID and rejects malformed values', () => {
+    const configured = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      DISCORD_DEFAULT_GUILD_ID: '111122223333444455',
+    } as NodeJS.ProcessEnv);
+    expect(configured.DISCORD_DEFAULT_GUILD_ID).toBe('111122223333444455');
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        DISCORD_DEFAULT_GUILD_ID: 'not-a-snowflake',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/DISCORD_DEFAULT_GUILD_ID/);
   });
 
   describe('OpenTelemetry fields (Plan 8 Phase A)', () => {

@@ -2,6 +2,7 @@
 
 exports[`config surface > declares the frozen set of schema keys, optional ones included 1`] = `
 [
+  "DISCORD_DEFAULT_GUILD_ID",
   "DISCORD_TOKEN",
   "GATEWAY",
   "LOG_LEVEL",
