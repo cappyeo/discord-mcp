@@ -120,9 +120,13 @@ describe('resolveCliPath', () => {
     existsImpl = (path) => path.endsWith(`${nodePath.sep}dist${nodePath.sep}cli.js`);
 
     const p = resolveCliPath('file:///C:/repo/discord-mcp/dist/init-abc123.js');
+    // `fileURLToPath` converts the synthetic Windows URL to the native path
+    // representation of the host running the test: `C:\\...` on Windows and
+    // `/C:/...` on POSIX. Both are the correct local filesystem spelling.
+    const drivePrefix = process.platform === 'win32' ? 'C:' : `${nodePath.sep}C:`;
 
     expect(p).toBe(
-      `C:${nodePath.sep}repo${nodePath.sep}discord-mcp${nodePath.sep}dist${nodePath.sep}cli.js`,
+      `${drivePrefix}${nodePath.sep}repo${nodePath.sep}discord-mcp${nodePath.sep}dist${nodePath.sep}cli.js`,
     );
   });
 
