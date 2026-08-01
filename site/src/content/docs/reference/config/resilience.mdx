@@ -1,0 +1,83 @@
+---
+title: Resilience
+description: Tune retry, timeout, circuit-breaker, and concurrency behavior for Discord REST calls.
+---
+
+These controls wrap Discord REST operations. For the policy order and operational
+tradeoffs, see [Resilience](/discord-mcp/operations/resilience/).
+
+## Retry
+
+### `MCP_RETRY_ENABLED`
+
+- **Type:** default-on boolean; only `false` disables it
+- **Default:** `true`
+- **Use:** Retries classified 5xx, 429, and network-reset errors. When off, those errors reach the caller after the first attempt.
+
+### `MCP_RETRY_MAX_ATTEMPTS`
+
+- **Type:** integer from 1 to 10
+- **Default:** `3`
+- **Use:** Total attempts, including the first request.
+- **Example:** `MCP_RETRY_MAX_ATTEMPTS=5`
+
+### `MCP_RETRY_BASE_DELAY_MS`
+
+- **Type:** integer from 50 to 5000 milliseconds
+- **Default:** `200`
+- **Use:** Base exponential-backoff delay before jitter.
+- **Example:** `MCP_RETRY_BASE_DELAY_MS=500`
+
+### `MCP_RETRY_MAX_DELAY_MS`
+
+- **Type:** integer from 500 to 60000 milliseconds
+- **Default:** `10000`
+- **Use:** Caps an individual retry delay.
+- **Example:** `MCP_RETRY_MAX_DELAY_MS=30000`
+
+### `MCP_RETRY_JITTER`
+
+- **Type:** enum
+- **Allowed:** `none`, `full`, `decorrelated`
+- **Default:** `full`
+- **Use:** Randomizes backoff. Choose `decorrelated` for high-concurrency clients; use `none` only when deterministic timing is needed for tests.
+
+## Timeout
+
+### `MCP_TIMEOUT_DEFAULT_MS`
+
+- **Type:** integer from 1000 to 120000 milliseconds
+- **Default:** `30000`
+- **Use:** Timeout for one Discord REST request, not for the entire tool or multi-request workflow.
+- **Example:** `MCP_TIMEOUT_DEFAULT_MS=10000`
+
+## Circuit breaker and concurrency
+
+### `MCP_CIRCUIT_ENABLED`
+
+- **Type:** default-on boolean; only `false` disables it
+- **Default:** `true`
+- **Use:** Fails fast with `CircuitOpenError` while the breaker is open.
+
+### `MCP_CIRCUIT_FAILURE_THRESHOLD`
+
+- **Type:** integer from 3 to 100
+- **Default:** `10`
+- **Use:** Consecutive failures after retries that trip the breaker.
+- **Example:** `MCP_CIRCUIT_FAILURE_THRESHOLD=5`
+
+### `MCP_CIRCUIT_HALF_OPEN_AFTER_MS`
+
+- **Type:** integer from 5000 to 600000 milliseconds
+- **Default:** `60000`
+- **Use:** Wait before the breaker tries a half-open probe.
+- **Example:** `MCP_CIRCUIT_HALF_OPEN_AFTER_MS=30000`
+
+### `MCP_BULKHEAD_LIMIT`
+
+- **Type:** integer from 1 to 1000
+- **Default:** `100`
+- **Use:** Maximum concurrent in-flight Discord REST calls. Excess calls are rejected immediately; there is no queue.
+- **Example:** `MCP_BULKHEAD_LIMIT=50`
+
+Values below roughly 10 can cause pipeline self-deadlock.

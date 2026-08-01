@@ -65,6 +65,10 @@ and the shared MDX building blocks in `src/components/docs/`.
 - Use `ClientTabs` for any client-specific instructions. Supply named slots
   (`claude-desktop`, `claude-code`, `cursor`, `generic`) so the selected tab
   stays synchronized across pages.
+- Keep guides and references separate: `operations/configure.mdx` explains
+  deployment decisions, while `reference/config/` holds the exact
+  environment-variable contract grouped by concern. Update both the reference
+  and the hand-authored sidebar when a runtime setting changes.
 - Verify every documentation change with `pnpm --filter site test` and
   `pnpm --filter site build` before publishing.
 

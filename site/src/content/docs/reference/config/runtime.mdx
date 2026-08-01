@@ -1,0 +1,28 @@
+---
+title: Runtime behavior
+description: Enable Gateway subscriptions and choose the server log level.
+---
+
+## Discord Gateway
+
+### `GATEWAY`
+
+- **Type:** boolean string; `1`, `true`, and `yes` are truthy
+- **Default:** `false`
+- **Use:** Enables the Discord Gateway WebSocket client and resource subscriptions. When off, the server is REST-only and does not import `discord.js`.
+- **Example:** `GATEWAY=true`
+
+`discord-mcp serve --gateway` is equivalent to `GATEWAY=true`. Use the environment
+variable when the MCP client config can set `env` but not command arguments.
+
+## Logging
+
+### `LOG_LEVEL`
+
+- **Type:** enum
+- **Allowed:** `fatal`, `error`, `warn`, `info`, `debug`, `trace`
+- **Default:** `info`
+- **Use:** Sets the embedded Pino logger level. `debug` and `trace` expose verbose middleware information for development.
+- **Example:** `LOG_LEVEL=debug`
+
+Logs use stderr because stdout is reserved for stdio JSON-RPC.

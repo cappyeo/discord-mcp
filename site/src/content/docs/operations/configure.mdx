@@ -1,0 +1,56 @@
+---
+title: Configure discord-mcp
+description: Start with a safe runtime baseline, then add only the controls your Discord MCP deployment needs.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
+
+discord-mcp receives its runtime settings through environment variables in your
+MCP client configuration. Start with the smallest safe configuration, verify it,
+then add controls for the behavior you need.
+
+## Start with a safe baseline
+
+Set the bot token and leave the remaining controls at their defaults:
+
+```bash
+DISCORD_TOKEN=your-discord-bot-token
+```
+
+This starts the server with REST-only transport, `info` logging, retry, circuit
+breaking, and audit logging enabled. Destructive tools stay in dry-run mode until
+you explicitly opt in.
+
+<Aside type="caution">
+Setting `MCP_DRY_RUN=false` enables execution only for the 29 confirmation-gated
+tools. Each call still needs `__confirm: true`; this is intentionally a two-key
+safety check.
+</Aside>
+
+## Add controls by intent
+
+<DocsCardGrid
+  links={[
+    { title: 'Limit access', href: '/discord-mcp/reference/config/access/', description: 'Set a default guild or allow only the tool categories your agent needs.' },
+    { title: 'Control writes', href: '/discord-mcp/reference/config/safety/', description: 'Understand dry-run mode and make deliberate production changes.' },
+    { title: 'Observe traffic', href: '/discord-mcp/reference/config/observability/', description: 'Export traces to an OTLP collector or inspect spans locally.' },
+    { title: 'Tune reliability', href: '/discord-mcp/reference/config/resilience/', description: 'Adjust retry, timeout, circuit breaker, and concurrency limits.' },
+    { title: 'Record mutations', href: '/discord-mcp/reference/config/audit/', description: 'Choose the audit sink and file location that fit your operations.' },
+  ]}
+/>
+
+## Verify before using an agent
+
+Run the online doctor after the client has started the server:
+
+```bash
+discord-mcp doctor --online
+```
+
+It reports missing or invalid schema-backed environment variables. Use the
+[environment variable reference](/discord-mcp/reference/config/) for the exact
+accepted values and defaults. `MCP_DRY_RUN` is intentionally not part of that
+schema validation, so verify that value byte-for-byte before enabling writes.

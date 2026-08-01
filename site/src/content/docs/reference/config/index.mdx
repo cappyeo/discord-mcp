@@ -1,0 +1,39 @@
+---
+title: Environment variable reference
+description: Exact defaults, accepted values, and runtime behavior for all 28 discord-mcp environment variables.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import DocsCardGrid from '../../../../components/docs/DocsCardGrid.astro';
+
+This is the complete runtime contract for discord-mcp. Every setting is read when
+the server starts; invalid schema-backed values make `serve` exit with a precise
+error and are reported by `discord-mcp doctor`.
+
+For deployment decisions and a safe starting point, see
+[Configure discord-mcp](/discord-mcp/operations/configure/).
+
+<Aside type="note">
+Most booleans accept `1`, `true`, or `yes` as truthy. Default-on controls use
+different semantics: only the literal string `false` turns them off.
+</Aside>
+
+## Browse by concern
+
+<DocsCardGrid
+  links={[
+    { title: 'Access and scope', href: '/discord-mcp/reference/config/access/', description: 'Bot token, default guild, and the tool-category allowlist.' },
+    { title: 'Safety', href: '/discord-mcp/reference/config/safety/', description: 'The dry-run gate that protects confirmation-gated tools.' },
+    { title: 'Runtime', href: '/discord-mcp/reference/config/runtime/', description: 'Gateway subscriptions and server logging.' },
+    { title: 'Observability', href: '/discord-mcp/reference/config/observability/', description: 'OpenTelemetry service, exporter, and sampling controls.' },
+    { title: 'Resilience', href: '/discord-mcp/reference/config/resilience/', description: 'Retry, timeout, circuit-breaker, and concurrency settings.' },
+    { title: 'Audit logging', href: '/discord-mcp/reference/config/audit/', description: 'Mutation audit switch, sink, and file path.' },
+  ]}
+/>
+
+## Source and validation
+
+Most variables are defined in the
+[Zod schema](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/config.ts).
+The exception is `MCP_DRY_RUN`: the confirmation precondition reads it directly
+from `process.env`, so `doctor` cannot validate it.

@@ -1,0 +1,33 @@
+---
+title: Audit logging
+description: Configure mutation audit logging, its destination, and an optional JSONL file path.
+---
+
+Audit middleware records mutations only. See [Audit logging](/discord-mcp/operations/audit/)
+for the event schema and redaction policy.
+
+## Audit switch
+
+### `MCP_AUDIT_ENABLED`
+
+- **Type:** default-on boolean; only `false` disables it
+- **Default:** `true`
+- **Use:** Disables the audit middleware completely when false, regardless of the selected sink.
+- **Example:** `MCP_AUDIT_ENABLED=false`
+
+## Destination
+
+### `MCP_AUDIT_SINK`
+
+- **Type:** enum
+- **Allowed:** `stderr`, `file`, `otlp`, `none`
+- **Default:** `stderr`
+- **Use:** Chooses where mutation events go. `stderr` writes JSONL, `file` uses `MCP_AUDIT_FILE`, `otlp` is reserved for the OTLP sink, and `none` is an explicit opt-out.
+- **Example:** `MCP_AUDIT_SINK=file`
+
+### `MCP_AUDIT_FILE`
+
+- **Type:** path string
+- **Default:** `./discord-mcp-audit.jsonl` when the file sink is selected
+- **Use:** File path for the JSONL audit log. The file is created when missing and appended when it exists.
+- **Example:** `MCP_AUDIT_FILE=/var/log/discord-mcp/audit.jsonl`

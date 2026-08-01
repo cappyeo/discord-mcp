@@ -21,6 +21,7 @@ own page describing defaults, override knobs, and the observability surface.
 
 <DocsCardGrid
   links={[
+    { title: 'Configure discord-mcp', href: '/discord-mcp/operations/configure/', description: 'Start with a safe production baseline, then add only the runtime controls your deployment needs.' },
     { title: 'Telemetry', href: '/discord-mcp/operations/telemetry/', description: 'Enable OpenTelemetry traces and metrics. Honeycomb, local Jaeger, console exporter; six built-in metrics; trace context propagation into Discord REST.' },
     { title: 'Resilience', href: '/discord-mcp/operations/resilience/', description: 'The composite policy chain — bulkhead, circuit breaker, retry, timeout. 10 environment variables; 429-aware backoff; pipeline interactions.' },
     { title: 'Audit logging', href: '/discord-mcp/operations/audit/', description: 'Mutating-only audit trail. Four sinks (stderr, file, OTLP-stub, none); JSONL schema; PII redaction policy; SOC2/HIPAA considerations.' },
@@ -35,8 +36,8 @@ it's the one set of knobs that affects every Discord call the server makes.
 Telemetry is opt-in (`OTEL_ENABLED=false` by default, zero overhead) and
 audit is on by default but can be tuned per-sink.
 
-For the remaining environment variables (token, category allowlist, dry-run
-mode), see [Reference → Environment variables](/discord-mcp/reference/config/).
+For the exact environment-variable contract (token, category allowlist, dry-run
+mode), see [Environment variables](/discord-mcp/reference/config/).
 Note that there is **no guild allowlist** — `ALLOWED_GUILDS` is not read by
 any code path and per-guild restriction is deferred post-1.0.
 

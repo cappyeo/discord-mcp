@@ -1,0 +1,76 @@
+---
+title: Observability
+description: Configure OpenTelemetry service metadata, OTLP export, and trace sampling.
+---
+
+All `OTEL_*` settings are inert until telemetry is enabled. When it is off, the
+OpenTelemetry SDK is not imported.
+
+## Enable telemetry
+
+### `OTEL_ENABLED`
+
+- **Type:** boolean string
+- **Default:** `false`
+- **Use:** Master switch for OpenTelemetry.
+- **Example:** `OTEL_ENABLED=true`
+
+### `OTEL_SERVICE_NAME`
+
+- **Type:** string
+- **Default:** `discord-mcp`
+- **Use:** Sets the `service.name` resource attribute.
+- **Example:** `OTEL_SERVICE_NAME=discord-mcp-prod`
+
+### `OTEL_SERVICE_VERSION`
+
+- **Type:** string
+- **Default:** the installed package version
+- **Use:** Sets the `service.version` resource attribute for rolling deploys.
+- **Example:** `OTEL_SERVICE_VERSION=1.2.3-canary`
+
+## Export traces
+
+### `OTEL_EXPORTER_OTLP_ENDPOINT`
+
+- **Type:** URL
+- **Default:** unset
+- **Use:** OTLP collector endpoint. A console exporter can still run without one.
+- **Example:** `OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io`
+
+### `OTEL_EXPORTER_OTLP_PROTOCOL`
+
+- **Type:** enum
+- **Allowed:** `http/protobuf`, `http/json`, `grpc`
+- **Default:** `http/protobuf`
+- **Use:** Selects the OTLP wire format; `http/protobuf` is the recommended default.
+
+### `OTEL_EXPORTER_OTLP_HEADERS`
+
+- **Type:** comma-separated `key=value` pairs
+- **Default:** unset
+- **Use:** Adds headers to each OTLP export, commonly backend authentication.
+- **Example:** `OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=your-api-key,env=prod`
+
+### `OTEL_CONSOLE_EXPORTER`
+
+- **Type:** boolean string
+- **Default:** `false`
+- **Use:** Writes spans to stderr for local debugging when no collector is available.
+- **Example:** `OTEL_CONSOLE_EXPORTER=true`
+
+## Control sampling
+
+### `OTEL_TRACES_SAMPLER`
+
+- **Type:** enum
+- **Allowed:** `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`
+- **Default:** `parentbased_always_on`
+- **Use:** Chooses how traces are sampled. `parentbased_*` preserves upstream sampling decisions.
+
+### `OTEL_TRACES_SAMPLER_ARG`
+
+- **Type:** number from 0 to 1
+- **Default:** `1`
+- **Use:** Sampling ratio for `traceidratio` and `parentbased_traceidratio`; `0.1` records 10% of traces.
+- **Example:** `OTEL_TRACES_SAMPLER_ARG=0.05`

@@ -1,0 +1,41 @@
+---
+title: Access and scope
+description: Configure the Discord bot credential, a default guild, and the tool-category allowlist.
+---
+
+Use these settings to give the server the credential and the smallest tool surface
+your agent needs.
+
+## Bot credential
+
+### `DISCORD_TOKEN`
+
+- **Type:** string, minimum 50 characters
+- **Default:** required
+- **Use:** Discord bot token for REST authentication. Bare tokens and `Bot <token>` are accepted; the token is redacted from audit events.
+- **Example:** `DISCORD_TOKEN=your-discord-bot-token`
+
+## Guild default
+
+### `DISCORD_DEFAULT_GUILD_ID`
+
+- **Type:** Discord snowflake with 17–20 digits
+- **Default:** unset
+- **Use:** Supplies an omitted top-level `guild_id` before tool validation. An explicit tool argument always wins.
+- **Example:** `DISCORD_DEFAULT_GUILD_ID=111122223333444455`
+
+This does not infer a guild from a channel, user, webhook, or message ID, and it
+does not affect tools without a top-level `guild_id` input.
+
+## Tool scope
+
+### `MCP_CATEGORIES`
+
+- **Type:** comma-separated tool category names
+- **Default:** unset, so every category is available
+- **Use:** Omits disallowed categories from `tools/list` and rejects a direct call with `SCOPE_REJECTED`.
+- **Example:** `MCP_CATEGORIES=messages,channels,members`
+
+Entries are trimmed and empty values are ignored. Unknown categories fail at
+startup with the valid list instead of silently disabling a tool surface. The
+`meta` category is always available so `mcp_pipeline` remains reachable.

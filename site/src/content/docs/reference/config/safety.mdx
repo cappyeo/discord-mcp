@@ -1,0 +1,29 @@
+---
+title: Safety controls
+description: Understand the dry-run gate that protects confirmation-gated Discord mutations.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Dry-run mode
+
+### `MCP_DRY_RUN`
+
+- **Type:** literal string comparison: `env.MCP_DRY_RUN !== 'false'`
+- **Default:** dry-run is on; an unset value counts as on
+- **Use:** Protects 29 destructive tools. With dry-run on, they return `DRY_RUN_PREVIEW` with redacted arguments instead of executing.
+- **Example:** `MCP_DRY_RUN=false`
+
+Setting the literal string `false` allows those tools to execute, but every call
+still requires `__confirm: true`. The other 163 tools are not affected, so this
+is not a global read-only switch.
+
+<Aside type="danger">
+`MCP_DRY_RUN` is not in the Zod schema and `doctor` does not validate it. A typo
+such as `fasle`, `0`, `no`, or `disabled` keeps dry-run enabled. This fails closed,
+but it can surprise an operator who expected a destructive call to execute.
+</Aside>
+
+If confirmation-gated tools keep returning `DRY_RUN_PREVIEW`, check this value
+byte-for-byte first. For the call-level requirement, see
+[Confirmation](/discord-mcp/architecture/confirmation/).
