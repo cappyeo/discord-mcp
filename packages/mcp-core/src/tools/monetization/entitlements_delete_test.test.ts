@@ -1,4 +1,4 @@
-import { server } from '@cappyeo/discord-mcp-server-mocks';
+import { server } from '@discord-mcp/server-mocks';
 import { REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { HttpResponse, http } from 'msw';

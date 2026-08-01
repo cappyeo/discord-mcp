@@ -6,7 +6,7 @@
  * `vi.unstubAllGlobals()` in afterEach for explicitness (and to be safe
  * against any test running in isolation).
  */
-import type { Config } from '@cappyeo/discord-mcp-core';
+import type { Config } from '@discord-mcp/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenOnlineCheck } from './token-online.js';
 

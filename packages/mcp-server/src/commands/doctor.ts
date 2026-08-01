@@ -22,7 +22,7 @@
  * `env-vars` check is the canonical reporter for the parse failure
  * itself (status=fail with zod issue details).
  */
-import { type Config, loadConfig } from '@cappyeo/discord-mcp-core';
+import { type Config, loadConfig } from '@discord-mcp/core';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
 import { emitResult } from '../lib/output.js';
 

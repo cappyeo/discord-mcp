@@ -5,7 +5,7 @@
  * two `dist/` artefacts that integration tests depend on actually exist:
  *
  *  1. `packages/mcp-core/dist/index.js` — every test that imports from
- *     `@cappyeo/discord-mcp-core` resolves through the workspace symlink to
+ *     `@discord-mcp/core` resolves through the workspace symlink to
  *     mcp-core's compiled output. Vitest deps.optimizer can sometimes
  *     run before turbo's dep graph builds it; on a fresh worktree (CI
  *     pull, fresh clone) the dist might be missing.
@@ -16,7 +16,7 @@
  *     coverage runs everywhere, including local dev without a manual
  *     `pnpm build` step.
  *
- * We use `pnpm --filter @cappyeo/discord-mcp build` for the cli build because
+ * We use `pnpm --filter @discord-mcp/cli build` for the cli build because
  * it transitively rebuilds mcp-core via turbo's `dependsOn: ['^build']`.
  * That single command therefore satisfies BOTH artefacts above.
  *
@@ -43,11 +43,11 @@ export default async function setup(): Promise<void> {
   // doesn't flag this. It's printed once per `vitest run` and only when
   // the dist artefacts were absent — i.e. fresh worktree / cold CI.
   console.warn(
-    '[vitest-global] dist/ artefacts missing — building @cappyeo/discord-mcp (transitively rebuilds @cappyeo/discord-mcp-core)...',
+    '[vitest-global] dist/ artefacts missing — building @discord-mcp/cli (transitively rebuilds @discord-mcp/core)...',
   );
   // workspace root = ../../ relative to packages/mcp-server.
   const workspaceRoot = resolve(here, '../..');
-  execSync('pnpm --filter @cappyeo/discord-mcp build', {
+  execSync('pnpm --filter @discord-mcp/cli build', {
     stdio: 'inherit',
     cwd: workspaceRoot,
   });

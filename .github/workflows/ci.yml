@@ -35,7 +35,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
-      - run: pnpm --filter @cappyeo/discord-mcp-core exec vitest run --coverage
+      - run: pnpm --filter @discord-mcp/core exec vitest run --coverage
       - run: pnpm exec publint --strict packages/mcp-core
       - run: pnpm exec publint --strict packages/mcp-server
   pack:

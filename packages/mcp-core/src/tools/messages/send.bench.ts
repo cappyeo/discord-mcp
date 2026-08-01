@@ -10,7 +10,7 @@ import '../../container.js';
 /**
  * Plan 12 Phase E.1 — performance bench for messages_send.
  *
- * Run via `pnpm --filter @cappyeo/discord-mcp-core bench`. Bench files run on
+ * Run via `pnpm --filter @discord-mcp/core bench`. Bench files run on
  * `vitest bench` only; they're excluded from `vitest run` because
  * `vitest.config.ts` `include: ['src/** /*.test.ts']` does NOT match `.bench.ts`.
  *

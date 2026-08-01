@@ -14,7 +14,7 @@ import { buildPolicy } from './policy.js';
  *   3. timeout fast-fail — confirms TaskCancelledError raises in <50ms
  *      with MCP_TIMEOUT_DEFAULT_MS=10.
  *
- * Run via `pnpm --filter @cappyeo/discord-mcp-core bench`. CI does NOT gate on
+ * Run via `pnpm --filter @discord-mcp/core bench`. CI does NOT gate on
  * bench p50/p95.
  */
 

@@ -26,7 +26,7 @@ describe('telemetry conventions', () => {
   });
 
   it('exports the instrumentation name + version', () => {
-    expect(conventions.TELEMETRY_INSTRUMENTATION_NAME).toBe('@cappyeo/discord-mcp-core');
+    expect(conventions.TELEMETRY_INSTRUMENTATION_NAME).toBe('@discord-mcp/core');
     expect(conventions.TELEMETRY_INSTRUMENTATION_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 

@@ -77,7 +77,7 @@ Every entry except `@hono/node-server` is **build- and test-time only**.
 `vitest`, `esbuild`, `turbo`, `astro`, `sharp` and `brace-expansion` are
 absent from both published tarballs. They are real advisories for a
 contributor running this repo; they are not supply-chain exposure for anyone
-installing `@cappyeo/discord-mcp`.
+installing `@discord-mcp/cli`.
 
 CI gates on `--prod` for exactly that reason, and now runs weekly on a
 schedule rather than only on push — the absence of that schedule is why three
@@ -154,7 +154,7 @@ node .github/scripts/assert-no-workspace-protocol.mjs
 
 The last one guards a different failure class entirely: pnpm rewrites the
 `workspace:` protocol on pack, npm does not, and a published manifest
-containing `"@cappyeo/discord-mcp-core": "workspace:*"` fails every consumer install
+containing `"@discord-mcp/core": "workspace:*"` fails every consumer install
 and cannot be repaired without a deprecate-and-republish.
 
 ## Related

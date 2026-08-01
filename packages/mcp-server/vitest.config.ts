@@ -1,8 +1,8 @@
 /**
- * Vitest config for @cappyeo/discord-mcp (mcp-server).
+ * Vitest config for @discord-mcp/cli (mcp-server).
  *
  * Plan 12 Phase C.3: introduces a `globalSetup` hook that auto-builds
- * `dist/cli.js` (and transitively `@cappyeo/discord-mcp-core`) when missing, so
+ * `dist/cli.js` (and transitively `@discord-mcp/core`) when missing, so
  * `cli.smoke.test.ts` no longer needs the `describe.skipIf(!cliBuilt)`
  * gate. See vitest.global-setup.ts for the setup body.
  */

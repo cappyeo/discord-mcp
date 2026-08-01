@@ -9,7 +9,7 @@ import { executePipeline, type Step } from '../../pipeline/executor.js';
  * interpolation), with a synthetic `invoke` that returns immediately so
  * we isolate the pipeline cost from underlying tool/REST cost.
  *
- * Run via `pnpm --filter @cappyeo/discord-mcp-core bench`. Numbers are
+ * Run via `pnpm --filter @discord-mcp/core bench`. Numbers are
  * informational; CI does NOT gate on bench p50/p95.
  */
 

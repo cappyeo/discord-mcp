@@ -1,13 +1,13 @@
 ---
-title: "@cappyeo/discord-mcp-core API"
-description: Public TypeScript exports from @cappyeo/discord-mcp-core. defineTool, buildServer, loadConfig, wrapRestWithResilience, error classes, branded snowflake types.
+title: "@discord-mcp/core API"
+description: Public TypeScript exports from @discord-mcp/core. defineTool, buildServer, loadConfig, wrapRestWithResilience, error classes, branded snowflake types.
 sidebar:
   order: 3
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-`@cappyeo/discord-mcp-core` is the embeddable engine. The `discord-mcp` binary is one
+`@discord-mcp/core` is the embeddable engine. The `discord-mcp` binary is one
 consumer; you can build others — custom transports, alternative CLIs,
 extensions that ship their own tools — on top of the same exports.
 
@@ -25,7 +25,7 @@ response helpers — is public and stable without having a section here. Read
 the barrel for the full list.
 
 What *is* private: **deep imports into subpaths**. Importing from
-`@cappyeo/discord-mcp-core/dist/tools/_lib/...` or any path other than the package
+`@discord-mcp/core/dist/tools/_lib/...` or any path other than the package
 root is unsupported and may break in any release, including a patch.
 
 ## Tool authoring
@@ -63,7 +63,7 @@ instantiating the tool.
 **Example**:
 
 ```ts
-import { ChannelId, defineTool } from '@cappyeo/discord-mcp-core';
+import { ChannelId, defineTool } from '@discord-mcp/core';
 import { z } from 'zod';
 
 export default defineTool({
@@ -144,7 +144,7 @@ transport can flush it via `shutdown()` on `SIGTERM`.
 
 ```ts
 import { REST } from '@discordjs/rest';
-import { buildServer, loadConfig, wrapRestWithResilience, buildPolicy } from '@cappyeo/discord-mcp-core';
+import { buildServer, loadConfig, wrapRestWithResilience, buildPolicy } from '@discord-mcp/core';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import pino from 'pino';
 
@@ -216,7 +216,7 @@ raw `ZodError`. If you need the structured Zod issues, do your own
 **Example**:
 
 ```ts
-import { loadConfig } from '@cappyeo/discord-mcp-core';
+import { loadConfig } from '@discord-mcp/core';
 
 try {
   const config = loadConfig();
@@ -266,7 +266,7 @@ for `formatErrorForUser` to consume.
 
 ```ts
 import { REST } from '@discordjs/rest';
-import { wrapRestWithResilience, buildPolicy, loadConfig, classifyDiscordError } from '@cappyeo/discord-mcp-core';
+import { wrapRestWithResilience, buildPolicy, loadConfig, classifyDiscordError } from '@discord-mcp/core';
 
 const config = loadConfig();
 const rest = new REST().setToken(config.DISCORD_TOKEN);
@@ -346,7 +346,7 @@ transports that want the same error UX.
 **Example**:
 
 ```ts
-import { formatErrorForUser, DiscordPermissionError } from '@cappyeo/discord-mcp-core';
+import { formatErrorForUser, DiscordPermissionError } from '@discord-mcp/core';
 
 const err = new DiscordPermissionError({
   resource: 'channels/123',
@@ -400,7 +400,7 @@ Two non-snowflake schemas live in the same module for ergonomic imports:
 **Example**:
 
 ```ts
-import { ChannelId, MessageId, type ChannelId as ChannelIdT } from '@cappyeo/discord-mcp-core';
+import { ChannelId, MessageId, type ChannelId as ChannelIdT } from '@discord-mcp/core';
 
 function loadMessage(channel: ChannelIdT, message: string) {
   // message is a plain string here — would fail validation if it's not a snowflake.

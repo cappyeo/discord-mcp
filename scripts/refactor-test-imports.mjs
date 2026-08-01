@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Plan 12 Phase A.4 — one-time migration to rewrite relative imports of
 // the root test/setup.js (now packages/mcp-server-mocks/src/setup.ts)
-// to the workspace specifier '@cappyeo/discord-mcp-server-mocks'.
+// to the workspace specifier '@discord-mcp/server-mocks'.
 //
 // Usage: node scripts/refactor-test-imports.mjs
 // Safe to delete after Phase A merges.
@@ -18,7 +18,7 @@ const RE = /from\s+(['"])(?:\.\.[\\/])+test[\\/]setup\.js\1/g;
 let changed = 0;
 for (const file of candidates) {
   const before = readFileSync(file, 'utf8');
-  const after = before.replace(RE, "from '@cappyeo/discord-mcp-server-mocks'");
+  const after = before.replace(RE, "from '@discord-mcp/server-mocks'");
   if (before !== after) {
     writeFileSync(file, after, 'utf8');
     changed++;

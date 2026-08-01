@@ -1,5 +1,5 @@
 /**
- * The frozen public surface of `@cappyeo/discord-mcp-core`.
+ * The frozen public surface of `@discord-mcp/core`.
  *
  * v1.0.0 commits to "exports frozen — no removals, only additions" for 6+
  * months. That was a promise with nothing enforcing it: any refactor could

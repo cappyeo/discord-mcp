@@ -27,7 +27,7 @@ Run `discord-mcp migrate --list` to see all adapters, or `discord-mcp migrate --
 
 ```bash
 # 1. Install
-npm install -g @cappyeo/discord-mcp  # or use npx
+npm install -g @discord-mcp/cli  # or use npx
 
 # 2. Print a config snippet for your MCP client, then merge it into that
 #    client's config file yourself (init writes nothing without --output)

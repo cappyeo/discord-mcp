@@ -33,7 +33,7 @@ before deploying.
 pnpm --filter site generate-tools
 ```
 
-Reads `__toolMetadata` static from `@cappyeo/discord-mcp-core` exports and emits
+Reads `__toolMetadata` static from `@discord-mcp/core` exports and emits
 one MDX per tool plus 28 category index pages plus a top-level index
 into `site/src/content/docs/tools/`. Runs automatically before `dev` and
 `build`.

@@ -18,7 +18,7 @@
  * in the standard MCP server config (e.g. `command: "node",
  * args: ["/abs/path/cli.js"]`). When the project is published on npm a
  * portable alternative is `serverPath: "npx"` + `serverArgs:
- * ["@cappyeo/discord-mcp"]` — generators don't enforce one or the other,
+ * ["@discord-mcp/cli"]` — generators don't enforce one or the other,
  * they just wire whatever the caller provides.
  *
  * `discordToken` is the literal value placed in `env.DISCORD_TOKEN`.
