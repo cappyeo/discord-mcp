@@ -27,11 +27,11 @@
 
   <path d="M344 214 H422" fill="none" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
   <path d="M410 204 L426 214 L410 224" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="383" y="191" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" text-anchor="middle">MCP / stdio</text>
+  <text x="383" y="191" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" text-anchor="middle">stdio</text>
 
   <path d="M778 214 H856" fill="none" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
   <path d="M844 204 L860 214 L844 224" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="817" y="191" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" text-anchor="middle">Discord REST API</text>
+  <text x="817" y="191" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13" text-anchor="middle">HTTPS</text>
 
   <g>
     <rect x="48" y="154" width="296" height="120" rx="16" fill="#161b22" stroke="#30363d" stroke-width="2"/>
