@@ -456,7 +456,7 @@ describe('renderToolsIndex', () => {
     expect(md).toContain('Messages (1)');
     expect(md).not.toContain('ToolCatalog');
     expect(md).toContain('Channels (1)');
-    expect(md).toContain('Messaging and community');
+    expect(md).toContain('Messaging');
   });
 });
 

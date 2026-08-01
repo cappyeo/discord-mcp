@@ -80,7 +80,7 @@ export default defineConfig({
             { label: 'Reference overview', slug: 'reference' },
             { label: 'Tool reference', slug: 'tools' },
             {
-              label: 'Messaging and community',
+              label: 'Messaging',
               collapsed: true,
               items: [
                 'tools/messages',
@@ -92,7 +92,7 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Moderation and server management',
+              label: 'Moderation',
               collapsed: true,
               items: [
                 'tools/members',
@@ -105,7 +105,7 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Application building',
+              label: 'Application',
               collapsed: true,
               items: [
                 'tools/application',
@@ -117,7 +117,7 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Media and live experiences',
+              label: 'Experiences',
               collapsed: true,
               items: [
                 'tools/emojis',
@@ -129,7 +129,7 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Identity and commerce',
+              label: 'Monetization',
               collapsed: true,
               items: ['tools/users', 'tools/monetization', 'tools/meta'],
             },

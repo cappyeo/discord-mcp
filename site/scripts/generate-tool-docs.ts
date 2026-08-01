@@ -794,18 +794,18 @@ export function renderToolsIndex(byCategory: Map<string, ToolMetadata[]>): strin
   const total = Array.from(byCategory.values()).reduce((sum, arr) => sum + arr.length, 0);
   const domains = [
     {
-      title: 'Messaging and community',
+      title: 'Messaging',
       description: 'Messages, channels, threads, reactions, polls, and webhooks.',
       categories: ['messages', 'channels', 'threads', 'reactions', 'polls', 'webhooks'],
     },
     {
-      title: 'Moderation and server management',
+      title: 'Moderation',
       description:
         'Members, roles, AutoMod, server settings, invites, audit records, and onboarding.',
       categories: ['members', 'roles', 'automod', 'guild', 'invites', 'audit_log', 'onboarding'],
     },
     {
-      title: 'Application building',
+      title: 'Application',
       description:
         'App configuration, commands, interactions, Components V2, events, and intelligence.',
       categories: [
@@ -818,12 +818,12 @@ export function renderToolsIndex(byCategory: Map<string, ToolMetadata[]>): strin
       ],
     },
     {
-      title: 'Media and live experiences',
+      title: 'Experiences',
       description: 'Emoji, stickers, soundboard, voice, and Stage instances.',
       categories: ['emojis', 'app_emojis', 'stickers', 'soundboard', 'voice', 'stage_instances'],
     },
     {
-      title: 'Identity and commerce',
+      title: 'Monetization',
       description: 'Users, monetization, and protocol helpers.',
       categories: ['users', 'monetization', 'meta'],
     },
