@@ -1,6 +1,7 @@
 import { server } from '@discord-mcp/server-mocks';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import commandsEditCommandPermissions from './edit_command_permissions.js';
 import '../../container.js';
 
@@ -55,7 +56,7 @@ describe('commands_edit_command_permissions', () => {
     expect(r.structuredContent.permissions[0]!.id).toBe('333333333333333333');
   });
 
-  it('throws when bearer_token missing', async () => {
+  it('declares bearer_token required and rejects direct calls when it is missing', async () => {
     const t = new commandsEditCommandPermissions(
       {
         name: 'commands_edit_command_permissions',
@@ -65,17 +66,15 @@ describe('commands_edit_command_permissions', () => {
       },
       { name: 'commands_edit_command_permissions', enabled: true },
     );
+    const args = {
+      application_id: '111111111111111111',
+      guild_id: '999000999000999000',
+      command_id: '222222222222222222',
+      permissions: [],
+    };
+    expect(z.object(t.inputSchema).safeParse(args).success).toBe(false);
     await expect(
-      t.run(
-        {
-          application_id: '111111111111111111',
-          guild_id: '999000999000999000',
-          command_id: '222222222222222222',
-          permissions: [],
-          // bearer_token intentionally omitted to verify the runtime guard
-        },
-        { signal: new AbortController().signal },
-      ),
+      t.run(args as Parameters<typeof t.run>[0], { signal: new AbortController().signal }),
     ).rejects.toThrow(/bearer_token/i);
   });
 });

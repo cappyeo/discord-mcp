@@ -24,7 +24,7 @@ export default defineTool({
     '**When to use**:',
     '- Inspect description / tags / availability of a known sticker.',
     '',
-    '**Returns**: `{id, name, description, tags, format_type, available}`. `description` is wrapped in `<untrusted_discord_embed>` (mod-authored).',
+    '**Returns**: `{id, name, description, tags, format_type, available}`. Structured `description` remains raw moderator-authored data; the human-readable text response fences it.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild owning the sticker'),

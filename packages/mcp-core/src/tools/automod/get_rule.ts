@@ -45,7 +45,7 @@ export default defineTool({
     '**When to use**:',
     '- Inspect rule config before editing.',
     '',
-    '**Returns**: full rule shape. `name` and trigger_metadata `keyword_filter` / `regex_patterns` are user-authored — wrapped untrusted.',
+    '**Returns**: full rule shape. `name` and trigger metadata remain raw user-authored data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the rule'),

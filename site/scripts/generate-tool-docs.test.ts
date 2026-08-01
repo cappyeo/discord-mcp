@@ -4,11 +4,15 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from '../../packages/mcp-core/node_modules/zod/index.js';
 import {
+  buildOutputExample,
+  buildSchemaExample,
   escapeMdx,
+  escapeMdxProse,
   generate,
   loadAllTools,
   parseDescription,
   renderCategoryIndex,
+  renderJsonSchema,
   renderSchemaTable,
   renderToolMdx,
   renderToolsIndex,
@@ -36,6 +40,7 @@ describe('parseDescription', () => {
     expect(out.whenToUse).toContain('Avoid for components.');
     expect(out.whenNotToUse).toContain('Embeds — use rich_send');
     expect(out.returns).toContain('message_id');
+    expect(out.extraSections).toEqual([]);
   });
 
   it('returns empty strings for missing sections', () => {
@@ -44,20 +49,28 @@ describe('parseDescription', () => {
     expect(out.whenToUse).toBe('');
     expect(out.whenNotToUse).toBe('');
     expect(out.returns).toBe('');
+    expect(out.extraSections).toEqual([]);
   });
 
-  it('ignores unknown sections (e.g. Example)', () => {
+  it('preserves authored sections such as Example', () => {
     const desc = ['**Purpose**: do thing.', '', '**Example**: x.', '', '**Returns**: `{ok}`.'].join(
       '\n',
     );
     const out = parseDescription(desc);
     expect(out.purpose).toBe('do thing.');
     expect(out.returns).toContain('ok');
+    expect(out.extraSections).toEqual([{ heading: 'Example', body: 'x.' }]);
   });
 
   it('returns empty record for non-conforming input', () => {
     const out = parseDescription('totally unstructured text');
-    expect(out).toEqual({ purpose: '', whenToUse: '', whenNotToUse: '', returns: '' });
+    expect(out).toEqual({
+      purpose: '',
+      whenToUse: '',
+      whenNotToUse: '',
+      returns: '',
+      extraSections: [],
+    });
   });
 });
 
@@ -73,6 +86,12 @@ describe('escapeMdx', () => {
   it('leaves regular text untouched', () => {
     expect(escapeMdx('plain text 123')).toBe('plain text 123');
   });
+
+  it('preserves braces inside inline code while escaping prose braces', () => {
+    expect(escapeMdxProse('Returns `{message_id}` from {Discord}.')).toBe(
+      'Returns `{message_id}` from \\{Discord\\}.',
+    );
+  });
 });
 
 describe('renderSchemaTable', () => {
@@ -86,7 +105,7 @@ describe('renderSchemaTable', () => {
       channel_id: z.string().describe('Channel snowflake'),
       content: z.string(),
     });
-    expect(md).toContain('| Field | Type | Required | Description |');
+    expect(md).toContain('| Field | Type | Required | Constraints | Description |');
     expect(md).toContain('`channel_id`');
     expect(md).toContain('Channel snowflake');
     expect(md).toContain('| yes |');
@@ -108,6 +127,138 @@ describe('renderSchemaTable', () => {
     expect(md).toContain('`ids`');
     expect(md).toContain('array');
     expect(md).toContain('list of ids');
+  });
+
+  it('marks defaulted fields as optional at the call boundary', () => {
+    const md = renderSchemaTable({ limit: z.number().int().default(50) });
+    expect(md).toMatch(/`limit`.*\|\s*no\s*\|/);
+    expect(md).toContain('default: `50`');
+  });
+
+  it('uses the complete JSON Schema required list for z.unknown outputs', () => {
+    const md = renderSchemaTable({ component: z.unknown() });
+    expect(md).toMatch(/`component`.*\|\s*yes\s*\|/);
+  });
+
+  it('renders the complete JSON schema for nested inspection', () => {
+    const schema = renderJsonSchema({ options: z.array(z.object({ label: z.string() })) });
+    expect(schema).toContain('"options"');
+    expect(schema).toContain('"label"');
+  });
+
+  it('removes implementation sentinel bounds from the published JSON Schema', () => {
+    expect(renderJsonSchema({ count: z.number().int() })).not.toContain('9007199254740991');
+  });
+
+  it('publishes input-mode schemas where defaulted fields are optional', () => {
+    const schema = JSON.parse(renderJsonSchema({ limit: z.number().int().default(50) })) as {
+      required?: string[];
+    };
+    expect(schema.required ?? []).not.toContain('limit');
+  });
+});
+
+describe('buildSchemaExample', () => {
+  it('builds a schema-valid example from required fields and skips optionals', () => {
+    const fields = {
+      channel_id: z.string().regex(/^\d{17,20}$/),
+      content: z.string().min(1).max(2000),
+      tts: z.boolean().optional(),
+    };
+    const example = buildSchemaExample(fields);
+    expect(example).toEqual({
+      channel_id: '123456789012345678',
+      content: 'Hello from discord-mcp',
+    });
+    expect(z.object(fields).safeParse(example).success).toBe(true);
+  });
+
+  it('builds nested object and array examples', () => {
+    const fields = {
+      items: z.array(z.object({ url: z.string().url(), label: z.string() })).min(1),
+    };
+    const example = buildSchemaExample(fields);
+    expect(z.object(fields).safeParse(example).success).toBe(true);
+  });
+
+  it('avoids implementation-level safe-integer bounds as sample values', () => {
+    expect(buildSchemaExample({ count: z.number().int() })).toEqual({ count: 1 });
+    expect(renderSchemaTable({ count: z.number().int() })).not.toContain('9007199254740991');
+  });
+
+  it('creates a semantically complete voice scheduled-event example', () => {
+    const fields = {
+      guild_id: z.string(),
+      entity_type: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      channel_id: z.string().optional(),
+      scheduled_start_time: z.string().datetime(),
+    };
+    expect(buildSchemaExample(fields, { toolName: 'events_create' })).toEqual({
+      guild_id: '123456789012345678',
+      entity_type: 2,
+      channel_id: '123456789012345678',
+      scheduled_start_time: '2030-01-01T10:00:00.000Z',
+    });
+  });
+
+  it('uses a valid TextDisplay child for Components V2 array inputs', () => {
+    const fields = { components: z.array(z.unknown()).min(1) };
+    expect(buildSchemaExample(fields, { toolName: 'components_v2_validate' })).toEqual({
+      components: [{ type: 10, content: 'Hello from discord-mcp' }],
+    });
+  });
+
+  it('fills Discord cross-field requirements in command, forum, and upload examples', () => {
+    const command = buildSchemaExample(
+      {
+        application_id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        type: z.number().int().optional(),
+      },
+      { toolName: 'commands_create_global' },
+    );
+    expect(command).toMatchObject({ type: 1, description: 'Example command description' });
+
+    const forum = buildSchemaExample(
+      { message: z.object({ content: z.string().optional() }) },
+      { toolName: 'channels_forum_create_thread' },
+    );
+    expect(forum).toEqual({ message: { content: 'Hello from discord-mcp' } });
+
+    expect(buildSchemaExample({ image: z.string().describe('Base64 data URI') })).toEqual({
+      image: 'data:image/png;base64,iVBORw0KGgo=',
+    });
+  });
+
+  it('uses a real registered tool in the pipeline example', () => {
+    const example = buildSchemaExample(
+      {
+        steps: z.array(
+          z.object({
+            id: z.string().optional(),
+            tool: z.string(),
+            args: z.record(z.string(), z.unknown()),
+          }),
+        ),
+      },
+      { toolName: 'mcp_pipeline' },
+    );
+    expect(example).toEqual({ steps: [{ id: 'me', tool: 'users_get_current', args: {} }] });
+  });
+
+  it('adds one useful mutable field to modify calls without required changes', () => {
+    expect(
+      buildSchemaExample(
+        {
+          guild_id: z.string(),
+          audit_reason: z.string().optional(),
+          name: z.string().optional(),
+          topic: z.string().optional(),
+        },
+        { toolName: 'channels_modify' },
+      ),
+    ).toEqual({ guild_id: '123456789012345678', name: 'Example name' });
   });
 });
 
@@ -149,29 +300,84 @@ describe('renderToolMdx', () => {
   it('produces frontmatter with quoted description', () => {
     const mdx = renderToolMdx(sampleTool);
     expect(mdx).toMatch(/^---\ntitle: messages_send\ndescription: '/);
+    expect(mdx).toContain('sidebar:\n  hidden: true');
+    expect(mdx).toContain('editUrl: https://github.com/cappyeo/discord-mcp/edit/main/');
   });
 
-  it('relies on Starlight for the page H1 and includes all four content sections + tables', () => {
+  it('relies on Starlight for the page H1 and includes populated content sections + tables', () => {
     const mdx = renderToolMdx(sampleTool);
     expect(mdx).toContain('title: messages_send');
     expect(mdx).not.toMatch(/^# /m);
     expect(mdx).toContain('## When to use');
-    expect(mdx).toContain('## When NOT to use');
+    expect(mdx).toContain('## When not to use');
     expect(mdx).toContain('## Input');
     expect(mdx).toContain('## Returns');
     expect(mdx).toContain('### Output schema');
     expect(mdx).toContain('## Annotations');
     expect(mdx).toContain('## Source');
+    expect(mdx).toContain('Complete input JSON Schema');
+    expect(mdx).toContain('## MCP call example');
+    expect(mdx).toContain('### Example structured result');
+    expect(mdx).toContain('## Access and common errors');
   });
 
   it('renders confirm_required precondition when present', () => {
     const mdx = renderToolMdx({ ...sampleTool, preconditions: ['confirm_required'] });
     expect(mdx).toContain('__confirm:true');
   });
+
+  it('describes local-only tools without Discord permission boilerplate', () => {
+    const mdx = renderToolMdx({
+      ...sampleTool,
+      annotations: { ...sampleTool.annotations, openWorldHint: false },
+    });
+    expect(mdx).toContain('This tool is local-only and does not call Discord.');
+    expect(mdx).not.toContain("Discord applies the bot's server role");
+  });
+
+  it('uses one real output branch for alternative and unknown schemas', () => {
+    const webhook = buildOutputExample({
+      ...sampleTool,
+      name: 'webhooks_execute',
+      category: 'webhooks',
+      outputSchema: {
+        enqueued: z.boolean().optional(),
+        message_id: z.string().optional(),
+      },
+    });
+    expect(webhook).toEqual({ enqueued: true });
+
+    const builder = buildOutputExample({
+      ...sampleTool,
+      name: 'components_v2_build_container',
+      category: 'components_v2',
+      outputSchema: { component: z.unknown() },
+    });
+    expect(builder?.component).toMatchObject({ type: 17 });
+  });
+
+  it('folds an authored shorthand into the runnable MCP example', () => {
+    const mdx = renderToolMdx({
+      ...sampleTool,
+      description: `${sampleDesc}\n\n**Example**: \`{channel_id:"123"}\`.`,
+    });
+    expect(mdx).toContain('**Tool-authored shorthand:**');
+    expect(mdx).not.toMatch(/^## Example$/m);
+    expect(mdx).toContain('## MCP call example');
+  });
+
+  it('renders a fenced authored example without nesting a broken fence in a blockquote', () => {
+    const mdx = renderToolMdx({
+      ...sampleTool,
+      description: `${sampleDesc}\n\n**Example**:\n\`\`\`json\n{"channel_id":"123"}\n\`\`\``,
+    });
+    expect(mdx).toContain('**Tool-authored example**\n\n```json');
+    expect(mdx).not.toContain('> **Tool-authored shorthand:** ```');
+  });
 });
 
 describe('renderCategoryIndex', () => {
-  it('produces a CardGrid with one card per tool, alphabetical by name', () => {
+  it('produces a searchable catalog with one entry per tool', () => {
     const tools: ToolMetadata[] = [
       {
         name: 'messages_a',
@@ -199,14 +405,11 @@ describe('renderCategoryIndex', () => {
     const md = renderCategoryIndex('messages', tools);
     expect(md).toContain('title: Messages');
     expect(md).not.toMatch(/^# /m);
-    expect(md).toContain('2 tools in this category');
+    expect(md).toContain('ToolCatalog');
     expect(md).toContain('messages_a');
     expect(md).toContain('messages_b');
-    // JSX attribute values must be HTML-encoded, not backslash-escaped.
-    expect(md).toContain('&quot;quotes&quot;');
-    expect(md).toContain('&lt;brackets>');
-    expect(md).toContain('&amp;');
-    expect(md).not.toContain('\\"quotes\\"');
+    expect(md).not.toContain('**Purpose**');
+    expect(md).toContain('B with \\"quotes\\" & <brackets>.');
   });
 });
 
@@ -251,6 +454,7 @@ describe('renderToolsIndex', () => {
     expect(md).toContain('discord-mcp exposes 2 tools');
     expect(md).not.toMatch(/^# /m);
     expect(md).toContain('Messages (1)');
+    expect(md).toContain('ToolCatalog');
     expect(md).toContain('Channels (1)');
     // Categories sorted alphabetically (channels before messages)
     const idxChannels = md.indexOf('Channels (1)');

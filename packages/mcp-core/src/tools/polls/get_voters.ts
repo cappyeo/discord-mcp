@@ -25,7 +25,7 @@ export default defineTool({
     '',
     '**Path**: `/channels/{channel.id}/polls/{message.id}/answers/{answer_id}`. `answer_id` is a poll-local integer (NOT a snowflake).',
     '',
-    '**Returns**: `{voters:[{id, username}], count, untrusted_text}`. Usernames wrapped.',
+    '**Returns**: `{voters:[{id, username}], count, untrusted_text}`. Usernames remain raw Discord data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the poll message'),

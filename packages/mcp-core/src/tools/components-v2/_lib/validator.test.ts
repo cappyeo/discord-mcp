@@ -148,6 +148,28 @@ describe('validateComponentsV2', () => {
     expect(r.issues.some((i) => i.code === 'BUTTON_NO_ID_OR_URL')).toBe(true);
   });
 
+  it('rejects duplicate custom_id values across the message tree', () => {
+    const r = validateComponentsV2([
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 1, custom_id: 'same' },
+          { type: 2, style: 2, custom_id: 'same' },
+        ],
+      },
+    ]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.some((i) => i.code === 'DUPLICATE_CUSTOM_ID')).toBe(true);
+  });
+
+  it('rejects File components because send/edit have no attachment input', () => {
+    const r = validateComponentsV2([
+      { type: 13, file: { url: 'attachment://report.pdf' } } as never,
+    ]);
+    expect(r.valid).toBe(false);
+    expect(r.issues.some((i) => i.code === 'FILE_UNSUPPORTED')).toBe(true);
+  });
+
   it('issues carry path and fix_hint', () => {
     const r = validateComponentsV2([
       {

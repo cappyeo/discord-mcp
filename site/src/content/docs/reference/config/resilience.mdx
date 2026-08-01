@@ -12,13 +12,15 @@ tradeoffs, see [Resilience](/discord-mcp/operations/resilience/).
 
 - **Type:** default-on boolean; only `false` disables it
 - **Default:** `true`
-- **Use:** Retries classified 5xx, 429, and network-reset errors. When off, those errors reach the caller after the first attempt.
+- **Use:** Retries selected surfaced transient failures when replay is safe.
+  `@discordjs/rest` separately owns its route queue and 429 waits.
 
 ### `MCP_RETRY_MAX_ATTEMPTS`
 
 - **Type:** integer from 1 to 10
 - **Default:** `3`
-- **Use:** Total attempts, including the first request.
+- **Use:** Number of extra retries after the initial call. The default permits
+  up to four calls. Set `MCP_RETRY_ENABLED=false` to disable retry.
 - **Example:** `MCP_RETRY_MAX_ATTEMPTS=5`
 
 ### `MCP_RETRY_BASE_DELAY_MS`
@@ -80,4 +82,5 @@ tradeoffs, see [Resilience](/discord-mcp/operations/resilience/).
 - **Use:** Maximum concurrent in-flight Discord REST calls. Excess calls are rejected immediately; there is no queue.
 - **Example:** `MCP_BULKHEAD_LIMIT=50`
 
-Values below roughly 10 can cause pipeline self-deadlock.
+The pipeline executes sequentially and its parent holds no REST slot, so a
+limit of 1 is valid (though it serializes all Discord REST work).

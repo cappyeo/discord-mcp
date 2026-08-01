@@ -28,7 +28,7 @@ export default defineTool({
     '**When NOT to use**:',
     '- Fetching guild-specific member info → `members_get`. Bot identity → `users_get_current`.',
     '',
-    '**Returns**: `{id, username, global_name, avatar, bot, untrusted_text}`. `username`/`global_name` wrapped untrusted.',
+    '**Returns**: `{id, username, global_name, avatar, bot, untrusted_text}`. Names remain raw Discord data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     user_id: UserId.describe('Discord user id'),

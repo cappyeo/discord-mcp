@@ -1,164 +1,85 @@
 ---
 title: Rate limits
-description: Discord's global vs per-route rate-limit model, how discord-mcp responds — disabled @discordjs/rest queue, cockatiel-owned retry, bulkhead, webhook bypass.
+description: How @discordjs/rest scheduling and discord-mcp resilience share responsibility for Discord REST traffic.
 sidebar:
   order: 9
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Discord enforces two layers of rate limits that any production bot has to
-respect: a **global** ceiling (~50 requests/sec per token to most routes)
-and **per-route** buckets (varying per endpoint, with `:id`-aware
-discrimination — `/channels/A/messages` and `/channels/B/messages` are
-separate buckets). When you exceed either, Discord responds with `HTTP 429`
-and a `retry_after` header.
+Discord applies a global bot limit and route-specific buckets. The response
+headers define each bucket's capacity and reset timing; a limited request
+returns HTTP 429 with a retry delay.
 
-discord-mcp's job is to (1) respect those limits proactively, (2) handle
-the inevitable 429 when proactivity fails, and (3) give the agent a clear
-signal when it's pushing too hard.
+## Ownership boundary
 
-## The model
-
-```mermaid
-graph LR
-  Tool[Tool] --> Bulkhead[Bulkhead<br/>concurrency cap]
-  Bulkhead --> Circuit[Circuit breaker<br/>per-route]
-  Circuit --> Retry[Retry<br/>429-aware]
-  Retry --> DJS[discordjs/rest]
-  DJS --> Discord[Discord API]
-  DJS -. djs queue disabled .-> Note[retries: 0<br/>cockatiel owns retry]
+```text
+tool
+  → discord-mcp bulkhead
+  → shared circuit breaker
+  → discord-mcp retry policy
+  → @discordjs/rest route/global scheduler
+  → Discord
 ```
 
-Three quotas live in different layers:
+`@discordjs/rest` remains the rate-limit authority. It tracks route hashes,
+queues requests behind bucket resets, and waits/retries on 429 responses.
+discord-mcp does not disable this scheduler.
 
-- **Bulkhead** (concurrency): the `MCP_BULKHEAD_LIMIT` semaphore caps
-  in-flight requests. Default 100; tighten to 20–30 for early "agent is
-  over-parallelizing" signals.
-- **Per-route circuit breaker**: opens after 10 failures on a single route
-  in a sliding window. Stops hammering a flapping endpoint before Discord's
-  Cloudflare layer treats us as abusive.
-- **429-aware retry**: when Discord returns 429, the retry layer waits
-  `retry_after` seconds (plus jitter) before re-issuing. Bounded by
-  `MCP_RETRY_MAX_ATTEMPTS`.
-
-See [Operations → Resilience](/discord-mcp/operations/resilience/) for the
-exact env var contract.
-
-## `@discordjs/rest` queue is DISABLED
-
-By default, `@discordjs/rest` ships with its own retry queue: when it sees
-a 429, it queues subsequent requests and retries the failing one
-automatically. Sounds good, but it conflicts with Cockatiel:
-
-- djs-rest retries **inside** its own request method (a single `await`
-  in the tool blocks for the full backoff).
-- Cockatiel wraps that await with **another** retry layer.
-- A 429 fires; djs-rest waits `retry_after`; Cockatiel's timeout fires
-  during the wait; the request appears to time out; Cockatiel retries.
-  Now you have two unbounded retry sources fighting each other.
-
-**Plan 8 Phase C disabled the djs-rest queue** by passing `retries: 0` to
-the `@discordjs/rest` constructor. Cockatiel is the **single** retry
-authority; djs-rest just makes the HTTP call and bubbles 429s up
-immediately.
-
-```ts
-// From packages/mcp-core/src/rest/resilient.ts (paraphrased)
-const rest = new REST({
-  version: '10',
-  retries: 0,           // ← cockatiel owns retry
-  globalRequestsPerSecond: 0, // ← cockatiel/bulkhead owns concurrency
-});
-```
-
-The `globalRequestsPerSecond: 0` similarly disables djs-rest's internal
-global-rate-limit awareness; we let cockatiel + bulkhead handle that too.
-Result: one retry layer, predictable backoff, clean traces.
-
-## Webhook bypass
+The server constructs REST with `{ version: "10", retries: 0 }`. In
+`@discordjs/rest`, that `retries` option controls retries for server errors and
+timeouts; it does **not** disable the rate-limit queue or its 429 recursion.
+There is no `globalRequestsPerSecond: 0` override in the runtime.
 
 <Aside type="note">
-**Webhooks have their own rate-limit bucket, separate from the bot's.**
-This is a Discord-side property, not a discord-mcp one.
+The outer Cockatiel policy may retry a transient error that escapes the REST
+client, but `MCP_RETRY_MAX_ATTEMPTS` does not bound the time
+`@discordjs/rest` spends waiting inside its own rate-limit scheduler.
 </Aside>
 
-Webhook routes (`/webhooks/{id}/{token}` for execution,
-`/webhooks/{id}` for management) use:
+## Local protection layers
 
-- A **per-webhook ratelimit** (typically 30/min) that's *not* shared
-  with the bot's global bucket.
-- A different identity (the webhook ID/token, not the bot token).
+| Layer | Runtime scope | Saturation behavior |
+| --- | --- | --- |
+| Bulkhead | All REST calls using the policy | Rejects immediately with `BULKHEAD_FULL`; queue size is zero. |
+| Circuit breaker | One shared breaker per built policy | Fast-fails with `CIRCUIT_OPEN` while open. |
+| Retry | Selected transient failures | `MCP_RETRY_MAX_ATTEMPTS` is extra retries; disable with `MCP_RETRY_ENABLED=false`. |
+| Timeout | Each policy attempt | Can expire while an inner REST request is waiting; no dedicated timeout code today. |
 
-Practical implication: high-volume publishing (announcements, notifications,
-log forwarding) should use webhooks, leaving the bot's rate budget free for
-interactive work (commands, moderation, slash responses).
+These layers protect local capacity and upstream stability. They do not replace
+Discord's bucket model or grant a higher request allowance.
 
-The trade-off: webhooks can't react, can't moderate, can't read history —
-they're write-only. Use them for the publish-heavy half of your workload
-and let the bot handle everything else.
+## Workload guidance
 
-See [`webhook-execute` recipe](/discord-mcp/recipes/webhook-execute/) for
-worked patterns.
+- Prefer a dedicated bulk endpoint when it expresses the same operation; it
+  reduces call count and preserves per-item result reporting.
+- Keep parallel agent calls bounded. Raising `MCP_BULKHEAD_LIMIT` increases
+  concurrency, not Discord's quota.
+- Pipelines are sequential. Their parent holds no REST slot, so a bulkhead limit
+  of 1 does not deadlock the executor.
+- Use `MCP_RETRY_ENABLED=false`—not a retry count of 1—when testing the first
+  surfaced transient failure.
+- If a webhook fits the product flow, remember that its route has its own
+  Discord bucket semantics; it is not a universal bypass for Discord limits.
 
-## Tuning by workload
+## Observe pressure
 
-### High-volume agent (announcement bot, log forwarder)
+- `mcp.bulkhead.rejected.count` rising means local concurrency was exhausted.
+- `mcp.circuit.transitions{to_state="open"}` shows the shared breaker opening.
+- `mcp.deadletter.count` with its `error.type` label records policy failures
+  that reached the caller.
 
-- `MCP_BULKHEAD_LIMIT=200` — raise concurrency cap; you're publish-heavy.
-- `MCP_RETRY_MAX_ATTEMPTS=4` `MCP_RETRY_BASE_DELAY_MS=500` — be patient with
-  occasional 429s; you have time.
-- Use webhooks for the publishing path; reserve the bot for control plane.
-
-### Low-volume agent (moderation, dashboards)
-
-- Defaults are fine. `MCP_BULKHEAD_LIMIT=100` is way more than needed.
-- Tighten if you want a clear "stop" signal: `MCP_BULKHEAD_LIMIT=20` —
-  hits saturation fast if the agent loops, makes the bug visible.
-
-### Pipeline-heavy agent (multi-tool atomic operations)
-
-- Be careful with `MCP_BULKHEAD_LIMIT`: one pipeline that fans out to N
-  children competes with itself for slots. See
-  [Architecture → Pipeline](/discord-mcp/architecture/pipeline/) and
-  [Operations → Resilience](/discord-mcp/operations/resilience/) for the
-  pipeline + bulkhead interaction notes.
-- Min sane value: 10. A bulkhead of 1 deadlocks the pipeline tool itself.
-
-### Dev / test
-
-- `MCP_RETRY_MAX_ATTEMPTS=1` to surface failures immediately.
-- `MCP_CIRCUIT_ENABLED=false` so a flaky test doesn't open the breaker
-  and corrupt subsequent test runs.
-- `MCP_TIMEOUT_DEFAULT_MS=5000` to fail fast on hangs.
-
-## Observability
-
-When the system pushes too hard, the metrics show it:
-
-- **`mcp.bulkhead.rejected.count`** rising → tighten parallelism in the agent
-  loop, or raise the bulkhead.
-- **`mcp.circuit.transitions{to="open"}`** firing → a route is genuinely
-  failing; the breaker is doing its job. Investigate the route.
-- **`mcp.deadletter.count{error_code="rate_limited"}`** → the agent
-  exhausted retries on 429s; consider bumping `MCP_RETRY_MAX_ATTEMPTS`
-  or batching via dedicated bulk tools (`messages_bulk_delete` instead
-  of N individual deletes).
-
-See [Operations → Telemetry](/discord-mcp/operations/telemetry/) for the
-full metric catalog and recommended dashboards.
+The resilience metrics are process-wide and do not carry tool or route labels.
+Use tool spans and metrics to locate the workload that created the pressure.
 
 ## Source map
 
-| Concern | File |
-| ------- | ---- |
-| REST adapter (cockatiel + djs) | [`rest/resilient.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts) |
-| Cockatiel policy chain | [`rest/policy.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/policy.ts) |
-| Error mapping (429 → DiscordRateLimitError) | [`rest/errors.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts) |
+- [REST construction](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-server/src)
+- [Resilient REST wrapper](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts)
+- [Policy chain](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/policy.ts)
 
 ## Related
 
-- [Operations → Resilience](/discord-mcp/operations/resilience/) — retry/circuit/bulkhead env vars in detail.
-- [Operations → Telemetry](/discord-mcp/operations/telemetry/) — how to observe rate-limit pressure.
-- [Architecture → Error handling](/discord-mcp/architecture/error-handling/) — `DISCORD_RATE_LIMITED`, `BULKHEAD_SATURATED`, `CIRCUIT_OPEN` recovery hints.
-- [`webhook-execute` recipe](/discord-mcp/recipes/webhook-execute/) — using webhooks to bypass the bot bucket.
+- [Resilience](/discord-mcp/operations/resilience/)
+- [Telemetry](/discord-mcp/operations/telemetry/)
+- [Error handling](/discord-mcp/architecture/error-handling/)

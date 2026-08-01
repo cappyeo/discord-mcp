@@ -27,7 +27,7 @@ export default defineTool({
     '**When NOT to use**:',
     '- Single-channel scope → `webhooks_list_channel`.',
     '',
-    '**Returns**: `{webhooks:[{id,name,type,channel_id,application_id}], count}`. Names are wrapped untrusted (creator-controlled).',
+    '**Returns**: `{webhooks:[{id,name,type,channel_id,application_id}], count}`. Structured names remain raw creator-controlled data; the human-readable text response fences them.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to query'),

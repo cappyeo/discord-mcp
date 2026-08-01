@@ -1,17 +1,53 @@
 ---
-title: Get started
-description: Quickstart guides for installing, configuring, and using discord-mcp.
+title: Start here
+description: Go from a Discord bot token to a verified read and write tool call through your MCP client.
+type: tutorial
+prev: false
+next:
+  link: /discord-mcp/start/create-discord-bot/
+  label: Create a Discord bot
 ---
 
+import { Aside, Steps } from '@astrojs/starlight/components';
 import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
-Use the Get started section to install discord-mcp, configure your client, and run your first tool call.
+discord-mcp is a local stdio MCP server that lets an AI client call Discord through a bot you
+control. Nothing is hosted for you: your client starts the process, passes the bot token in its
+environment, and receives structured tool results over MCP.
+
+<Aside type="caution">
+The server inherits the bot's Discord permissions. Some ordinary write tools execute on the
+first call, so begin in a private test server and use least-privilege bot permissions.
+</Aside>
+
+## Choose your path
+
+If you do not yet have a Discord application, begin with
+[Create a Discord bot](/discord-mcp/start/create-discord-bot/). Then follow the
+[Quickstart](/discord-mcp/start/quickstart/) for installation, client connection,
+diagnostics, one read, and one test write.
+
+Use the focused pages when you need to inspect or repeat one step:
+
+<Steps>
+
+1. [Create a Discord bot](/discord-mcp/start/create-discord-bot/) and install it in a test server.
+2. [Install the CLI](/discord-mcp/start/installation/) with Node.js 22.12 or newer.
+3. [Connect your MCP client](/discord-mcp/start/client-setup/) using a generated config snippet.
+4. Run `discord-mcp doctor --online`, then inspect the request and result contracts in [How a tool call works](/discord-mcp/start/first-tool-call/).
+
+</Steps>
+
+## Choose what you need
 
 <DocsCardGrid
   links={[
-    { title: 'Quickstart', href: '/discord-mcp/start/quickstart/', description: 'Install the CLI, generate a Claude Desktop snippet, validate it, and make your first call.' },
-    { title: 'Installation', href: '/discord-mcp/start/installation/', description: 'Choose npm, pnpm, or yarn and understand the optional Gateway runtime.' },
-    { title: 'Client setup', href: '/discord-mcp/start/client-setup/', description: 'Generate and merge a config snippet for Claude Desktop, Claude Code, Cursor, or any stdio MCP client.' },
-    { title: 'First tool call', href: '/discord-mcp/start/first-tool-call/', description: 'Follow a real Discord request from agent prompt through tool response.' },
+    { title: 'Quickstart', href: '/discord-mcp/start/quickstart/', description: 'Follow the shortest verified path through install, connection, channel discovery, and one test message.' },
+    { title: 'Create a Discord bot', href: '/discord-mcp/start/create-discord-bot/', description: 'Create a test bot, choose minimal permissions, store the token, and copy Discord IDs.' },
+    { title: 'Client setup', href: '/discord-mcp/start/client-setup/', description: 'Generate and merge config for Claude Desktop, Claude Code, Cursor, or another stdio MCP client.' },
+    { title: 'Troubleshooting', href: '/discord-mcp/start/troubleshooting/', description: 'Resolve Node, token, spawn, permissions, IDs, dry-run, and Gateway problems by symptom.' },
   ]}
 />
+
+After the first call, use the [tool catalog](/discord-mcp/tools/) for exact contracts or the
+[workflow guides](/discord-mcp/recipes/) for multi-step tasks.

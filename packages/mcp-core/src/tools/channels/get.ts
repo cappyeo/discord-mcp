@@ -24,7 +24,7 @@ export default defineTool({
   name: 'channels_get',
   category: 'channels',
   description:
-    '**Purpose**: Fetch full metadata for a single Discord channel.\n\n**When to use**: inspect topic, slowmode, nsfw of a known channel.\n\n**Returns**: `{id, name, type, nsfw, topic, rate_limit_per_user, position?, parent_id?, guild_id?}`. `name` is `null` for DMs. `position` and `parent_id` are guild-channel-only — both are absent for threads and DMs. `topic` wrapped in `<untrusted_discord_channel_topic>` (user-controlled).',
+    '**Purpose**: Fetch full metadata for a single Discord channel.\n\n**When to use**: inspect topic, slowmode, nsfw of a known channel.\n\n**Returns**: `{id, name, type, nsfw, topic, rate_limit_per_user, position?, parent_id?, guild_id?}`. `name` is `null` for DMs. `position` and `parent_id` are guild-channel-only — both are absent for threads and DMs. Structured `topic` remains raw user-controlled data; the human-readable text response fences it.',
   inputSchema: {
     channel_id: ChannelId.describe('Target channel ID'),
   },

@@ -1,13 +1,13 @@
 ---
 title: Middleware chain
-description: The four-layer Koa-style middleware chain wrapping every tool call — telemetry, validate, preconditions, audit. Why their order matters.
+description: The six-stage middleware chain wrapping every tool call — telemetry, default guild, validation, category gate, preconditions, and audit.
 sidebar:
   order: 2
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Every tool call goes through a four-layer middleware chain before reaching the
+Every tool call goes through a six-stage middleware chain before reaching the
 tool's `run` method. The order is fixed and matters: each layer assumes the
 ones outside it have already run.
 
@@ -16,10 +16,14 @@ ones outside it have already run.
 ```mermaid
 graph LR
   A[tools/call] --> B[telemetry]
-  B --> C[validate]
-  C --> D[preconditions]
-  D --> E[audit]
-  E --> F[Tool.run]
+  B --> C[default guild]
+  C --> D[validate]
+  D --> E[category gate]
+  E --> F[preconditions]
+  F --> G[audit]
+  G --> H[Tool.run]
+  H --> G
+  G --> F
   F --> E
   E --> D
   D --> C
@@ -49,7 +53,18 @@ counted (so you can spot a buggy agent that's spamming bad inputs). If
 validation ran first and rejected before telemetry, you'd lose visibility on
 exactly the calls that need monitoring.
 
-## Layer 2: validate
+## Layer 2: default guild
+
+Source: [`middleware/default-guild.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/default-guild.ts)
+
+When `DISCORD_DEFAULT_GUILD_ID` is set, supplies it only if the call omitted a
+top-level `guild_id` and the selected tool declares that field. Explicit input
+always wins; tools without `guild_id` are unchanged.
+
+Why before validation: the default must be present before a required
+`guild_id` schema is parsed.
+
+## Layer 3: validate
 
 Source: [`middleware/validate.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/validate.ts)
 
@@ -57,7 +72,7 @@ Runs the tool's zod schema against `arguments`. On failure, throws
 `ValidationError` with a structured `issues` array (each issue has `path`,
 `message`, `code`).
 
-Why second: if args are invalid, preconditions can't safely inspect them
+Why before policy gates: if args are invalid, later stages cannot safely inspect them
 (e.g. `ConfirmRequired` reads `args.__confirm` — if `args` is the wrong
 shape, that read might throw before the validation message ever surfaces).
 Validating first means preconditions and the handler both work with a
@@ -71,25 +86,37 @@ extracted from the raw arg payload **before** zod runs (see
 place the chain reads pre-validation args.
 </Aside>
 
-## Layer 3: preconditions
+## Layer 4: category gate
+
+Source: [`middleware/category.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/category.ts)
+
+Enforces the `MCP_CATEGORIES` allowlist for every registered tool. The `meta`
+category stays available so `mcp_pipeline` can be called, but each pipeline step
+re-enters the dispatcher and is checked against its own category.
+
+Why this is middleware: a new tool cannot accidentally bypass the allowlist by
+forgetting to declare a precondition.
+
+## Layer 5: preconditions
 
 Source: [`middleware/precondition.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/precondition.ts)
 
-Runs every `Precondition` piece declared by the tool. The two built-in
-preconditions are:
+Runs every `Precondition` piece declared by the tool. The store contains two
+built-in pieces, but only identifiers in that tool's metadata run:
 
 - **`ConfirmRequired`** ([`preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts))
   — gates destructive tools behind `__confirm:true` + `MCP_DRY_RUN=false`.
 - **`CategoryEnabled`** ([`preconditions/CategoryEnabled.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/CategoryEnabled.ts))
-  — gates tools by `MCP_SCOPES` (read, moderate, members, channels, etc.).
+  — remains available for embedders; the built-in server applies the category
+  gate globally in layer 4.
 
 Preconditions throw structured errors; the handler never runs if any
 precondition fails.
 
-Why before audit: a precondition that rejects (e.g. "wrong scope") shouldn't
+Why before audit: a precondition that rejects (for example, missing confirmation) shouldn't
 audit the tool body — the tool didn't actually execute.
 
-## Layer 4: audit (innermost)
+## Layer 6: audit (innermost)
 
 Source: [`middleware/audit.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts)
 
@@ -107,15 +134,18 @@ auditing it would log non-events and balloon the trail.
 The mental model is **outermost = most universal, innermost = most
 specific**:
 
-| Layer | Sees | Skips on |
-| ----- | ---- | -------- |
+| Stage | Sees | Stops or skips on |
+| ----- | ---- | ----------------- |
 | Telemetry | every call | nothing — always observes |
-| Validate | every call passed by telemetry | malformed args |
-| Preconditions | every call passed by validate | scope/dry-run/confirm violations |
-| Audit | every call passed by preconditions | `idempotent: true` tools |
+| Default guild | raw call plus selected tool schema | no matching field/default |
+| Validate | defaulted arguments | malformed args |
+| Category gate | validated calls | disallowed category |
+| Preconditions | valid, category-allowed calls | confirmation or custom policy rejection |
+| Audit | calls that passed every earlier stage | skips `idempotent: true` tools |
 
-Each inner layer assumes the outer guarantees: audit knows args are
-well-formed; preconditions know args parse; validate knows the call exists.
+Each inner stage assumes the outer guarantees: audit receives a valid,
+category-allowed call; preconditions receive parsed args; validation receives
+any configured default guild.
 
 Reversing the order breaks each guarantee in a subtle way — e.g. moving
 audit outside preconditions means logging "would have audited" events that
@@ -138,16 +168,15 @@ span; audit reads it to attach `trace_id`/`span_id`). Layers communicate via
 this map rather than monkey-patching the context — keeps the type contract
 clean.
 
-## Adding a new layer
+## Adding a stage
 
-If you ever need a fifth layer (e.g. rate limiting per-tenant), insert it
-**between preconditions and audit**: it should observe valid + permitted
-calls, but its rejection should still count as a "tool not executed" for
-audit purposes. Don't add it after audit — that's the contract boundary.
+Place a new policy stage **before audit** if rejection means the tool never
+executed. Its exact position depends on whether it needs raw, defaulted, or
+validated arguments; cover that ordering decision with a dispatcher-level test.
 
 ## Related
 
 - [Operations → Telemetry](/discord-mcp/operations/telemetry/) — the metrics emitted by layer 1.
-- [Operations → Audit](/discord-mcp/operations/audit/) — the AuditEvent schema emitted by layer 4.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the precondition behavior in layer 3.
+- [Operations → Audit](/discord-mcp/operations/audit/) — the AuditEvent schema emitted by layer 6.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the precondition behavior in layer 5.
 - [Architecture → Error handling](/discord-mcp/architecture/error-handling/) — how layer-thrown errors surface to the client.

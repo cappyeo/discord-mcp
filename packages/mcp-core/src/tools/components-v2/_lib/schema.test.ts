@@ -88,6 +88,53 @@ describe('ComponentV2 discriminated union', () => {
     expect(r.success).toBe(false);
   });
 
+  it('pairs button styles with the Discord-defined credential field', () => {
+    expect(
+      ComponentV2.safeParse({ type: 2, style: 1, label: 'Wrong', url: 'https://x.test' }).success,
+    ).toBe(false);
+    expect(
+      ComponentV2.safeParse({ type: 2, style: 5, label: 'Wrong', custom_id: 'x' }).success,
+    ).toBe(false);
+    expect(ComponentV2.safeParse({ type: 2, style: 6, sku_id: '123456789012345678' }).success).toBe(
+      true,
+    );
+    expect(
+      ComponentV2.safeParse({
+        type: 2,
+        style: 6,
+        sku_id: '123456789012345678',
+        label: 'Not allowed',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('enforces ActionRow as up to five buttons or exactly one select', () => {
+    const button = { type: 2 as const, style: 1 as const, custom_id: 'button' };
+    const select = {
+      type: 3 as const,
+      custom_id: 'select',
+      options: [{ label: 'One', value: 'one' }],
+    };
+    expect(ComponentsV2Array.safeParse([{ type: 1, components: [button] }]).success).toBe(true);
+    expect(ComponentsV2Array.safeParse([{ type: 1, components: [select, select] }]).success).toBe(
+      false,
+    );
+    expect(ComponentsV2Array.safeParse([{ type: 1, components: [button, select] }]).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects child-only and attachment-backed components at the top level', () => {
+    for (const component of [
+      { type: 2, style: 1, custom_id: 'button' },
+      { type: 3, custom_id: 'select', options: [{ label: 'One', value: 'one' }] },
+      { type: 11, media: { url: 'https://example.com/thumb.png' } },
+      { type: 13, file: { url: 'attachment://report.pdf' } },
+    ]) {
+      expect(ComponentsV2Array.safeParse([component]).success).toBe(false);
+    }
+  });
+
   it('ComponentsV2Array accepts 1-40 items', () => {
     expect(ComponentsV2Array.safeParse([{ type: 10, content: 'one' }]).success).toBe(true);
     expect(ComponentsV2Array.safeParse([]).success).toBe(false);

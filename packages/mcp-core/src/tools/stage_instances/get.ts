@@ -21,7 +21,7 @@ export default defineTool({
     '**Purpose**: Fetch the live Stage instance for a channel.',
     '',
     '**Returns**: `{id, guild_id, channel_id, topic, privacy_level, untrusted_text}`.',
-    'The `topic` is user-authored — wrapped untrusted.',
+    'The `topic` remains raw user-authored data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Stage channel'),

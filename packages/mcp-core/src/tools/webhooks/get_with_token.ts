@@ -27,7 +27,7 @@ export default defineTool({
     '',
     '**Auth**: Sends NO `Authorization: Bot …` header — Discord rejects bot auth on token routes.',
     '',
-    '**Returns**: Webhook record. `token` is preserved here (the caller already has it). `name` wrapped untrusted.',
+    '**Returns**: Webhook record. `token` is preserved here (the caller already has it). `name` remains raw creator-controlled data; `untrusted_name` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook to fetch'),

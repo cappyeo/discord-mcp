@@ -26,17 +26,17 @@ shift, covered below.
 
 ## Why migrate to discord-mcp
 
-- **Production hardening** — first-class OpenTelemetry traces and cockatiel
-  resilience policies on every REST call.
+- **Production hardening** — first-class OpenTelemetry traces and Cockatiel
+  resilience policies on the central Discord REST path.
   See [Operations: telemetry](/discord-mcp/operations/telemetry/).
-- **Full Discord REST surface (192 tools)** — discord-mcp covers about
+- **Broad 192-tool Discord surface** — discord-mcp covers about
   4x the discord-ops tool count, including the 100+ helpers discord-ops omits
   (forums, stickers, automod, polls, scheduled events, voice, stage
   instances, application commands, onboarding).
-- **Components V2 first-class** — every send/edit tool accepts `flags = 32768`
-  layouts. See the
+- **Components V2 first-class** — dedicated `components_v2_send` and
+  `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Pipeline atomicity** — `mcp_pipeline` chains multiple tool calls in
+- **Pipeline sequencing** — `mcp_pipeline` chains multiple tool calls in
   a single round-trip, replacing discord-ops's client-side templates.
   See [Architecture: pipeline](/discord-mcp/architecture/pipeline/).
 
@@ -44,7 +44,7 @@ shift, covered below.
 
 discord-ops is unusual among Discord MCPs because its "killer features"
 are deployment patterns, not tool surface. The migration covers tool names
-cleanly (NAME_MAP has 36 entries with `high` / `medium` confidence), but
+cleanly through the adapter's maintained mapping table, but
 the surrounding patterns shift:
 
 ### 1. Multi-guild project routing
@@ -53,15 +53,15 @@ the surrounding patterns shift:
 `{ project: 'my-app', channel: 'builds' }`, and the server resolves the
 pair to a `(guild_id, channel_id)` via `~/.discord-ops.json`.
 
-**discord-mcp**: One process per guild. Every process has a single
-`DISCORD_TOKEN` from one bot user installed in one guild. No `project:`
-argument exists at the tool level.
+**discord-mcp**: A process has one `DISCORD_TOKEN`, and that bot can operate in
+every guild where it is installed. No `project:` argument exists at the tool
+level; calls use Discord IDs directly.
 
-**Migration**: spawn one discord-mcp process per project. Configure each
-under a separate MCP client entry with its own `DISCORD_TOKEN`. Your client
-(Claude Desktop, Cline, etc.) then has N MCP servers — one per project — and
-the agent picks the right one by name. The tool surface is identical across
-all N.
+**Migration**: one discord-mcp process can operate across every guild visible
+to its bot token; pass `guild_id` per call or configure
+`DISCORD_DEFAULT_GUILD_ID` as a convenience default. Run separate processes
+only when projects use different bot tokens or require an explicit isolation
+boundary.
 
 ### 2. Tool profiles (slim cuts for token budget)
 
@@ -69,40 +69,43 @@ all N.
 `moderation` (7), `messaging` (5), `channels` (7), `webhooks` (6), and
 `full` (49). Profiles reduce schema overhead by hiding tools from the client.
 
-**discord-mcp**: Ships the full surface (192 tools). The agent or MCP client
-filters at runtime via tool-allowlist patterns or category-based selection.
+**discord-mcp**: Ships 192 tools and filters the advertised registry server-side
+with `MCP_CATEGORIES`.
 Profile-variant names like `messages_lite` and `messages_full` collapse onto
 the same discord-mcp tool with `confidence: medium`.
 
-**Migration**: drop profile selection from your config. Configure the
-allowlist in your MCP client (Claude Desktop's config supports
-`mcp.toolAllowlist`; Cline has equivalent UI). For Claude Desktop on the full
-surface, the schema overhead is ~20kB — tolerable for most agents.
+**Migration**: translate the old profile into a comma-separated
+`MCP_CATEGORIES` value in the server environment. Verify the resulting
+`tools/list` response because categories are broader than discord-ops profiles.
 
 ### 3. Dry-run mode
 
 **discord-ops**: `DISCORD_OPS_DRY_RUN=1` short-circuits destructive calls
 before they hit the Discord REST API.
 
-**discord-mcp**: `MCP_DRY_RUN=true` does the same, process-wide. Set in your
-MCP client config alongside `DISCORD_TOKEN`.
+**discord-mcp**: `MCP_DRY_RUN=true` protects only the 29 tools registered with
+`confirm_required`. Ordinary writes—including many send, edit, and create
+tools—can still execute on the first call.
 
-**Migration**: rename the env var. No tool change required. See
-[Operations: audit](/discord-mcp/operations/audit/) for the audit-log
-shape under dry-run.
+**Migration**: do not treat the environment variables as equivalent. Inventory
+every write in the old profile, check the destination tool's **Confirmation
+required** badge, and use a test guild or restricted bot permissions for writes
+outside the gate. See [Confirmation](/discord-mcp/architecture/confirmation/).
 
 ### 4. Saved templates
 
 **discord-ops**: `send_template` / `list_templates` reference named message
 bodies stored client-side in `~/.discord-ops.json`.
 
-**discord-mcp**: Components V2 templates live as MCP **resources** under
-`discord://components-v2/templates/<name>` (planned for a future Plan).
-Today, store templates in your agent prompt and reference them by name.
+**discord-mcp**: Five built-in Components V2 templates ship as MCP resources
+under `discord://components-v2/templates/<name>`. They are fixed layout
+templates, not a persistence layer for arbitrary discord-ops message bodies.
 
-**Migration**: copy the template strings from `~/.discord-ops.json` into your
-agent prompt's system message. The two `send_template` / `list_templates`
-tools are reported as `unmapped`; remove the calls and inline the bodies.
+**Migration**: compare each saved template with the built-in announcement,
+release-notes, welcome-card, poll-results, and incident-status resources. Reuse
+a matching resource; otherwise keep the body in client-managed configuration
+and send it with `messages_send`. The two source tools remain `unmapped`
+because discord-mcp does not store arbitrary named templates.
 
 ## Step-by-step migration
 
@@ -125,10 +128,9 @@ tools are reported as `unmapped`; remove the calls and inline the bodies.
 
 3. **Inventory your projects.**
 
-   For every entry in `~/.discord-ops.json`, decide: do you want one
-   discord-mcp process per project (parallel deployment) or do you collapse
-   them down to one bot per workspace? Most users go with one process per
-   project.
+   For every entry in `~/.discord-ops.json`, decide whether projects can share
+   one bot token and process. Keep separate processes only for different bot
+   identities, credentials, or isolation requirements.
 
 4. **Generate a client config for each process.**
 
@@ -147,15 +149,16 @@ tools are reported as `unmapped`; remove the calls and inline the bodies.
    mapped table. For `medium` and `low` confidence entries, adjust argument
    shapes per the per-entry notes.
 
-6. **Set `MCP_DRY_RUN=true`** in the MCP client config of any project where
-   you want dry-run behavior. The discord-ops `DISCORD_OPS_DRY_RUN` env var
-   is no longer consulted.
+6. **Rebuild the safety boundary.** Set `MCP_DRY_RUN=true` for confirm-gated
+   tools, then separately constrain ordinary writes with Discord permissions,
+   category exposure, and a test guild. The discord-ops
+   `DISCORD_OPS_DRY_RUN` variable is no longer consulted.
 
 </Steps>
 
 ## Top 20 mappings
 
-The full NAME_MAP covers 36 mapped entries. The most common operations:
+The most common mapped operations are:
 
 | discord-ops tool   | discord-mcp tool                | Confidence | Notes                                                          |
 | ------------------ | ------------------------------- | ---------- | -------------------------------------------------------------- |
@@ -220,4 +223,5 @@ The low-confidence entries you should always re-read:
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate)
 - [Operations: audit](/discord-mcp/operations/audit/) — dry-run audit-log shape.
 - [Architecture: pipeline](/discord-mcp/architecture/pipeline/) — replaces
-  discord-ops client-side templates with atomic multi-call chains.
+  discord-ops client-side templates with fail-fast multi-call chains. Earlier
+  Discord side effects remain if a later step fails.

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.cappyeo/discord-mcp",
+  "title": "Discord MCP",
+  "description": "Connect MCP-compatible AI clients to Discord through a typed local server with 192 tools.",
+  "repository": {
+    "url": "https://github.com/cappyeo/discord-mcp",
+    "source": "github",
+    "id": "1223078565",
+    "subfolder": "packages/mcp-server"
+  },
+  "version": "0.13.2",
+  "websiteUrl": "https://cappyeo.github.io/discord-mcp/",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.13.2/site/src/assets/discord-mcp-logo-light.png",
+      "mimeType": "image/png",
+      "sizes": ["1024x1024"],
+      "theme": "light"
+    },
+    {
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.13.2/site/src/assets/discord-mcp-logo-dark.png",
+      "mimeType": "image/png",
+      "sizes": ["1024x1024"],
+      "theme": "dark"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@discord-mcp/cli",
+      "version": "0.13.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Discord bot token. The optional Bot prefix is accepted.",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true,
+          "name": "DISCORD_TOKEN"
+        }
+      ]
+    }
+  ]
+}

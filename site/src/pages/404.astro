@@ -1,0 +1,36 @@
+---
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+const frontmatter = {
+  title: 'Page not found',
+  description: 'The Discord MCP documentation page you requested does not exist or has moved.',
+  template: 'splash' as const,
+  editUrl: false,
+  sidebar: { hidden: true },
+  prev: false,
+  next: false,
+};
+---
+
+<StarlightPage {frontmatter}>
+  <p>
+    The link may be outdated, or the page may have moved during the documentation
+    reorganization. Choose the shortest route back into the docs.
+  </p>
+
+  <CardGrid>
+    <Card title="Start here" icon="rocket">
+      <p>Install Discord MCP and make a verified first tool call.</p>
+      <p><a href="/discord-mcp/start/quickstart/">Open the quickstart</a></p>
+    </Card>
+    <Card title="Find a tool" icon="magnifier">
+      <p>Search all 192 generated tool references by name, category, or purpose.</p>
+      <p><a href="/discord-mcp/tools/">Browse the tool catalog</a></p>
+    </Card>
+    <Card title="Return home" icon="document">
+      <p>Review the product model, safety boundary, and documentation paths.</p>
+      <p><a href="/discord-mcp/">Go to the docs home</a></p>
+    </Card>
+  </CardGrid>
+</StarlightPage>

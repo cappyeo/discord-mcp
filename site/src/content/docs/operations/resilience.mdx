@@ -1,199 +1,95 @@
 ---
 title: Resilience
-description: discord-mcp's composite resilience policy — bulkhead, circuit breaker, retry, timeout. 10 environment variables; 429-aware backoff; pipeline interactions.
+description: The actual retry, timeout, circuit-breaker, and bulkhead behavior around Discord REST calls.
 sidebar:
   order: 2
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-discord-mcp wraps every Discord REST call in a composite resilience policy:
-**bulkhead → circuit breaker → 429-aware retry → timeout → REST**. Each layer
-is configurable via environment variables. This page explains what the
-defaults are, when to override them, and how the layers interact.
+Every Discord REST call passes through one shared policy:
 
-## The policy chain
-
-```mermaid
-graph LR
-  A[Tool] --> B[Bulkhead]
-  B --> C[Circuit Breaker]
-  C --> D[Retry]
-  D --> E[Timeout]
-  E --> F[Discord REST]
+```text
+bulkhead → circuit breaker → retry → timeout → Discord REST
 ```
 
-Read top-down: a call is admitted by the bulkhead, then checked against the
-circuit, then dispatched through the retry policy (which honors 429s and
-times out individual attempts).
+The pipeline meta-tool executes steps sequentially. Its parent invocation does
+not reserve a REST slot; each leaf REST request enters this policy independently.
 
-If you stack the layers in a different mental model, debugging becomes
-confusing — keep this picture in mind when reading
-[`packages/mcp-core/src/rest/policy.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/policy.ts).
+## Defaults
 
-## Retry
+| Layer | Environment variables | Default |
+| --- | --- | --- |
+| Retry | `MCP_RETRY_ENABLED`, `MCP_RETRY_MAX_ATTEMPTS`, `MCP_RETRY_BASE_DELAY_MS`, `MCP_RETRY_MAX_DELAY_MS`, `MCP_RETRY_JITTER` | enabled; 3 extra retries; 200–10000 ms; full jitter |
+| Timeout | `MCP_TIMEOUT_DEFAULT_MS` | 30000 ms per attempt |
+| Circuit breaker | `MCP_CIRCUIT_ENABLED`, `MCP_CIRCUIT_FAILURE_THRESHOLD`, `MCP_CIRCUIT_HALF_OPEN_AFTER_MS` | enabled; 10 failures; 60000 ms |
+| Bulkhead | `MCP_BULKHEAD_LIMIT` | 100 in-flight REST calls; no queue |
 
-Retries are ON by default with exponential backoff + jitter.
+## Retry semantics
 
-| Var | Default | Range | Notes |
-| --- | ------- | ----- | ----- |
-| `MCP_RETRY_ENABLED` | `true` | bool | Set to literal `false` to disable. |
-| `MCP_RETRY_MAX_ATTEMPTS` | `3` | 1–10 | Total tries (NOT extra retries). `3` means: 1 attempt + up to 2 retries. |
-| `MCP_RETRY_BASE_DELAY_MS` | `200` | 50–5000 | Starting backoff. |
-| `MCP_RETRY_MAX_DELAY_MS` | `10000` | 500–60000 | Cap for exponential growth. |
-| `MCP_RETRY_JITTER` | `full` | `none` / `full` / `decorrelated` | `full` ≈ AWS recommendation. |
+`MCP_RETRY_MAX_ATTEMPTS` is Cockatiel's **number of retries**, not the total
+number of calls. The default `3` permits one initial call plus three retries.
+Setting it to `1` still permits one retry; use `MCP_RETRY_ENABLED=false` to
+disable this layer.
 
-**What retries**: 5xx, network errors, request timeouts, and explicit-Discord
-transient codes.
+The classifier retries selected transient failures such as server errors and
+Discord rate limits. Idempotent HTTP methods can be replayed. Non-idempotent
+requests are protected from replay when the outcome is ambiguous, because a
+second POST could duplicate the action.
 
-**What does NOT retry**: 4xx client errors (bad input, missing permissions,
-not-found). These bubble straight up as structured errors so the agent can
-correct itself rather than burn rate-limit headroom on a request that will
-never succeed.
-
-### When to override
-
-- **Aggressive dev loop** (low latency, fail fast):
-  `MCP_RETRY_MAX_ATTEMPTS=1` `MCP_RETRY_BASE_DELAY_MS=50`.
-  No retries means the first failure surfaces immediately.
-- **Conservative prod**:
-  `MCP_RETRY_MAX_ATTEMPTS=4` `MCP_RETRY_BASE_DELAY_MS=500`
-  `MCP_RETRY_MAX_DELAY_MS=20000`. Higher attempt count + longer cap protects
-  against extended Discord outages without thrashing.
-- **Long-running bulk operations** (e.g. bulk-ban, archive sweep):
-  consider raising `MCP_TIMEOUT_DEFAULT_MS` rather than retry count — the
-  operation that's already in flight is more valuable than starting over.
-
-## 429 (rate limit) handling
-
-Discord rate-limit responses (`HTTP 429`) carry a `retry_after` header (in
-seconds, may be fractional). The resilience pipeline honors it directly: when
-a 429 fires, the next retry waits **at least** `retry_after` seconds (plus
-jitter) before re-issuing.
-
-Two scopes:
-
-- **Per-route**: routes in Discord are bucketed by major parameters (e.g.
-  `/channels/:id/messages` is bucketed by `channel_id`). Hitting the
-  per-route limit pauses only that route.
-- **Global**: `X-RateLimit-Global: true` is treated the same way — pause and
-  respect `retry_after`. Global hits are rare and almost always indicate a
-  bug (e.g. tight loop without yielding).
-
-Both surface a `mcp.tool.errors` increment with `error_code: "rate_limited"`
-if all retries are exhausted; a single 429 followed by a successful retry is
-invisible at the audit/error layer (counted in metrics as a normal call).
-
-There is no separate env var for 429 behavior — it's gated by
-`MCP_RETRY_ENABLED` and bounded by `MCP_RETRY_MAX_ATTEMPTS`. Setting attempts
-to 1 turns 429 retry off (the call surfaces immediately).
-
-<Aside type="note">
-The `@discordjs/rest` client used internally has its own queue that would
-also retry on 429 — Plan 8 Phase C disabled it (`retries: 0`) so cockatiel
-owns retry exclusively. Without that flip, a 429 would retry twice (once in
-djs-rest, once in cockatiel) with mismatched backoffs.
+<Aside type="caution">
+The timeout sits inside retry, so it applies to each attempt. The current
+classifier does not convert or explicitly retry Cockatiel timeout cancellation;
+if it escapes, the generic formatter reports `INTERNAL_ERROR`. Do not depend on
+a dedicated timeout code.
 </Aside>
 
-## Timeouts
+## Discord rate limits
 
-One budget:
+Discord's REST client still owns route-bucket scheduling and 429 handling.
+discord-mcp passes `{ retries: 0 }` to its constructor, which disables that
+constructor retry count; it does **not** remove the client's queue or every
+internal rate-limit behavior. The outer policy can also retry a surfaced 429,
+subject to replay safety and its retry budget.
 
-| Var | Default | Range | Description |
-| --- | ------- | ----- | ----------- |
-| `MCP_TIMEOUT_DEFAULT_MS` | `30000` | 1000–120000 | Per-call ceiling for the standard REST path. |
-
-Timeout fires AFTER retry — i.e. each individual attempt can take up to the
-timeout, then the policy retries (until `MAX_ATTEMPTS` is reached). The total
-wall-clock budget for a tool call is roughly
-`MAX_ATTEMPTS * TIMEOUT_MS + sum(backoffs)`. With defaults: ~95 seconds worst
-case for the standard path.
-
-**Recommendation**:
-
-- Dev: `MCP_TIMEOUT_DEFAULT_MS=10000` to surface hangs quickly.
-- Prod: keep defaults unless you've measured Discord P99 latency for your
-  specific routes.
+See [Rate limits](/discord-mcp/architecture/rate-limits/) for the ownership
+boundary.
 
 ## Circuit breaker
 
-Once a route has failed `MCP_CIRCUIT_FAILURE_THRESHOLD` times in a sliding
-window, the circuit opens and **fast-rejects** subsequent calls without
-hitting Discord. After `MCP_CIRCUIT_HALF_OPEN_AFTER_MS`, the breaker enters
-half-open: the next call probes the upstream; if it succeeds the circuit
-closes, otherwise it re-opens.
+`buildPolicy()` creates **one breaker shared by all calls using that policy**.
+It is not partitioned per Discord route. Once the failure threshold opens it,
+subsequent calls fast-fail with `CIRCUIT_OPEN` until the half-open probe window.
 
-| Var | Default | Range | Notes |
-| --- | ------- | ----- | ----- |
-| `MCP_CIRCUIT_ENABLED` | `true` | bool | Set literal `false` to disable. |
-| `MCP_CIRCUIT_FAILURE_THRESHOLD` | `10` | 3–100 | Failures before opening. |
-| `MCP_CIRCUIT_HALF_OPEN_AFTER_MS` | `60000` | 5000–600000 | Recovery probe delay. |
+Tune the threshold only after observing real traffic. A global breaker is a
+coarse upstream-protection mechanism: one failing route can affect other REST
+calls that share it.
 
-**When to override**:
+## Bulkhead
 
-- Disable in unit/integration tests where you want failures to bubble
-  immediately: `MCP_CIRCUIT_ENABLED=false`.
-- High-volume prod: bump `MCP_CIRCUIT_FAILURE_THRESHOLD=25` to reduce noise
-  from sporadic transients.
-- Aggressive recovery: lower `MCP_CIRCUIT_HALF_OPEN_AFTER_MS=15000` if you're
-  confident upstream issues clear quickly.
+The bulkhead limits concurrent REST calls across tools and rejects overflow
+immediately with `BULKHEAD_FULL`; its queue size is zero.
 
-The breaker is **per-route**, not global. A flapping `/messages` endpoint
-won't trip `/channels`.
+`MCP_BULKHEAD_LIMIT=1` is valid. It does not deadlock the pipeline: steps are
+sequential, the parent holds no REST slot, and each leaf releases its slot before
+the next step begins.
 
-## Bulkhead (concurrency limit)
+## Operator checklist
 
-The bulkhead semaphore caps **in-flight Discord REST calls** across all
-tools. When the limit is reached, new calls **fast-reject** with `error_code:
-"bulkhead_saturated"` rather than queueing — head-of-line blocking is worse
-than a clear "back off" signal.
+1. Disable retry with `MCP_RETRY_ENABLED=false` when you need the first failure.
+2. Treat `MCP_RETRY_MAX_ATTEMPTS` as extra retries when estimating latency.
+3. Keep non-idempotent calls out of manual retry loops unless their result is known.
+4. Expect `CIRCUIT_OPEN` to affect the shared policy, not a single route.
+5. Back off and reduce concurrency when a call returns `BULKHEAD_FULL`.
 
-| Var | Default | Range | Notes |
-| --- | ------- | ----- | ----- |
-| `MCP_BULKHEAD_LIMIT` | `100` | 1–1000 | Max concurrent in-flight REST calls. |
+## Source map
 
-<Aside type="caution">
-**Minimum sane value: 10.** The internal pipeline tool can spawn sub-tools
-that issue REST calls; a bulkhead of 1 deadlocks instantly because the parent
-holds a slot waiting for the child. We document this rather than enforce a
-runtime minimum so test fixtures with limit=1 still work for unit tests that
-never recurse.
-</Aside>
-
-**Sizing**: Discord allows ~50 requests/second per bot to most routes. A
-bulkhead of 100 is generous and rarely hits in practice unless the agent is
-making bulk parallel tool calls. Tighten to 20–30 if you want a clear early
-signal of "agent is over-parallelizing".
-
-## Pipeline + bulkhead interaction
-
-The `mcp_pipeline` meta-tool composes other tools serially or in parallel.
-**Each leaf tool that hits Discord acquires a bulkhead slot.** If your
-pipeline fans out to 50 children that each issue 2 REST calls, you can
-briefly exceed 100 in-flight REST calls; the bulkhead will kick in and the
-over-spilled calls return `bulkhead_saturated`, which the pipeline propagates
-back up as a partial-result with the failed children flagged.
-
-Bottom line: pipelines do NOT amplify the bulkhead — they share it. This is
-intentional. If you raise `MCP_BULKHEAD_LIMIT`, you're also raising the
-pipeline's effective fan-out before saturation.
-
-See [Architecture → Pipeline](/discord-mcp/architecture/pipeline/) for the
-recursion guard and interpolation syntax.
-
-## Reference table
-
-| Layer | Default behavior | Disable how |
-| ----- | ---------------- | ----------- |
-| Retry | 3 attempts, exponential w/ full jitter | `MCP_RETRY_ENABLED=false` or `MCP_RETRY_MAX_ATTEMPTS=1` |
-| 429 retry-after | Honored, capped by retry budget | (gated by retry) |
-| Timeout | 30s default, 60s long | (no toggle — set ms to max range) |
-| Circuit | 10 failures → open 60s | `MCP_CIRCUIT_ENABLED=false` |
-| Bulkhead | 100 in-flight, fast-reject | `MCP_BULKHEAD_LIMIT=1000` (effectively off for normal load) |
+- [Policy construction](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/policy.ts)
+- [REST wrapper and error mapping](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts)
+- [Error formatter](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts)
 
 ## Related
 
-- [Telemetry → resilience metrics](/discord-mcp/operations/telemetry/) — circuit transitions, bulkhead rejections, dead-letter counts.
-- [Architecture → Rate limits](/discord-mcp/architecture/rate-limits/) — Discord's global vs per-route buckets, `@discordjs/rest` interaction.
-- [Architecture → Error handling](/discord-mcp/architecture/error-handling/) — how Cockatiel errors map to MCP error codes.
-- Source: [`packages/mcp-core/src/rest/policy.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/policy.ts), [`resilient.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts).
+- [Error handling](/discord-mcp/architecture/error-handling/)
+- [Rate limits](/discord-mcp/architecture/rate-limits/)
+- [Pipeline](/discord-mcp/architecture/pipeline/)

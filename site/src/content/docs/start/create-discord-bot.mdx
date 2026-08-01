@@ -1,0 +1,85 @@
+---
+title: Create a Discord bot
+description: Create a test bot, grant only the permissions you need, and collect the IDs required for your first discord-mcp call.
+prev:
+  link: /discord-mcp/start/
+  label: Start here
+next:
+  link: /discord-mcp/start/quickstart/
+  label: Quickstart
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+By the end of this guide, your bot will be installed in a private test server and you will
+have its token, a guild ID, and a channel ID ready for discord-mcp.
+
+<Aside type="caution">
+Use a dedicated test server while learning. discord-mcp acts with the bot's Discord
+permissions, and ordinary write tools such as `messages_send` can execute immediately.
+</Aside>
+
+## Before you begin
+
+You need a Discord account and a server where you can manage apps. If you do not have a
+test server, create one from Discord's **Add a Server** button.
+
+<Steps>
+
+1. **Create an application.**
+
+   Open the [Discord Developer Portal](https://discord.com/developers/applications), select
+   **New Application**, give it a recognizable name, and create it. New applications include
+   a bot user by default.
+
+2. **Generate and store the bot token.**
+
+   Open **Bot**, select **Reset Token**, and copy the new token into a password manager.
+   Discord only shows it once.
+
+   Never paste the token into chat, an issue, a screenshot, or a committed file. If it is
+   exposed, reset it immediately and update your local MCP client config.
+
+3. **Choose the smallest useful permissions.**
+
+   Open **Installation** and configure a **Guild Install** with the `bot` scope. For the first
+   tutorial, grant only:
+
+   - View Channels
+   - Send Messages
+   - Read Message History
+
+   Add moderation, role, webhook, or thread permissions later only when a workflow needs
+   them. Do not grant **Administrator** as a shortcut.
+
+4. **Install the bot in your test server.**
+
+   Copy the install link from **Installation**, open it, choose **Add to server**, and select
+   your test server. Confirm that the bot appears in the member list.
+
+5. **Copy the guild and channel IDs.**
+
+   In Discord, open **User Settings → Advanced** and enable **Developer Mode**. Then:
+
+   - Right-click the test server and select **Copy Server ID**. This is your `guild_id`.
+   - Right-click the test channel and select **Copy Channel ID**. This is your `channel_id`.
+
+</Steps>
+
+## Gateway intents
+
+The default discord-mcp setup uses Discord's HTTP API and does not need privileged Gateway
+intents. Only enable Gateway mode when you need live event notifications. Gateway mode asks
+for Guilds, Guild Voice States, and Guild Presences; presence data requires the corresponding
+privileged intent in the Developer Portal.
+
+## Checkpoint
+
+You should now have:
+
+- a bot installed in a private test server;
+- a token stored locally and nowhere else;
+- a `guild_id` and `channel_id` copied from Discord;
+- View Channels, Send Messages, and Read Message History permissions.
+
+Continue to [Install discord-mcp](/discord-mcp/start/installation/).

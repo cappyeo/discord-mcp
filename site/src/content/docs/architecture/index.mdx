@@ -1,50 +1,37 @@
 ---
 title: Architecture
-description: How discord-mcp is built — Sapphire pieces, four-layer middleware, resilient REST adapter, optional Gateway, and the cross-cutting concerns that hold them together.
+description: How discord-mcp is built — tool registry, six-stage middleware, resilient REST adapter, optional Gateway, and protocol boundaries.
+type: explanation
+prev: false
+next: false
 sidebar:
   order: 0
 ---
 
 import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
-This section is the **contributor + advanced operator reference** for how
-discord-mcp is built. The other sections describe what the server does
-([Tools](/discord-mcp/tools/)), how to use it
-([Recipes](/discord-mcp/recipes/)), and how to run it
-([Operations](/discord-mcp/operations/)). This section is about how it's
-*organized* under the hood.
-
-discord-mcp is a layered TypeScript server. Tools live in a Sapphire-style
-piece registry; every call goes through a four-layer Koa-style middleware
-chain (telemetry → validate → preconditions → audit); REST traffic is
-wrapped in a Cockatiel resilience policy (bulkhead → circuit → retry →
-timeout); optional Gateway support adds five subscribable resource URIs
-backed by a debounced WebSocket client. Each of those layers gets its own
-deep-dive page below.
-
-The shape comes from one constraint: **MCP is an agent contract**. Agents
-are higher-volume, lower-trust, and harder to debug than humans, so the
-server has to do more of the cross-cutting work itself — validation,
-auth, audit, observability, structured errors with recovery hints —
-rather than expect every tool to re-implement them. The pieces below are
-the answer to "what does the server need to do once, so each tool can be
-short."
+Trace a tool call from MCP input to Discord REST. Tools live in a Sapphire-style
+registry and pass through six middleware stages: telemetry → default guild →
+validation → category gate → preconditions → audit. The REST adapter adds
+bulkhead, circuit-breaker, retry, and timeout policies. Optional Gateway mode
+emits notifications for five URI keys and falls back to REST-only startup when
+the Gateway connection cannot boot.
 
 <DocsCardGrid
   links={[
     { title: 'Overview', href: '/discord-mcp/architecture/overview/', description: 'The big picture: layered architecture, the Sapphire piece + store model, repo layout, and a call-path mermaid diagram.' },
-    { title: 'Middleware chain', href: '/discord-mcp/architecture/middleware-chain/', description: 'The four layers wrapping every tool call (telemetry → validate → preconditions → audit), why their order matters, and where to insert a hypothetical fifth layer.' },
+    { title: 'Middleware chain', href: '/discord-mcp/architecture/middleware-chain/', description: 'The six stages wrapping every tool call, why their order matters, and which controls run before execution.' },
     { title: 'Components V2', href: '/discord-mcp/architecture/components-v2/', description: 'The V2 layout primitives (Container, Section, MediaGallery, ActionRow), the schema validator, the preview renderer, the 5 templates, and the flags=32768 contract.' },
-    { title: 'Pipeline', href: '/discord-mcp/architecture/pipeline/', description: 'The mcp_pipeline executor: atomic multi-tool calls, {{stepN.path}} interpolation, the recursion guard, partial-failure semantics, with a mermaid sequence diagram.' },
-    { title: 'Gateway', href: '/discord-mcp/architecture/gateway/', description: 'The optional --gateway mode: lazy-loaded discord.js, 5 subscribable URIs, 5 handlers, SubscriptionRegistry, the 300ms debounce on PRESENCE_UPDATE.' },
+    { title: 'Pipeline', href: '/discord-mcp/architecture/pipeline/', description: 'The mcp_pipeline executor: sequential fail-fast calls, {{stepN.path}} interpolation, recursion guard, and partial-failure semantics.' },
+    { title: 'Gateway', href: '/discord-mcp/architecture/gateway/', description: 'The optional --gateway mode: five notification URI keys, five handlers, in-memory subscriptions, debounce, and REST-only fallback.' },
     { title: 'Error handling', href: '/discord-mcp/architecture/error-handling/', description: 'The error hierarchy (client vs server), formatErrorForUser shape, recovery-hint contract, DRY_RUN_PREVIEW pattern, Cockatiel mappings.' },
-    { title: 'Confirmation', href: '/discord-mcp/architecture/confirmation/', description: 'The __confirm:true + MCP_DRY_RUN=false dual-key contract that gates every destructive tool. Why double-underscore, why safe-by-default.' },
+    { title: 'Confirmation', href: '/discord-mcp/architecture/confirmation/', description: 'The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 29 explicitly registered high-risk tools—and its limits.' },
     { title: 'Sampling', href: '/discord-mcp/architecture/sampling/', description: 'Zero-API-key intelligence: how the 5 intelligence tools call back into the client’s LLM via MCP sampling, with a graceful host_llm_should_process fallback.' },
-    { title: 'Rate limits', href: '/discord-mcp/architecture/rate-limits/', description: 'Discord’s global vs per-route bucket model, why @discordjs/rest’s queue is disabled, how cockatiel owns retry, when to use webhooks to bypass the bot bucket.' },
+    { title: 'Rate limits', href: '/discord-mcp/architecture/rate-limits/', description: 'Discord’s global and route buckets, the @discordjs/rest scheduler, and the boundary with local resilience policies.' },
   ]}
 />
 
-## How to read this section
+## Choose a path
 
 If you're a **contributor**, start with [Overview](/discord-mcp/architecture/overview/)
 to get the layout, then jump to whichever subsystem you're touching. The

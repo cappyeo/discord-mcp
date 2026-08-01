@@ -39,7 +39,7 @@ export default defineTool({
   description: [
     "**Purpose**: Fetch a guild's onboarding configuration.",
     '',
-    '**Returns**: `{guild_id, prompts, default_channel_ids, enabled, mode, untrusted_text}`. Prompt titles + option titles/descriptions wrapped untrusted.',
+    '**Returns**: `{guild_id, prompts, default_channel_ids, enabled, mode, untrusted_text}`. Prompt and option text remains raw Discord data; `untrusted_text` provides a separately fenced copy.',
     '',
     'See: https://discord.com/developers/docs/resources/guild#guild-onboarding-object',
   ].join('\n'),

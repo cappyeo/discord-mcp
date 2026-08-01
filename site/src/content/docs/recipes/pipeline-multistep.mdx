@@ -1,6 +1,6 @@
 ---
-title: Pipeline — chain three calls atomically
-description: Use mcp_pipeline to compose announce, schedule, and grant-role into one server-side request.
+title: Pipeline — chain three calls sequentially
+description: Use mcp_pipeline to compose announce, schedule, and grant-role in one fail-fast server-side request.
 sidebar:
   order: 3
 ---
@@ -35,8 +35,9 @@ use the dedicated bulk tool for that resource instead.
 
    Each step has `id` (for interpolation), `tool` (the tool name), and `args`.
    Strings inside `args` may contain `{{step_id.path}}` placeholders. Below the
-   announcement step's `message_id` flows into the event's description, and the
-   announcement's author flows into the role-grant call.
+   announcement step's `message_id` flows into the event's description. The
+   host's user ID and the role ID are known workflow inputs and are supplied
+   directly to the role-grant step.
 
    ```json
    {
@@ -56,9 +57,9 @@ use the dedicated bulk tool for that resource instead.
            "tool": "events_create",
            "args": {
              "guild_id": "111122223333444455",
-             "name": "Office hours — May 1",
-             "scheduled_start_time": "2026-05-01T17:00:00Z",
-             "scheduled_end_time": "2026-05-01T18:00:00Z",
+            "name": "Office hours — January 1",
+            "scheduled_start_time": "2030-01-01T17:00:00Z",
+            "scheduled_end_time": "2030-01-01T18:00:00Z",
              "entity_type": 3,
              "privacy_level": 2,
              "entity_metadata": { "location": "https://discord.com/channels/111122223333444455/222233334444555566/{{announce.message_id}}" },
@@ -93,26 +94,47 @@ use the dedicated bulk tool for that resource instead.
              "id": "announce",
              "tool": "messages_send",
              "status": "success",
-             "result": { "message_id": "888899990000111122", "channel_id": "222233334444555566" },
+             "result": {
+               "message_id": "888899990000111122",
+               "channel_id": "222233334444555566",
+               "jump_url": "https://discord.com/channels/111122223333444455/222233334444555566/888899990000111122",
+              "timestamp": "2030-01-01T16:30:00.000Z"
+             },
              "duration_ms": 142
            },
            {
              "id": "event",
              "tool": "events_create",
              "status": "success",
-             "result": { "event_id": "333344445555666677", "name": "Office hours — May 1" },
+             "result": {
+               "id": "333344445555666677",
+               "guild_id": "111122223333444455",
+              "name": "Office hours — January 1",
+               "description": "Linked to announcement 888899990000111122",
+              "scheduled_start_time": "2030-01-01T17:00:00.000Z",
+              "scheduled_end_time": "2030-01-01T18:00:00.000Z",
+               "status": 1,
+               "entity_type": 3,
+               "channel_id": null
+             },
              "duration_ms": 218
            },
            {
              "id": "grant",
              "tool": "members_add_role",
              "status": "success",
+             "result": {
+               "added": true,
+               "user_id": "777788889999000011",
+               "role_id": "555566667777888899"
+             },
              "duration_ms": 96
            }
          ],
          "variables": {
            "announce": { "message_id": "888899990000111122", "channel_id": "222233334444555566" },
-           "event": { "event_id": "333344445555666677", "name": "Office hours — May 1" }
+           "event": { "id": "333344445555666677", "name": "Office hours — May 1" },
+           "grant": { "added": true, "user_id": "777788889999000011", "role_id": "555566667777888899" }
          },
          "total_duration_ms": 456,
          "aborted": false
@@ -128,9 +150,9 @@ use the dedicated bulk tool for that resource instead.
              "id": "event",
              "tool": "events_create",
              "status": "error",
-             "error": { "code": "DISCORD_403", "message": "Missing MANAGE_EVENTS", "retriable": false },
+             "error": { "code": "DISCORD_PERMISSION_DENIED", "message": "Missing MANAGE_EVENTS", "retriable": false },
              "duration_ms": 88
-           },
+           }
          ],
          "variables": { "announce": { "message_id": "888899990000111122" } },
          "total_duration_ms": 230,
@@ -167,9 +189,14 @@ use the dedicated bulk tool for that resource instead.
 | Concern | N separate `tools/call` | One `mcp_pipeline` |
 |---|---|---|
 | Round-trips | N | 1 |
-| Atomic abort | client must re-implement | server-side, free |
+| Stop after a failed step | client must re-implement | server-side, built in |
 | Intermediate state | client juggles | exposed via `variables` |
-| Logging | N audit-log entries, no parent | one parent + N children |
+| Audit logging | Depends on each tool's idempotency metadata | One parent event plus events for non-idempotent leaves; idempotent leaves are skipped |
+
+<Aside type="caution">
+Stopping is not rollback. Any Discord side effect from an earlier successful step remains and
+must be compensated explicitly if your workflow requires reversal.
+</Aside>
 
 ## See also
 

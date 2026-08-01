@@ -7,7 +7,7 @@ export default defineTool({
   name: 'components_v2_validate',
   category: 'components_v2',
   description:
-    '**Purpose**: Validate a Components V2 components array OFFLINE (no Discord API call). Catches 40-cap, nesting violations, accessory mismatches, MediaGallery range, Button missing custom_id/url.\n\n**When to use**: iterate on a layout before sending. Saves round-trips for agents constructing complex cards.\n\n**Returns**: `{valid, issues:[{path, code, message, fix_hint?}]}`.',
+    '**Purpose**: Validate a Components V2 components array OFFLINE (no Discord API call). Enforces the 40-cap, placement and nesting rules, ActionRow cardinality, Button style contracts, unique custom_id values, accessory requirements, and MediaGallery range. File components are rejected because the current send/edit tools do not upload attachments.\n\n**When to use**: iterate on a layout before sending. Saves round-trips for agents constructing complex cards.\n\n**Returns**: `{valid, issues:[{path, code, message, fix_hint?}]}`.',
   inputSchema: {
     components: z.array(z.unknown()).describe('Components array (will be validated)'),
   },

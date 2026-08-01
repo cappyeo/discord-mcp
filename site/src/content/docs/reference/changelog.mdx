@@ -5,12 +5,37 @@ sidebar:
   order: 4
 ---
 
-discord-mcp follows the **plan-as-release-train** model: each plan number
-maps to one minor release. v0.X.0 corresponds to Plan X. Tags are cut from
-the merge commit of the plan's PR into `main`.
+This page records user-visible changes for each tagged release. For the exact
+commit history and downloadable artifacts, see
+[GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
-For PR-level history, see the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases)
-page. Tag dates and SHAs below come from `git for-each-ref refs/tags/v0.*`.
+## v0.13.2 — Documentation architecture and runtime contract hardening
+
+Released **2026-08-01**.
+
+- Rebuilt the documentation information architecture around Start, Guides,
+  Reference, and Develop journeys, with a searchable tool catalog and generated
+  input/output contracts for all 192 tools.
+- Corrected Discord API examples, interaction callback types, Components V2
+  validation, REST error normalization, confirmation previews, and credential
+  redaction.
+- Documented the exact trust boundary between raw `structuredContent` and
+  separately fenced human-readable or `untrusted_*` fields.
+- Corrected the npm `mcpName` ownership namespace and added an official
+  `server.json` manifest for MCP Registry publication.
+
+## v0.13.1 — Correctness follow-up, default guild, and published package cleanup
+
+Released **2026-08-01**.
+
+- Fixed 18 follow-up defects found by re-auditing v0.13.0, including output
+  schema fallback coverage, credential redaction, channel/member result drift,
+  and OpenTelemetry startup checks.
+- Added `DISCORD_DEFAULT_GUILD_ID`, which supplies an omitted top-level
+  `guild_id` before validation while preserving explicit arguments.
+- Removed duplicate document headings across the docs site.
+- Restored the public npm scope to `@discord-mcp/*` and published package
+  version 0.13.1.
 
 ## v0.13.0 — Correctness audit: the confirmation gate, the category gate, and 58 verified defects
 

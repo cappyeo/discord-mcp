@@ -1,190 +1,135 @@
 ---
 title: Error handling
-description: discord-mcp's error hierarchy — Plan 1 base errors, Discord domain errors, Cockatiel mappings. The formatErrorForUser shape and DRY_RUN_PREVIEW pattern.
+description: The error classes and MCP result envelope that discord-mcp actually exposes.
 sidebar:
   order: 6
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Every error the server surfaces to the client is a structured object with
-four guaranteed fields: a stable `code`, a `retriable` boolean, a
-human-readable `message`, and a `recovery_hint` that tells the agent what
-to do next. This page is the map of where those errors come from.
+discord-mcp treats Discord failures as **tool results**, not broken JSON-RPC
+exchanges. Check `isError`, then branch on the stable `structuredContent.code`.
 
-## The hierarchy
+## Wire contract
 
-```
-DiscordMcpError                   (base — all custom errors extend this)
-├─ DiscordClientError             (caller's fault — 4xx-equivalent)
-│  ├─ DiscordPermissionError      (DISCORD_PERMISSION_DENIED)
-│  ├─ DiscordRateLimitError       (DISCORD_RATE_LIMITED)
-│  ├─ DiscordNotFoundError        (DISCORD_NOT_FOUND)
-│  ├─ ValidationError             (VALIDATION_FAILED)
-│  ├─ DiscordAuthError            (DISCORD_AUTH_INVALID)
-│  ├─ DiscordCloudflareBlocked    (DISCORD_CLOUDFLARE_BLOCKED)
-│  ├─ ScopeRejectedError          (SCOPE_REJECTED)
-│  ├─ GuildNotAllowedError        (GUILD_NOT_ALLOWED)   ← never constructed
-│  ├─ DryRunPreview               (DRY_RUN_PREVIEW)
-│  └─ CancelledError              (CANCELLED)
-└─ DiscordServerError             (server's fault — 5xx-equivalent)
-   ├─ CircuitOpenError            (CIRCUIT_OPEN)
-   ├─ BulkheadFullError           (BULKHEAD_SATURATED)
-   ├─ DiscordTimeoutError         (DISCORD_TIMEOUT)
-   └─ DiscordRestUnavailable      (DISCORD_REST_UNAVAILABLE)
-```
-
-Source:
-[`errors/base.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts),
-[`errors/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts),
-[`errors/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts).
-
-`GuildNotAllowedError` is defined and formatted but **no code path ever
-constructs it**. There is no guild allowlist: no `ALLOWED_GUILDS` env var is
-read anywhere, and no layer compares a guild id against one. An agent can act
-on every guild the bot has joined. Per-guild restriction is **deferred
-post-1.0** — the class and its `GUILD_NOT_ALLOWED` code are reserved for that
-work. Treat this row as a placeholder, not a control you can rely on.
-
-The split mirrors HTTP semantics: client errors are deterministic (the same
-input will fail the same way; the agent must change the input or the
-config); server errors are transient (retry might work).
-
-## `formatErrorForUser`
-
-Source: [`errors/format.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts).
-
-The single conversion point that turns any thrown error into the wire
-shape returned to the MCP client:
-
-```ts
-{
-  code: string,            // stable machine-readable identifier
-  retriable: boolean,      // whether a naive retry might succeed
-  message: string,         // human-readable summary
-  recovery_hint: string,   // imperative next step
-  // optional, error-specific:
-  suggested_tool?: string,
-  retry_after_ms?: number,
-  missing_permissions?: string[],
-  validation_issues?: { path: string, message: string, code: string }[],
-}
-```
-
-Any `DiscordMcpError` formats trivially via this helper. **Unknown errors**
-(e.g. a programmer mistake that throws a `TypeError`) are wrapped into a
-generic `INTERNAL_ERROR` shape with `retriable: false` and a hint that
-mentions filing an issue — we never leak stack traces to the client.
-
-## Recovery hints
-
-The contract: every `recovery_hint` is **imperative + actionable** for the
-agent.
-
-| Code | Recovery hint shape |
-| ---- | ------------------- |
-| `DISCORD_PERMISSION_DENIED` | "Grant `<perm>` to bot's role in Server Settings → Roles." |
-| `DISCORD_RATE_LIMITED` | "Wait `<ms>`ms then retry" (+ optional batch alternative). |
-| `DISCORD_NOT_FOUND` | "Verify: 1) `<resource>` exists 2) bot has VIEW permission 3) ID is correct" |
-| `VALIDATION_FAILED` | "Fix `<path>`: `<zod issue>`" |
-| `DRY_RUN_PREVIEW` | "Set `MCP_DRY_RUN=false` AND pass `__confirm:true` to actually execute" |
-| `CIRCUIT_OPEN` | "Discord upstream failing; circuit auto-recovers in `<ms>`ms" |
-| `BULKHEAD_SATURATED` | "Too many in-flight calls; retry after current batch completes" |
-
-The hints encode the **fix**, not the diagnosis. The agent doesn't need to
-know what a bulkhead is to act on `BULKHEAD_SATURATED` — it just needs to
-know "retry later."
-
-## The DRY_RUN_PREVIEW pattern
-
-The `DryRunPreview` error is the load-bearing piece of the safe-by-default
-posture. When a destructive tool is called without confirmation, the
-precondition throws `DryRunPreview` carrying the **redacted preview of what
-would have run**:
+Every formatted failure guarantees four structured fields:
 
 ```json
 {
-  "code": "DRY_RUN_PREVIEW",
-  "retriable": false,
-  "message": "Dry-run: would call messages_send with the given args",
-  "recovery_hint": "Set MCP_DRY_RUN=false AND pass __confirm:true to actually execute",
-  "preview": { "channel_id": "111122223333444455", "content": "..." }
+  "isError": true,
+  "content": [{ "type": "text", "text": "Human-readable diagnosis and recovery" }],
+  "structuredContent": {
+    "code": "DISCORD_NOT_FOUND",
+    "retriable": false,
+    "category": "client",
+    "recovery_hint": "Verify the ID, resource visibility, and credential scope."
+  }
 }
 ```
 
-The agent sees the preview, optionally surfaces it to the human, then
-either:
+`content[0].text` carries the human-readable diagnosis. `recovery_hint` keeps
+the next action machine-readable. Error-specific
+structured fields can include `retry_after_ms`, `missing`, `have`, `resource`,
+`issues`, `suggested_tool`, or `trace_id`; do not assume they exist for every
+code.
 
-1. Re-issues the call with `__confirm:true` (and the operator has
-   `MCP_DRY_RUN=false` in env), or
-2. Surfaces the preview to its own human as "this is what I would do, are
-   you sure?" and re-issues with `__confirm:true` only once approved. That
-   prompt is entirely client-side — the server never initiates one.
+<Aside type="note">
+An unexpected thrown value becomes `INTERNAL_ERROR` with `retriable: true` and
+`category: "server"`. Stack traces are not returned to the client.
+</Aside>
 
-Either way, **no Discord call ever fires** until both halves of the
-contract are satisfied. See [Confirmation](/discord-mcp/architecture/confirmation/)
-for the contract details.
+## Error families
 
-## Cockatiel mappings
+All custom errors extend `DiscordError`:
 
-The resilience layer uses [Cockatiel](https://github.com/connor4312/cockatiel)
-for retry, circuit breaker, bulkhead, and timeout. Cockatiel throws its
-own error types; we map them to discord-mcp errors so the client never
-sees a leaky implementation detail:
+```text
+DiscordError
+├─ DiscordClientError
+└─ DiscordServerError
+```
 
-| Cockatiel error | discord-mcp error | Code |
-| --------------- | ----------------- | ---- |
-| `BrokenCircuitError` | `CircuitOpenError` | `CIRCUIT_OPEN` |
-| `BulkheadRejectedError` | `BulkheadFullError` | `BULKHEAD_SATURATED` |
-| `TaskCancelledError` (timeout) | `DiscordTimeoutError` | `DISCORD_TIMEOUT` |
+| Code | Category | Retry as-is? | Meaning |
+| --- | --- | --- | --- |
+| `DISCORD_PERMISSION_DENIED` | client | no | The route credential or resource lacks authorization. |
+| `DISCORD_RATE_LIMITED` | client | yes | Discord returned a rate limit and retry delay. |
+| `DISCORD_NOT_FOUND` | client | no | The resource does not exist or is not visible. |
+| `VALIDATION_FAILED` | client | no | Input failed schema or domain validation. |
+| `DISCORD_AUTH_INVALID` | client | no | Discord rejected the credential used by the route. |
+| `DISCORD_CLOUDFLARE_BLOCKED` | client | yes | Discord temporarily blocked the caller IP. |
+| `SCOPE_REJECTED` | client | no | The tool's category is not enabled. |
+| `GUILD_NOT_ALLOWED` | client | no | Reserved; no runtime allowlist currently constructs it. |
+| `DRY_RUN_PREVIEW` | client | no | A confirm-gated tool was previewed, not executed. |
+| `CANCELLED` | client | no | The MCP client cancelled the call. |
+| `DISCORD_SERVER_ERROR` | server | yes | Discord returned an upstream server failure. |
+| `CIRCUIT_OPEN` | server | yes | The local circuit breaker is open. |
+| `BULKHEAD_FULL` | server | yes | The local REST concurrency limit rejected the call. |
+| `INTERNAL_ERROR` | server | yes | An unexpected failure reached the formatter. |
 
-Mapping happens in [`rest/errors.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts)
-inside the resilient REST adapter, so all REST callers see the canonical
-codes.
+Raw `@discordjs/rest` failures are normalized before the generic fallback:
 
-This was added in Plan 8 Phase D — before that, callers occasionally got
-`BrokenCircuitError` thrown straight through, which broke the
-`formatErrorForUser` contract because Cockatiel's error class isn't a
-`DiscordMcpError`.
+| Discord HTTP status | Public code | Retry as-is? |
+| --- | --- | --- |
+| `400` | `VALIDATION_FAILED` | no |
+| `401` | `DISCORD_AUTH_INVALID` | no |
+| `403` | `DISCORD_PERMISSION_DENIED` | no |
+| `404` | `DISCORD_NOT_FOUND` | no |
+| `429` | `DISCORD_RATE_LIMITED` | yes, after `retry_after_ms` when supplied |
+| `5xx` | `DISCORD_SERVER_ERROR` | yes, with backoff |
 
-## The `tool_error` envelope
+The formatter exposes the HTTP status and numeric Discord error code when
+available, but never returns the REST URL or request body because either may
+contain webhook, interaction, or OAuth credentials.
 
-Errors don't always cross the wire as JSON-RPC errors. By design, the tool
-result envelope can carry `isError: true` with structured content,
-preserving the request as a successful protocol exchange while marking
-the *application* result as failed:
+There is currently no dedicated public timeout error. A Cockatiel timeout that
+reaches the generic formatter is reported as `INTERNAL_ERROR`.
+
+## Dry-run preview
+
+Only tools registered with confirmation metadata—currently 29 tools—participate
+in this gate. Ordinary writes such as `messages_send` can execute immediately.
 
 ```json
 {
   "isError": true,
   "structuredContent": {
-    "code": "DISCORD_NOT_FOUND",
+    "code": "DRY_RUN_PREVIEW",
     "retriable": false,
-    "recovery_hint": "Verify: 1) ...",
-    "message": "Channel 999... not found"
+    "category": "client",
+    "tool": "messages_delete",
+    "preview": {
+      "channel_id": "111122223333444455",
+      "message_id": "999900001111222233"
+    }
   }
 }
 ```
 
-Why: an MCP-level JSON-RPC error implies "the protocol exchange itself
-broke." A 404 from Discord is not a protocol break — it's a perfectly
-ordinary outcome the agent needs to handle. Returning it as
-`isError: true` with structured content keeps the trace clean (the call
-succeeded; the result said no) and lets the agent branch on the `code`
-field.
+To execute a gated call, the server must run with `MCP_DRY_RUN=false` and the
+request must include `__confirm: true`. See [Confirmation](/discord-mcp/architecture/confirmation/).
+
+## Resilience mappings
+
+The REST adapter explicitly maps only two Cockatiel failures:
+
+| Cockatiel failure | Public code |
+| --- | --- |
+| `BrokenCircuitError` | `CIRCUIT_OPEN` |
+| `BulkheadRejectedError` | `BULKHEAD_FULL` |
+
+The formatter also handles those raw Cockatiel classes defensively. Cancellation
+uses discord-mcp's own `CancelledError`; Cockatiel timeout cancellation is not
+currently converted into a dedicated domain error.
 
 ## Source map
 
-| Concern | File |
-| ------- | ---- |
-| Base classes | [`errors/base.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts) |
-| Client errors | [`errors/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts) |
-| Server errors | [`errors/server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts) |
-| Wire formatter | [`errors/format.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts) |
-| Cockatiel mappings | [`rest/errors.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/errors.ts) |
+- [Base classes](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/base.ts)
+- [Client errors](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/client.ts)
+- [Server errors](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/server.ts)
+- [Wire formatter](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/errors/format.ts)
+- [Resilient REST adapter](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/rest/resilient.ts)
 
 ## Related
 
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the `DRY_RUN_PREVIEW` contract.
-- [Operations → Resilience](/discord-mcp/operations/resilience/) — what triggers the Cockatiel error mappings.
-- [Architecture → Rate limits](/discord-mcp/architecture/rate-limits/) — `DISCORD_RATE_LIMITED` recovery semantics.
+- [Resilience](/discord-mcp/operations/resilience/)
+- [Rate limits](/discord-mcp/architecture/rate-limits/)
+- [Confirmation](/discord-mcp/architecture/confirmation/)

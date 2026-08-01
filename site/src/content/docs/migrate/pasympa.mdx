@@ -25,19 +25,20 @@ per-entry notes.
 
 ## Why migrate to discord-mcp
 
-- **Production hardening** — first-class OpenTelemetry traces and cockatiel
-  resilience policies (retry / circuit breaker / bulkhead) on every REST call.
+- **Production hardening** — first-class OpenTelemetry traces and Cockatiel
+  resilience policies (retry / circuit breaker / bulkhead) on the central
+  Discord REST path.
   See [Operations: telemetry](/discord-mcp/operations/telemetry/) and
   [Architecture: rate limits](/discord-mcp/architecture/rate-limits/).
-- **Full Discord REST surface (192 tools)** — discord-mcp covers ~110% of
-  PaSympa's tool count, including stickers, automod, polls, application
+- **Broad 192-tool Discord surface** — the catalog includes stickers, automod, polls, application
   commands, onboarding, voice state, stage instances, scheduled events
   (subscribers + invites), and the Components V2 layout primitives.
-- **Components V2 first-class** — every send/edit tool accepts `flags = 32768`
-  layouts. See the
+- **Components V2 first-class** — dedicated `components_v2_send` and
+  `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Gateway resource subscriptions** — `resources/subscribe` over Discord
-  Gateway events replaces REST polling. See
+- **Gateway event notifications** — `resources/subscribe` can signal that
+  Discord state changed; fetch current state with the corresponding REST tool.
+  It complements polling but does not replace the read step. See
   [Architecture: gateway](/discord-mcp/architecture/gateway/) and the
   [gateway-subscribe recipe](/discord-mcp/recipes/gateway-subscribe/).
 
@@ -102,11 +103,10 @@ per-entry notes.
 
 </Steps>
 
-## Top 20 mappings
+## Representative mappings
 
-The table below shows the most common PaSympa operations and their
-discord-mcp equivalents. These are the calls every agent uses; the full
-NAME_MAP covers another ~58 entries — see the
+The table below shows common PaSympa operations and their discord-mcp
+equivalents. See the
 [adapter source](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/pasympa.ts)
 for the complete list.
 
@@ -177,5 +177,5 @@ report's `unmapped` list:
 - [discord-mcp tools (192)](/discord-mcp/tools/) — auto-generated reference.
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate) — flags
   and exit codes.
-- [Architecture: gateway](/discord-mcp/architecture/gateway/) — what
-  `resources/subscribe` does that PaSympa polling does not.
+- [Architecture: gateway](/discord-mcp/architecture/gateway/) — how
+  notifications and authoritative REST reads work together.

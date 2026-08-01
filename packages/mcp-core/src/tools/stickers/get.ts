@@ -29,7 +29,7 @@ export default defineTool({
     '**When to use**:',
     '- Resolve a sticker ID surfaced in a message or pack response.',
     '',
-    '**Returns**: `{id, name, description, tags, type, format_type, guild_id?}`. `description` is wrapped in `<untrusted_discord_embed>` (user-authored).',
+    '**Returns**: `{id, name, description, tags, type, format_type, guild_id?}`. Structured `description` remains raw user-authored data; the human-readable text response fences it.',
   ].join('\n'),
   inputSchema: {
     sticker_id: StickerId.describe('Sticker to fetch'),

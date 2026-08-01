@@ -1,174 +1,107 @@
 ---
-title: Gateway — subscribe to live guild state
-description: Replace REST polling with MCP resource subscriptions backed by Discord Gateway events.
+title: Gateway — verify a live notification
+description: Test discord-mcp's experimental Gateway subscription signal without assuming list/read resource support.
 sidebar:
   order: 6
 ---
 
-import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-The default discord-mcp transport is REST-only — every read is a fresh HTTP
-call. For dashboards, presence indicators, or any UI that should reflect the
-guild **as it changes**, polling burns rate limits and lags. The optional
-`--gateway` mode replaces polling with **MCP resource subscriptions** backed by
-the Discord Gateway WebSocket.
-
-## Use case
-
-A dashboard agent says: **"Notify me whenever someone goes voice-active in
-guild XYZ, or when a moderator deletes a message."**
-
-REST polling would mean spinning a 5-second loop hitting `/voice-states` and
-`/audit-logs` per guild — expensive, slow, blunt. Gateway subscriptions give
-the agent push notifications instead.
-
-<Aside type="note">
-Gateway support is **opt-in** because it pulls in `discord.js` as an optional
-dependency. Run `pnpm add discord.js` (or `npm i discord.js`) before passing
-`--gateway` to the server, otherwise the server will fail with a clear "module
-not found" error and exit. The flag is documented at
-[Installation → optional gateway](/discord-mcp/start/installation/).
-</Aside>
+Gateway mode can turn selected Discord events into MCP
+`notifications/resources/updated` signals. The current implementation is useful for
+experiments, but it is not a complete live-resource system: the URI patterns are not returned
+by `resources/list`, cannot be fetched with `resources/read`, and the server advertises
+subscription capability even when Gateway mode is inactive.
 
 <Aside type="caution">
-Resource **subscriptions** are an MCP capability some clients still lack. As of
-the Plan 10 cut, **Claude Desktop and Claude Code support resource
-subscriptions**; ChatGPT, Cursor, Cline, and Continue do not. The server
-advertises the capability at initialization — clients that don't see it should
-fall back to the REST polling pattern.
+Do not build a production workflow from the initialization capability alone. Verify that your
+client can subscribe and that one real Discord event produces the expected notification.
 </Aside>
 
-## Five subscribable resource URIs
+## Supported notification patterns
 
-| URI | Pushed by Gateway event |
+| Subscription URI | Signal source |
 |---|---|
-| `discord://guild/{id}/info` | `GUILD_UPDATE` |
-| `discord://guild/{id}/members/online` | `PRESENCE_UPDATE` (debounced) |
-| `discord://channel/{id}/typing` | `TYPING_START` |
-| `discord://voice/{guild_id}/state` | `VOICE_STATE_UPDATE` |
-| `discord://guild/{id}/audit-log/recent` | `GUILD_AUDIT_LOG_ENTRY_CREATE` (polled fallback) |
+| `discord://guild/{guild_id}/info` | Guild update |
+| `discord://guild/{guild_id}/members/online` | Presence update, debounced |
+| `discord://channel/{channel_id}/typing` | Typing start, debounced |
+| `discord://voice/{guild_id}/state` | Voice state update |
+| `discord://guild/{guild_id}/audit-log/recent` | Audit-log polling fallback |
 
-## Tool flow
+These URIs are notification keys, not readable resource documents.
 
 <Steps>
 
-1. **Start the server with gateway mode.**
+1. **Install Gateway support with the CLI.**
 
    ```bash
-   pnpm add discord.js
-   discord-mcp --gateway
+   npm install -g @discord-mcp/cli discord.js
    ```
 
-   On startup the server connects to the Discord Gateway, authenticates with
-   the bot token, and registers handlers for the five event types above.
+   `discord.js` must be resolvable from the same installation as the CLI.
 
-2. **Discover available resources.**
+2. **Enable required intents.**
 
-   The MCP method is `resources/list`. The server returns the URIs above plus
-   the standard tool-discovery resources.
+   The Gateway client requests Guilds, Guild Voice States, and Guild Presences. Enable the
+   Presence intent for the bot in the Developer Portal when testing online-member signals.
 
-   <Tabs>
-     <TabItem label="Request">
-       ```json
-       { "method": "resources/list" }
-       ```
-     </TabItem>
-     <TabItem label="Response (excerpt)">
-       ```json
-       {
-         "resources": [
-           { "uri": "discord://guild/111122223333444455/info", "name": "Guild info" },
-           { "uri": "discord://guild/111122223333444455/members/online", "name": "Online members" },
-           { "uri": "discord://channel/222233334444555566/typing", "name": "Typing in channel" },
-           { "uri": "discord://voice/111122223333444455/state", "name": "Voice state" },
-           { "uri": "discord://guild/111122223333444455/audit-log/recent", "name": "Recent audit log" }
-         ]
-       }
-       ```
-     </TabItem>
-   </Tabs>
+3. **Start with Gateway mode.**
 
-3. **Subscribe to the URIs you care about.**
+   ```bash
+   discord-mcp serve --gateway
+   ```
 
-   The MCP method is `resources/subscribe`. Subscribe individually per URI; the
-   server records intent in an in-memory registry and only forwards events for
-   subscribed resources.
+   In normal client use, add `--gateway` to the generated server arguments. If Gateway startup
+   fails, discord-mcp logs a warning and continues REST-only; confirm the log before proceeding.
+
+4. **Subscribe through a capable MCP client.**
+
+   Use an exact URI containing the real Discord ID:
 
    ```json
    {
      "method": "resources/subscribe",
-     "params": { "uri": "discord://voice/111122223333444455/state" }
+     "params": {
+       "uri": "discord://voice/111122223333444455/state"
+     }
    }
    ```
 
-4. **Handle update notifications.**
+5. **Trigger and observe one event.**
 
-   Whenever the underlying Gateway event fires, the server emits a JSON-RPC
-   notification using the standard MCP method `notifications/resources/updated`.
-   The agent reacts by calling `resources/read` to fetch the latest state — or
-   by treating the notification itself as the signal, depending on the use
-   case.
+   Join or leave a voice channel in the test guild. A working path emits:
 
    ```json
    {
      "method": "notifications/resources/updated",
-     "params": { "uri": "discord://voice/111122223333444455/state" }
+     "params": {
+       "uri": "discord://voice/111122223333444455/state"
+     }
    }
    ```
 
-5. **Unsubscribe when done.**
+   The notification contains the URI only. Use a matching REST tool to fetch current state if
+   your workflow needs data after the signal.
 
-   Long-lived agents should release subscriptions to keep the registry small.
-   The server otherwise tears them down on disconnect.
+6. **Unsubscribe when finished.**
 
    ```json
    {
      "method": "resources/unsubscribe",
-     "params": { "uri": "discord://voice/111122223333444455/state" }
+     "params": {
+       "uri": "discord://voice/111122223333444455/state"
+     }
    }
    ```
 
 </Steps>
 
-## Why this exists
+## Fallback design
 
-- **REST polling → push.** Replacing a 5s polling loop with an event handler
-  cuts both latency and rate-limit burn.
-- **Discord Gateway events → MCP resources.** The Gateway speaks WebSocket
-  events; MCP speaks resources. The server bridges the two so MCP clients can
-  use the standard subscription primitive.
-- **`discord.js` is optional.** The Gateway path imports `discord.js` lazily.
-  Users who only need REST tools never pay the install cost.
+For a client without subscriptions—or until this feature is hardened—poll the narrowest
+read-only Discord tool at a conservative interval and respect rate limits. Keep event-driven
+and polling paths behind the same application interface so the transport choice can change.
 
-## Debounce
-
-`PRESENCE_UPDATE` and `TYPING_START` can fire dozens of times per second on a
-busy guild. The server **debounces** notifications per resource — rapid events
-within a short window coalesce into one `notifications/resources/updated`
-emission, so the agent's notification stream stays sane.
-
-## Client compatibility
-
-| Client | Resource subscription support |
-|---|---|
-| Claude Desktop | yes |
-| Claude Code | yes |
-| Cursor | no (use REST polling) |
-| ChatGPT | no |
-| Cline, Continue, Windsurf | no |
-
-Clients that don't advertise the capability should stick with the REST tools
-(`voice_get_user_state`, `audit_log_get`, etc.) and a polling loop.
-
-## See also
-
-- [Installation → optional gateway](/discord-mcp/start/installation/) — how to
-  install `discord.js` and pass `--gateway`.
-- [Architecture: gateway resources](/discord-mcp/architecture/gateway/) — event
-  handlers, debounce, and the subscription registry.
-- [`audit_log_get`](/discord-mcp/tools/audit_log/get/) — REST equivalent for
-  clients without subscription support.
-- [Recipe: pipeline](/discord-mcp/recipes/pipeline-multistep/) — for agents
-  that need to react to a notification with a chain of tool calls.
-- [Operations: client capability matrix](/discord-mcp/operations/clients/) —
-  full feature support across all major MCP clients.
+See [Client compatibility](/discord-mcp/operations/clients/),
+[Gateway architecture](/discord-mcp/architecture/gateway/), and
+[Troubleshooting](/discord-mcp/start/troubleshooting/).

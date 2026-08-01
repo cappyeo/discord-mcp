@@ -26,7 +26,7 @@ export default defineTool({
   name: 'application_get_current',
   category: 'application',
   description:
-    '**Purpose**: Fetch the bot/app application object (`/applications/@me`).\n\n**When to use**: confirm app identity; read flags, install URLs, tags, interaction endpoint, etc.\n\n**Returns**: projected application shape; `name` and `description` are wrapped (app-author controlled).',
+    '**Purpose**: Fetch the bot/app application object (`/applications/@me`).\n\n**When to use**: confirm app identity; read flags, install URLs, tags, interaction endpoint, etc.\n\n**Returns**: projected application shape. `name` and `description` remain raw app-author data; `untrusted_text` provides a separately fenced copy.',
   inputSchema: {},
   outputSchema: {
     id: ApplicationId,

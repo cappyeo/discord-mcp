@@ -20,7 +20,7 @@ export default defineTool({
     '- Single message → use `messages_delete`.',
     '- Messages older than 14 days — Discord rejects with 400.',
     '',
-    '**Example**: `{channel_id:"111122223333444455", message_ids:["m1","m2",...], __confirm:true}`',
+    '**Example**: `{channel_id:"111122223333444455", message_ids:["111122223333444456","111122223333444457"], __confirm:true}`',
     '',
     '**Returns**: `{deleted, channel_id, count}`.',
     '',

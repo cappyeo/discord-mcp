@@ -1,16 +1,16 @@
 ---
 title: Audit logging
-description: discord-mcp's mutating-call audit trail — four sinks (stderr, file, OTLP-stub, none); JSONL schema; PII redaction policy; SOC2/HIPAA considerations.
+description: Configure audit sinks, understand the emitted JSONL schema, and account for current coverage and redaction limits.
 sidebar:
   order: 3
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Every **mutating** tool call (i.e. `idempotent: false`) emits a single audit
-event that captures who/what/when/result. Read-only tools (e.g.
-`messages_read`, `channels_get`) do NOT generate audit noise — their read
-patterns are already visible in [telemetry](/discord-mcp/operations/telemetry/).
+The audit middleware emits an event for tools whose metadata declares
+`idempotent: false`. This is not the same as a complete write audit: some
+Discord writes are idempotent and are skipped by the current predicate. Use
+the trail as an operational aid, not proof that every mutation was captured.
 
 This page covers sink configuration, log forwarding, retention, and the
 on-disk JSONL schema.
@@ -37,7 +37,7 @@ to "force-on" audit when it's disabled at the master switch.
   ```bash
   export MCP_AUDIT_ENABLED=true
   export MCP_AUDIT_SINK=stderr
-  npx discord-mcp 2> /var/log/discord-mcp/audit-$(date +%F).jsonl
+  discord-mcp serve 2> /var/log/discord-mcp/audit-$(date +%F).jsonl
   ```
 
   stderr is the only safe stream in stdio MCP — stdout is reserved for
@@ -52,7 +52,7 @@ to "force-on" audit when it's disabled at the master switch.
   export MCP_AUDIT_ENABLED=true
   export MCP_AUDIT_SINK=file
   export MCP_AUDIT_FILE=/var/log/discord-mcp/audit.jsonl
-  npx discord-mcp
+  discord-mcp serve
   ```
 
   The file is opened with `flags: 'a'` (append-only) and stays open for the
@@ -66,7 +66,7 @@ to "force-on" audit when it's disabled at the master switch.
   ```bash
   export MCP_AUDIT_ENABLED=true
   export MCP_AUDIT_SINK=otlp
-  npx discord-mcp
+  discord-mcp serve
   ```
 
   Today this falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]`
@@ -87,7 +87,7 @@ to "force-on" audit when it's disabled at the master switch.
 
   ```bash
   export MCP_AUDIT_ENABLED=false
-  npx discord-mcp
+  discord-mcp serve
   ```
 
   No audit events emitted at all. Use only when a regulator explicitly bans
@@ -130,24 +130,22 @@ For containerised deployments, prefer the platform's log driver
 (`json-file`, `awslogs`, `gelf`, etc.) and have it consume stderr — i.e. use
 the `stderr` sink, not the `file` sink, in a container.
 
-## Compliance considerations (SOC2 / SOX / GDPR / HIPAA)
+## Coverage and compliance limits
 
 ### Idempotent tools are NOT audited
 
-By design (Plan 8 §10 critical rule 2), the audit middleware short-circuits
-when `tool.idempotent === true`. This covers all read-only operations:
+The audit middleware short-circuits when `tool.idempotent === true`. This
+covers read-only operations, but it also excludes idempotent writes. The
+current catalog contains write tools that therefore do not emit an event.
 
 - `messages_read`, `messages_get`, `channels_list`, `channels_get`,
   `members_search`, etc. — anything that returns data without mutation.
 
-The reasoning: SOC2 audit-trail requirements focus on **changes**, not reads.
-Read patterns are still observable via telemetry (every tool call has a span
-with `mcp.tool.name`); duplicating that into audit records would balloon log
-volume without adding compliance value.
-
-If your compliance regime requires read-trail logging (rare — usually for
-HIPAA-scope deployments), there is currently no override flag. File an issue
-and we'll consider a `MCP_AUDIT_INCLUDE_READS` toggle for Plan 9+.
+Read patterns remain visible through telemetry when it is enabled, but spans
+and audit events have different retention and integrity properties. There is
+currently no flag to include reads or idempotent writes. If your controls
+require complete change or access logging, add an external boundary and verify
+coverage against the exact tool set before production use.
 
 ### PII redaction
 
@@ -157,7 +155,7 @@ for the full policy:
 
 - **Global keys**: `token`, `bearer_token`, `auth`, `password`, `secret`
   redacted at any depth (case-insensitive).
-- **Per-tool keys**: 15 mutating tools have explicit content-bearing fields
+- **Per-tool keys**: 17 tools have explicit content-bearing fields
   (`content`, `embeds`, `components`, `messages`, etc.) marked sensitive. New
   tools must opt in via the `SENSITIVE_KEYS_BY_TOOL` map.
 - **Length-aware marker**: redacted strings become `[REDACTED:${length}ch]`
@@ -165,8 +163,9 @@ for the full policy:
 - **Truncation**: any non-redacted string > 200 chars is truncated to
   `100ch + "...[TRUNCATED]"` to bound record size.
 
-The audit JSONL is therefore safe to ingest into a SIEM that does not have
-field-level access controls — the bytes themselves are already redacted.
+Redaction is a best-effort allowlist, not proof that every sensitive value has
+been removed. Apply field-level access controls and retention limits in the log
+platform, and review new tool arguments before forwarding events to a SIEM.
 
 ### Retention
 

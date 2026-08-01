@@ -24,7 +24,7 @@ export default defineTool({
   name: 'events_list',
   category: 'events',
   description:
-    '**Purpose**: List scheduled events for a guild.\n\n**When to use**: enumerate upcoming voice/stage/external events.\n\n**Returns**: `{events:[...], count}`. `name`/`description` wrapped.',
+    '**Purpose**: List scheduled events for a guild.\n\n**When to use**: enumerate upcoming voice/stage/external events.\n\n**Returns**: `{events:[...], count}`. Structured names and descriptions remain raw Discord data; the human-readable text response fences event names.',
   inputSchema: {
     guild_id: GuildId.describe('Guild to query'),
   },

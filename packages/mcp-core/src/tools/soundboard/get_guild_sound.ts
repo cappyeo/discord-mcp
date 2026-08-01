@@ -23,7 +23,7 @@ export default defineTool({
   description: [
     '**Purpose**: Fetch a single guild soundboard sound.',
     '',
-    '**Returns**: `{sound_id, name, volume, emoji_id, emoji_name, guild_id, available, untrusted_text}`. Name wrapped.',
+    '**Returns**: `{sound_id, name, volume, emoji_id, emoji_name, guild_id, available, untrusted_text}`. `name` remains raw Discord data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the sound'),

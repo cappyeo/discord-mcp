@@ -28,7 +28,7 @@ export default defineTool({
     '',
     '**Pagination**: `before`/`after` are guild-id cursors. `limit` 1-200.',
     '',
-    '**Returns**: `{guilds:[{id, owner, permissions, features}], count, untrusted_names}`. Each guild `name` wrapped untrusted.',
+    '**Returns**: `{guilds:[{id, name, owner, permissions, features}], count, untrusted_names}`. Guild names remain raw Discord data; `untrusted_names` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     before: GuildId.optional().describe('Pagination cursor: guilds with id < this'),

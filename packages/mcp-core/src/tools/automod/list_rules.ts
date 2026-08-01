@@ -24,7 +24,7 @@ export default defineTool({
     '**When to use**:',
     '- Audit existing rules; find a rule ID before modifying/deleting it.',
     '',
-    '**Returns**: `{rules:[{id, name, trigger_type, event_type, enabled}], count, untrusted_names}`. Rule names are user-authored — wrapped untrusted.',
+    '**Returns**: `{rules:[{id, name, trigger_type, event_type, enabled}], count, untrusted_names}`. Rule names remain raw user-authored data; `untrusted_names` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to list AutoMod rules for'),

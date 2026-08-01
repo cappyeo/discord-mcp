@@ -1,0 +1,71 @@
+<sidebar-tabs>
+  <ul class="tab-list">
+    <slot name="tabs" />
+  </ul>
+  <div class="tab-panels">
+    <slot />
+  </div>
+</sidebar-tabs>
+
+<script>
+  class SidebarTabs extends HTMLElement {
+    connectedCallback() {
+      const tabList = this.querySelector<HTMLElement>('.tab-list');
+      const tabs = Array.from(tabList?.querySelectorAll<HTMLAnchorElement>('a') ?? []);
+      const panels = Array.from(
+        this.querySelectorAll<HTMLElement>(':scope > .tab-panels > [id]'),
+      );
+      if (!tabList || tabs.length === 0 || tabs.length !== panels.length) return;
+
+      tabList.setAttribute('role', 'tablist');
+      let initialIndex = Math.max(
+        0,
+        tabs.findIndex((tab) => tab.dataset.initial === 'true'),
+      );
+
+      const activate = (index: number, focus = false) => {
+        tabs.forEach((tab, tabIndex) => {
+          const active = tabIndex === index;
+          tab.setAttribute('aria-selected', String(active));
+          tab.setAttribute('tabindex', active ? '0' : '-1');
+          panels[tabIndex]!.hidden = !active;
+        });
+        if (focus) tabs[index]?.focus();
+      };
+
+      tabs.forEach((tab, index) => {
+        tab.id = `sidebar-tab-${index}`;
+        tab.setAttribute('role', 'tab');
+        tab.parentElement?.setAttribute('role', 'presentation');
+
+        const panel = panels[index]!;
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', tab.id);
+
+        tab.addEventListener('click', (event) => {
+          event.preventDefault();
+          activate(index);
+        });
+        tab.addEventListener('keydown', (event) => {
+          const nextIndex =
+            event.key === 'ArrowLeft'
+              ? (index - 1 + tabs.length) % tabs.length
+              : event.key === 'ArrowRight'
+                ? (index + 1) % tabs.length
+                : event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? tabs.length - 1
+                    : undefined;
+          if (nextIndex === undefined) return;
+          event.preventDefault();
+          activate(nextIndex, true);
+        });
+      });
+
+      activate(initialIndex);
+    }
+  }
+
+  customElements.define('sidebar-tabs', SidebarTabs);
+</script>

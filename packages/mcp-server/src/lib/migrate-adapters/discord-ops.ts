@@ -77,21 +77,19 @@
  *   1. **Multi-guild project routing** —
  *      discord-ops accepts `{ project: 'my-app', channel: 'builds' }` and
  *      resolves to a `(guild_id, channel_id)` pair via `~/.discord-ops.json`.
- *      The TOOL set is the same; only the input shape differs. discord-mcp
- *      runs one process per guild (single `DISCORD_TOKEN` per server),
- *      so callers achieve the same outcome by spawning one MCP per project
- *      and pointing each at its guild's bot token. Multi-guild tools like
- *      `discord_send_to_project_X` (if any private fork exposes them) MUST
- *      map to the standard `messages_send` and the user MUST switch the
- *      `DISCORD_TOKEN` env at the process level.
+ *      The TOOL set is the same; only the input shape differs. One discord-mcp
+ *      process can operate across every guild visible to its `DISCORD_TOKEN`;
+ *      callers pass `guild_id` per call or set `DISCORD_DEFAULT_GUILD_ID`.
+ *      Separate processes are only needed for different tokens or explicit
+ *      isolation boundaries.
  *
  *   2. **Tool profiles (slim cuts for token budget)** —
  *      discord-ops ships profiles like `monitoring` (7 tools), `readonly`
  *      (7), `moderation` (7), `messaging` (5), `channels` (7), `webhooks`
  *      (6), and `full` (49). They reduce schema overhead by hiding tools
  *      from the client. discord-mcp ships the full surface (192 tools at
- *      Phase D) and expects the AGENT (or the MCP client) to filter at
- *      runtime via tool-allowlist patterns. This isn't a translation
+ *      Phase D) and filters the advertised registry server-side with
+ *      `MCP_CATEGORIES`. This isn't a translation
  *      problem — there's no source code for "the lite profile" that
  *      needs migrating. If a discord-ops fork exposes profile-variant
  *      tool names like `messages_lite` / `messages_full`, NAME_MAP folds
@@ -100,10 +98,10 @@
  *
  *   3. **Dry-run mode** —
  *      discord-ops uses `DISCORD_OPS_DRY_RUN=1` to short-circuit destructive
- *      calls before they hit the Discord REST API. discord-mcp has the
- *      equivalent `MCP_DRY_RUN=true` env var that achieves the same effect
- *      (Plan 7 Phase B). No tool-level translation is needed; users carry
- *      over the env var with a renamed key.
+ *      calls before they hit the Discord REST API. `MCP_DRY_RUN=true` only
+ *      gates discord-mcp's 29 `confirm_required` tools; other writes can
+ *      still execute. Users must audit every mapped write rather than carry
+ *      over the variable as an equivalent safety boundary.
  *
  *   Known mapping ambiguities (see NAME_MAP `notes` for per-tool detail):
  *     - discord-ops's `send_template` / `list_templates` are CLIENT-SIDE
@@ -540,13 +538,13 @@ export const discordOpsAdapter: MigrationSource = {
     // of NAME_MAP coverage. See file-level "## Architectural mismatches".
     if (allTools.length > 0) {
       warnings.push(
-        'multi-guild project routing is a deployment pattern; run one discord-mcp process per guild (one DISCORD_TOKEN each) to mirror discord-ops projects',
+        'multi-guild project routing changes shape: one discord-mcp process can reach every guild visible to its bot token; use guild_id or DISCORD_DEFAULT_GUILD_ID, and split processes only for different tokens or isolation',
       );
       warnings.push(
-        'tool profiles (lite/full/monitoring/...) are not migrated — discord-mcp ships the full surface and expects the agent or client to filter at runtime',
+        'tool profiles (lite/full/monitoring/...) are not migrated directly — translate them to the server-side MCP_CATEGORIES allowlist and verify tools/list',
       );
       warnings.push(
-        'dry-run: set MCP_DRY_RUN=true to mirror DISCORD_OPS_DRY_RUN=1 (no tool change required)',
+        'dry-run is not equivalent: MCP_DRY_RUN=true gates only the 29 confirm_required tools; inventory ordinary writes and use restricted permissions or a test guild for the rest',
       );
     }
 

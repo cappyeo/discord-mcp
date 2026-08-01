@@ -1,17 +1,18 @@
 ---
 title: Installation
 description: Install discord-mcp via npm, pnpm, or yarn — including the optional gateway runtime.
+prev: false
+next: false
 ---
 
 discord-mcp ships as a single npm package (`@discord-mcp/cli`) that bundles the server.
 
 ## Requirements
 
-- **Node.js 20.11 or newer.** The server uses native `fetch` and the
-  AsyncLocalStorage shape stabilized in 20.11.
+- **Node.js 22.12 or newer.** This is the minimum declared by the published packages.
 - A Discord bot token with the appropriate scopes for the tools you call.
 
-Check your Node version with `node --version`. If you're below 20.11, upgrade via
+Check your Node version with `node --version`. If you're below 22.12, upgrade via
 [fnm](https://github.com/Schniz/fnm), [nvm](https://github.com/nvm-sh/nvm),
 [volta](https://volta.sh/), or your OS package manager.
 
@@ -78,18 +79,11 @@ npm install -g @discord-mcp/cli discord.js
 discord-mcp serve --gateway
 ```
 
-When `--gateway` is set, the server sets `GATEWAY=1`, lazy-imports `discord.js`,
-opens a Gateway connection, and accepts `resources/subscribe` on five URIs:
-
-- `discord://guild/{id}/info`
-- `discord://voice/{guild_id}/state`
-- `discord://channel/{id}/typing`
-- `discord://guild/{id}/members/online`
-- `discord://guild/{id}/audit-log`
-
-Note that **message events are not among them** — there is no message handler,
-so the Gateway does not push message creations, edits, or deletions. Read
-messages with the `messages_*` REST tools.
+When `--gateway` is set, the server lazy-imports `discord.js` and attempts to open a Gateway
+connection for live notification subscriptions. Gateway startup failure is non-fatal: the
+server logs a warning and continues in REST-only mode. Treat this surface as advanced; the
+ordinary MCP resource catalog remains the static Components V2 catalog and does not expose
+those live URIs through `resources/list` or `resources/read`.
 
 See [Architecture → Gateway](/discord-mcp/architecture/gateway/) for the full
 integration model.

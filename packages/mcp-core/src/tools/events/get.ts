@@ -31,7 +31,7 @@ export default defineTool({
     '**When to use**:',
     '- Inspect a specific event before modifying or deleting.',
     '',
-    '**Returns**: projected event shape with optional `user_count`. `creator_id` is absent for events created before October 2021. `name`/`description`/`entity_metadata.location` wrapped untrusted.',
+    '**Returns**: projected event shape with optional `user_count`. `creator_id` is absent for events created before October 2021. Event text remains raw; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild that owns the event'),

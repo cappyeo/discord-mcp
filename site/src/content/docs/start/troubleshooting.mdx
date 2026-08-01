@@ -1,0 +1,101 @@
+---
+title: Troubleshooting
+description: Diagnose installation, token, client startup, Discord permission, tool input, dry-run, and Gateway problems.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Start with one command:
+
+```bash
+discord-mcp doctor --online
+```
+
+Exit `0` means every check passed, `1` means warnings only, and `2` means at least one
+failure. Use the symptom below that matches what you see.
+
+## The CLI will not install or start
+
+Run `node --version`. discord-mcp requires **Node.js 22.12 or newer**. After upgrading,
+reinstall the CLI and verify the binary:
+
+```bash
+npm install -g @discord-mcp/cli
+discord-mcp --version
+```
+
+For a one-off diagnostic without a global install, use the scoped package name:
+
+```bash
+npx --yes @discord-mcp/cli@latest doctor --online
+```
+
+## `DISCORD_TOKEN` is missing or invalid
+
+- If your generated config still contains the literal `${env:DISCORD_TOKEN}`, replace that
+  placeholder with the real token in the **local** client config unless you have verified
+  that your client expands environment placeholders.
+- `doctor` reads the environment of the terminal where it runs; it does not read the token
+  back from your MCP client config.
+- A `Bot ` prefix is accepted but not required.
+- If Discord returns `401`, reset the token in the Developer Portal and replace the old value.
+
+<Aside type="danger">
+Treat the generated client configuration as a secret once it contains a token. Never commit,
+share, or screenshot it.
+</Aside>
+
+## The client does not show `discord-mcp`
+
+1. Confirm that the `discord-mcp` entry is inside the client's top-level `mcpServers` object.
+2. Keep existing MCP entries when merging the generated snippet.
+3. Check that the generated `command` and first `args` path still exist. The snippet is tied
+   to the CLI installation that created it; regenerate it after moving or reinstalling Node.
+4. Fully quit and reopen the client, then inspect its MCP/server logs.
+
+## A tool returns `403 Missing Permissions`
+
+The bot is authenticated but its Discord role cannot perform the action in that channel.
+Check both the server role and channel-specific permission overrides. Grant the smallest
+permission required by the tool, then retry.
+
+## A tool returns `404` or “Unknown Channel”
+
+Discord tools use snowflake IDs, not `#channel` names. Enable Developer Mode and copy the
+server or channel ID, or call `channels_list` with the correct `guild_id` and use the returned
+channel `id`.
+
+## A write happened without a confirmation prompt
+
+This can be expected. Only tools whose reference page says **Confirmation required** use the
+`__confirm` plus `MCP_DRY_RUN` gate. Ordinary writes such as `messages_send` are not gated and
+can execute on the first call. Limit the bot's Discord permissions and use a test server.
+
+## `DRY_RUN_PREVIEW` never becomes a real mutation
+
+For a confirmation-gated tool, both conditions are required:
+
+1. set `MCP_DRY_RUN=false` in the server's environment; and
+2. send the tool call with `__confirm: true`.
+
+The setting does not affect tools that are not confirmation-gated.
+
+## Gateway mode falls back to REST-only
+
+Gateway support requires `discord.js` to be resolvable from the CLI installation. If Gateway
+startup fails, discord-mcp logs a warning and continues in REST-only mode. Reinstall the CLI
+and `discord.js` together, check the requested intents, then restart the client.
+
+```bash
+npm install -g @discord-mcp/cli discord.js
+discord-mcp serve --gateway
+```
+
+Gateway subscriptions are an advanced notification surface; they are not a replacement for
+the REST tool and resource catalogs.
+
+## Still blocked?
+
+Open a [GitHub issue](https://github.com/cappyeo/discord-mcp/issues) with the CLI version,
+Node version, operating system, client name, and redacted error output. Never include the bot
+token or a client config containing it.

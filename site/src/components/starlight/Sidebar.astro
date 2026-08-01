@@ -1,0 +1,133 @@
+---
+import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter';
+import { Icon } from '@astrojs/starlight/components';
+import SidebarPersister from '@astrojs/starlight/components/SidebarPersister.astro';
+import SidebarSublist from '@astrojs/starlight/components/SidebarSublist.astro';
+import type { StarlightRouteData } from '@astrojs/starlight/route-data';
+import SidebarPanel from './SidebarPanel.astro';
+import SidebarTab from './SidebarTab.astro';
+import SidebarTabs from './SidebarTabs.astro';
+
+const { id, sidebar } = Astro.locals.starlightRoute;
+
+type SidebarEntry = StarlightRouteData['sidebar'][number];
+type SidebarGroup = Extract<SidebarEntry, { type: 'group' }>;
+
+function assertGroups(entries: SidebarEntry[]): asserts entries is SidebarGroup[] {
+  if (entries.some((entry) => entry.type !== 'group')) {
+    throw new Error('Every top-level sidebar item must be a group.');
+  }
+}
+
+function containsCurrent(entries: SidebarEntry[]): boolean {
+  return entries.some((entry) =>
+    entry.type === 'link' ? entry.isCurrent : containsCurrent(entry.entries),
+  );
+}
+
+assertGroups(sidebar);
+const hasCurrentTab = sidebar.some(({ entries }) => containsCurrent(entries));
+const routeId = id.replace(/\.mdx$/, '');
+const inSection = (section: string) => routeId === section || routeId.startsWith(`${section}/`);
+const inferredLabel =
+  inSection('tools') || inSection('reference')
+    ? 'Reference'
+    : inSection('recipes') ||
+        inSection('operations') ||
+        (inSection('migrate') && routeId !== 'migrate/authoring')
+      ? 'Guides'
+      : inSection('architecture') || routeId === 'migrate/authoring'
+        ? 'Develop'
+        : 'Start';
+const isInitial = (label: string, entries: SidebarEntry[]) =>
+  hasCurrentTab ? containsCurrent(entries) : label === inferredLabel;
+const makeId = (label: string) => `sidebar-panel-${label.toLowerCase().replaceAll(/\s+/g, '-')}`;
+const icons = ['rocket', 'open-book', 'magnifier', 'puzzle'] as const;
+---
+
+<SidebarPersister>
+  <SidebarTabs>
+    <Fragment slot="tabs">
+      {
+        sidebar.map(({ label, entries }, index) => (
+          <SidebarTab id={makeId(label)} initial={isInitial(label, entries)} class="sidebar-tab">
+            <Icon name={icons[index] ?? 'document'} />
+            <span>{label}</span>
+          </SidebarTab>
+        ))
+      }
+    </Fragment>
+    {
+      sidebar.map(({ label, entries }) => (
+        <SidebarPanel id={makeId(label)} initial={isInitial(label, entries)}>
+          <SidebarSublist sublist={entries} />
+        </SidebarPanel>
+      ))
+    }
+  </SidebarTabs>
+</SidebarPersister>
+
+<div class="md:sl-hidden">
+  <MobileMenuFooter />
+</div>
+
+<style>
+  :global(.sidebar-pane) {
+    overflow-y: scroll;
+  }
+
+  :global(sidebar-tabs > .tab-list) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+    margin: 0 0 1.25rem;
+    padding: 0.3rem;
+    list-style: none;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.75rem;
+    background: var(--sl-color-bg-nav);
+  }
+
+  .sidebar-tab :global(a) {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    padding: 0.5rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    color: var(--sl-color-gray-3);
+    font-size: 0.8rem;
+    font-weight: 650;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .sidebar-tab :global(a:hover) {
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+  }
+
+  .sidebar-tab :global(a[aria-selected='true']) {
+    color: var(--sl-color-text-accent);
+    border-color: var(--sl-color-hairline-light);
+    background: var(--sl-color-bg);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--sl-color-black) 10%, transparent);
+  }
+
+  .sidebar-tab :global(svg) {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+  }
+
+  :global([data-theme='light']) .sidebar-tab :global(a) {
+    color: var(--sl-color-gray-2);
+  }
+
+  :global([data-theme='light']) .sidebar-tab :global(a:hover),
+  :global([data-theme='light']) .sidebar-tab :global(a[aria-selected='true']) {
+    color: var(--sl-color-accent-high);
+    background: var(--sl-color-white);
+  }
+</style>

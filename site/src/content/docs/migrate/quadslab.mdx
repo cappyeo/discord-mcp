@@ -27,35 +27,33 @@ discord-mcp equivalents.
 
 ## Why migrate to discord-mcp
 
-- **Production hardening** — first-class OpenTelemetry traces and cockatiel
-  resilience policies on every REST call; sustained 200/min headroom even at
-  full surface load. See [Operations: telemetry](/discord-mcp/operations/telemetry/).
-- **Components V2 first-class** — every send/edit tool accepts `flags = 32768`
-  layouts. See the
+- **Production hardening** — first-class OpenTelemetry traces and Cockatiel
+  resilience policies on the central Discord REST path. See
+  [Operations: telemetry](/discord-mcp/operations/telemetry/).
+- **Components V2 first-class** — dedicated `components_v2_send` and
+  `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Confirmation envelope on destructive tools** — every destructive call
-  requires a `__confirm: true` argument before the underlying REST call fires,
-  so prompt injection can't silently delete a guild.
+- **Explicit confirmation on selected high-risk tools** — the 29 tools
+  registered with `confirm_required` require `__confirm: true` and
+  `MCP_DRY_RUN=false`. Other writes can execute immediately, so inspect each
+  tool's confirmation badge rather than inferring safety from “destructive.”
   See [Architecture: confirmation](/discord-mcp/architecture/confirmation/).
-- **Pipeline atomicity** — `mcp_pipeline` chains multiple tool calls in a
+- **Pipeline sequencing** — `mcp_pipeline` chains multiple tool calls in a
   single round-trip with `{{step.path}}` interpolation between them.
   See [Architecture: pipeline](/discord-mcp/architecture/pipeline/).
 
 ## MCP Resources overlap
 
-quadslab exposes MCP **resources** (server-side `resources/list` +
-`resources/subscribe`) for live channel/message state. This is **not** a tool
-— it's the MCP server-level resource surface, which is a different MCP
-capability than `tools/call`. discord-mcp covers this via the gateway client
-(Plan 6): run with `--gateway` and your MCP client gets the equivalent
-subscribable URIs (channels, threads, messages, members, presence) backed by
-Discord Gateway events instead of REST polling.
+quadslab exposes MCP **resources** for live state. This is not a tool, and the
+migration extractor does not translate it. discord-mcp's current Gateway
+surface emits experimental subscription notifications, but those live URIs
+are not available through its `resources/list` or `resources/read` catalog.
 
 The `quadslab` adapter does **not** translate resource subscriptions —
 they don't appear in `<category>Tools` arrays, so they're invisible to the
-extraction step. You get the equivalent surface for free by running discord-mcp
-with `--gateway`. See [Architecture: gateway](/discord-mcp/architecture/gateway/)
-and the [gateway-subscribe recipe](/discord-mcp/recipes/gateway-subscribe/).
+extraction step. Treat this as a migration gap and keep the old resource path
+until a discord-mcp subscription has been verified end-to-end for your client.
+See [Architecture: gateway](/discord-mcp/architecture/gateway/).
 
 ## Step-by-step migration
 
@@ -101,20 +99,23 @@ and the [gateway-subscribe recipe](/discord-mcp/recipes/gateway-subscribe/).
 
    Merge the printed snippet, set `DISCORD_TOKEN`, then restart your MCP client.
 
-6. **Optional — enable gateway resources.**
+6. **Optional — enable Gateway notifications.**
 
    ```bash
    discord-mcp serve --gateway
    ```
 
-   This backs `resources/subscribe` with Discord Gateway events,
-   replacing quadslab's resource subscriptions.
+   This backs experimental `resources/subscribe` notifications with Discord
+   Gateway events. It does not expose quadslab's live resources through
+   `resources/list` or `resources/read`; retain the old resource path until
+   the notification-plus-REST-read flow is verified in your client.
 
 </Steps>
 
 ## Top 25 mappings
 
-This is a representative cut; the full NAME_MAP covers ~96 mapped entries.
+This is a representative cut; consult the adapter source for the complete
+maintained mapping table.
 
 | quadslab tool             | discord-mcp tool                   | Confidence | Notes                                                                |
 | ------------------------- | ---------------------------------- | ---------- | -------------------------------------------------------------------- |
@@ -166,14 +167,13 @@ Notable low-confidence entries (always re-read the per-entry `notes`):
 About 14 quadslab tools have no discord-mcp equivalent and surface in the
 report's `unmapped` list. Reasons grouped by category:
 
-- **Presence (2)** — `set_bot_status`, `get_bot_info`. These belong to gateway
-  state, not REST. discord-mcp manages bot presence via the gateway client
-  configuration, not via tools. Move presence config from your agent prompt
-  into the discord-mcp serve flags or environment.
+- **Presence (2)** — `set_bot_status`, `get_bot_info`. discord-mcp currently
+  exposes neither presence tools nor a serve flag/environment setting for bot
+  presence. Keep the old integration for this capability or omit it.
 - **Templates (4)** — `list_templates`, `create_template`, `delete_template`,
   `sync_template`. Discord guild templates have no discord-mcp tool wrapper
-  yet (planned for a future release). Workaround: continue calling the REST
-  endpoint directly, or omit the feature.
+  today. Workaround: continue calling the REST endpoint directly, or omit the
+  feature.
 - **Helper composites (3)** — `clone_channel`, `copy_channel_permissions`,
   `check_permissions`. Compose from primitives:
   `channels_get` + `channels_create_guild_channel` + `channels_modify_permissions`.
@@ -190,4 +190,4 @@ report's `unmapped` list. Reasons grouped by category:
 - [Architecture: gateway](/discord-mcp/architecture/gateway/) — for the
   resource subscription overlap.
 - [Architecture: confirmation](/discord-mcp/architecture/confirmation/) —
-  the `__confirm: true` pattern on every destructive tool.
+  the exact registry of tools that require `__confirm: true`.

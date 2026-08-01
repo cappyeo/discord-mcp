@@ -21,7 +21,7 @@ export default defineTool({
   description: [
     '**Purpose**: List Discord-provided default soundboard sounds (available globally).',
     '',
-    '**Returns**: `{sounds:[{sound_id, name, volume, emoji_id, emoji_name, available}], count, untrusted_names}`. Names wrapped.',
+    '**Returns**: `{sounds:[{sound_id, name, volume, emoji_id, emoji_name, available}], count, untrusted_names}`. Names remain raw Discord data; `untrusted_names` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {},
   outputSchema: {

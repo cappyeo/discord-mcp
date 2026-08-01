@@ -43,9 +43,8 @@ export default defineTool({
     bearer_token: z
       .string()
       .min(1)
-      .optional()
       .describe(
-        'User OAuth2 access token (NOT bot token). Required by Discord; tool throws if missing. Treated as a credential — do not log.',
+        'Required user OAuth2 access token (NOT bot token). Treated as a credential — do not log.',
       ),
   },
   outputSchema: {

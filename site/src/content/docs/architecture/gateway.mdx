@@ -1,142 +1,90 @@
 ---
-title: Gateway
-description: The optional Discord Gateway client — lazy-loaded discord.js, 5 subscribable URIs, 5 handlers, SubscriptionRegistry, debounce, and the --gateway flag.
+title: Gateway notifications
+description: How the optional discord.js client maps five event patterns to experimental MCP resource-update notifications.
 sidebar:
   order: 5
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-discord-mcp's REST adapter is fine for "do this thing on demand" workflows.
-For "tell me when state changes" workflows, REST polling burns rate limits
-and lags reality. The optional `--gateway` mode adds a Discord Gateway
-WebSocket client and exposes **5 subscribable resource URIs**: agents
-subscribe via `resources/subscribe`, the server pushes
-`notifications/resources/updated` whenever Gateway events change the
-underlying state.
+The default runtime uses Discord's HTTP API. With `--gateway`, discord-mcp also attempts to
+start a `discord.js` client and can emit MCP `notifications/resources/updated` for subscribed
+URI patterns. The implementation wires 5 handlers: four event-driven paths and one audit-log
+poller.
 
-## The five subscribable URIs
+<Aside type="caution">
+This is currently a notification-only bridge, not a complete live-resource model. The URIs
+below are not listed or readable through the MCP resource store. The server also registers
+subscribe handlers independently of Gateway startup, so capability advertisement is not proof
+that live notifications are active.
+</Aside>
 
-| URI | Pushed by Gateway event | Handler |
-| --- | ----------------------- | ------- |
+## Notification URI patterns
+
+| URI | Signal source | Handler |
+|---|---|---|
 | `discord://guild/{id}/info` | `GUILD_UPDATE` | [`guild_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/guild_update.ts) |
 | `discord://voice/{guild_id}/state` | `VOICE_STATE_UPDATE` | [`voice_state_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/voice_state_update.ts) |
 | `discord://channel/{id}/typing` | `TYPING_START` | [`typing_start.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/typing_start.ts) |
-| `discord://guild/{id}/members/online` | `PRESENCE_UPDATE` (debounced) | [`presence_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/presence_update.ts) |
-| `discord://guild/{id}/audit-log` | poll-based | [`audit_log_poll.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/audit_log_poll.ts) |
+| `discord://guild/{id}/members/online` | `PRESENCE_UPDATE`, debounced | [`presence_update.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/presence_update.ts) |
+| `discord://guild/{id}/audit-log/recent` | 60-second REST polling | [`audit_log_poll.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/handlers/audit_log_poll.ts) |
 
-The first four are real Gateway events; the audit-log one is implemented as
-a poll because Discord doesn't push audit-log entries over the Gateway. We
-hide that distinction behind the same `notifications/resources/updated`
-shape so subscribers don't need to care.
+The notification carries the URI as a signal. It does not contain current guild, voice,
+typing, presence, or audit-log state. A consumer must call an appropriate REST tool when it
+needs data after the update.
 
-See [`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/) for
-end-to-end usage.
+## Startup and fallback
 
-## Lazy loading
+`discord.js` is lazy-imported only when Gateway mode starts. The client requests Guilds, Guild
+Voice States, and Guild Presences intents.
 
-`discord.js` is a heavy dependency (~3–5 MB transitive) and most discord-mcp
-users don't need it. Plan 6 made it an **`optionalDependency`** that's
-imported only when `--gateway` is set:
+If import, login, or handler startup fails, the stdio transport catches the error, logs a
+warning, and continues in REST-only mode. This keeps the core tool server available, but it
+means operators must inspect startup logs when live notifications matter.
 
-```ts
-// Pseudocode from packages/mcp-core/src/gateway/client.ts
-async function createGatewayClient() {
-  const djs = await import('discord.js'); // dynamic import, fails clearly if missing
-  // ... wire up djs.Client + handlers ...
-}
+```bash
+npm install -g @discord-mcp/cli discord.js
+discord-mcp serve --gateway
 ```
 
-If `--gateway` is set but `discord.js` isn't installed, the server fails at
-startup with a clear "module not found" error and exits non-zero rather
-than booting in a half-broken state.
+## Subscription registry
 
-Source: [`packages/mcp-core/src/gateway/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts).
+`SubscriptionRegistry` is an in-memory `Set<string>` with subscribe, unsubscribe, membership,
+list, pattern-match, and clear operations. It does not currently store a session identifier or
+persist subscriptions across process restarts.
 
-## SubscriptionRegistry
+When an event handler receives a Discord event, it computes a URI, checks whether that exact
+URI is registered, and calls the MCP notification callback only for a match. Unknown URI
+strings can be registered but no handler will ever match them.
 
-When a client calls `resources/subscribe` on a URI, the server records:
+## Debounce and polling
 
-- **The URI** (e.g. `discord://guild/123/info`).
-- **The session** that subscribed (so we can route notifications correctly
-  in multi-session futures).
-- **A debounce slot** if the URI is debounce-eligible (currently
-  `members/online` only).
+Presence and typing handlers use the shared debounce helper to coalesce bursts before sending
+an update notification. Voice and guild updates notify directly. Audit-log change detection is
+not a Gateway event in this implementation; a 60-second poll compares the newest entry for
+each subscribed guild URI.
 
-Source: [`packages/mcp-core/src/gateway/subscription_registry.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts).
+## Known limitations
 
-When a Gateway event arrives, the matching handler:
+- Live URIs are not returned by `resources/list`.
+- `resources/read` cannot fetch their state.
+- Subscribe capability is registered even without a working Gateway client.
+- Gateway startup failure degrades silently to REST-only except for a warning log.
+- Subscriptions are process-local and in-memory.
+- A notification does not include the changed state.
 
-1. Computes the affected URI(s) — e.g. a `GUILD_UPDATE` for guild ABC
-   affects `discord://guild/ABC/info`.
-2. Asks the registry: "Is anyone subscribed to this URI?"
-3. If yes, builds the new resource payload and emits
-   `notifications/resources/updated` to the subscriber session.
-4. If no, drops the event silently — no work done.
-
-This is **subscriber-driven**: handlers do nothing for URIs nobody cares
-about. A bot deployed without subscribers pays only the WebSocket connection
-cost, not the per-event compute cost.
-
-## Debounce (300ms coalescing)
-
-`PRESENCE_UPDATE` is a fire-hose: every member status flicker fires one. A
-busy guild with 10K members can emit hundreds of presence events per
-second. Pushing them all to a subscriber would spam the agent and tank
-rendering performance.
-
-The debounce wrapper (300ms window) collapses bursts:
-
-- First event in a window: timer starts.
-- Subsequent events for the same URI: ignored (not coalesced — the latest
-  state is fetched at flush).
-- After 300ms: the handler reads the **current** online count from the
-  djs cache and emits one notification.
-
-Source: [`packages/mcp-core/src/gateway/debounce.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts).
-
-The 300ms is hardcoded — not env-configurable on purpose: it's tuned to
-human perception (presence change feels "instant" up to ~400ms, beyond
-that it feels stale). Going below makes the spam-control useless; going
-above makes the UI feel sluggish.
-
-<Aside type="note">
-The other four URIs do **not** debounce. `GUILD_UPDATE`,
-`VOICE_STATE_UPDATE`, and `TYPING_START` are inherently low-frequency;
-audit-log poll runs on its own cadence. Only `PRESENCE_UPDATE` has the
-fire-hose problem.
-</Aside>
-
-## The `--gateway` CLI flag
-
-Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
-
-Setting `--gateway`:
-
-1. Imports `discord.js` (fail-fast on missing).
-2. Boots a `djs.Client` with Gateway intents matching the 5 handlers.
-3. Wires the handlers into the SubscriptionRegistry.
-4. Adds `resources/subscribe` to the server's advertised capabilities.
-
-Without `--gateway`, the server boots in REST-only mode: it exposes the
-five resources for *reading* but doesn't accept subscriptions; clients that
-try to subscribe get a "capability not supported" error. This degradation
-is graceful — the recipe links to the [client capability matrix](/discord-mcp/operations/clients/)
-explaining which clients fall back gracefully and which need manual
-re-polling.
+These limits should shape the product contract. A production consumer needs health evidence,
+a matching REST fallback, and an end-to-end notification check.
 
 ## Source map
 
 | Concern | File |
-| ------- | ---- |
-| Lazy-loaded djs client | [`gateway/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts) |
-| Subscription registry | [`gateway/subscription_registry.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts) |
-| Debounce wrapper | [`gateway/debounce.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts) |
-| 5 handlers | [`gateway/handlers/`](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-core/src/gateway/handlers) |
-| `--gateway` wiring | [`mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts) |
+|---|---|
+| Lazy-loaded Discord client and intents | [`gateway/client.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/client.ts) |
+| In-memory subscription registry | [`gateway/subscription_registry.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/subscription_registry.ts) |
+| Debounce helper | [`gateway/debounce.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/gateway/debounce.ts) |
+| Event handlers | [`gateway/handlers/`](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-core/src/gateway/handlers) |
+| Stdio startup fallback | [`mcp-server/src/transports/stdio.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/transports/stdio.ts) |
 
-## Related
-
-- [`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/) — end-to-end agent flow with subscriptions and notifications.
-- [Operations → Client capability matrix](/discord-mcp/operations/clients/) — which clients support `resources/subscribe`.
-- [Get started → Installation](/discord-mcp/start/installation/) — installing the optional `discord.js` dep.
+Follow the [verification recipe](/discord-mcp/recipes/gateway-subscribe/) or return to
+[Client compatibility](/discord-mcp/operations/clients/).

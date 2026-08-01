@@ -1,201 +1,236 @@
 ---
-title: Components V2 — rich product announcement
-description: Compose a Discord Components V2 message — section, media gallery, container — then validate before sending.
+title: Components V2 — build a rich announcement
+description: Build a section and media gallery, wrap them in a container, validate the exact tree, and send it.
 sidebar:
   order: 2
 ---
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Discord's **Components V2** layout system replaces the cramped 2000-character
-message body with a tree of containers, sections, and media galleries.
-Components V2 is the right choice when an agent needs to post something that
-looks like a webpage — release notes, dashboards, formatted reports.
+This workflow posts a structured announcement with a header thumbnail and image gallery. Each
+builder returns `{ component }`; unwrap that field before passing the node to the next builder.
 
-## Use case
-
-A product manager says: **"Post the v2.0 launch announcement to #releases.
-Include the hero screenshot and the three feature thumbnails I uploaded."**
-
-Plain `messages_send` would force the agent to cram everything into 2000
-markdown characters. Components V2 instead lets the agent hand Discord a
-structured tree.
-
-<Aside type="note">
-A Components V2 message **must** carry the `flags` bitfield value `32768`
-(equivalent to `1 << 15`, named `IS_COMPONENTS_V2` in Discord docs). The flag is
-**irreversible per message** — once sent with V2, the same message cannot be
-edited back to plain content. The `components_v2_send` tool sets this for you;
-you only need to worry about it when calling `webhooks_execute` directly.
+<Aside type="caution">
+`components_v2_send` is an ordinary write and is not confirmation-gated. It validates locally,
+then posts immediately. Components V2 is irreversible for that message; it cannot later become
+a plain-content message.
 </Aside>
-
-## Tool flow
 
 <Steps>
 
-1. **Build the header section.**
+1. **Build a section with its required accessory.**
 
-   A Section pairs text components with a single accessory (button, thumbnail,
-   or media). For a launch banner, pair a heading + tagline with the hero image.
+   `text` is an array of one to three Markdown strings. Component type identifiers are numeric.
 
    <Tabs>
-     <TabItem label="Input">
-       ```json
-       {
-         "name": "components_v2_build_section",
-         "arguments": {
-           "components": [
-             { "type": "text_display", "content": "# discord-mcp v2.0" },
-             { "type": "text_display", "content": "192 tools. Zero API keys. Production-ready." }
-           ],
-           "accessory": {
-             "type": "thumbnail",
-             "media": { "url": "https://cdn.example.com/launches/v2-hero.png" }
-           }
-         }
-       }
-       ```
-     </TabItem>
-     <TabItem label="Output">
-       ```json
-       {
-         "type": 9,
-         "components": [
-           { "type": 10, "content": "# discord-mcp v2.0" },
-           { "type": 10, "content": "192 tools. Zero API keys. Production-ready." }
+     <TabItem label="Call">
+
+     ```json
+     {
+       "name": "components_v2_build_section",
+       "arguments": {
+         "text": [
+           "# discord-mcp release",
+           "A typed Discord toolset for MCP clients."
          ],
          "accessory": {
            "type": 11,
-           "media": { "url": "https://cdn.example.com/launches/v2-hero.png" }
+           "media": { "url": "https://example.com/hero.png" },
+           "description": "Release artwork"
          }
        }
-       ```
+     }
+     ```
+
+     </TabItem>
+     <TabItem label="Structured result">
+
+     ```json
+     {
+       "component": {
+         "type": 9,
+         "components": [
+           { "type": 10, "content": "# discord-mcp release" },
+           { "type": 10, "content": "A typed Discord toolset for MCP clients." }
+         ],
+         "accessory": {
+           "type": 11,
+           "media": { "url": "https://example.com/hero.png" },
+           "description": "Release artwork"
+         }
+       }
+     }
+     ```
+
      </TabItem>
    </Tabs>
 
-2. **Build the screenshot gallery.**
+2. **Build the media gallery.**
 
-   Media galleries hold 1–10 images displayed as a grid. The builder produces a
-   ready-to-send subtree.
+   Builder inputs use a top-level `url`. The builder converts it to Discord's nested
+   `media.url` output shape.
 
    <Tabs>
-     <TabItem label="Input">
-       ```json
-       {
-         "name": "components_v2_build_media_gallery",
-         "arguments": {
-           "items": [
-             { "media": { "url": "https://cdn.example.com/launches/v2-feature-1.png" }, "description": "Tool browser" },
-             { "media": { "url": "https://cdn.example.com/launches/v2-feature-2.png" }, "description": "Pipeline editor" },
-             { "media": { "url": "https://cdn.example.com/launches/v2-feature-3.png" }, "description": "Audit log" }
-           ]
-         }
-       }
-       ```
-     </TabItem>
-     <TabItem label="Output">
-       ```json
-       {
-         "type": 12,
+     <TabItem label="Call">
+
+     ```json
+     {
+       "name": "components_v2_build_media_gallery",
+       "arguments": {
          "items": [
-           { "media": { "url": "https://cdn.example.com/launches/v2-feature-1.png" }, "description": "Tool browser" },
-           { "media": { "url": "https://cdn.example.com/launches/v2-feature-2.png" }, "description": "Pipeline editor" },
-           { "media": { "url": "https://cdn.example.com/launches/v2-feature-3.png" }, "description": "Audit log" }
+           { "url": "https://example.com/tool-catalog.png", "description": "Tool catalog" },
+           { "url": "https://example.com/telemetry.png", "description": "Telemetry view" }
          ]
        }
-       ```
+     }
+     ```
+
+     </TabItem>
+     <TabItem label="Structured result">
+
+     ```json
+     {
+       "component": {
+         "type": 12,
+         "items": [
+           { "media": { "url": "https://example.com/tool-catalog.png" }, "description": "Tool catalog" },
+           { "media": { "url": "https://example.com/telemetry.png" }, "description": "Telemetry view" }
+         ]
+       }
+     }
+     ```
+
      </TabItem>
    </Tabs>
 
-3. **Wrap section + gallery in a container.**
+3. **Wrap both returned components in a container.**
 
-   Containers add a colored accent bar (`accent_color`) and group children.
-   Pass the outputs of steps 1–2 as the container's `components` array.
+   Pass `sectionResult.component` and `galleryResult.component`, not the wrapper objects.
 
    ```json
    {
      "name": "components_v2_build_container",
      "arguments": {
-       "components": [ /* output of step 1 */, /* output of step 2 */ ],
+       "components": [
+         {
+           "type": 9,
+           "components": [
+             { "type": 10, "content": "# discord-mcp release" },
+             { "type": 10, "content": "A typed Discord toolset for MCP clients." }
+           ],
+           "accessory": {
+             "type": 11,
+             "media": { "url": "https://example.com/hero.png" },
+             "description": "Release artwork"
+           }
+         },
+         {
+           "type": 12,
+           "items": [
+             { "media": { "url": "https://example.com/tool-catalog.png" }, "description": "Tool catalog" },
+             { "media": { "url": "https://example.com/telemetry.png" }, "description": "Telemetry view" }
+           ]
+         }
+       ],
        "accent_color": 5793266
      }
    }
    ```
 
-4. **Validate before sending.**
+   The result is `{ "component": { "type": 17, ... } }`.
 
-   Discord rejects malformed Components V2 trees with a generic 400. The
-   `components_v2_validate` tool runs the same schema checks the server applies
-   internally, so you catch errors **before** burning your rate-limit token.
+4. **Validate the final top-level array.**
 
    ```json
    {
      "name": "components_v2_validate",
      "arguments": {
-       "components": [ /* the container from step 3 */ ]
+       "components": [
+         {
+           "type": 17,
+           "components": [
+             {
+               "type": 9,
+               "components": [
+                 { "type": 10, "content": "# discord-mcp release" },
+                 { "type": 10, "content": "A typed Discord toolset for MCP clients." }
+               ],
+               "accessory": {
+                 "type": 11,
+                 "media": { "url": "https://example.com/hero.png" },
+                 "description": "Release artwork"
+               }
+             },
+             {
+               "type": 12,
+               "items": [
+                 { "media": { "url": "https://example.com/tool-catalog.png" }, "description": "Tool catalog" },
+                 { "media": { "url": "https://example.com/telemetry.png" }, "description": "Telemetry view" }
+               ]
+             }
+           ],
+           "accent_color": 5793266
+         }
+       ]
      }
    }
    ```
 
-   On success the tool returns `{ valid: true, component_count: N }`. On failure
-   it returns precise paths to the broken nodes.
+   Success is exactly `{ "valid": true, "issues": [] }`. There is no
+   `component_count` in the validator result.
 
-5. **Send to channel.**
+5. **Send the same validated array.**
 
-   <Tabs>
-     <TabItem label="Input">
-       ```json
-       {
-         "name": "components_v2_send",
-         "arguments": {
-           "channel_id": "222233334444555566",
-           "components": [ /* the validated container */ ]
+   Use the exact `components` array from validation and add the target channel ID:
+
+   ```json
+   {
+     "name": "components_v2_send",
+     "arguments": {
+       "channel_id": "222233334444555566",
+       "components": [
+         {
+           "type": 17,
+           "components": [
+             {
+               "type": 9,
+               "components": [
+                 { "type": 10, "content": "# discord-mcp release" },
+                 { "type": 10, "content": "A typed Discord toolset for MCP clients." }
+               ],
+               "accessory": {
+                 "type": 11,
+                 "media": { "url": "https://example.com/hero.png" },
+                 "description": "Release artwork"
+               }
+             },
+             {
+               "type": 12,
+               "items": [
+                 { "media": { "url": "https://example.com/tool-catalog.png" }, "description": "Tool catalog" },
+                 { "media": { "url": "https://example.com/telemetry.png" }, "description": "Telemetry view" }
+               ]
+             }
+           ],
+           "accent_color": 5793266
          }
-       }
-       ```
-     </TabItem>
-     <TabItem label="Output">
-       ```json
-       {
-         "message_id": "888899990000111122",
-         "channel_id": "222233334444555566",
-         "jump_url": "https://discord.com/channels/111122223333444455/222233334444555566/888899990000111122",
-         "component_count": 6
-       }
-       ```
-     </TabItem>
-   </Tabs>
+       ]
+     }
+   }
+   ```
+
+   The result contains `message_id`, `channel_id`, `jump_url`, and
+   `component_count: 1` because there is one top-level container.
 
 </Steps>
 
-## Why validate before sending
+## Why the builder sequence matters
 
-- **Saves API quota.** A failed send still consumes a rate-limit token. A failed
-  `components_v2_validate` call is local-only.
-- **Better error messages.** Discord's 400 says "invalid components"; the
-  validator says "components[0].components[2].accessory.url must be https".
-- **Idempotent.** Re-running validate has no side effects, so the agent can
-  iterate freely.
+- Each builder is read-only and can be rerun safely.
+- Wrapper objects are never valid component nodes; always pass their `component` value.
+- Offline validation returns precise issue paths without consuming a Discord request.
+- The final send automatically sets the Components V2 message flag.
 
-## Components V2 vs `messages_send`
-
-| Need | Use |
-|------|-----|
-| Plain text reply, simple markdown | `messages_send` |
-| Formatted report, multiple images, structured layout | `components_v2_send` |
-| Reusable layout with placeholders | `components_v2_send_from_template` |
-
-## See also
-
-- [`components_v2_send`](/discord-mcp/tools/components_v2/send/) — schema for
-  the final send call.
-- [`components_v2_validate`](/discord-mcp/tools/components_v2/validate/) — full
-  validator output shape.
-- [`components_v2_build_container`](/discord-mcp/tools/components_v2/build_container/),
-  [`components_v2_build_section`](/discord-mcp/tools/components_v2/build_section/),
-  [`components_v2_build_media_gallery`](/discord-mcp/tools/components_v2/build_media_gallery/)
-  — the three builders used here.
-- [Recipe: webhook execute](/discord-mcp/recipes/webhook-execute/) — Components
-  V2 via webhooks for high-volume announcements.
-- [Architecture: Components V2](/discord-mcp/architecture/components-v2/) — how
-  the builders compose into Discord's component tree.
+See the exact [`components_v2` tool category](/discord-mcp/tools/components_v2/),
+the [`components_v2_send` reference](/discord-mcp/tools/components_v2/send/), or the
+[Components V2 architecture](/discord-mcp/architecture/components-v2/).

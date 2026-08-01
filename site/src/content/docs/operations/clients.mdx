@@ -1,108 +1,107 @@
 ---
-title: Client capability matrix
-description: Which MCP clients support which capabilities — tools, resources, resources/subscribe, sampling, elicitation. Setup links per client.
+title: Client compatibility
+description: The MCP capabilities discord-mcp needs, how to verify them in any client, and which features degrade when a capability is absent.
 sidebar:
   order: 4
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import ClientTabs from '../../../components/docs/ClientTabs.astro';
 
-The MCP specification covers five capabilities that affect what discord-mcp can
-do once connected: `tools`, `resources`, `resources/subscribe`, `sampling`, and
-`elicitation` — the last of which discord-mcp does not use today. Not every
-client implements all five. This page is the
-operator's quick-reference for what works where, as of the Plan 10 cut
-(2026-Q2).
+The dependable compatibility contract is capability-based, not a hard-coded client version
+matrix. Client releases change independently, so verify the features you need in the current
+client rather than relying on an old “yes/no” table.
 
-<Aside type="note">
-The server advertises every capability it supports at the MCP `initialize`
-handshake. Clients that don't see a capability in the server's response simply
-don't expose it — there's no runtime error. Likewise, the server can detect
-missing client-side capabilities (sampling especially) and degrade gracefully
-to a fallback.
+## Minimum contract
+
+A client can use discord-mcp's core surface when it can:
+
+1. start a local process as an MCP server;
+2. communicate with it over stdio;
+3. pass `DISCORD_TOKEN` and other environment variables; and
+4. list and call MCP tools.
+
+That contract is enough for the 192 Discord tools. Resources, subscriptions, and sampling are
+optional extensions with narrower use cases.
+
+## Feature requirements
+
+| discord-mcp feature | Client capability | Behavior when absent |
+|---|---|---|
+| Discord tool catalog | `tools` | Core functionality is unavailable. |
+| Components V2 schema/template catalog | `resources` list/read | Use the tool reference and builder tools instead. |
+| Live Gateway notifications | resource subscriptions | The client cannot receive push updates; REST tools still work. |
+| Intelligence tools | sampling | The tool returns a host-processing fallback payload rather than a completed LLM analysis. |
+| Confirmation gate | none beyond tools | The `__confirm` contract is a tool argument; discord-mcp does not use MCP elicitation. |
+
+<Aside type="caution">
+The server currently advertises subscription support even when Gateway mode is not active.
+Treat live subscriptions as experimental and verify an actual update end-to-end before building
+a workflow around them.
 </Aside>
 
-## The matrix
+## Generate the client config
 
-| Capability | Claude Desktop | Claude Code | Cursor | Generic stdio | Notes |
-| ---------- | -------------- | ----------- | ------ | ------------- | ----- |
-| `tools` | yes | yes | yes | yes | Universal — every MCP client supports tool calls. |
-| `resources` (read) | yes | yes | yes | varies | List + read URIs. Cursor exposes them in the MCP panel; Claude products surface them inline. |
-| `resources/subscribe` | yes | yes | no | varies | Push notifications via `notifications/resources/updated`. Cursor lacks this as of 2026-Q2; fall back to REST polling. See [`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/). |
-| `sampling` | yes | yes | yes (since 0.42) | varies | Lets the server call back into the client's LLM. Required by the 5 intelligence tools. See [Architecture → Sampling](/discord-mcp/architecture/sampling/). |
-| `elicitation` | yes | yes | no | rare | Mid-tool human-in-the-loop confirmation. **Not used by discord-mcp today** — the server never elicits, and every gated tool goes through the `__confirm` contract regardless of client support. |
+<ClientTabs>
+  <div slot="claude-desktop">
 
-## Per-client notes
+  ```bash
+  discord-mcp init --client claude-desktop
+  ```
 
-### Claude Desktop
+  Merge the generated entry into Claude Desktop's `mcpServers` object and fully restart the app.
 
-- **Min version**: 0.7.5 (sampling shipped late 2025).
-- **Known limitations**: stdio only; no HTTP transport. Server config lives
-  in `~/Library/Application Support/Claude/claude_desktop_config.json`
-  (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows).
-- **Best for**: developer workstations, single-tenant operator UI. Supports
-  all five capabilities.
-- Setup: [Get started → Client setup](/discord-mcp/start/client-setup/).
+  </div>
+  <div slot="claude-code">
 
-### Claude Code
+  ```bash
+  discord-mcp init --client claude-code
+  ```
 
-- **Min version**: any 1.x (MCP support is part of the core CLI).
-- **Known limitations**: same stdio-only constraint as Desktop. The CLI
-  manages MCP servers via `claude mcp add` and stores config in the user's
-  home directory.
-- **Best for**: agent-driven workflows, scripted/CI use, operators who prefer
-  terminal over GUI. Supports all five capabilities.
-- Setup: [Get started → Client setup](/discord-mcp/start/client-setup/).
+  Merge the output into the user or project MCP config supported by your Claude Code release.
 
-### Cursor
+  </div>
+  <div slot="cursor">
 
-- **Min version**: 0.42 for stable sampling support; resource subscriptions
-  remain unsupported as of the Plan 10 cut.
-- **Known limitations**: no `resources/subscribe`. The missing `elicitation`
-  support costs nothing here — discord-mcp never elicits, so destructive
-  tools use the `__confirm:true` contract on every client (see
-  [Architecture → Confirmation](/discord-mcp/architecture/confirmation/)).
-- **Best for**: in-editor agent workflows where Discord is one of several
-  MCP servers in scope. Tools and resources both render in the MCP panel.
-- Setup: [Get started → Client setup](/discord-mcp/start/client-setup/).
+  ```bash
+  discord-mcp init --client cursor
+  ```
 
-### Generic stdio (custom clients)
+  Merge the output into Cursor's user or project MCP config and restart the editor.
 
-- **Min version**: any client implementing MCP spec ≥ 2025-03-26.
-- **Known limitations**: capability set depends entirely on the client
-  implementation. The server gracefully advertises only what's relevant; a
-  minimum-viable client that only handles `tools` will see 192 tool entries
-  and no resources.
-- **Best for**: bespoke agent harnesses, integration tests, or wrapping
-  discord-mcp inside a higher-level orchestrator.
-- Setup: configure the client to spawn `npx discord-mcp` with the required
-  env vars (`DISCORD_TOKEN`, `MCP_DRY_RUN`, etc.). See
-  [Get started → Installation](/discord-mcp/start/installation/).
+  </div>
+  <div slot="generic">
 
-## Gateway-mode caveat
+  ```bash
+  discord-mcp init --client generic
+  ```
 
-`--gateway` adds `resources/subscribe` semantics to five URIs (see
-[`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/)). The
-matrix above shows which clients can take advantage of those subscriptions.
-Clients in the "no" column will still see the resources but cannot subscribe
-to push updates — they'd have to re-read on a timer to get fresh state.
+  Place the standard `mcpServers` entry where your client documents local stdio servers.
 
-## What the server advertises
+  </div>
+</ClientTabs>
 
-discord-mcp announces capabilities at `initialize` based on:
+If you did not install the CLI globally, the scoped one-off command is
+`npx --yes @discord-mcp/cli@latest`. Do not substitute an unscoped package name.
 
-- `--gateway` flag → enables `resources/subscribe`.
-- `MCP_SCOPES` env → restricts `tools` list to the scoped subset.
-- `OTEL_ENABLED` → does NOT affect capabilities; observability is
-  server-side only.
+## Verify instead of assuming
 
-Clients then negotiate their side. If both server and client advertise a
-capability, it's enabled for the session; if either side lacks it, the
-feature is invisible.
+For every client and release:
 
-## Related
+1. Run `discord-mcp doctor --online` in a terminal with `DISCORD_TOKEN` set.
+2. Restart the client and confirm `users_get_current` succeeds.
+3. Confirm `channels_list` can discover a test channel.
+4. If you need intelligence, run its smallest example and inspect whether the response is a
+   completed result or a host-processing fallback.
+5. If you need Gateway events, verify one real subscription update after starting with
+   `--gateway`; do not infer support from the initialization capability alone.
 
-- [Get started → Client setup](/discord-mcp/start/client-setup/) — concrete config snippets per client.
-- [`gateway-subscribe` recipe](/discord-mcp/recipes/gateway-subscribe/) — the workflow that exercises subscriptions.
-- [`intelligence-summarize` recipe](/discord-mcp/recipes/intelligence-summarize/) — the workflow that exercises sampling.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the `__confirm` contract that gates destructive tools on every client.
+## Server-side controls
+
+- `MCP_CATEGORIES` limits which tool categories are registered.
+- `MCP_DRY_RUN` affects only tools that declare the confirmation precondition.
+- `OTEL_ENABLED` changes server-side observability, not the client capability contract.
+
+Continue with [Client setup](/discord-mcp/start/client-setup/), the
+[sampling architecture](/discord-mcp/architecture/sampling/), or
+[Gateway architecture](/discord-mcp/architecture/gateway/).

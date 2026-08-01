@@ -30,7 +30,7 @@ export default defineTool({
     '',
     '**Auth**: NO `Authorization: Bot …` header.',
     '',
-    '**Returns**: Updated webhook record. `name` wrapped untrusted.',
+    '**Returns**: Updated webhook record. `name` remains raw creator-controlled data; `untrusted_name` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook to modify'),

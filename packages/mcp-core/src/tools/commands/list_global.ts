@@ -18,7 +18,7 @@ export default defineTool({
   name: 'commands_list_global',
   category: 'commands',
   description:
-    '**Purpose**: List globally-registered application commands.\n\n**When to use**: audit global slash commands; before bulk-overwriting global registry.\n\n**Returns**: `{commands:[{id, name, description, type}], count, untrusted_text}` — names/descriptions are app-author authored, wrapped untrusted.',
+    '**Purpose**: List globally-registered application commands.\n\n**When to use**: audit global slash commands; before bulk-overwriting global registry.\n\n**Returns**: `{commands:[{id, name, description, type}], count, untrusted_text}`. Names and descriptions remain raw app-author data; `untrusted_text` provides a separately fenced copy.',
   inputSchema: {
     application_id: ApplicationId.describe('Bot/app application ID'),
     with_localizations: z

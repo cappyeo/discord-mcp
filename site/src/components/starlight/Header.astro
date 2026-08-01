@@ -1,0 +1,175 @@
+---
+import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import SocialIcons from 'virtual:starlight/components/SocialIcons';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+
+const { hasSidebar } = Astro.locals.starlightRoute;
+---
+
+<div class="header">
+  <div class="title-wrapper sl-flex">
+    <SiteTitle />
+    {
+      !hasSidebar && (
+        <nav class="home-nav sl-hidden lg:sl-flex print:hidden" aria-label="Documentation">
+          <a href="/discord-mcp/start/">Start</a>
+          <a href="/discord-mcp/recipes/">Guides</a>
+          <a href="/discord-mcp/reference/">Reference</a>
+          <a href="/discord-mcp/architecture/">Develop</a>
+        </nav>
+      )
+    }
+  </div>
+  <div class="sl-flex print:hidden">
+    <Search />
+  </div>
+  <div class="sl-hidden md:sl-flex print:hidden right-group">
+    <div class="sl-flex social-icons"><SocialIcons /></div>
+    <ThemeSelect />
+    <LanguageSelect />
+  </div>
+  {
+    !hasSidebar && (
+      <details class="home-menu md:sl-hidden print:hidden">
+        <summary aria-label="Open documentation menu">Menu</summary>
+        <nav aria-label="Documentation">
+          <a href="/discord-mcp/start/">Start</a>
+          <a href="/discord-mcp/recipes/">Guides</a>
+          <a href="/discord-mcp/reference/">Reference</a>
+          <a href="/discord-mcp/architecture/">Develop</a>
+        </nav>
+      </details>
+    )
+  }
+</div>
+
+<script>
+  const menu = document.querySelector<HTMLDetailsElement>('.home-menu');
+  menu?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => menu.removeAttribute('open')));
+</script>
+
+<style>
+  @layer starlight.core {
+    .header {
+      display: flex;
+      gap: var(--sl-nav-gap);
+      justify-content: space-between;
+      align-items: center;
+      height: 100%;
+    }
+
+    .title-wrapper {
+      gap: 1.25rem;
+      align-items: center;
+      overflow: clip;
+      min-width: 0;
+      margin: -0.25rem;
+      padding: 0.25rem;
+    }
+
+    .right-group,
+    .social-icons {
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .home-nav {
+      gap: 0.2rem;
+      align-items: center;
+    }
+
+    .home-nav a {
+      padding: 0.45rem 0.55rem;
+      color: var(--sl-color-gray-3);
+      border-radius: 0.4rem;
+      font-size: 0.85rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .home-nav a:hover {
+      color: var(--sl-color-text-accent);
+      background: var(--sl-color-gray-6);
+    }
+
+    .social-icons::after {
+      content: '';
+      height: 2rem;
+      border-inline-end: 1px solid var(--sl-color-gray-5);
+    }
+
+    .home-menu {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .home-menu summary {
+      display: grid;
+      place-items: center;
+      width: var(--sl-menu-button-size);
+      height: var(--sl-menu-button-size);
+      overflow: hidden;
+      color: transparent;
+      border-radius: 999px;
+      background: var(--sl-color-white);
+      box-shadow: var(--sl-shadow-md);
+      cursor: pointer;
+    }
+
+    .home-menu summary::before {
+      content: '☰';
+      color: var(--sl-color-black);
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+
+    .home-menu[open] summary::before {
+      content: '×';
+    }
+
+    .home-menu nav {
+      position: fixed;
+      z-index: var(--sl-z-index-menu);
+      inset: var(--sl-nav-height) 0 auto;
+      display: grid;
+      gap: 0.4rem;
+      padding: 1rem var(--sl-nav-pad-x) 1.2rem;
+      border-bottom: 1px solid var(--sl-color-hairline-shade);
+      background: var(--sl-color-bg-nav);
+      box-shadow: var(--sl-shadow-md);
+    }
+
+    .home-menu nav a {
+      padding: 0.75rem 0.9rem;
+      color: var(--sl-color-white);
+      border-radius: 0.5rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .home-menu nav a:hover {
+      color: var(--sl-color-text-accent);
+      background: var(--sl-color-gray-6);
+    }
+
+    @media (min-width: 50rem) {
+      :global(:root[data-has-sidebar]) {
+        --__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
+      }
+
+      :global(:root:not([data-has-toc])) {
+        --__toc-width: 0rem;
+      }
+
+      .header {
+        --__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
+        --__main-column-fr: calc((100% + var(--__sidebar-pad, 0rem) - var(--__toc-width, var(--sl-sidebar-width)) - (2 * var(--__toc-width, var(--sl-nav-pad-x))) - var(--sl-content-inline-start, 0rem) - var(--sl-content-width)) / 2);
+        display: grid;
+        grid-template-columns: minmax(calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))), auto) 1fr auto;
+        align-content: center;
+      }
+    }
+  }
+</style>

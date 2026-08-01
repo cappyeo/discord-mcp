@@ -19,7 +19,7 @@ export default defineTool({
   name: 'webhooks_list_channel',
   category: 'webhooks',
   description:
-    '**Purpose**: List webhooks attached to a single channel.\n\n**When to use**: discover webhooks before sending via `webhooks_execute` (Plan 7); audit channel for unauthorized webhooks.\n\n**Returns**: `{webhooks:[{id,name,type,channel_id,application_id}], count}`. `name` wrapped (creator-controlled).',
+    '**Purpose**: List webhooks attached to a single channel.\n\n**When to use**: discover webhooks before sending via `webhooks_execute`; audit a channel for unauthorized webhooks.\n\n**Returns**: `{webhooks:[{id,name,type,channel_id,application_id}], count}`. Structured names remain raw creator-controlled data; the human-readable text response fences them.',
   inputSchema: {
     channel_id: ChannelId.describe('Channel to query'),
   },

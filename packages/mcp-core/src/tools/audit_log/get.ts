@@ -22,7 +22,7 @@ export default defineTool({
   name: 'audit_log_get',
   category: 'audit_log',
   description:
-    '**Purpose**: Fetch audit log entries for a guild.\n\n**When to use**: investigate "who kicked X?", post-incident forensics.\n\n**Example**: `{guild_id:"999000999000999000", limit:50, action_type:20}`  (action_type 20 = MEMBER_KICK)\n\n**Returns**: `{entries:[{id, target_id, user_id, action_type, reason}], count}`. `reason` wrapped (mod-controlled).',
+    '**Purpose**: Fetch audit log entries for a guild.\n\n**When to use**: investigate "who kicked X?", post-incident forensics.\n\n**Example**: `{guild_id:"999000999000999000", limit:50, action_type:20}`  (action_type 20 = MEMBER_KICK)\n\n**Returns**: `{entries:[{id, target_id, user_id, action_type, reason}], count}`. Structured `reason` values remain raw moderator-controlled data; the human-readable text response fences them.',
   inputSchema: {
     guild_id: GuildId.describe('Guild to query'),
     limit: z.number().int().min(1).max(100).default(50).describe('Max entries (1-100, default 50)'),

@@ -1,30 +1,23 @@
 ---
 title: Operations
 description: Production hardening reference for operators running discord-mcp at scale — observability, resilience, audit, and client capability matrix.
+type: operations
 sidebar:
   order: 0
 ---
 
 import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
-This section is the **production hardening reference** for operators running
-discord-mcp at scale. The other sections — [Tools](/discord-mcp/tools/),
-[Recipes](/discord-mcp/recipes/), and [Architecture](/discord-mcp/architecture/) —
-describe what the server can do and how it's built. This section is about how
-to **run it safely and observably** in front of a real Discord guild and a real
-agent.
-
-Every page here is rooted in the env-var contract: the server's runtime
-behavior is fully controlled by environment variables (no config files, no
-mutable runtime state). Below are the four operator concerns, each with its
-own page describing defaults, override knobs, and the observability surface.
+Start with a safe runtime baseline, then add observability, resilience, and an
+audit sink deliberately. These pages distinguish startup configuration from
+mutable session state and document where a control does — and does not — apply.
 
 <DocsCardGrid
   links={[
     { title: 'Configure discord-mcp', href: '/discord-mcp/operations/configure/', description: 'Start with a safe production baseline, then add only the runtime controls your deployment needs.' },
-    { title: 'Telemetry', href: '/discord-mcp/operations/telemetry/', description: 'Enable OpenTelemetry traces and metrics. Honeycomb, local Jaeger, console exporter; six built-in metrics; trace context propagation into Discord REST.' },
-    { title: 'Resilience', href: '/discord-mcp/operations/resilience/', description: 'The composite policy chain — bulkhead, circuit breaker, retry, timeout. 10 environment variables; 429-aware backoff; pipeline interactions.' },
-    { title: 'Audit logging', href: '/discord-mcp/operations/audit/', description: 'Mutating-only audit trail. Four sinks (stderr, file, OTLP-stub, none); JSONL schema; PII redaction policy; SOC2/HIPAA considerations.' },
+    { title: 'Telemetry', href: '/discord-mcp/operations/telemetry/', description: 'Export OpenTelemetry traces and metrics over OTLP HTTP/protobuf, with stdio-safe operating guidance.' },
+    { title: 'Resilience', href: '/discord-mcp/operations/resilience/', description: 'The shared bulkhead, circuit breaker, retry, and timeout policy around Discord REST calls.' },
+    { title: 'Audit logging', href: '/discord-mcp/operations/audit/', description: 'Configure four sinks, inspect the JSONL schema, and understand the current idempotency-based coverage and redaction limits.' },
     { title: 'Client capability matrix', href: '/discord-mcp/operations/clients/', description: 'Which MCP clients support which capabilities (tools, resources, subscribe, sampling, elicitation). Setup links per client.' },
   ]}
 />

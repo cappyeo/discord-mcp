@@ -2,9 +2,8 @@ name: release
 
 # Both publishable manifests set `publishConfig.provenance: true`, which
 # requires an OIDC token — publishing from a laptop hard-fails and the usual
-# workaround silently drops the attestation. This job supplies `id-token:
-# write`. It is `workflow_dispatch` behind a protected environment on purpose:
-# this repo never publishes from CI without explicit operator approval.
+# workaround silently drops the attestation. This workflow supplies `id-token:
+# write` and only runs after an explicit `workflow_dispatch` for an existing tag.
 on:
   workflow_dispatch:
     inputs:
@@ -35,9 +34,38 @@ jobs:
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
       - run: pnpm install --frozen-lockfile
+      - name: Verify release metadata
+        run: node .github/scripts/assert-release-metadata.mjs
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
       - run: pnpm build
       - run: pnpm test
+      - name: Verify packed package manifests
+        run: node .github/scripts/assert-no-workspace-protocol.mjs
       # --provenance is already declared via publishConfig in each manifest.
       - run: pnpm publish -r --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  registry:
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install MCP Registry publisher
+        run: |
+          curl -fsSLo mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_linux_amd64.tar.gz
+          echo "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf  mcp-publisher.tar.gz" | sha256sum -c -
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+      - name: Validate Registry manifest
+        run: ./mcp-publisher validate server.json
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish Registry metadata
+        run: ./mcp-publisher publish server.json

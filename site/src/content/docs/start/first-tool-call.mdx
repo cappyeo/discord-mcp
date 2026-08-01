@@ -1,56 +1,84 @@
 ---
-title: First tool call
-description: Walk through what happens when Claude sends your first Discord message.
+title: How a tool call works
+description: Follow one explicit messages_send call from MCP discovery through Discord and back as structured output.
+prev:
+  link: /discord-mcp/start/quickstart/
+  label: Quickstart
+next: false
 ---
 
-After Claude Desktop is configured (see [Quickstart](/discord-mcp/start/quickstart/)),
-your first interaction usually looks like this:
+import { Aside } from '@astrojs/starlight/components';
 
-> **You:** "Post 'hello from Claude' in #general of my test guild."
+Use an explicit tool name and Discord ID when you want predictable behavior:
 
-This single sentence triggers a precise sequence inside Claude.
+> Use `messages_send` with `channel_id` `112233445566778899` and content
+> `hello from discord-mcp`. Do not call any other tool.
 
-## What Claude does internally
+This avoids two common ambiguities: `messages_send` does not accept a channel name, and the
+server does not perform a separate human confirmation for this ordinary write.
 
-1. **Discovery — `tools/list`.** Claude sends a JSON-RPC `tools/list` request over stdio.
-   discord-mcp returns 192 tool definitions, each with a four-section description.
-2. **Selection.** Claude scans the tool catalog, looking for ones whose `Purpose`
-   line matches "post a message to a channel." It picks `messages_send`.
-3. **Argument extraction.** Claude reads `messages_send`'s input schema and fills the
-   required fields (`channel_id`, `content`) by either inferring from context or
-   asking you to confirm.
-4. **Invocation — `tools/call`.** Claude sends a `tools/call` JSON-RPC frame
-   with `name: "messages_send"` and the structured arguments.
-5. **Execution.** discord-mcp validates the args (zod), resolves the channel, applies
-   resilience policies (retry / circuit-breaker via Cockatiel), issues the REST call,
-   redacts the response per the privacy policy, and returns it.
-6. **Display.** Claude renders the success result — typically a confirmation with the
-   created message's ID and timestamp.
+## Request flow
 
-## The four-section description format
+1. **Discovery.** The client obtains the tool catalog through MCP `tools/list`.
+2. **Selection.** The client selects the exact `messages_send` identifier.
+3. **Validation.** discord-mcp validates `channel_id` as a Discord snowflake and `content` as
+   a non-empty string of at most 2,000 characters.
+4. **Execution.** The server applies its middleware and resilience policy, then sends an HTTP
+   request to Discord's create-message endpoint.
+5. **Result.** The tool returns a text summary for the conversation and structured JSON that
+   another tool can reuse.
 
-Every tool's description follows the same agent-optimized layout. Here is the contract
-for `messages_send` (abridged):
+The MCP call arguments are:
 
-```text
-Purpose: Send a new message to a Discord channel.
-When to use: User asks to post, send, share, or announce something in a channel.
-When NOT to use: When editing an existing message (use messages_edit) or replying
-  inside a thread without creating one (use threads_create + messages_send).
-Returns: { id, channel_id, content, author, timestamp, ... } — the created Message object.
+```json
+{
+  "name": "messages_send",
+  "arguments": {
+    "channel_id": "112233445566778899",
+    "content": "hello from discord-mcp"
+  }
+}
 ```
 
-The four-section structure is what lets Claude pick the right tool from 192
-candidates without hallucinating one that does not exist.
+The structured result has this shape:
 
-## Why structured output matters
+```json
+{
+  "message_id": "112233445566778900",
+  "channel_id": "112233445566778899",
+  "jump_url": "https://discord.com/channels/999000999000999000/112233445566778899/112233445566778900",
+  "timestamp": "2026-08-01T10:00:00.000Z"
+}
+```
 
-The tool's return value is **always structured JSON**, not free-form text. Claude
-re-uses fields like `id` from the response in follow-up tool calls, e.g. to add a
-reaction (`reactions_create`) or pin the message (`messages_pin`). This is why
-discord-mcp ships every endpoint as a tool rather than an ad-hoc shell.
+The IDs and timestamp above are examples. The keys match the runtime output schema.
 
-## Next
+## Reuse structured output
 
-- [Client setup](/discord-mcp/start/client-setup/) — same flow but with Cursor, Claude Code, or generic clients.
-- [Tools](/discord-mcp/tools/) — full reference for all 192 tools (auto-generated).
+An MCP client can take `message_id` and `channel_id` from the result and pass them to a
+follow-up tool such as `reactions_create`, `messages_pin`, or `messages_edit`. This is safer
+than asking the model to reconstruct identifiers from prose.
+
+## Safety boundary
+
+<Aside type="caution">
+MCP annotations describe risk; they do not grant permissions and they do not guarantee a
+client will ask first. `messages_send` writes immediately when Discord accepts the request.
+Only reference pages marked **Confirmation required** use the `__confirm` plus
+`MCP_DRY_RUN` contract.
+</Aside>
+
+The strongest boundary is the bot's Discord role. Give it access only to the servers,
+channels, and actions required by your workflows.
+
+## Common failures
+
+| Result | Meaning | Next action |
+|---|---|---|
+| Invalid arguments | A required field is missing or malformed. | Copy the numeric channel ID and keep content within 2,000 characters. |
+| `401` | The token is invalid or revoked. | Reset it in the Developer Portal and update the local config. |
+| `403` | The bot lacks channel permissions. | Check View Channel and Send Messages, including channel overrides. |
+| `404` | Discord cannot find or expose that channel to the bot. | Call `channels_list` for the correct guild and reuse the returned ID. |
+
+See the exact [`messages_send` reference](/discord-mcp/tools/messages/send/) or return to
+[Troubleshooting](/discord-mcp/start/troubleshooting/).

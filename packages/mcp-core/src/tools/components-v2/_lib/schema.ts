@@ -24,16 +24,37 @@ const Emoji = z.object({
   animated: z.boolean().optional(),
 });
 
-const ButtonBase = z.object({
+const ButtonBase = {
   type: z.literal(2),
-  style: z.number().int().min(1).max(6),
   label: z.string().max(80).optional(),
   emoji: Emoji.optional(),
   disabled: z.boolean().optional(),
-});
+} as const;
 export const Button = z.union([
-  ButtonBase.extend({ custom_id: z.string().min(1).max(100), url: z.never().optional() }),
-  ButtonBase.extend({ url: z.string().url(), custom_id: z.never().optional() }),
+  z.object({
+    ...ButtonBase,
+    style: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    custom_id: z.string().min(1).max(100),
+    url: z.never().optional(),
+    sku_id: z.never().optional(),
+  }),
+  z.object({
+    ...ButtonBase,
+    style: z.literal(5),
+    url: z.string().url(),
+    custom_id: z.never().optional(),
+    sku_id: z.never().optional(),
+  }),
+  z.object({
+    type: z.literal(2),
+    style: z.literal(6),
+    sku_id: z.string().regex(/^\d{17,20}$/),
+    disabled: z.boolean().optional(),
+    label: z.never().optional(),
+    emoji: z.never().optional(),
+    custom_id: z.never().optional(),
+    url: z.never().optional(),
+  }),
 ]);
 
 const SelectOption = z.object({
@@ -93,7 +114,7 @@ const MediaGallery = z.object({
 
 const File = z.object({
   type: z.literal(13),
-  file: z.object({ url: z.string() }),
+  file: z.object({ url: z.string().regex(/^attachment:\/\/[A-Za-z0-9._-]+$/) }),
   spoiler: z.boolean().optional(),
 });
 
@@ -111,19 +132,16 @@ const Select = z.discriminatedUnion('type', [
   ChannelSelect,
 ]);
 
-const ActionRow = z.object({
-  type: z.literal(1),
-  components: z
-    .array(z.union([Button, Select]))
-    .min(1)
-    .max(5),
-});
+const ActionRow = z.union([
+  z.object({ type: z.literal(1), components: z.array(Button).min(1).max(5) }),
+  z.object({ type: z.literal(1), components: z.array(Select).length(1) }),
+]);
 
 const Container: z.ZodType<unknown> = z.lazy(() =>
   z.object({
     type: z.literal(17),
     components: z
-      .array(z.union([Section, TextDisplay, MediaGallery, File, Separator, ActionRow]))
+      .array(z.union([Section, TextDisplay, MediaGallery, Separator, ActionRow]))
       .min(1)
       .max(10),
     accent_color: z.number().int().min(0).max(0xffffff).nullish(),
@@ -148,6 +166,15 @@ export const ComponentV2 = z.union([
   Container as z.ZodType<{ type: 17 } & Record<string, unknown>>,
 ]);
 
-export const ComponentsV2Array = z.array(ComponentV2).min(1).max(40);
+const TopLevelComponent = z.union([
+  ActionRow,
+  Section,
+  TextDisplay,
+  MediaGallery,
+  Separator,
+  Container as z.ZodType<{ type: 17 } & Record<string, unknown>>,
+]);
+
+export const ComponentsV2Array = z.array(TopLevelComponent).min(1).max(40);
 
 export type ComponentV2Input = z.infer<typeof ComponentV2>;

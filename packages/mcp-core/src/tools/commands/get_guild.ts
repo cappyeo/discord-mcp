@@ -20,7 +20,7 @@ export default defineTool({
   name: 'commands_get_guild',
   category: 'commands',
   description:
-    '**Purpose**: Fetch one guild-scoped command by id.\n\n**Returns**: `{id, name, description, type, application_id, guild_id, untrusted_text}`.',
+    '**Purpose**: Fetch one guild-scoped command by id.\n\n**Returns**: `{id, name, description, type, application_id, guild_id, untrusted_text}`. `name` and `description` remain raw; `untrusted_text` provides a separately fenced copy.',
   inputSchema: {
     application_id: ApplicationId.describe('Bot/app application ID'),
     guild_id: GuildId.describe('Guild scope'),

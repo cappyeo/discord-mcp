@@ -31,7 +31,7 @@ export default defineTool({
     '',
     '**Pagination**: pass `before` (ISO 8601 timestamp from a prior `archive_timestamp`) and `limit` to page back further. `has_more` indicates more pages.',
     '',
-    '**Returns**: `{threads:[{id,name,type,parent_id,owner_id,archive_timestamp}], has_more, count, channel_id}`. Names are wrapped in `<untrusted_discord_message>`.',
+    '**Returns**: `{threads:[{id,name,type,parent_id,owner_id,archive_timestamp}], has_more, count, channel_id}`. Structured names remain raw Discord data; the human-readable text response fences them.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Parent channel to list archived threads under'),

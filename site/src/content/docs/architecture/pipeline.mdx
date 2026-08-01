@@ -1,6 +1,6 @@
 ---
 title: Pipeline
-description: The mcp_pipeline executor — atomic multi-tool calls with variable interpolation and a recursion guard. Why it exists and how the executor works.
+description: The mcp_pipeline executor — sequential fail-fast tool calls with variable interpolation and a recursion guard.
 sidebar:
   order: 4
 ---
@@ -9,11 +9,13 @@ import { Aside } from '@astrojs/starlight/components';
 
 `mcp_pipeline` is the meta-tool that executes **N tool calls in a single MCP
 request**, with later steps referring to earlier results via interpolation
-syntax. It exists because some workflows are atomic in intent but require
+syntax. It exists because some workflows are one operator intent but require
 multiple Discord REST calls — e.g. "post the announcement, schedule the
-event, grant the role, all or nothing." Without a pipeline, the agent makes
+event, then grant the role." Without a pipeline, the agent makes
 three round-trips and has to handle partial failures itself; with one, the
-server captures intermediate state and propagates failures cleanly.
+server captures intermediate state and propagates failures cleanly. It does
+not provide transactions or rollback: completed Discord side effects remain
+when a later step fails.
 
 ## The flow
 
@@ -31,7 +33,7 @@ sequenceDiagram
   ToolA->>Discord: POST /messages
   Discord-->>ToolA: {id: "111122223333444455", ...}
   ToolA-->>Pipeline: result
-  Pipeline->>Pipeline: interpolate {{step_0.id}} into step 2
+  Pipeline->>Pipeline: interpolate {{step_0.message_id}} into step 2
   Pipeline->>ToolB: step 2
   ToolB->>Discord: POST /scheduled-events
   Discord-->>ToolB: {id: "...", ...}
@@ -61,7 +63,7 @@ second `step_1`.
 <Aside type="caution">
 There is no `step1`. A template like `{{step1.field}}` resolves to nothing
 and, because it is a whole-string template, the arg becomes `undefined` —
-which is then sent to Discord (or dropped by the tool's zod schema). Name your
+which is then rejected or transformed by the target tool's Zod schema. Name your
 steps explicitly; it is the only readable way to write a pipeline.
 </Aside>
 
@@ -97,10 +99,8 @@ as the template is the whole string.
 <Aside type="caution">
 **Pipelines cannot call pipelines.** A `mcp_pipeline` step that invokes
 `mcp_pipeline` is detected at dispatch and rejected with the
-`PIPELINE_RECURSION` error code. The reason: nested pipelines would multiply
-the bulkhead pressure (see [Operations → Resilience](/discord-mcp/operations/resilience/))
-and make state hand-off ambiguous (which step counter does the inner one
-share?).
+`PIPELINE_RECURSION` error code. A flat sequence keeps the 20-step bound,
+variable namespace, cancellation, and failure reporting unambiguous.
 </Aside>
 
 If you find yourself wanting nested pipelines, the right answer is to
@@ -112,14 +112,15 @@ nested-pipeline shapes as a flat sequence.
 
 Three reasons:
 
-1. **Atomic intent**: "announce + schedule + grant" is one operator action,
+1. **Cohesive intent**: "announce + schedule + grant" is one operator action,
    not three. Capturing it as one MCP call gives the agent a clean
    success/failure contract instead of three independent round-trips with
    their own error states.
 
-2. **Single observability unit**: one pipeline = one parent span (with N
-   child spans) in OTel. Audit emits **one event per leaf**, but the parent
-   span correlates them so you can reconstruct the workflow trivially.
+2. **Single observability unit**: one pipeline = one parent span with leaf tool
+   spans. Audit emits a parent event because `mcp_pipeline` is non-idempotent,
+   plus events for non-idempotent leaves. The current audit middleware skips
+   idempotent leaves, including idempotent writes.
 
 3. **Captured intermediate state**: `announce.message_id` gets passed into step 2
    without the agent ever seeing it. Reduces token usage on the agent side
@@ -137,9 +138,10 @@ Two failure modes:
   never appear in `steps` at all. Earlier steps' Discord side effects already
   happened; the `steps` array tells you exactly what completed. Set
   `continue_on_error: true` on a step to keep going past its failure instead.
-- **Bulkhead saturation**: if a leaf fails with `bulkhead_saturated`, the
-  pipeline propagates it. There is no automatic retry of the saturated
-  step inside the pipeline (cockatiel's retry already ran for that step).
+- **Bulkhead saturation**: if a leaf fails with `BULKHEAD_FULL`, the
+  pipeline propagates it. The bulkhead is the outermost fast-reject layer, so
+  its rejection never enters the inner retry policy; the pipeline itself does
+  not retry the step. The caller can back off and start a new call later.
 
 Interpolation is not a failure mode — see
 [Variable interpolation](#variable-interpolation) for what an unresolvable
@@ -151,7 +153,7 @@ The result envelope shape:
 {
   "steps": [
     { "id": "announce", "tool": "messages_send", "status": "success", "result": { "...": "..." }, "duration_ms": 142 },
-    { "id": "event", "tool": "events_create", "status": "error", "error": { "code": "DISCORD_PERMISSION", "message": "...", "retriable": false }, "duration_ms": 88 }
+    { "id": "event", "tool": "events_create", "status": "error", "error": { "code": "DISCORD_PERMISSION_DENIED", "message": "...", "retriable": false }, "duration_ms": 88 }
   ],
   "variables": { "announce": { "...": "..." } },
   "total_duration_ms": 230,

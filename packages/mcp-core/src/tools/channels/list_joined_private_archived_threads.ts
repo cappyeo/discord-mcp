@@ -32,7 +32,7 @@ export default defineTool({
     '**When NOT to use**:',
     "- Threads the bot didn't join — use `channels_list_private_archived_threads` (requires MANAGE_THREADS).",
     '',
-    '**Returns**: `{threads, has_more, count, channel_id}`. Names wrapped in `<untrusted_discord_message>`.',
+    '**Returns**: `{threads, has_more, count, channel_id}`. Structured names remain raw Discord data; the human-readable text response fences them.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Parent channel'),

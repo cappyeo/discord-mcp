@@ -1,6 +1,6 @@
 ---
 title: Telemetry (OpenTelemetry)
-description: Enable OpenTelemetry traces and metrics in discord-mcp — Honeycomb, local Jaeger, console exporter; six built-in metrics; trace context propagation into Discord REST.
+description: Export discord-mcp traces and metrics over OTLP HTTP/protobuf, with sampling, signal, and stdio-safety guidance.
 sidebar:
   order: 1
 ---
@@ -15,10 +15,10 @@ The SDK is **disabled by default**: if you do not set `OTEL_ENABLED=true` the
 server runs with no exporter wired and zero overhead. All telemetry
 configuration is environment-variable driven (no code changes needed).
 
-<Aside type="note">
-Telemetry is observe-only. Setting `OTEL_ENABLED=true` does not change any
-tool behavior — it only adds spans, metrics, and (optionally) console output.
-You can switch it on in production without a rolling restart concern.
+<Aside type="caution">
+Use an OTLP collector with stdio MCP. The current console span exporter writes
+through `console.dir`, which targets **stdout** and can corrupt the JSON-RPC
+stream. Do not set `OTEL_CONSOLE_EXPORTER=true` for `discord-mcp serve`.
 </Aside>
 
 ## Quickstart
@@ -35,9 +35,7 @@ Pick the exporter that matches your environment.
   export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
   export OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=YOUR_API_KEY,x-honeycomb-dataset=discord-mcp
   export OTEL_SERVICE_NAME=discord-mcp
-  export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-
-  npx discord-mcp
+  discord-mcp serve
   ```
 
   Traces appear in the Honeycomb UI under the `discord-mcp` dataset within
@@ -100,28 +98,20 @@ Pick the exporter that matches your environment.
   docker compose -f docker-compose.telemetry.yml up -d
   export OTEL_ENABLED=true
   export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-  export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-  npx discord-mcp
+  discord-mcp serve
   # Jaeger UI: http://localhost:16686
   ```
 
   </TabItem>
-  <TabItem label="Console exporter">
-
-  For dev / debugging only — no collector required:
-
-  ```bash
-  export OTEL_ENABLED=true
-  export OTEL_CONSOLE_EXPORTER=true
-  npx discord-mcp 2>otel.jsonl
-  ```
-
-  The console exporter writes spans as JSON to **stderr** (stdout is reserved
-  for JSON-RPC frames). Pipe stderr to a file or `tail` it. Useful when you
-  don't have a collector handy and just want to confirm that spans fire.
-
-  </TabItem>
 </Tabs>
+
+<Aside type="danger" title="Console exporter is incompatible with stdio">
+`OTEL_CONSOLE_EXPORTER=true` replaces the OTLP trace exporter with
+`ConsoleSpanExporter`. In the current runtime it emits to stdout, not stderr;
+shell redirection such as `2&gt;otel.jsonl` will not capture it and MCP framing
+can break. This option is retained in configuration but is not a supported
+`discord-mcp serve` setup.
+</Aside>
 
 ## Available signals
 
@@ -229,11 +219,11 @@ always reported.
 | `OTEL_SERVICE_NAME` | `discord-mcp` | `service.name` resource attribute. |
 | `OTEL_SERVICE_VERSION` | (package version) | `service.version` resource attribute. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (unset) | OTLP collector endpoint (e.g. `http://localhost:4318`). |
-| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | One of `http/protobuf`, `http/json`, `grpc`. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Parsed for compatibility but currently ignored; runtime export is always OTLP HTTP/protobuf. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | (unset) | Comma-separated `key=value` pairs (e.g. for vendor auth). |
 | `OTEL_TRACES_SAMPLER` | `parentbased_always_on` | One of the standard OTel samplers. |
 | `OTEL_TRACES_SAMPLER_ARG` | `1` | Ratio for ratio-based samplers. |
-| `OTEL_CONSOLE_EXPORTER` | `false` | When true, also writes spans to stderr as JSON (debug aid). |
+| `OTEL_CONSOLE_EXPORTER` | `false` | Unsupported with stdio: replaces OTLP trace export and writes spans to stdout. |
 
 ## Related
 

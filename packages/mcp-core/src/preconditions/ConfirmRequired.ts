@@ -1,3 +1,4 @@
+import { redactArgs } from '../audit/redact.js';
 import { DryRunPreview } from '../errors/client.js';
 import type { MiddlewareContext } from '../middleware/compose.js';
 import { Precondition } from '../pieces/Precondition.js';
@@ -26,13 +27,9 @@ export class ConfirmRequired extends Precondition {
     const confirmed = raw.__confirm === true;
 
     if (dryRunActive || !confirmed) {
-      const preview: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(args)) {
-        if (k !== '__confirm') {
-          preview[k] = v;
-        }
-      }
-      throw new DryRunPreview(ctx.tool.name, preview);
+      const previewArgs = { ...args };
+      delete previewArgs.__confirm;
+      throw new DryRunPreview(ctx.tool.name, redactArgs(previewArgs, ctx.tool.name));
     }
   }
 }

@@ -1,0 +1,272 @@
+---
+interface ToolSummary {
+  name: string;
+  category: string;
+  summary: string;
+  href: string;
+  destructive: boolean;
+  readOnly: boolean;
+}
+
+interface Props {
+  tools: ToolSummary[];
+}
+
+const { tools } = Astro.props;
+const categories = [...new Set(tools.map((tool) => tool.category))].sort();
+---
+
+<tool-catalog>
+  <div class:list={['catalog-controls', { single: categories.length <= 1 }]}>
+    <label>
+      <span>Find a tool</span>
+      <input type="search" placeholder="Search by task or tool name…" autocomplete="off" />
+    </label>
+    {
+      categories.length > 1 && (
+        <label>
+          <span>Category</span>
+          <select>
+            <option value="">All categories</option>
+            {categories.map((category) => <option value={category}>{category.replaceAll('_', ' ')}</option>)}
+          </select>
+        </label>
+      )
+    }
+  </div>
+
+  <p class="catalog-status" aria-live="polite">Showing all {tools.length} tools</p>
+
+  <ul class="catalog-list">
+    {
+      tools.map((tool) => (
+        <li data-name={tool.name} data-category={tool.category} data-summary={tool.summary}>
+          <a href={tool.href}>
+            <span class="tool-heading">
+              <code>
+                {tool.name.split('_').map((part, index) => (
+                  <Fragment>{index > 0 && <><wbr />_</>}{part}</Fragment>
+                ))}
+              </code>
+              {tool.readOnly && <span class="badge read">Read only</span>}
+              {!tool.readOnly && <span class="badge write">Writes</span>}
+              {tool.destructive && <span class="badge destructive">Destructive</span>}
+            </span>
+            <span class="tool-summary">{tool.summary}</span>
+            <span class="tool-category">{tool.category.replaceAll('_', ' ')}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+
+  <p class="catalog-empty" hidden>No tool matches those filters.</p>
+</tool-catalog>
+
+<script>
+  class ToolCatalog extends HTMLElement {
+    connectedCallback() {
+      const search = this.querySelector<HTMLInputElement>('input[type="search"]');
+      const select = this.querySelector<HTMLSelectElement>('select');
+      const rows = Array.from(this.querySelectorAll<HTMLElement>('.catalog-list > li'));
+      const status = this.querySelector<HTMLElement>('.catalog-status');
+      const empty = this.querySelector<HTMLElement>('.catalog-empty');
+      if (!search || !status || !empty) return;
+
+      const filter = () => {
+        const query = search.value.trim().toLowerCase();
+        const terms = query.split(/\s+/).filter(Boolean);
+        const category = select?.value ?? '';
+        let visible = 0;
+        rows.forEach((row) => {
+          const haystack = `${row.dataset.name} ${row.dataset.summary}`.toLowerCase();
+          const matches = (terms.length === 0 || terms.every((term) => haystack.includes(term))) &&
+            (!category || row.dataset.category === category);
+          row.hidden = !matches;
+          if (matches) visible += 1;
+        });
+        status.textContent = `Showing ${visible} of ${rows.length} tools`;
+        empty.hidden = visible !== 0;
+      };
+
+      search.addEventListener('input', filter);
+      select?.addEventListener('change', filter);
+    }
+  }
+
+  customElements.define('tool-catalog', ToolCatalog);
+</script>
+
+<style>
+  tool-catalog {
+    display: block;
+    margin-top: 1.5rem;
+  }
+
+  .catalog-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(10rem, 1fr);
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.75rem;
+    background: var(--sl-color-gray-7);
+  }
+
+  .catalog-controls.single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  label span {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--sl-color-gray-3);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  input,
+  select {
+    width: 100%;
+    min-height: 2.6rem;
+    padding: 0.55rem 0.7rem;
+    color: var(--sl-color-white);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-black);
+    font: inherit;
+  }
+
+  input:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  .catalog-status {
+    margin-block: 0.8rem;
+    color: var(--sl-color-gray-3);
+    font-size: 0.85rem;
+  }
+
+  .catalog-list {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .catalog-list a {
+    display: grid;
+    grid-template-columns: minmax(14rem, 0.85fr) minmax(16rem, 1.5fr) minmax(7rem, 0.5fr);
+    gap: 1rem;
+    align-items: center;
+    padding: 0.8rem 0.9rem;
+    color: inherit;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.65rem;
+    text-decoration: none;
+  }
+
+  .catalog-list a:hover {
+    border-color: var(--sl-color-accent);
+    background: color-mix(in srgb, var(--sl-color-accent-low) 45%, transparent);
+  }
+
+  .tool-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .tool-heading code {
+    overflow-wrap: anywhere;
+  }
+
+  .tool-summary,
+  .tool-category {
+    color: var(--sl-color-gray-3);
+    font-size: 0.85rem;
+  }
+
+  .tool-category {
+    text-align: right;
+    text-transform: capitalize;
+  }
+
+  .badge {
+    padding: 0.16rem 0.38rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 750;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .read {
+    color: hsl(160 70% 70%);
+    background: hsl(160 55% 18%);
+  }
+
+  .destructive {
+    color: hsl(0 100% 85%);
+    background: hsl(0 60% 25%);
+  }
+
+  .write {
+    color: hsl(38 100% 78%);
+    background: hsl(35 65% 22%);
+  }
+
+  .catalog-empty {
+    padding: 2rem;
+    text-align: center;
+    border: 1px dashed var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+  }
+
+  :global([data-theme='light']) .catalog-controls {
+    background: var(--sl-color-gray-7);
+  }
+
+  :global([data-theme='light']) input,
+  :global([data-theme='light']) select {
+    color: var(--sl-color-gray-1);
+    background: var(--sl-color-white);
+  }
+
+  :global([data-theme='light']) .read {
+    color: hsl(160 80% 22%);
+    background: hsl(160 65% 90%);
+  }
+
+  :global([data-theme='light']) .destructive {
+    color: hsl(0 70% 35%);
+    background: hsl(0 80% 93%);
+  }
+
+  :global([data-theme='light']) .write {
+    color: hsl(32 85% 30%);
+    background: hsl(38 90% 90%);
+  }
+
+  @media (max-width: 50rem) {
+    .catalog-controls,
+    .catalog-list a {
+      grid-template-columns: 1fr;
+    }
+
+    .catalog-list a {
+      gap: 0.35rem;
+    }
+
+    .tool-category {
+      text-align: left;
+    }
+  }
+</style>

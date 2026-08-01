@@ -4,7 +4,7 @@ description: Configure OpenTelemetry service metadata, OTLP export, and trace sa
 ---
 
 All `OTEL_*` settings are inert until telemetry is enabled. When it is off, the
-OpenTelemetry SDK is not imported.
+OpenTelemetry SDK is not started.
 
 ## Enable telemetry
 
@@ -35,7 +35,8 @@ OpenTelemetry SDK is not imported.
 
 - **Type:** URL
 - **Default:** unset
-- **Use:** OTLP collector endpoint. A console exporter can still run without one.
+- **Use:** OTLP HTTP collector endpoint. The runtime appends `/v1/traces` and
+  `/v1/metrics`.
 - **Example:** `OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io`
 
 ### `OTEL_EXPORTER_OTLP_PROTOCOL`
@@ -43,7 +44,9 @@ OpenTelemetry SDK is not imported.
 - **Type:** enum
 - **Allowed:** `http/protobuf`, `http/json`, `grpc`
 - **Default:** `http/protobuf`
-- **Use:** Selects the OTLP wire format; `http/protobuf` is the recommended default.
+- **Runtime status:** parsed by configuration but currently ignored. The server
+  always constructs the HTTP/protobuf trace and metric exporters; `http/json`
+  and `grpc` do not change transport behavior yet.
 
 ### `OTEL_EXPORTER_OTLP_HEADERS`
 
@@ -56,8 +59,11 @@ OpenTelemetry SDK is not imported.
 
 - **Type:** boolean string
 - **Default:** `false`
-- **Use:** Writes spans to stderr for local debugging when no collector is available.
-- **Example:** `OTEL_CONSOLE_EXPORTER=true`
+- **Use:** Do not enable for a stdio MCP server. The current exporter writes
+  through `console.dir` to stdout, replaces OTLP trace export, and can corrupt
+  JSON-RPC framing. Use an OTLP collector instead.
+- **Safe alternative:** configure `OTEL_EXPORTER_OTLP_ENDPOINT` and leave this
+  `false`.
 
 ## Control sampling
 

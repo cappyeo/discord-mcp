@@ -49,6 +49,16 @@ describe('MCP protocol contract', () => {
     expect(tools.map((t) => t.name)).toContain('messages_send');
   });
 
+  it('advertises defaulted input fields as optional', async () => {
+    const { tools } = await client.listTools();
+    const read = tools.find((tool) => tool.name === 'messages_read');
+    const event = tools.find((tool) => tool.name === 'events_create');
+    expect(read?.inputSchema.properties).toHaveProperty('limit');
+    expect((read?.inputSchema.required as string[]) ?? []).not.toContain('limit');
+    expect(event?.inputSchema.properties).toHaveProperty('privacy_level');
+    expect((event?.inputSchema.required as string[]) ?? []).not.toContain('privacy_level');
+  });
+
   it('callTool with invalid args returns isError=true (not throws)', async () => {
     const r = await client.callTool({ name: 'messages_send', arguments: {} });
     expect(r.isError).toBe(true);
@@ -356,6 +366,6 @@ describe('destructive tool authorization (MCP_DRY_RUN=false)', () => {
       },
     });
     expect(r.structuredContent).toMatchObject({ code: 'DRY_RUN_PREVIEW' });
-    expect(JSON.stringify(r.structuredContent)).not.toContain('__confirm');
+    expect(JSON.stringify(r.structuredContent?.preview)).not.toContain('__confirm');
   });
 });

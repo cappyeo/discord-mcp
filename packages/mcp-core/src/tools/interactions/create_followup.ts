@@ -26,7 +26,9 @@ export default defineTool({
   ].join('\n'),
   inputSchema: {
     application_id: ApplicationId.describe('Bot/app application ID'),
-    interaction_token: WebhookToken.describe('Interaction token (one-time, 15min TTL)'),
+    interaction_token: WebhookToken.describe(
+      'Scoped interaction credential, reusable for follow-ups for up to 15 minutes',
+    ),
     content: z.string().max(2000).optional(),
     embeds: z.array(z.record(z.string(), z.unknown())).optional(),
     components: z.array(z.record(z.string(), z.unknown())).optional(),

@@ -23,7 +23,7 @@ export default defineTool({
     '**When to use**:',
     "- Discover the bot's nick and role assignments in a target guild without needing the GUILD_MEMBERS intent.",
     '',
-    '**Returns**: `{user_id, nick, roles, joined_at}`. `nick` (if present) is wrapped in `<untrusted_discord_username>`.',
+    '**Returns**: `{user_id, nick, roles, joined_at}`. Structured `nick` remains raw Discord data; the human-readable text response fences it.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to inspect'),

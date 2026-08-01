@@ -86,13 +86,12 @@
  *        and `definitions:` exports — disjoint from this signature.
  *
  *   MCP Resources caveat:
- *     quadslab exposes MCP resources (per its README) which is the
- *     `resources/list` + `resources/subscribe` MCP server-level surface,
- *     not a tool. discord-mcp's Plan 6 already covers this via the
- *     gateway client. Resource subscriptions are NOT tools and do not
- *     appear in `<category>Tools` arrays, so they are out of scope for
- *     this adapter — users get the equivalent surface for free by
- *     running discord-mcp with `--gateway`.
+ *     quadslab exposes MCP resources (per its README) through the
+ *     server-level resource surface, not a tool. discord-mcp's Gateway can
+ *     emit experimental subscription notifications, but it does not expose
+ *     quadslab's live URIs through `resources/list` or `resources/read`.
+ *     Resource subscriptions are NOT tools and do not appear in
+ *     `<category>Tools` arrays, so they are out of scope for this adapter.
  *
  *   Known mapping ambiguities (see NAME_MAP `notes` for per-tool detail):
  *     - quadslab's `send_embed`, `send_dm_embed`, `send_message_with_file`
@@ -126,12 +125,11 @@
  *       `guild_get_welcome_screen` / `guild_modify_welcome_screen`.
  *       Confidence: high.
  *     - quadslab's `presence` tools (`set_bot_status`, `get_bot_info`)
- *       belong to gateway state, not REST. discord-mcp manages bot
- *       presence via the gateway client — no tool equivalent. Left
- *       unmapped (note in unmappedTools that gateway client owns this).
+ *       have no discord-mcp tool or runtime configuration equivalent.
+ *       They remain unmapped.
  *
  *   Tools deliberately left out of NAME_MAP (intentional unmapped):
- *     - presence: set_bot_status, get_bot_info (gateway-only, not REST)
+ *     - presence: set_bot_status, get_bot_info (no current equivalent)
  *     - templates: list_template, create_template, delete_template,
  *       sync_template (discord-mcp has no template tools yet)
  *     - higher-level helpers: clone_channel, copy_channel_permissions,

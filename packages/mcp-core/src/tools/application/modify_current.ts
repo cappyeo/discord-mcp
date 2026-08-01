@@ -22,7 +22,7 @@ export default defineTool({
     '',
     '**Pass only fields you want to change.** All fields optional.',
     '',
-    '**Returns**: updated `{id, name, description, icon, flags, untrusted_text}` (name/description wrapped).',
+    '**Returns**: updated `{id, name, description, icon, flags, untrusted_text}`. `name` and `description` remain raw; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     description: z.string().max(400).optional(),

@@ -21,12 +21,12 @@ export default defineTool({
     '',
     '**Auth**: token-secured (NO bot token).',
     '',
-    '**Returns**: `{message_id, channel_id, content, untrusted_messages}` — `content` is wrapped via `untrusted_discord_messages`.',
+    '**Returns**: `{message_id, channel_id, content, untrusted_messages}`. `content` remains raw Discord data; `untrusted_messages` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     application_id: ApplicationId.describe('Bot/app application ID'),
     interaction_token: WebhookToken.describe(
-      'Interaction token (one-time signed secret, 15-minute TTL). Treat as a credential.',
+      'Scoped interaction credential, reusable for follow-ups for up to 15 minutes. Treat as a credential.',
     ),
   },
   outputSchema: {

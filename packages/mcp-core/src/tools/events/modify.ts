@@ -37,7 +37,7 @@ export default defineTool({
     '',
     '**Status**: 1=SCHEDULED, 2=ACTIVE, 3=COMPLETED, 4=CANCELED. Status transitions are server-validated.',
     '',
-    '**Returns**: projected event shape. `creator_id` is absent for events created before October 2021. `name`/`description`/`entity_metadata.location` wrapped untrusted.',
+    '**Returns**: projected event shape. `creator_id` is absent for events created before October 2021. Event text remains raw; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild that owns the event'),

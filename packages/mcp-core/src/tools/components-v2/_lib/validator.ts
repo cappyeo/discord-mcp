@@ -101,9 +101,23 @@ export function validateComponentsV2(input: unknown): ValidatorResult {
     });
   }
 
+  const customIds = new Set<string>();
   const walk = (nodes: readonly Node[], path: string, parentType: number | null): void => {
     nodes.forEach((node, idx) => {
       const here = `${path}[${idx}]`;
+
+      if (typeof node.custom_id === 'string') {
+        if (customIds.has(node.custom_id)) {
+          issues.push({
+            path: `${here}.custom_id`,
+            code: 'DUPLICATE_CUSTOM_ID',
+            message: `custom_id ${JSON.stringify(node.custom_id)} is duplicated in this message.`,
+            fix_hint: 'Use a unique custom_id for every interactive component in the message.',
+          });
+        } else {
+          customIds.add(node.custom_id);
+        }
+      }
 
       if (node.type === ComponentTypeId.Container && parentType === ComponentTypeId.Container) {
         issues.push({
@@ -144,6 +158,17 @@ export function validateComponentsV2(input: unknown): ValidatorResult {
           path: here,
           code: 'THUMBNAIL_STANDALONE',
           message: 'Thumbnail is only valid as a Section.accessory.',
+        });
+      }
+
+      if (node.type === ComponentTypeId.File) {
+        issues.push({
+          path: here,
+          code: 'FILE_UNSUPPORTED',
+          message:
+            'File components require a matching attachment upload, which components_v2_send/edit do not accept.',
+          fix_hint:
+            'Remove the File component or send the attachment through another Discord route.',
         });
       }
 

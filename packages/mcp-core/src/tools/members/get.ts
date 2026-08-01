@@ -27,7 +27,7 @@ export default defineTool({
   name: 'members_get',
   category: 'members',
   description:
-    '**Purpose**: Fetch a guild member by user ID.\n\n**When to use**: inspect roles, nick, joined-at of a known user.\n\n**Returns**: `{user_id, username, global_name, nick, roles, joined_at, premium_since?, pending?}`. `joined_at` may be `null`; `premium_since` and `pending` are absent when Discord omits them. `nick` wrapped in `<untrusted_discord_username>`.',
+    '**Purpose**: Fetch a guild member by user ID.\n\n**When to use**: inspect roles, nick, joined-at of a known user.\n\n**Returns**: `{user_id, username, global_name, nick, roles, joined_at, premium_since?, pending?}`. `joined_at` may be `null`; `premium_since` and `pending` are absent when Discord omits them. Structured `nick` remains raw Discord data; the human-readable text response fences it.',
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the member'),
     user_id: UserId.describe('Member to fetch'),

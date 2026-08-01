@@ -1,0 +1,33 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props {
+  id: string;
+  initial?: boolean;
+}
+
+const { id, initial } = Astro.props;
+const attributes: HTMLAttributes<'div'> = initial ? { 'data-initial': 'true' } : {};
+---
+
+<div {id} {...attributes}>
+  <slot />
+</div>
+
+<style>
+  div {
+    animation: reveal-panel 10s steps(2, jump-none) 1;
+  }
+
+  div[data-initial],
+  div[role='tabpanel'] {
+    animation: none;
+  }
+
+  @keyframes reveal-panel {
+    from {
+      display: none;
+      content-visibility: hidden;
+    }
+  }
+</style>

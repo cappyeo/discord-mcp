@@ -28,7 +28,7 @@ export default defineTool({
     '**When NOT to use**:',
     '- Channels → use `channels_modify`. Roles → use `roles_modify`. Welcome screen → use `guild_modify_welcome_screen`.',
     '',
-    '**Returns**: projected guild shape `{id, name, icon, owner_id, description, preferred_locale, features}`. `name` and `description` are wrapped (server-owner controlled).',
+    '**Returns**: projected guild shape `{id, name, icon, owner_id, description, preferred_locale, features, untrusted_text}`. `name` and `description` remain raw server-owner data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to modify'),

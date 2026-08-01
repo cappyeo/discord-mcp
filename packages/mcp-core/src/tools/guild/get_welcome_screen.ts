@@ -27,7 +27,7 @@ export default defineTool({
     '**When to use**:',
     '- Inspect onboarding before tweaking it.',
     '',
-    '**Returns**: `{description, welcome_channels:[{channel_id, description, emoji_id, emoji_name}], untrusted_text}`. `description` and welcome_channels.description are wrapped untrusted (server-owner authored).',
+    '**Returns**: `{description, welcome_channels:[{channel_id, description, emoji_id, emoji_name}], untrusted_text}`. Descriptions remain raw server-owner data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to query'),

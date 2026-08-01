@@ -4,8 +4,45 @@
   --sl-color-accent-high: hsl(230 100% 85%);
 }
 
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   --sl-color-accent-low: hsl(235 100% 94%);
   --sl-color-accent: hsl(235 54% 46%);
   --sl-color-accent-high: hsl(235 54% 31%);
+}
+
+.tool-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.product-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-block: 1.5rem 2.5rem;
+}
+
+@media (max-width: 40rem) {
+  .sl-markdown-content table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    border-inline: 1px solid var(--sl-color-hairline-light);
+    box-shadow: inset -1rem 0 1rem -1rem color-mix(in srgb, var(--sl-color-black) 45%, transparent);
+  }
+
+  .sl-markdown-content th,
+  .sl-markdown-content td {
+    min-width: 7.5rem;
+  }
+
+  .sl-markdown-content th:first-child,
+  .sl-markdown-content td:first-child {
+    min-width: 9rem;
+  }
 }

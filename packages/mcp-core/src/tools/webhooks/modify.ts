@@ -24,7 +24,7 @@ export default defineTool({
     '**When to use**:',
     '- Change the channel a webhook posts to (`channel_id`) — only available on the bot-auth path.',
     '',
-    '**Returns**: Updated webhook record (no token). `name` wrapped untrusted.',
+    '**Returns**: Updated webhook record without a token. `name` remains raw creator-controlled data; `untrusted_name` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook to modify'),

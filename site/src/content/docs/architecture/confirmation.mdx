@@ -1,14 +1,14 @@
 ---
 title: Confirmation
-description: The __confirm:true + MCP_DRY_RUN=false contract that gates the 29 destructive tools that declare it. Why double-underscore, why safe-by-default, the recovery hint shape.
+description: The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 29 explicitly registered high-risk tools, including its limits and client responsibilities.
 sidebar:
   order: 7
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-discord-mcp's confirmation contract is the **load-bearing safety primitive**
-for irreversible operations. A tool that declares the `confirm_required`
+discord-mcp's confirmation contract is a **mechanical two-key guard** for
+selected high-risk operations. A tool that declares the `confirm_required`
 precondition — **29 of the 192 tools**, listed
 [below](#which-tools-require-it) — does not fire unless **both** of these
 hold at the same time:
@@ -17,8 +17,9 @@ hold at the same time:
 2. The agent passed `__confirm:true` in the tool's arguments.
 
 If either is missing, the tool throws a `DRY_RUN_PREVIEW` error carrying the
-redacted arguments instead of executing. The agent (or human) sees what
-*would* have happened, then decides whether to commit.
+redacted arguments instead of executing. The MCP client may show that preview
+to a human before re-issuing the call, but the server does not require or
+verify human approval.
 
 Tools that do **not** declare the precondition — including ordinary mutations
 like `messages_send` and `members_add_role` — are unaffected by both halves
@@ -28,19 +29,25 @@ Source: [`packages/mcp-core/src/preconditions/ConfirmRequired.ts`](https://githu
 
 ## Why two halves
 
-A single switch (e.g. just `__confirm:true`) would let a runaway agent
-execute destructive tools by guessing the magic argument. A single env
-var (e.g. just `MCP_DRY_RUN=false`) would mean any tool call goes through
-the moment the operator flips the flag — no per-call review.
+A single switch would make accidental activation easier. Splitting launch-time
+arming from a per-call assertion prevents either an environment change or an
+ordinary unconfirmed call from executing a gated tool by itself.
 
 Splitting it gives you the two-key launch model:
 
 - **`MCP_DRY_RUN`** is the **operator's switch**. They flip it once at boot
   to opt the deployment into "real execution mode."
-- **`__confirm:true`** is the **agent's per-call assertion**. It says "I,
-  the caller, accept that this specific call is destructive."
+- **`__confirm:true`** is the **caller's per-call assertion** that this
+  specific gated call should execute.
 
 Both must be set. Either alone fails closed.
+
+<Aside type="danger">
+This is not human-in-the-loop authorization. An autonomous or compromised
+caller can send `__confirm:true` whenever the server is armed with
+`MCP_DRY_RUN=false`. Keep dry-run enabled for a hard stop, and configure the
+client or UI to require human approval before consequential calls.
+</Aside>
 
 ## The flow
 
@@ -53,7 +60,7 @@ Agent → tool call (without __confirm)
          ↓
 Agent ← { isError: true, code: DRY_RUN_PREVIEW, recovery_hint: "..." }
 
-Agent (re-issues with __confirm:true)
+Client or agent (optionally after human approval, re-issues with __confirm:true)
          ↓
   Operator has MCP_DRY_RUN=false set ?
    ├─ no → DryRunPreview again (the env-var half failed)
@@ -137,14 +144,14 @@ const dryRunActive = this.env.MCP_DRY_RUN !== 'false';
 
 ## The recovery hint
 
-When `DryRunPreview` fires, its `recovery_hint` is the exact string the
-agent needs to act on:
+When `DryRunPreview` fires, its `recovery_hint` states the mechanical execution
+requirements:
 
 > Set MCP_DRY_RUN=false AND pass `__confirm:true` to actually execute
 
-Note the **AND** — it's load-bearing, telling the agent both halves are
-required. Without it, an agent might re-issue the call with `__confirm`
-alone and get the same error, then loop forever.
+The hint is operational guidance, not a secret or an approval challenge. It
+makes both required inputs explicit so clients do not loop on an incomplete
+retry.
 
 Re-issuing with `__confirm:true` is the **only** path through
 `ConfirmRequired`: server-initiated MCP elicitation is not implemented, so
@@ -210,20 +217,17 @@ If you need "this deployment cannot write to Discord," the gate for that is
 the bot's own Discord permissions, not this precondition.
 </Aside>
 
-## Bypass for tests
+## Testing confirmation
 
-Unit tests that exercise destructive tools must satisfy both halves:
+There is no "skip confirmation in test mode" toggle. A direct
+`tool.run(args, ctx?)` call exercises the tool handler only; it bypasses the
+server middleware that evaluates preconditions.
 
-```ts
-process.env.MCP_DRY_RUN = 'false';
-await tool.run({ args: { ...real_args, __confirm: true }, ... });
-```
-
-We do NOT provide a "skip confirmation in test mode" toggle. Tests that
-need to assert the precondition's behavior should test it directly; tests
-that need to assert downstream tool logic should set both halves
-explicitly. This keeps the production code path identical between tests
-and production.
+Test `ConfirmRequired` directly when you need to verify preview and approval
+behavior. Use an MCP/server-level invocation when the test must cover the full
+path, including both `MCP_DRY_RUN=false` and `__confirm: true`. Handler-only
+tests should pass the handler's normal arguments and make their narrower scope
+explicit.
 
 ## Source map
 

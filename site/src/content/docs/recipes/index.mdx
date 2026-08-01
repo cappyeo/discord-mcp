@@ -1,28 +1,18 @@
 ---
-title: Recipes
-description: Hand-written cookbook recipes showing how agents compose multiple discord-mcp tools to solve real workflows.
+title: Guides
+description: Complete Discord workflows built from verified discord-mcp tool calls, outputs, and failure paths.
+type: guide
+prev: false
+next: false
 sidebar:
   order: 0
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-The auto-generated [Tools](/discord-mcp/tools/) reference describes **what each
-of the 192 tools does**. These recipes describe **how to compose them** — the
-multi-step workflows that come up in real agent loops, with realistic Discord
-input and output.
-
-Each recipe walks through one use case end-to-end: the user prompt, the chain
-of tool calls, the JSON shape of every input and output, and the failure modes
-the agent has to handle. The examples use realistic snowflake IDs and the same
-JSON envelopes the server actually returns, so they double as integration-test
-fixtures when you wire up a new client.
-
-The six recipes below cover the most common composition patterns: a destructive
-batch operation, a rich-layout post, an atomic multi-tool chain, a
-zero-API-key intelligence task, a high-volume non-bot publishing path, and a
-push-based subscription model. Pick the closest one to your workflow and adapt
-from there.
+Choose the outcome closest to your task. Each guide shows the tool sequence,
+request and response shapes, safety boundary, and partial-failure behavior. For
+a single contract, use the [tool catalog](/discord-mcp/tools/).
 
 <CardGrid>
   <Card title="Moderation — bulk ban a raid" icon="warning">
@@ -41,7 +31,7 @@ from there.
     [Read recipe →](/discord-mcp/recipes/components-v2-announcement/)
   </Card>
 
-  <Card title="Pipeline — chain three calls atomically" icon="seti:cjsc">
+  <Card title="Pipeline — chain three calls sequentially" icon="seti:cjsc">
     Use `mcp_pipeline` to announce, schedule an event, and grant a role in one
     request. Covers `{{step.path}}` interpolation and the recursion guard.
 
@@ -64,10 +54,10 @@ from there.
     [Read recipe →](/discord-mcp/recipes/webhook-execute/)
   </Card>
 
-  <Card title="Gateway — subscribe to live state" icon="seti:bsl">
-    Replace REST polling with `resources/subscribe` backed by Discord Gateway
-    events. Covers the five subscribable URIs, debounce, and client
-    compatibility.
+  <Card title="Gateway — verify live notifications" icon="seti:bsl">
+    Verify `resources/subscribe` notifications backed by Discord Gateway
+    events. Covers the five notification URI keys, debounce, REST-only fallback,
+    and the current lack of resource list/read handlers.
 
     [Read recipe →](/discord-mcp/recipes/gateway-subscribe/)
   </Card>

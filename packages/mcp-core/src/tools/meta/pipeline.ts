@@ -55,7 +55,7 @@ export default defineTool({
     '**Example**:',
     '```',
     '{steps:[',
-    '  {id:"channels", tool:"channels_list", args:{guild_id:"123"}},',
+    '  {id:"channels", tool:"channels_list", args:{guild_id:"123456789012345678"}},',
     '  {id:"send",     tool:"messages_send", args:{channel_id:"{{channels.channels[0].id}}", content:"hi"}}',
     ']}',
     '```',

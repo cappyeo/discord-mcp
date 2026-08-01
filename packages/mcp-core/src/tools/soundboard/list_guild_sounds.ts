@@ -26,7 +26,7 @@ export default defineTool({
   description: [
     "**Purpose**: List a guild's custom soundboard sounds.",
     '',
-    '**Returns**: `{sounds:[...], count, untrusted_names}`. Names wrapped.',
+    '**Returns**: `{sounds:[...], count, untrusted_names}`. Names remain raw Discord data; `untrusted_names` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to list sounds from'),

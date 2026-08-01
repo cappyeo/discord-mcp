@@ -1,6 +1,6 @@
 ---
 title: Intelligence — summarize a busy channel
-description: Use MCP sampling to summarize a Discord channel without bringing your own LLM.
+description: Summarize a Discord channel through MCP sampling, with an explicit raw-message fallback when the client cannot sample.
 sidebar:
   order: 4
 ---
@@ -22,12 +22,11 @@ the heavy lifting; the second posts the result. discord-mcp ships zero API keys
 and never makes outbound LLM requests on your behalf.
 
 <Aside type="note">
-**Sampling capability is opt-in per client.** Claude Desktop, Cursor, ChatGPT,
-Cline, Continue, and Windsurf currently report "no sampling" during
-initialization. When the capability is missing the tool **falls back** to
-returning the raw messages plus a `_meta.fallback: 'host_llm_should_process'`
-hint, telling the host LLM to do the summarization itself in the next turn.
-Either path produces a usable summary; the difference is who runs the inference.
+**Sampling capability is negotiated at initialization.** Do not infer support
+from a client name or version. When `sampling` is absent, the tool returns raw
+messages plus `_meta.fallback: 'host_llm_should_process'`; the host model must
+produce the summary in a later turn. The fallback result is data to summarize,
+not a completed summary.
 </Aside>
 
 ## Tool flow
@@ -83,18 +82,17 @@ Either path produces a usable summary; the difference is who runs the inference.
      <TabItem label="Output (fallback)">
        ```json
        {
-         "summary": "[sampling unavailable — host LLM should summarize from raw_messages]",
-         "key_topics": [],
-         "action_items": [],
          "message_count_used": 50,
-         "sampling_used": false,
+         "channel_id": "222233334444555566",
+         "style": "bullet",
+         "raw_messages": [
+           { "id": "888899990000111101", "author": "alice", "content": "shipping the SSO hotfix now" },
+           { "id": "888899990000111102", "author": "bob", "content": "lgtm, will verify on staging" }
+         ],
          "_meta": {
            "fallback": "host_llm_should_process",
            "intent": "summarize",
-           "raw_messages": [
-             { "id": "888899990000111101", "author": "alice", "content": "shipping the SSO hotfix now" },
-             { "id": "888899990000111102", "author": "bob", "content": "lgtm, will verify on staging" }
-           ]
+           "sampling_used": false
          }
        }
        ```
@@ -114,7 +112,7 @@ Either path produces a usable summary; the difference is who runs the inference.
    ```
 
    When the tool returned the **fallback envelope**, the host LLM should
-   instead read `_meta.raw_messages`, generate the summary itself in the next
+   instead read the top-level `raw_messages`, generate the summary itself in the next
    turn, then call `messages_send` with that content.
 
 </Steps>
@@ -127,8 +125,9 @@ Either path produces a usable summary; the difference is who runs the inference.
 - **Privacy.** Channel content never leaves the path the user already trusts
   (their MCP client → their LLM). discord-mcp doesn't proxy text to a
   third-party inference provider.
-- **Graceful degradation.** Clients without sampling still get a usable result
-  via the fallback envelope — the agent just does the inference one turn later.
+- **Explicit degradation.** Clients without sampling receive the source data
+  and a machine-readable fallback marker. The host can then summarize it in a
+  separate model turn.
 
 ## Style options
 
@@ -136,7 +135,7 @@ Either path produces a usable summary; the difference is who runs the inference.
 |---------|---|
 | `bullet` (default) | Markdown bullet list, scannable |
 | `paragraph` | Two-to-three sentence paragraph |
-| `executive` | Single-sentence headline + 3-bullet body, written for skim-readers |
+| `executive` | One business-focused paragraph |
 
 ## See also
 

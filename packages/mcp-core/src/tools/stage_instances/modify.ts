@@ -22,7 +22,7 @@ export default defineTool({
     '',
     '**Pass only fields you want to change.**',
     '',
-    '**Returns**: updated `{id, guild_id, channel_id, topic, privacy_level, untrusted_text}` (topic wrapped).',
+    '**Returns**: updated `{id, guild_id, channel_id, topic, privacy_level, untrusted_text}`. `topic` remains raw user-authored data; `untrusted_text` provides a separately fenced copy.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Stage channel'),

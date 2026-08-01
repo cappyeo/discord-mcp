@@ -22,7 +22,7 @@ export default defineTool({
   name: 'guild_get',
   category: 'guild',
   description:
-    '**Purpose**: Fetch guild metadata.\n\n**When to use**: server overview; compute boost-tier-dependent caps.\n\n**Returns**: `{id, name, icon, owner_id, member_count, description, premium_tier, preferred_locale, features}`. `name` and `description` wrapped (server-owner controlled).',
+    '**Purpose**: Fetch guild metadata.\n\n**When to use**: server overview; compute boost-tier-dependent caps.\n\n**Returns**: `{id, name, icon, owner_id, member_count, description, premium_tier, preferred_locale, features}`. Structured `name` and `description` remain raw server-owner data; the human-readable text response fences them.',
   inputSchema: {
     guild_id: GuildId.describe('Guild to fetch'),
   },
