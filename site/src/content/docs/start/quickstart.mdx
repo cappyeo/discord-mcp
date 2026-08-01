@@ -1,92 +1,70 @@
 ---
-title: Quickstart
-description: Connect discord-mcp to Claude Desktop, verify the bot, discover a channel ID, and send one test message.
+title: Run your first Discord tools
+description: Verify the bot, discover a real channel ID, and send one deliberate test message from your MCP client.
 type: tutorial
+sidebar:
+  order: 31
 prev:
-  link: /discord-mcp/start/client-setup/
-  label: Connect your client
+  link: /discord-mcp/start/verify-setup/
+  label: Unit 3 - Verification
 next:
   link: /discord-mcp/start/first-tool-call/
-  label: How a tool call works
+  label: Understand the tool call
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
 This is the shortest verified path from a local install to a real Discord tool call. You will
 first prove the connection with a read-only request, then send one message to a test channel.
 
-## Prerequisites
+<TutorialPreCheck>
 
-- **Node.js 22.12 or newer** (`node --version`)
-- a Discord bot installed in a private test server
-- its token and the test server's ID
-- Claude Desktop, or another stdio MCP client covered in [Client setup](/discord-mcp/start/client-setup/)
+- Keep the bot installed in your private test server.
+- Confirm that your restarted MCP client lists discord-mcp's tools.
+- Have the bot token and test server ID available privately.
 
-If you do not have the bot yet, complete [Create a Discord bot](/discord-mcp/start/create-discord-bot/)
-before continuing.
+</TutorialPreCheck>
 
 <Steps>
 
-1. **Install the CLI.**
-
-   ```bash
-   npm install -g @discord-mcp/cli
-   discord-mcp --version
-   ```
-
-2. **Generate a Claude Desktop config snippet.**
-
-   ```bash
-   discord-mcp init --client claude-desktop
-   ```
-
-   In an interactive terminal, enter the token when prompted. This avoids putting it in shell
-   history. If the output contains the literal `${env:DISCORD_TOKEN}`, replace that placeholder
-   with the real token in your local config; do not assume every client expands it.
-
-3. **Merge the snippet into Claude Desktop.**
-
-   Add the generated `discord-mcp` entry to the existing top-level `mcpServers` object:
-
-   | OS | Claude Desktop config |
-   |---|---|
-   | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-   | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-   | Linux | `~/.config/Claude/claude_desktop_config.json` |
-
-   <Aside type="danger">
-   Do not point `init --output` at an existing client config. With `--force`, it writes a new
-   top-level document and can remove other configured MCP servers. Merge the printed entry.
-   Once the file contains a token, never commit or share it.
-   </Aside>
-
-4. **Validate the token and Discord connection.**
+1. **Validate the token against Discord.**
 
    `doctor` reads the current terminal environment, not the client config. Set the token only
    for this terminal and run the online checks:
 
    ```bash
-   export DISCORD_TOKEN="YOUR.TOKEN.HERE"          # macOS / Linux
+   read -rsp 'Discord bot token: ' DISCORD_TOKEN && printf '\n'
+   export DISCORD_TOKEN
    discord-mcp doctor --online
+   unset DISCORD_TOKEN
    ```
 
    ```powershell
-   $env:DISCORD_TOKEN = "YOUR.TOKEN.HERE"          # Windows PowerShell
+   $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
    discord-mcp doctor --online
+   Remove-Item Env:DISCORD_TOKEN
    ```
 
-   Continue on exit `0`; inspect warnings on exit `1`; fix failures on exit `2`.
+   The first example requires Bash; the second requires PowerShell 7. If neither is available,
+   skip this optional diagnostic rather than placing the token in a command or shell history.
 
-5. **Restart Claude Desktop and prove the connection read-only.**
+   Find the `token-online` row with status `OK` and the message `Discord accepted token` in the
+   report. Exit `1` can still mean the online token check passed with another warning; inspect
+   every line. Fix failures on exit `2`.
 
-   Fully quit and reopen Claude Desktop. Ask:
+2. **Prove the client connection read-only.**
+
+   In the MCP client you restarted during Unit 2, ask:
 
    > Use `users_get_current` and tell me the bot username and ID. Do not call any other tool.
 
    The tool needs no arguments. A successful result identifies the same bot you created in
    the Developer Portal.
 
-6. **Discover the channel ID.**
+3. **Discover the channel ID.**
 
    Replace the example with your copied server ID:
 
@@ -94,7 +72,7 @@ before continuing.
 
    The result includes `channels[].id`. Keep the ID for the next step.
 
-7. **Send one test message.**
+4. **Send one test message.**
 
    > Use `messages_send` with `channel_id` `112233445566778899` and content
    > `hello from discord-mcp`.
@@ -110,12 +88,20 @@ execute on the first call. Keep onboarding inside a test server and grant the bo
 Discord permissions it needs.
 </Aside>
 
-## What you proved
+<TutorialBox>
 
-- The MCP client can spawn discord-mcp over local stdio.
-- The token authenticates against Discord.
-- The bot can read the test guild's channel list.
-- A concrete `channel_id` can be passed into a write tool and its structured result reused.
+## Checklist for moving on
+
+<TutorialChecklist>
+
+- [ ] `users_get_current` returned the bot account I created.
+- [ ] `channels_list` returned the channel ID from my private test server.
+- [ ] `messages_send` returned `message_id`, `channel_id`, `jump_url`, and `timestamp`.
+- [ ] I opened `jump_url` and verified the test message in Discord.
+
+</TutorialChecklist>
+
+</TutorialBox>
 
 Next, read [How a tool call works](/discord-mcp/start/first-tool-call/) or open the
 [tool reference](/discord-mcp/tools/).

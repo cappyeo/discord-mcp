@@ -2,21 +2,33 @@
 title: Installation
 description: Install discord-mcp via npm, pnpm, or yarn — including the optional gateway runtime.
 type: tutorial
+sidebar:
+  order: 21
 prev:
-  link: /discord-mcp/start/create-discord-bot/
-  label: Create a Discord bot
+  link: /discord-mcp/start/local-setup/
+  label: Unit 2 - Local setup
 next:
   link: /discord-mcp/start/client-setup/
   label: Connect your client
 ---
 
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
 discord-mcp ships as a single npm package (`@discord-mcp/cli`) that bundles the server.
+
+<TutorialPreCheck>
+
+- Open a terminal where you can install global Node.js packages.
+- Keep the bot token private; this lesson does not require you to paste it into a command.
+
+</TutorialPreCheck>
 
 ## Requirements
 
 - **Node.js 22.12 or newer.** This is the minimum declared by the published packages.
-- A Discord bot token with the appropriate scopes for the tools you call.
+- A Discord bot installed in the test server with the permissions required by your calls.
 
 Check your Node version with `node --version`. If you're below 22.12, upgrade via
 [fnm](https://github.com/Schniz/fnm), [nvm](https://github.com/nvm-sh/nvm),
@@ -93,3 +105,17 @@ those live URIs through `resources/list` or `resources/read`.
 
 See [Architecture → Gateway](/discord-mcp/architecture/gateway/) for the full
 integration model.
+
+<TutorialBox>
+
+## Checklist for moving on
+
+<TutorialChecklist>
+
+- [ ] `node --version` reports Node.js 22.12 or newer.
+- [ ] `discord-mcp --version` prints the installed package version and exits.
+- [ ] `discord-mcp --help` lists `serve`, `doctor`, `init`, and `migrate`.
+
+</TutorialChecklist>
+
+</TutorialBox>

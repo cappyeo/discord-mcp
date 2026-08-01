@@ -1,0 +1,80 @@
+---
+export interface Props {
+  path: string;
+  index: number;
+}
+
+const { path, index } = Astro.props;
+---
+
+<tutorial-progress data-path={path}>
+  <span class="sr-only status">Not complete</span>
+  <span class="circle" aria-hidden="true">
+    <span class="index">{index}</span>
+    <svg viewBox="0 0 16 16" hidden>
+      <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm3.78-9.72a.75.75 0 0 0-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5z" />
+    </svg>
+  </span>
+</tutorial-progress>
+
+<style>
+  tutorial-progress {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .circle {
+    display: grid;
+    width: 1.5rem;
+    height: 1.5rem;
+    place-items: center;
+    border: 0.125rem solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    background: var(--sl-color-gray-6);
+    font-size: var(--sl-text-xs);
+    line-height: 1;
+  }
+
+  svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    fill: var(--sl-color-green);
+  }
+
+  svg[hidden],
+  .index[hidden] {
+    display: none;
+  }
+</style>
+
+<script>
+  import { TutorialProgressStore } from './TutorialProgressStore';
+
+  class TutorialProgress extends HTMLElement {
+    private unsubscribe?: () => void;
+
+    connectedCallback() {
+      const status = this.querySelector<HTMLElement>('.status');
+      const index = this.querySelector<HTMLElement>('.index');
+      const icon = this.querySelector<SVGElement>('svg');
+      const path = this.dataset.path;
+      if (!status || !index || !icon || !path) return;
+
+      this.unsubscribe = TutorialProgressStore.subscribePageDone(path, (done) => {
+        this.dataset.status = done ? 'complete' : 'todo';
+        if (this.parentElement) this.parentElement.dataset.status = this.dataset.status;
+        status.textContent = done ? 'Complete' : 'Not complete';
+        index.hidden = done;
+        icon.hidden = !done;
+      });
+    }
+
+    disconnectedCallback() {
+      this.unsubscribe?.();
+    }
+  }
+
+  if (!customElements.get('tutorial-progress')) {
+    customElements.define('tutorial-progress', TutorialProgress);
+  }
+</script>

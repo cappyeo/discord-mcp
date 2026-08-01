@@ -1,0 +1,28 @@
+<div class="tutorial-box">
+  <section><slot /></section>
+</div>
+
+<style>
+  .tutorial-box {
+    margin-block: 2.5rem;
+    padding: 1.75rem 2rem;
+    border: 1px solid var(--sl-color-green);
+    background: var(--sl-color-green-low);
+    color: var(--sl-color-green-high);
+  }
+
+  .tutorial-box :global(h2) {
+    margin-top: 0;
+    color: var(--sl-color-white);
+  }
+
+  :global([data-theme='light']) .tutorial-box :global(h2) {
+    color: var(--sl-color-gray-1);
+  }
+
+  @media (max-width: 30rem) {
+    .tutorial-box {
+      padding: 1.25rem;
+    }
+  }
+</style>

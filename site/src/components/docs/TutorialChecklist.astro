@@ -1,0 +1,89 @@
+---
+export interface Props {
+  key?: string;
+}
+
+const { key = 'default' } = Astro.props;
+---
+
+<tutorial-check-list data-key={key}>
+  <slot />
+</tutorial-check-list>
+
+<style>
+  tutorial-check-list > :global(ul) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  tutorial-check-list :global(li) {
+    position: relative;
+    margin: 0 -0.75rem;
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.75rem 0.55rem 3rem;
+    color: var(--sl-color-green-high);
+    font-size: var(--sl-text-lg);
+    line-height: 1.45;
+  }
+
+  tutorial-check-list :global(label) {
+    display: block;
+    cursor: pointer;
+  }
+
+  tutorial-check-list :global(input[type='checkbox']) {
+    position: absolute;
+    inset-inline-start: 0.75rem;
+    top: 0.65rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: 0;
+    accent-color: var(--sl-color-green);
+    cursor: pointer;
+  }
+
+  tutorial-check-list :global(li:has(input:checked)) {
+    color: var(--sl-color-white);
+  }
+
+  :global([data-theme='light']) tutorial-check-list :global(li:has(input:checked)) {
+    color: var(--sl-color-gray-1);
+  }
+</style>
+
+<script>
+  import { TutorialProgressStore } from './TutorialProgressStore';
+
+  class TutorialCheckList extends HTMLElement {
+    connectedCallback() {
+      if (this.dataset.initialized === 'true') return;
+      this.dataset.initialized = 'true';
+
+      const key = this.dataset.key ?? 'default';
+      const inputs = Array.from(
+        this.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+      );
+
+      TutorialProgressStore.initializeList(key, inputs.length);
+      inputs.forEach((input, index) => {
+        const item = input.closest('li');
+        if (item && !input.closest('label')) {
+          const label = document.createElement('label');
+          while (item.firstChild) label.append(item.firstChild);
+          item.append(label);
+        }
+
+        input.disabled = false;
+        input.checked = TutorialProgressStore.getListItem(key, index);
+        input.addEventListener('change', () => {
+          TutorialProgressStore.setListItem(key, index, input.checked);
+        });
+      });
+    }
+  }
+
+  if (!customElements.get('tutorial-check-list')) {
+    customElements.define('tutorial-check-list', TutorialCheckList);
+  }
+</script>

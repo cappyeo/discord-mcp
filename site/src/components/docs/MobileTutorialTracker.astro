@@ -1,0 +1,114 @@
+---
+import SetupTracker from './SetupTracker.astro';
+---
+
+<mobile-tutorial-tracker class="mobile-tutorial-tracker">
+  <details>
+    <summary>
+      <span>Tutorial tracker</span>
+      <span class="caret" aria-hidden="true">›</span>
+    </summary>
+    <div class="tracker-content"><SetupTracker id="mobile" /></div>
+  </details>
+</mobile-tutorial-tracker>
+
+<style>
+  .mobile-tutorial-tracker {
+    display: block;
+    padding: 0.75rem 1rem 0;
+  }
+
+  summary {
+    display: inline-flex;
+    gap: 0.6rem;
+    align-items: center;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--sl-color-bg-nav);
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-xs);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  summary::marker,
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  details[open] .caret {
+    transform: rotate(90deg);
+  }
+
+  .caret {
+    transition: transform 150ms ease;
+  }
+
+  .tracker-content {
+    margin-top: 0.75rem;
+    max-height: min(65vh, 34rem);
+    overflow-y: auto;
+  }
+
+  .tracker-content :global(.tracker-title) {
+    display: none;
+  }
+
+  :global([data-theme='light']) summary {
+    color: var(--sl-color-gray-1);
+  }
+</style>
+
+<script>
+  class MobileTutorialTracker extends HTMLElement {
+    private controller?: AbortController;
+
+    connectedCallback() {
+      this.controller?.abort();
+      this.controller = new AbortController();
+      const details = this.querySelector('details');
+      const summary = this.querySelector('summary');
+      if (!details || !summary) return;
+
+      this.addEventListener(
+        'click',
+        (event) => {
+          const target = event.target;
+          if (target instanceof Element && target.closest('.tracker-content a')) {
+            details.open = false;
+          }
+        },
+        { signal: this.controller.signal },
+      );
+
+      this.addEventListener(
+        'keydown',
+        (event) => {
+          if (event.key !== 'Escape' || !details.open) return;
+          details.open = false;
+          summary.focus();
+        },
+        { signal: this.controller.signal },
+      );
+
+      document.addEventListener(
+        'click',
+        (event) => {
+          if (details.open && event.target instanceof Node && !this.contains(event.target)) {
+            details.open = false;
+          }
+        },
+        { signal: this.controller.signal },
+      );
+    }
+
+    disconnectedCallback() {
+      this.controller?.abort();
+    }
+  }
+
+  if (!customElements.get('mobile-tutorial-tracker')) {
+    customElements.define('mobile-tutorial-tracker', MobileTutorialTracker);
+  }
+</script>

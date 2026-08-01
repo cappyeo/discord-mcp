@@ -2,12 +2,17 @@
 title: Discord MCP tutorial
 description: A guided setup from a Discord bot to a verified local MCP tool call.
 type: tutorial
+unitTitle: Welcome to discord-mcp
+sidebar:
+  order: 0
 prev: false
 next:
-  link: /discord-mcp/start/create-discord-bot/
-  label: Create a Discord bot
+  link: /discord-mcp/start/discord-setup/
+  label: Unit 1 - Discord setup
 ---
 
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 discord-mcp is a local stdio MCP server that lets an AI client call Discord through a bot you
@@ -30,9 +35,24 @@ inside a private server you control.
 1. [Create a Discord bot](/discord-mcp/start/create-discord-bot/) and install it in a test server.
 2. [Install the CLI](/discord-mcp/start/installation/) with Node.js 22.12 or newer.
 3. [Connect your MCP client](/discord-mcp/start/client-setup/) using a generated config snippet.
-4. Run `discord-mcp doctor --online`, then inspect the request and result contracts in [How a tool call works](/discord-mcp/start/first-tool-call/).
+4. [Run your first Discord tools](/discord-mcp/start/quickstart/) to verify the bot and send one test message.
+5. [Understand the tool call](/discord-mcp/start/first-tool-call/) from request arguments to structured output.
 
 </Steps>
 
 When you finish, use [Tools](/discord-mcp/tools/) for exact contracts or
 [Workflows](/discord-mcp/recipes/) for multi-step tasks.
+
+<TutorialBox>
+
+## Ready to begin?
+
+<TutorialChecklist>
+
+- [ ] I have a private Discord server where I can safely test a bot.
+- [ ] I understand that the bot can only do what its Discord permissions allow.
+- [ ] I have a private place outside source control where I can store the bot token.
+
+</TutorialChecklist>
+
+</TutorialBox>

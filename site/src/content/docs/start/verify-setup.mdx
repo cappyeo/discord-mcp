@@ -1,0 +1,43 @@
+---
+title: 'Check in: Unit 3 - Verification'
+description: Verify authentication, discover a real Discord channel, and make the tutorial's first tool call.
+type: tutorial
+unitTitle: Verify a real Discord tool call
+sidebar:
+  order: 30
+prev:
+  link: /discord-mcp/start/client-setup/
+  label: Connect your client
+next:
+  link: /discord-mcp/start/quickstart/
+  label: Run your first tools
+---
+
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+
+This unit proves the full path from your MCP client to Discord. You will authenticate the
+bot, make a read-only request, discover a channel ID, and send one deliberate test message.
+
+## Where are you going?
+
+The quickstart begins with diagnostics and `users_get_current`, so you can verify the client
+and token without changing Discord. It then uses `channels_list` to obtain a real ID before
+calling `messages_send` in your private test channel.
+
+The final lesson explains the request, validation, execution, and structured result so you
+can recognize the same flow in every tool reference.
+
+<TutorialBox>
+
+## Checklist
+
+<TutorialChecklist>
+
+- [ ] My bot is installed in the private test server.
+- [ ] My MCP client has been restarted with the discord-mcp server configured.
+- [ ] I have the test server ID and a channel where the bot may read and send messages.
+
+</TutorialChecklist>
+
+</TutorialBox>

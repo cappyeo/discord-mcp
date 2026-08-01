@@ -2,21 +2,34 @@
 title: How a tool call works
 description: Follow one explicit messages_send call from MCP discovery through Discord and back as structured output.
 type: tutorial
+sidebar:
+  order: 32
 prev:
   link: /discord-mcp/start/quickstart/
-  label: Quickstart
+  label: Run your first tools
 next: false
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
-Use an explicit tool name and Discord ID when you want predictable behavior:
+<TutorialPreCheck>
+
+- Complete the quickstart and keep the test message's `channel_id`, `message_id`, and `jump_url`.
+- Continue using the private test server for every example on this page.
+
+</TutorialPreCheck>
+
+The quickstart used an explicit tool name and Discord ID to make the final call predictable:
 
 > Use `messages_send` with `channel_id` `112233445566778899` and content
 > `hello from discord-mcp`. Do not call any other tool.
 
-This avoids two common ambiguities: `messages_send` does not accept a channel name, and the
-server does not perform a separate human confirmation for this ordinary write.
+This avoided two common ambiguities: `messages_send` does not accept a channel name, and the
+server does not perform a separate human confirmation for this ordinary write. The prompt above
+is the call you already completed; you do not need to send the message again.
 
 ## Request flow
 
@@ -83,3 +96,18 @@ channels, and actions required by your workflows.
 
 See the exact [`messages_send` reference](/discord-mcp/tools/messages/send/) or return to
 [Troubleshooting](/discord-mcp/start/troubleshooting/).
+
+<TutorialBox>
+
+## Tutorial complete
+
+<TutorialChecklist>
+
+- [ ] I can identify the tool name and arguments in the MCP request.
+- [ ] I can identify `message_id`, `channel_id`, `jump_url`, and `timestamp` in the result.
+- [ ] I understand that `messages_send` writes immediately and is not confirmation-gated.
+- [ ] I know to reuse IDs from structured output instead of reconstructing them from prose.
+
+</TutorialChecklist>
+
+</TutorialBox>

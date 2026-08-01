@@ -18,6 +18,7 @@ export const collections = {
             'archive',
           ])
           .optional(),
+        unitTitle: z.string().optional(),
       }),
     }),
   }),

@@ -1,0 +1,43 @@
+---
+title: 'Check in: Unit 2 - Local setup'
+description: Prepare Node.js, install the discord-mcp CLI, and connect it to a local MCP client.
+type: tutorial
+unitTitle: Install and connect the local MCP server
+sidebar:
+  order: 20
+prev:
+  link: /discord-mcp/start/create-discord-bot/
+  label: Create a Discord bot
+next:
+  link: /discord-mcp/start/installation/
+  label: Install discord-mcp
+---
+
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+
+This unit installs the published CLI and gives your MCP client an explicit stdio server
+configuration. Nothing is deployed: the client starts discord-mcp as a local subprocess.
+
+## Where are you going?
+
+You will first verify Node.js, install `@discord-mcp/cli`, and confirm the executable works.
+Then you will generate a client-specific `mcpServers` entry, merge it without overwriting
+other servers, and restart the client so it can discover discord-mcp's tools.
+
+The generated configuration can contain your bot token. Treat the entire local config file
+as a secret after you add a real token.
+
+<TutorialBox>
+
+## Checklist
+
+<TutorialChecklist>
+
+- [ ] I have Node.js 22.12 or newer and can run commands in a terminal.
+- [ ] I have an MCP client that can start a local stdio server.
+- [ ] My bot token is available privately and is not stored in this repository.
+
+</TutorialChecklist>
+
+</TutorialBox>

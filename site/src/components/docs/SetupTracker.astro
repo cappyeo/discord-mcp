@@ -1,257 +1,309 @@
 ---
-type Lesson = {
-  title: string;
-  href: string;
-};
+import { getCollection } from 'astro:content';
+import TutorialProgress from './TutorialProgress.astro';
+import TutorialUnitProgress from './TutorialUnitProgress.astro';
 
-type Unit = {
-  title: string;
-  summary: string;
-  lessons: Lesson[];
-};
+export interface Props {
+  id?: string;
+}
 
-const units: Unit[] = [
-  {
-    title: 'Introduction',
-    summary: 'Understand the local MCP server and choose a safe test environment.',
-    lessons: [{ title: 'Introduction', href: '/discord-mcp/start/' }],
-  },
-  {
-    title: 'Discord setup',
-    summary: 'Create a bot, grant only the permissions you need, and collect its IDs.',
-    lessons: [{ title: 'Create a Discord bot', href: '/discord-mcp/start/create-discord-bot/' }],
-  },
-  {
-    title: 'Local setup',
-    summary: 'Install the CLI and connect it to the MCP client you use every day.',
-    lessons: [
-      { title: 'Install discord-mcp', href: '/discord-mcp/start/installation/' },
-      { title: 'Connect your client', href: '/discord-mcp/start/client-setup/' },
-    ],
-  },
-  {
-    title: 'Verify your setup',
-    summary: 'Prove the connection with a safe read, then understand one explicit tool call.',
-    lessons: [
-      { title: 'Quickstart', href: '/discord-mcp/start/quickstart/' },
-      { title: 'How a tool call works', href: '/discord-mcp/start/first-tool-call/' },
-    ],
-  },
-  {
-    title: 'Need help?',
-    summary: 'Resolve installation, token, permissions, and connection problems by symptom.',
-    lessons: [{ title: 'Troubleshooting', href: '/discord-mcp/start/troubleshooting/' }],
-  },
-];
-
+const { id = 'tutorial' } = Astro.props;
 const normalizePath = (path: string) => path.replace(/\/+$/, '') || '/';
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const hrefFor = (entryId: string) => `${basePath}${entryId}/`;
+
+const tutorialPages = (await getCollection('docs'))
+  .filter((entry) => entry.data.type === 'tutorial')
+  .sort((left, right) => {
+    const leftOrder = left.data.sidebar.order ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = right.data.sidebar.order ?? Number.MAX_SAFE_INTEGER;
+    return leftOrder - rightOrder || left.id.localeCompare(right.id);
+  });
+
+for (const page of tutorialPages) {
+  if (page.data.sidebar.order === undefined) {
+    throw new Error(`Tutorial page "${page.id}" is missing sidebar.order.`);
+  }
+}
+
+const units: Array<{ title: string; lessons: (typeof tutorialPages)[number][] }> = [];
+for (const page of tutorialPages) {
+  if (page.data.unitTitle) {
+    units.push({ title: page.data.unitTitle, lessons: [page] });
+    continue;
+  }
+
+  const unit = units.at(-1);
+  if (!unit) {
+    throw new Error(`Tutorial page "${page.id}" appears before the first unitTitle.`);
+  }
+  unit.lessons.push(page);
+}
+
 const currentPath = normalizePath(Astro.url.pathname);
-const currentUnitIndex = Math.max(
-  0,
-  units.findIndex((unit) =>
-    unit.lessons.some((lesson) => normalizePath(lesson.href) === currentPath),
-  ),
+const currentUnitIndex = units.findIndex((unit) =>
+  unit.lessons.some((lesson) => normalizePath(hrefFor(lesson.id)) === currentPath),
 );
-const currentUnit = units[currentUnitIndex];
-const lessons = units.flatMap((unit) => unit.lessons);
-const currentLessonIndex = Math.max(
-  0,
-  lessons.findIndex((lesson) => normalizePath(lesson.href) === currentPath),
-);
-const nextLesson = lessons[currentLessonIndex + 1];
+if (currentUnitIndex === -1) {
+  throw new Error(`Tutorial route "${currentPath}" is not part of a tutorial unit.`);
+}
+
+const headings =
+  Astro.locals.starlightRoute.toc?.items.filter((heading) => heading.slug !== '_top') ?? [];
+const tabId = (index: number) => `${id}-unit-tab-${index}`;
+const panelId = (index: number) => `${id}-unit-panel-${index}`;
+const tabLabelId = (index: number) => `${id}-unit-label-${index}`;
+const tabProgressId = (index: number) => `${id}-unit-progress-${index}`;
 ---
 
-<nav class="setup-tracker" aria-label="Setup tracker">
-  <p class="tracker-title">Setup tracker</p>
-  <ol class="unit-tabs">
-    {
-      units.map((unit, index) => (
-        <li>
-          <a href={unit.lessons[0].href} aria-current={index === currentUnitIndex ? 'step' : undefined}>
-            <span class="sr-only">{unit.title}</span>
-            {index}
-          </a>
-        </li>
-      ))
-    }
-  </ol>
-  <section class="unit-panel" aria-label={`Unit ${currentUnitIndex}: ${currentUnit.title}`}>
-    <p class="unit-kicker">Unit {currentUnitIndex} of {units.length - 1}</p>
-    <h2>{currentUnit.title}</h2>
-    <p>{currentUnit.summary}</p>
-    <ol class="lesson-list">
+<tutorial-unit-tabs data-initial-index={currentUnitIndex}>
+  <nav class="tutorial-tracker" aria-label="Tutorial tracker">
+    <p class="tracker-title">Tutorial tracker</p>
+    <div class="unit-tabs" role="tablist" aria-label="Tutorial units">
       {
-        currentUnit.lessons.map((lesson, index) => (
-          <li>
-            <a href={lesson.href} aria-current={normalizePath(lesson.href) === currentPath ? 'page' : undefined}>
-              <span>{index + 1}</span>
-              {lesson.title}
-            </a>
-          </li>
+        units.map((unit, index) => (
+          <button
+            id={tabId(index)}
+            type="button"
+            role="tab"
+            aria-controls={panelId(index)}
+            aria-labelledby={tabLabelId(index)}
+            aria-describedby={tabProgressId(index)}
+            aria-selected={index === currentUnitIndex ? 'true' : 'false'}
+            tabindex={index === currentUnitIndex ? 0 : -1}
+          >
+            <span id={tabLabelId(index)} class="sr-only">Unit {index}: {unit.title}</span>
+            <TutorialUnitProgress
+              unitNumber={index}
+              paths={unit.lessons.map((lesson) => hrefFor(lesson.id))}
+              descriptionId={tabProgressId(index)}
+            />
+          </button>
         ))
       }
-    </ol>
+    </div>
     {
-      nextLesson && (
-        <a class="continue" href={nextLesson.href}>
-          Continue: {nextLesson.title} →
-        </a>
-      )
+      units.map((unit, unitIndex) => (
+        <section
+          id={panelId(unitIndex)}
+          class="unit-panel"
+          role="tabpanel"
+          aria-labelledby={tabId(unitIndex)}
+          hidden={unitIndex !== currentUnitIndex}
+        >
+          <h2>{unit.title}</h2>
+          <ol class="lesson-list">
+            {unit.lessons.map((lesson, lessonIndex) => {
+              const href = hrefFor(lesson.id);
+              const isCurrent = normalizePath(href) === currentPath;
+              return (
+                <li>
+                  <a href={href} aria-current={isCurrent ? 'page' : undefined}>
+                    <TutorialProgress path={href} index={lessonIndex} />
+                    <span>{lesson.data.title}</span>
+                  </a>
+                  {isCurrent && headings.length > 0 && (
+                    <ul class="page-sections">
+                      {headings.map((heading) => (
+                        <li><a href={`#${heading.slug}`}>{heading.text}</a></li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ))
     }
-  </section>
-</nav>
+  </nav>
+</tutorial-unit-tabs>
 
 <style>
-  .setup-tracker {
-    margin-block: 1.5rem 2.25rem;
+  tutorial-unit-tabs,
+  .tutorial-tracker {
+    display: block;
+    width: 100%;
+  }
+
+  .tutorial-tracker {
+    font-size: var(--sl-text-xs);
   }
 
   .tracker-title {
     margin: 0 0 0.55rem;
-    font-size: var(--sl-text-lg);
-    font-weight: 700;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-h5);
+    font-weight: 600;
   }
 
-  .unit-tabs,
-  .lesson-list {
+  .unit-tabs {
+    display: flex;
+    gap: 0.2rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .unit-tabs button {
+    display: grid;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    place-items: center;
+    margin: 0;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 0.35rem 0.35rem 0 0;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+  }
+
+  .unit-tabs button:hover {
+    color: var(--sl-color-white);
+  }
+
+  .unit-tabs button[aria-selected='true'] {
+    position: relative;
+    z-index: 1;
+    margin-bottom: -1px;
+    border-color: var(--sl-color-gray-5);
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-white);
+  }
+
+  .unit-tabs button:focus-visible {
+    outline: 2px solid var(--sl-color-accent-high);
+    outline-offset: 2px;
+  }
+
+  .unit-panel {
+    padding: 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-top: 0;
+    border-radius: 0 0 0.4rem 0.4rem;
+    background: var(--sl-color-gray-6);
+  }
+
+  .unit-panel[hidden] {
+    display: none;
+  }
+
+  .unit-panel h2 {
+    margin: 0 0 0.75rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+  }
+
+  .lesson-list,
+  .page-sections {
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .unit-tabs {
-    display: flex;
-    gap: 0.35rem;
-    padding-inline: 0.7rem;
-    border-bottom: 1px solid var(--sl-color-gray-5);
-  }
-
-  .unit-tabs a {
-    display: grid;
-    width: 2.55rem;
-    min-height: 2.65rem;
-    place-items: center;
-    color: var(--sl-color-gray-3);
-    border: 1px solid transparent;
-    border-bottom: 0;
-    border-radius: 0.45rem 0.45rem 0 0;
-    text-decoration: none;
-  }
-
-  .unit-tabs a:hover {
-    color: var(--sl-color-white);
-    background: var(--sl-color-gray-6);
-  }
-
-  .unit-tabs a[aria-current='step'] {
-    position: relative;
-    z-index: 1;
-    color: var(--sl-color-white);
-    font-weight: 700;
-    background: var(--sl-color-gray-6);
-    border-color: var(--sl-color-gray-5);
-  }
-
-  .unit-tabs a[aria-current='step']::after {
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    width: 100%;
-    height: 1px;
-    content: '';
-    background: var(--sl-color-gray-6);
-  }
-
-  .unit-panel {
-    padding: 1rem;
-    background: var(--sl-color-gray-6);
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.5rem;
-  }
-
-  .unit-kicker {
-    margin: 0;
-    color: var(--sl-color-accent-high);
-    font-size: var(--sl-text-xs);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .unit-panel h2 {
-    margin: 0.25rem 0;
-    font-size: var(--sl-text-lg);
-  }
-
-  .unit-panel > p:not(.unit-kicker) {
-    margin: 0 0 0.85rem;
-    color: var(--sl-color-gray-3);
-  }
-
   .lesson-list {
     display: grid;
-    gap: 0.35rem;
+    gap: 0.45rem;
   }
 
-  .lesson-list a {
+  .lesson-list > li > a {
     display: flex;
-    gap: 0.5rem;
-    align-items: center;
+    gap: 0.45rem;
+    align-items: flex-start;
     color: var(--sl-color-gray-3);
     text-decoration: none;
   }
 
-  .lesson-list a:hover,
-  .lesson-list a[aria-current='page'] {
+  .lesson-list > li > a[aria-current='page'] {
     color: var(--sl-color-white);
-  }
-
-  .lesson-list span {
-    display: grid;
-    flex: 0 0 auto;
-    width: 1.4rem;
-    height: 1.4rem;
-    place-items: center;
-    color: var(--sl-color-gray-3);
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 999px;
-    font-size: var(--sl-text-xs);
-  }
-
-  .lesson-list a[aria-current='page'] span {
-    color: var(--sl-color-white);
-    border-color: var(--sl-color-accent);
-    background: var(--sl-color-accent-low);
-  }
-
-  .continue {
-    display: inline-flex;
-    margin-top: 0.95rem;
-    color: var(--sl-color-accent-high);
     font-weight: 700;
+  }
+
+  .lesson-list > li > a[data-status='complete'] {
+    color: var(--sl-color-green-high);
+  }
+
+  .page-sections {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0.4rem 0 0.35rem 2rem;
+  }
+
+  .page-sections a {
+    color: var(--sl-color-gray-3);
     text-decoration: none;
   }
 
-  .continue:hover {
-    text-decoration: underline;
+  .page-sections a:hover,
+  .lesson-list a:hover {
+    color: var(--sl-color-white);
   }
 
-  :global([data-theme='light']) .unit-tabs a:hover,
-  :global([data-theme='light']) .unit-tabs a[aria-current='step'],
+  :global([data-theme='light']) .tracker-title,
+  :global([data-theme='light']) .unit-tabs button[aria-selected='true'],
+  :global([data-theme='light']) .unit-panel h2,
+  :global([data-theme='light']) .lesson-list > li > a[aria-current='page'],
   :global([data-theme='light']) .lesson-list a:hover,
-  :global([data-theme='light']) .lesson-list a[aria-current='page'],
-  :global([data-theme='light']) .lesson-list a[aria-current='page'] span {
+  :global([data-theme='light']) .page-sections a:hover {
     color: var(--sl-color-gray-1);
   }
+</style>
 
-  @media (max-width: 30rem) {
-    .unit-tabs {
-      justify-content: space-between;
-      padding-inline: 0.25rem;
+<script>
+  class TutorialUnitTabs extends HTMLElement {
+    private controller?: AbortController;
+
+    connectedCallback() {
+      this.controller?.abort();
+      this.controller = new AbortController();
+      const tabs = Array.from(this.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => this.select(index), {
+          signal: this.controller?.signal,
+        });
+        tab.addEventListener(
+          'keydown',
+          (event) => {
+            const destination =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? tabs.length - 1
+                  : event.key === 'ArrowRight'
+                    ? (index + 1) % tabs.length
+                    : event.key === 'ArrowLeft'
+                      ? (index - 1 + tabs.length) % tabs.length
+                      : undefined;
+            if (destination === undefined) return;
+            event.preventDefault();
+            this.select(destination, true);
+          },
+          { signal: this.controller.signal },
+        );
+      });
     }
 
-    .unit-tabs a {
-      width: 2.25rem;
+    disconnectedCallback() {
+      this.controller?.abort();
+    }
+
+    private select(index: number, focus = false) {
+      const tabs = Array.from(this.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+      const panels = Array.from(this.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+
+      tabs.forEach((tab, tabIndex) => {
+        const selected = tabIndex === index;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focus) tab.focus();
+      });
+      panels.forEach((panel, panelIndex) => {
+        panel.hidden = panelIndex !== index;
+      });
     }
   }
-</style>
+
+  if (!customElements.get('tutorial-unit-tabs')) {
+    customElements.define('tutorial-unit-tabs', TutorialUnitTabs);
+  }
+</script>

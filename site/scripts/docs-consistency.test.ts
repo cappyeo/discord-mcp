@@ -348,7 +348,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     };
     const nodeFloor = packageJson.engines.node.replace(/^>=/, '');
 
-    for (const page of ['start/installation.mdx', 'start/quickstart.mdx']) {
+    for (const page of ['start/local-setup.mdx', 'start/installation.mdx']) {
       expect(readFileSync(join(DOCS_DIR, page), 'utf8'), page).toContain(nodeFloor);
     }
   });

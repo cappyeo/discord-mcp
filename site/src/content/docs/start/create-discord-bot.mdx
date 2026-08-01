@@ -2,14 +2,19 @@
 title: Create a Discord bot
 description: Create a test bot, grant only the permissions you need, and collect the IDs required for your first discord-mcp call.
 type: tutorial
+sidebar:
+  order: 11
 prev:
-  link: /discord-mcp/start/
-  label: Introduction
+  link: /discord-mcp/start/discord-setup/
+  label: Unit 1 - Discord setup
 next:
-  link: /discord-mcp/start/installation/
-  label: Install discord-mcp
+  link: /discord-mcp/start/local-setup/
+  label: Unit 2 - Local setup
 ---
 
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 By the end of this guide, your bot will be installed in a private test server and you will
@@ -20,10 +25,12 @@ Use a dedicated test server while learning. discord-mcp acts with the bot's Disc
 permissions, and ordinary write tools such as `messages_send` can execute immediately.
 </Aside>
 
-## Before you begin
+<TutorialPreCheck>
 
-You need a Discord account and a server where you can manage apps. If you do not have a
-test server, create one from Discord's **Add a Server** button.
+- Sign in to the Discord account that will own the new application, or can edit an existing one.
+- Create or choose a private test server where you have Manage Server.
+
+</TutorialPreCheck>
 
 <Steps>
 
@@ -48,10 +55,9 @@ test server, create one from Discord's **Add a Server** button.
 
    - View Channels
    - Send Messages
-   - Read Message History
 
-   Add moderation, role, webhook, or thread permissions later only when a workflow needs
-   them. Do not grant **Administrator** as a shortcut.
+   Add Read Message History, moderation, role, webhook, or thread permissions later only
+   when a workflow needs them. Do not grant **Administrator** as a shortcut.
 
 4. **Install the bot in your test server.**
 
@@ -74,13 +80,17 @@ intents. Only enable Gateway mode when you need live event notifications. Gatewa
 for Guilds, Guild Voice States, and Guild Presences; presence data requires the corresponding
 privileged intent in the Developer Portal.
 
-## Checkpoint
+<TutorialBox>
 
-You should now have:
+## Checklist for moving on
 
-- a bot installed in a private test server;
-- a token stored locally and nowhere else;
-- a `guild_id` and `channel_id` copied from Discord;
-- View Channels, Send Messages, and Read Message History permissions.
+<TutorialChecklist>
 
-Continue to [Install discord-mcp](/discord-mcp/start/installation/).
+- [ ] The bot is installed in my private test server.
+- [ ] The token is stored privately and has not been committed or shared.
+- [ ] I copied the numeric test server ID and channel ID; each contains 17 to 20 digits.
+- [ ] The bot has View Channels and Send Messages, but not Administrator.
+
+</TutorialChecklist>
+
+</TutorialBox>

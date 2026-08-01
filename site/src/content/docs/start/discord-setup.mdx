@@ -1,0 +1,46 @@
+---
+title: 'Check in: Unit 1 - Discord setup'
+description: Prepare a private Discord server, create a dedicated bot, and collect the IDs needed by discord-mcp.
+type: tutorial
+unitTitle: Create a safe Discord test environment
+sidebar:
+  order: 10
+prev:
+  link: /discord-mcp/start/
+  label: Introduction
+next:
+  link: /discord-mcp/start/create-discord-bot/
+  label: Create a Discord bot
+---
+
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+
+Before installing anything locally, give discord-mcp a safe place to work. In this unit,
+you will create a dedicated Discord application, install its bot in a private test server,
+and grant only the permissions needed by the tutorial.
+
+## Where are you going?
+
+At the end of this unit, you will have four pieces of information ready for local setup:
+
+- a bot token stored privately;
+- the ID of your test server;
+- the ID of a channel where the bot can read and send messages;
+- a bot role limited to View Channels and Send Messages.
+
+The token authenticates the server. The server and channel IDs identify exactly where your
+first read and write calls will run. Keep all tutorial calls inside this test environment.
+
+<TutorialBox>
+
+## Checklist
+
+<TutorialChecklist>
+
+- [ ] I am signed in to the account that will own the new application, or can edit an existing one, and I have Manage Server in the private test server.
+- [ ] I am ready to store the bot token privately and use least-privilege permissions.
+
+</TutorialChecklist>
+
+</TutorialBox>

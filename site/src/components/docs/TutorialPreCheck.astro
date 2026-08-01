@@ -1,0 +1,43 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+---
+
+<div class="pre-check">
+  <p class="title">
+    <Icon name="approve-check-circle" />
+    Before you begin
+  </p>
+  <slot />
+</div>
+
+<style>
+  .pre-check {
+    margin-block: 1.5rem 2rem;
+    padding: 1rem;
+    border-inline-start: 0.25rem solid var(--sl-color-green);
+    background: var(--sl-color-green-low);
+    color: var(--sl-color-white);
+    outline: 1px solid transparent;
+  }
+
+  .title {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 0 0 0.75rem;
+    color: var(--sl-color-green-high);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .title :global(svg) {
+    width: 1.4rem;
+    height: 1.4rem;
+    fill: currentcolor;
+  }
+
+  .pre-check > :global(ul) {
+    margin-bottom: 0;
+  }
+</style>

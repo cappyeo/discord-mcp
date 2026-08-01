@@ -2,27 +2,41 @@
 title: Client setup
 description: Wire up discord-mcp with Claude Desktop, Claude Code, Cursor, or any generic MCP client.
 type: tutorial
+sidebar:
+  order: 22
 prev:
   link: /discord-mcp/start/installation/
   label: Install discord-mcp
 next:
-  link: /discord-mcp/start/quickstart/
-  label: Quickstart
+  link: /discord-mcp/start/verify-setup/
+  label: Unit 3 - Verification
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import ClientTabs from '../../../components/docs/ClientTabs.astro';
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
 discord-mcp speaks **stdio MCP** and works with any client that can spawn an MCP server
 as a subprocess. The `init` command generates the right `mcpServers` snippet for the
 client you select; it prints that snippet by default, so you stay in control of the
 file you merge it into.
 
+<TutorialPreCheck>
+
+- Confirm that `discord-mcp --version` works in your terminal.
+- Keep your bot token available in a password manager or another private location.
+- Find your client's local MCP configuration file before generating a snippet.
+
+</TutorialPreCheck>
+
 <Aside type="caution">
-`init` does not discover or edit your client config automatically. In an interactive terminal,
-enter the token when prompted so it is not stored in shell history. If you leave it empty, the
-snippet contains the literal `${env:DISCORD_TOKEN}` placeholder. Replace it in the local config
-unless you have verified that your client expands environment placeholders.
+`init` does not discover or edit your client config. Its token prompt is visible, and the generated
+snippet is printed to the terminal. The safest path is to press Enter at the token prompt, merge the
+snippet, then replace `${env:DISCORD_TOKEN}` only inside the private local config. Keep the placeholder
+only when you have verified that your client expands it. Do not pass the token with `--token`, because
+command arguments can remain in shell history and process inspection.
 </Aside>
 
 ## Choose your client
@@ -84,23 +98,21 @@ a fresh snippet instead of editing an absolute path by hand.
 Once the snippet contains a real token, treat the whole client config as a secret: do not
 commit, share, or screenshot it.
 
-## Verifying the connection
+After restarting, confirm that your client can list discord-mcp's tools without a startup
+error. Unit 3 performs the online token diagnostic and the first authenticated tool call, so
+you do not need to expose the token to a second process yet.
 
-After merging config and restarting your client, set a temporary token for the shell
-where you run diagnostics:
+<TutorialBox>
 
-```bash
-export DISCORD_TOKEN="YOUR.TOKEN.HERE"          # macOS / Linux
-```
+## Checklist for moving on
 
-```powershell
-$env:DISCORD_TOKEN = "YOUR.TOKEN.HERE"          # Windows PowerShell
-```
+<TutorialChecklist>
 
-Then run:
+- [ ] I merged the generated `discord-mcp` entry without removing my other MCP servers.
+- [ ] The local config contains a real token or a placeholder my client is known to expand.
+- [ ] I fully restarted the MCP client after changing its configuration.
+- [ ] The client can list discord-mcp tools without a server startup error.
 
-```bash
-discord-mcp doctor --online
-```
+</TutorialChecklist>
 
-If your client's logs show successful `tools/list` responses, the wiring is correct.
+</TutorialBox>

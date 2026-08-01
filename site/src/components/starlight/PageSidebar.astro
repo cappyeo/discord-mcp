@@ -1,21 +1,22 @@
 ---
 import MobileTableOfContents from 'virtual:starlight/components/MobileTableOfContents';
 import TableOfContents from 'virtual:starlight/components/TableOfContents';
+import MobileTutorialTracker from '../docs/MobileTutorialTracker.astro';
 import SetupTracker from '../docs/SetupTracker.astro';
 
-const { id, toc } = Astro.locals.starlightRoute;
-const isTutorial = id === 'start' || id.startsWith('start/');
+const { entry, toc } = Astro.locals.starlightRoute;
+const isTutorial = entry.data.type === 'tutorial';
 ---
 
 {
   isTutorial ? (
     <>
       <div class="lg:sl-hidden tutorial-tracker-mobile">
-        <SetupTracker />
+        <MobileTutorialTracker />
       </div>
       <div class="right-sidebar-panel sl-hidden lg:sl-block">
         <div class="sl-container">
-          <SetupTracker />
+          <SetupTracker id="desktop" />
         </div>
       </div>
     </>
@@ -63,10 +64,6 @@ const isTutorial = id === 'start' || id.startsWith('start/');
 
     .right-sidebar-panel :global(:where(a):hover) {
       color: var(--sl-color-white);
-    }
-
-    .tutorial-tracker-mobile {
-      padding: 0 1rem;
     }
 
     @media (min-width: 72rem) {

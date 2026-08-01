@@ -42,23 +42,10 @@ export default defineConfig({
           label: 'Tutorial',
           items: [
             { label: 'Introduction', slug: 'start' },
-            {
-              label: '1 — Discord setup',
-              items: ['start/create-discord-bot'],
-            },
-            {
-              label: '2 — Local setup',
-              items: ['start/installation', 'start/client-setup'],
-            },
-            {
-              label: '3 — Verify your setup',
-              items: ['start/quickstart', 'start/first-tool-call'],
-            },
-            {
-              label: 'Need help?',
-              collapsed: true,
-              items: ['start/troubleshooting'],
-            },
+            { label: 'Unit 1 - Discord setup', slug: 'start/discord-setup' },
+            { label: 'Unit 2 - Local setup', slug: 'start/local-setup' },
+            { label: 'Unit 3 - Verification', slug: 'start/verify-setup' },
+            { label: 'Troubleshooting', slug: 'start/troubleshooting' },
           ],
         },
         {
