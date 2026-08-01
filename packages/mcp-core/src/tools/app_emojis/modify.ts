@@ -21,7 +21,7 @@ export default defineTool({
     '- Update the public-facing name of an app emoji.',
     '',
     '**When NOT to use**:',
-    '- Replacing image bytes — Discord does not allow editing emoji bytes.',
+    '- Replacing image bytes - Discord does not allow editing emoji bytes.',
     '',
     '**Returns**: `{id, name, animated}`.',
   ].join('\n'),

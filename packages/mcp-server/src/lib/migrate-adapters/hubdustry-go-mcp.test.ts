@@ -1,12 +1,12 @@
 /**
- * Adapter unit tests — Plan 9 Phase E.
+ * Adapter unit tests - Plan 9 Phase E.
  *
  * Tests run against the synthetic fixture under
  * `packages/mcp-server/test-fixtures/hubdustry-go-mcp/`. The fixture
  * lives outside `src/` so it isn't compiled, isn't packed (the package
  * `files: ["dist", ...]` allowlist excludes it), and isn't lint-checked.
  *
- * The fixture contains 5 mcp.NewTool calls — server.files.{list,read,
+ * The fixture contains 5 mcp.NewTool calls - server.files.{list,read,
  * write} and server.deploy.{trigger,status}. The Hubdustry adapter's
  * NAME_MAP is empty by design, so a successful run reports all 5 as
  * unmapped.
@@ -23,7 +23,7 @@ import { hubdustryGoMcpAdapter } from './hubdustry-go-mcp.js';
 const PACKAGE_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'hubdustry-go-mcp');
 
-describe('hubdustryGoMcpAdapter — id + description', () => {
+describe('hubdustryGoMcpAdapter - id + description', () => {
   it('exposes a stable kebab-case id', () => {
     expect(hubdustryGoMcpAdapter.id).toBe('hubdustry-go-mcp');
   });
@@ -33,7 +33,7 @@ describe('hubdustryGoMcpAdapter — id + description', () => {
   });
 });
 
-describe('hubdustryGoMcpAdapter — Plan 11 Phase A metadata', () => {
+describe('hubdustryGoMcpAdapter - Plan 11 Phase A metadata', () => {
   it('declares the upstream homepage link', () => {
     expect(hubdustryGoMcpAdapter.homepage).toBe(
       'https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp',
@@ -46,7 +46,7 @@ describe('hubdustryGoMcpAdapter — Plan 11 Phase A metadata', () => {
   });
 });
 
-describe('hubdustryGoMcpAdapter — detect()', () => {
+describe('hubdustryGoMcpAdapter - detect()', () => {
   it('returns true for the synthetic fixture (apps/mcp layout)', async () => {
     expect(await hubdustryGoMcpAdapter.detect(FIXTURE_ROOT)).toBe(true);
   });
@@ -68,7 +68,7 @@ describe('hubdustryGoMcpAdapter — detect()', () => {
   });
 });
 
-describe('hubdustryGoMcpAdapter — migrate()', () => {
+describe('hubdustryGoMcpAdapter - migrate()', () => {
   it('reports all 5 fixture tools as unmappedTools (NAME_MAP is empty)', async () => {
     const result = await hubdustryGoMcpAdapter.migrate(FIXTURE_ROOT);
     expect(result.source).toBe('hubdustry-go-mcp');
@@ -105,7 +105,7 @@ describe('hubdustryGoMcpAdapter — migrate()', () => {
   it('walks tools/*.go recursively (subdir tools also discovered)', async () => {
     // Sanity: the fixture's tools/ has flat files, so the recursion just
     // confirms the readDirGoFiles helper visits them. Both files.go and
-    // deploy.go are read — verified via the per-tool count below.
+    // deploy.go are read - verified via the per-tool count below.
     const result = await hubdustryGoMcpAdapter.migrate(FIXTURE_ROOT);
     const fileTools = result.unmappedTools.filter((n) => n.startsWith('server.files.'));
     const deployTools = result.unmappedTools.filter((n) => n.startsWith('server.deploy.'));
@@ -115,6 +115,6 @@ describe('hubdustryGoMcpAdapter — migrate()', () => {
 
   // Defensive cleanup in case any test left a temp dir behind.
   afterAll(() => {
-    // No persistent state to clean here — temp dirs are scoped per-test.
+    // No persistent state to clean here - temp dirs are scoped per-test.
   });
 });

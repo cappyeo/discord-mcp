@@ -10,7 +10,7 @@ export default defineTool({
   category: 'webhooks',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a message previously sent by this webhook. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a message previously sent by this webhook. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Retract a stale alert or accidentally posted content.',
@@ -21,7 +21,7 @@ export default defineTool({
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook id'),
-    token: WebhookToken.describe('Webhook secret — treat as credential, do not log'),
+    token: WebhookToken.describe('Webhook secret - treat as credential, do not log'),
     message_id: MessageId.describe('Message to delete'),
     thread_id: ChannelId.optional().describe('Query param: thread the message lives in'),
   },

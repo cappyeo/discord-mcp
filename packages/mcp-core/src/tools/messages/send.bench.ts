@@ -8,7 +8,7 @@ import messagesSend from './send.js';
 import '../../container.js';
 
 /**
- * Plan 12 Phase E.1 — performance bench for messages_send.
+ * Plan 12 Phase E.1 - performance bench for messages_send.
  *
  * Run via `pnpm --filter @discord-mcp/core bench`. Bench files run on
  * `vitest bench` only; they're excluded from `vitest run` because
@@ -23,7 +23,7 @@ import '../../container.js';
  * Numbers are informational; CI does NOT gate on bench p50/p95.
  */
 
-// Concrete instance shape — defineTool returns the abstract Tool typeof, so we
+// Concrete instance shape - defineTool returns the abstract Tool typeof, so we
 // alias to a structural type that mirrors what `messagesSend` produces.
 interface RunnableTool {
   run(args: unknown, ctx: { signal: AbortSignal }): Promise<unknown>;

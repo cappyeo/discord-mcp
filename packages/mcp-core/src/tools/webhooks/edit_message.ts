@@ -20,7 +20,7 @@ export default defineTool({
     '- Update an alert that has been resolved, fix a typo, swap V2 layouts.',
     '',
     '**Prefer instead**:',
-    '- `components_v2_edit` for V2 layouts (this is the low-level escape hatch — V2 validation is intentionally `z.record`).',
+    '- `components_v2_edit` for V2 layouts (this is the low-level escape hatch - V2 validation is intentionally `z.record`).',
     '',
     '**Auth**: NO `Authorization: Bot …` header.',
     '',
@@ -30,7 +30,7 @@ export default defineTool({
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook id'),
-    token: WebhookToken.describe('Webhook secret — treat as credential, do not log'),
+    token: WebhookToken.describe('Webhook secret - treat as credential, do not log'),
     message_id: MessageId.describe('Message to edit'),
     thread_id: ChannelId.optional().describe('Query param: thread the message lives in'),
     content: z.string().max(2000).nullable().optional(),

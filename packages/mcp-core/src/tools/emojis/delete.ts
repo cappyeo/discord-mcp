@@ -10,7 +10,7 @@ export default defineTool({
   category: 'emojis',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a custom guild emoji. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a custom guild emoji. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Retire a stale or off-brand emoji.',

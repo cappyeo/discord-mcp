@@ -1,5 +1,5 @@
 /**
- * Registry of all supported MCP client snippet generators — Plan 9 Phase D.
+ * Registry of all supported MCP client snippet generators - Plan 9 Phase D.
  *
  * Order is intentional: Claude Desktop first (most common entry point
  * for new users), Claude Code second (Anthropic CLI), Cursor third
@@ -9,7 +9,7 @@
  *
  * To add a new client: implement {@link ClientGenerator} in a new file
  * under this directory, register the singleton here, and add a test.
- * No other surface needs to change — `init` reads from this array.
+ * No other surface needs to change - `init` reads from this array.
  */
 import { claudeCodeGenerator } from './claude-code.js';
 import { claudeDesktopGenerator } from './claude-desktop.js';

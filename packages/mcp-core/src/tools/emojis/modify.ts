@@ -22,7 +22,7 @@ export default defineTool({
     '- Rename an emoji; restrict to a role tier.',
     '',
     '**When NOT to use**:',
-    '- Replacing the image — Discord does not allow editing emoji bytes; create a new one and delete the old.',
+    '- Replacing the image - Discord does not allow editing emoji bytes; create a new one and delete the old.',
     '',
     '**Returns**: `{id, name, animated, roles}`.',
   ].join('\n'),

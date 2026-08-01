@@ -81,7 +81,7 @@ describe('bindTypingStartHandler', () => {
       vi.advanceTimersByTime(1000);
     }
 
-    // Leading fire + one per 5s window — never starved, never per-event.
+    // Leading fire + one per 5s window - never starved, never per-event.
     expect(notify.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(notify.mock.calls.length).toBeLessThanOrEqual(6);
   });

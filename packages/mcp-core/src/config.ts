@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
 
-// Helper for truthy env strings — matches Plan 8 §5 boolean env-string convention.
+// Helper for truthy env strings - matches Plan 8 §5 boolean env-string convention.
 const boolish = (def = false) =>
   z
     .string()
@@ -31,7 +31,7 @@ const ConfigSchema = z.object({
   OTEL_ENABLED: boolish(false),
   OTEL_SERVICE_NAME: z.string().default('discord-mcp'),
   OTEL_SERVICE_VERSION: z.string().default(packageJson.version),
-  // OTLP collector endpoint (e.g. http://localhost:4318). Optional — when unset
+  // OTLP collector endpoint (e.g. http://localhost:4318). Optional - when unset
   // the SDK still boots (if OTEL_CONSOLE_EXPORTER=true) or stays inert.
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
   OTEL_EXPORTER_OTLP_PROTOCOL: z
@@ -77,7 +77,7 @@ const ConfigSchema = z.object({
   MCP_CIRCUIT_HALF_OPEN_AFTER_MS: z.coerce.number().int().min(5000).max(600000).default(60000),
   // Bulkhead: max in-flight Discord REST calls.  queueSize is hard-coded to 0
   // in policy.ts (fast-reject, no head-of-line blocking).  Min sane value is
-  // 10 — see policy.ts JSDoc note on pipeline self-deadlock.
+  // 10 - see policy.ts JSDoc note on pipeline self-deadlock.
   MCP_BULKHEAD_LIMIT: z.coerce.number().int().min(1).max(1000).default(100),
 
   // --- Audit logging (Plan 8 Phase E) ---
@@ -88,10 +88,10 @@ const ConfigSchema = z.object({
     .string()
     .transform((v) => v !== 'false')
     .default(true),
-  // Sink selector — see audit/sink.ts. `none` is identical to setting
+  // Sink selector - see audit/sink.ts. `none` is identical to setting
   // MCP_AUDIT_ENABLED=false but reserved for explicit opt-out via sink config.
   MCP_AUDIT_SINK: z.enum(['stderr', 'file', 'otlp', 'none']).default('stderr'),
-  // Path used by FileAuditSink. Optional — sink falls back to a default
+  // Path used by FileAuditSink. Optional - sink falls back to a default
   // (./discord-mcp-audit.jsonl) at runtime when undefined.
   MCP_AUDIT_FILE: z.string().optional(),
 });

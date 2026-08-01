@@ -45,7 +45,7 @@ export default defineTool({
   },
   idempotent: true,
   handler: async (args) => {
-    // No Routes helper for activity instances yet — call the path directly.
+    // No Routes helper for activity instances yet - call the path directly.
     const raw = (await container.rest.get(
       `/applications/${args.application_id}/activity-instances/${args.instance_id}`,
     )) as RawActivityInstance;

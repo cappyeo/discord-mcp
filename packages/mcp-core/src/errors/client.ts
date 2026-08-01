@@ -72,7 +72,7 @@ export class DiscordCloudflareBlocked extends DiscordClientError {
   public readonly code = 'DISCORD_CLOUDFLARE_BLOCKED';
   public readonly retriable = true;
   public constructor(public readonly retryAfterMs: number = 3_600_000) {
-    super('Cloudflare 1015 — exceeded 10K invalid requests / 10 min');
+    super('Cloudflare 1015 - exceeded 10K invalid requests / 10 min');
     this.recoveryHint = `IP-banned for ~1h. STOP all Discord requests. Investigate which tool spammed invalid args.`;
   }
 }

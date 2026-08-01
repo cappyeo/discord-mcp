@@ -2,7 +2,7 @@ import { ScopeRejectedError } from '../errors/client.js';
 import type { ToolMiddleware } from './compose.js';
 
 /**
- * Category allowlist — the `MCP_CATEGORIES` least-privilege control.
+ * Category allowlist - the `MCP_CATEGORIES` least-privilege control.
  *
  * Enforced here rather than as a per-tool precondition: attaching
  * `preconditions: ['category_enabled']` to 192 tool files would put the gate
@@ -10,7 +10,7 @@ import type { ToolMiddleware } from './compose.js';
  * silently exempt. One middleware in the chain covers every tool that exists
  * and every tool anyone adds.
  *
- * Unset means allow-all — this narrows a deployment's blast radius, it is not
+ * Unset means allow-all - this narrows a deployment's blast radius, it is not
  * a deny-by-default authorization system, and flipping the default would break
  * every existing install.
  *

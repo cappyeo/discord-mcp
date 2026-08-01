@@ -1,5 +1,5 @@
 /**
- * CLI output formatter — pretty TTY mode and JSON mode.
+ * CLI output formatter - pretty TTY mode and JSON mode.
  *
  * Plan 9 Phase A. The output module is shared by `doctor`, `init`,
  * `migrate` and any future sub-command that emits a structured result.
@@ -99,7 +99,7 @@ function renderPretty(result: CommandResult): string {
 
 /**
  * Emit a CommandResult. Sets `process.exitCode = result.exitCode`.
- * Never calls `process.exit()` — Node drains stdout/stderr naturally
+ * Never calls `process.exit()` - Node drains stdout/stderr naturally
  * once the event loop empties.
  */
 export function emitResult(result: CommandResult, asJson: boolean): void {

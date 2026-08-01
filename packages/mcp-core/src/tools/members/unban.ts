@@ -14,7 +14,7 @@ export default defineTool({
     '**When to use**:',
     '- Restore a previously-banned user.',
     '',
-    '**Returns**: `{unbanned, user_id, guild_id}`. Idempotent — unbanning a non-banned user returns 404 from Discord.',
+    '**Returns**: `{unbanned, user_id, guild_id}`. Idempotent - unbanning a non-banned user returns 404 from Discord.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to unban from'),

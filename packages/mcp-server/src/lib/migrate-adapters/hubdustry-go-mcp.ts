@@ -1,10 +1,10 @@
 /**
- * Hubdustry Go MCP adapter — Plan 9 Phase E reference implementation.
+ * Hubdustry Go MCP adapter - Plan 9 Phase E reference implementation.
  *
  * Hubdustry's MCP server (https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp)
  * was the user's previous Go-based project. Its tools are all
- * server-admin / files / containers / deploy / system-stats — none are
- * Discord — so against a real Hubdustry tree this adapter produces
+ * server-admin / files / containers / deploy / system-stats - none are
+ * Discord - so against a real Hubdustry tree this adapter produces
  * `0 mapped, N unmapped, 0 manual review`. That's the intended output:
  * it demonstrates the framework while honestly reporting that Hubdustry
  * has nothing this MCP can run today. Plan 11 ships Discord-using
@@ -15,7 +15,7 @@
  * `mcp.NewTool` call pattern we consider this a Hubdustry-shaped repo.
  *
  * Tool extraction: regex over `*.go` files under `tools/` for the
- * `mcp.NewTool("name"` pattern. This is best-effort — it will miss
+ * `mcp.NewTool("name"` pattern. This is best-effort - it will miss
  * multi-line calls and any tool name built via concatenation. The
  * adapter is documented to be best-effort; users can extend or
  * hand-edit the result.
@@ -32,14 +32,14 @@ import type { MigrationResult, MigrationSource } from './types.js';
  * populate entries here.
  */
 const NAME_MAP: Record<string, string> = {
-  // intentionally empty — see file-level JSDoc.
+  // intentionally empty - see file-level JSDoc.
 };
 
 /**
  * Resolve the actual Hubdustry root: prefer `<rootPath>/apps/mcp` (the
  * monorepo layout the user runs locally), fall back to `<rootPath>`
  * itself (a standalone clone of just the mcp app). Returns the
- * unchanged `rootPath` if neither candidate has a `main.go` — `migrate`
+ * unchanged `rootPath` if neither candidate has a `main.go` - `migrate`
  * then proceeds and reports "no tools found" via `warnings`.
  */
 function detectActualPath(rootPath: string): string {
@@ -48,13 +48,13 @@ function detectActualPath(rootPath: string): string {
     statSync(join(monorepoCandidate, 'main.go'));
     return monorepoCandidate;
   } catch {
-    // not the monorepo layout — try the direct layout below.
+    // not the monorepo layout - try the direct layout below.
   }
   try {
     statSync(join(rootPath, 'main.go'));
     return rootPath;
   } catch {
-    // neither found — let migrate() report empty results.
+    // neither found - let migrate() report empty results.
   }
   return rootPath;
 }
@@ -87,7 +87,7 @@ function readDirGoFiles(dir: string): string[] {
 
 export const hubdustryGoMcpAdapter: MigrationSource = {
   id: 'hubdustry-go-mcp',
-  description: 'Hubdustry Go MCP server (apps/mcp) — non-Discord tools, reference adapter',
+  description: 'Hubdustry Go MCP server (apps/mcp) - non-Discord tools, reference adapter',
   homepage: 'https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp',
   languages: ['go'],
   toolCountEstimate: 8,
@@ -102,7 +102,7 @@ export const hubdustryGoMcpAdapter: MigrationSource = {
           return true;
         }
       } catch {
-        // file missing or unreadable — try the next candidate.
+        // file missing or unreadable - try the next candidate.
       }
     }
     return false;
@@ -136,7 +136,7 @@ export const hubdustryGoMcpAdapter: MigrationSource = {
     }
 
     if (allTools.length === 0) {
-      warnings.push('no mcp.NewTool calls found — adapter may not match this Hubdustry version');
+      warnings.push('no mcp.NewTool calls found - adapter may not match this Hubdustry version');
     }
 
     const mappedTools = allTools

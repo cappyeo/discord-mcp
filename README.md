@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-banner.jpg" alt="Discord MCP — connect Discord to the Model Context Protocol" width="1200" />
+  <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-banner.jpg" alt="Discord MCP - connect Discord to the Model Context Protocol" width="1200" />
 </p>
 
 <h1 align="center">discord-mcp</h1>
@@ -73,11 +73,11 @@ Explore the complete, generated [tool reference](https://cappyeo.github.io/disco
 
 ## Built for production use
 
-- **Safety controls** — destructive operations require explicit confirmation and can be governed by category-level controls.
-- **Reliable Discord access** — retries, timeouts, rate-limit handling, and circuit breaking protect agent workflows from transient API failures.
-- **Observability** — OpenTelemetry traces and metrics, structured logs, and audit events make operations inspectable.
-- **Typed contracts** — every tool is schema-defined; public core exports, CLI flags, configuration variables, and tool metadata are regression-tested.
-- **Supply-chain evidence** — npm releases are published from GitHub Actions with signed SLSA provenance.
+- **Safety controls** - destructive operations require explicit confirmation and can be governed by category-level controls.
+- **Reliable Discord access** - retries, timeouts, rate-limit handling, and circuit breaking protect agent workflows from transient API failures.
+- **Observability** - OpenTelemetry traces and metrics, structured logs, and audit events make operations inspectable.
+- **Typed contracts** - every tool is schema-defined; public core exports, CLI flags, configuration variables, and tool metadata are regression-tested.
+- **Supply-chain evidence** - npm releases are published from GitHub Actions with signed SLSA provenance.
 
 Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [operations guides](https://cappyeo.github.io/discord-mcp/operations/), and [v1.0 readiness plan](docs/v1.0.0-readiness.md) for implementation details and current stability commitments.
 

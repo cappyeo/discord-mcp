@@ -10,7 +10,7 @@ export default defineTool({
   category: 'interactions',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete the original interaction response message. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete the original interaction response message. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**Auth**: token-secured (NO bot token).',
     '',

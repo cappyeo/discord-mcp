@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { __SENSITIVE_KEYS_BY_TOOL_FOR_TESTS, redactArgs } from './redact.js';
 
-describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
+describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
   describe('global sensitive keys', () => {
     it('redacts globally sensitive top-level keys with length-aware marker', () => {
       const out = redactArgs(
@@ -272,7 +272,7 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
         'interactions_edit_followup',
       ]);
       const declared = new Set(Object.keys(__SENSITIVE_KEYS_BY_TOOL_FOR_TESTS));
-      // Sets must be equal — no orphans either way.
+      // Sets must be equal - no orphans either way.
       expect([...declared].sort()).toEqual([...exercised].sort());
     });
   });
@@ -299,7 +299,7 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
     }
   });
 
-  // `mcp_pipeline` args are `{steps:[{tool, args}]}` — the nested args belong
+  // `mcp_pipeline` args are `{steps:[{tool, args}]}` - the nested args belong
   // to the inner tools and must get the inner tools' redaction.
   describe('mcp_pipeline nested step args (R2-RED-05)', () => {
     it('applies the inner tool rules to steps[].args', () => {
@@ -376,7 +376,7 @@ describe('redactArgs (Plan 8 Phase F — per-tool + recursive)', () => {
 
   describe('allowlist semantics', () => {
     it('tools NOT in SENSITIVE_KEYS_BY_TOOL only get global rules', () => {
-      // `payload` is sensitive for messages_send (no — it's `content`),
+      // `payload` is sensitive for messages_send (no - it's `content`),
       // but for an unknown tool it should pass through (truncated only).
       const out = redactArgs(
         { content: 'this is fine for unknown tool', payload: 'arbitrary' },

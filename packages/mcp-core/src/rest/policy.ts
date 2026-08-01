@@ -50,8 +50,8 @@ import { DiscordRetryableError } from './errors.js';
  *     breaker, not N. Otherwise threshold semantics are misleading.
  *   - The breaker error filter mirrors the retry filter
  *     (`DiscordRetryableError`) so 4xx never increments the breaker counter
- *     — only true upstream/network failures do.
- *   - `queueSize: 0` on the bulkhead — DO NOT queue. Head-of-line blocking is
+ *     - only true upstream/network failures do.
+ *   - `queueSize: 0` on the bulkhead - DO NOT queue. Head-of-line blocking is
  *     worse than fast failure for an agent. The agent can re-issue.
  *
  * Pipeline self-deadlock note (Plan 8 §13):
@@ -72,9 +72,9 @@ import { DiscordRetryableError } from './errors.js';
  *   - `!MCP_RETRY_ENABLED`: skip retry, use `wrap(bulkhead?, breaker?, timeout)`.
  *   - `!MCP_CIRCUIT_ENABLED`: skip breaker. Hooks for breaker are also skipped.
  *   - Bulkhead is always present (cockatiel doesn't expose an off-switch and
- *     the limit defaults to 100 — effectively unbounded for stdio agents).
+ *     the limit defaults to 100 - effectively unbounded for stdio agents).
  *
- * @param config Loaded config — only the resilience fields are read.
+ * @param config Loaded config - only the resilience fields are read.
  * @param logger Optional pino logger for hook observability. When omitted
  *               (test paths), hooks still emit OTel metrics.
  */
@@ -105,7 +105,7 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
 
   // Custom backoff: prefer Retry-After when known, otherwise delegate to
   // exponential.  The exponential instance is advanced (and returned as
-  // `state`) on EVERY attempt — including the Retry-After branch — so a 429
+  // `state`) on EVERY attempt - including the Retry-After branch - so a 429
   // followed by a 5xx does not reset the chain back to the initial delay.
   const customBackoff = new DelegateBackoff<IRetryBackoffContext<unknown>, IBackoff<unknown>>(
     (ctx, state) => {
@@ -118,7 +118,7 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
     },
   );
 
-  // `replaySafe` — not just the type — because an ambiguous POST failure is a
+  // `replaySafe` - not just the type - because an ambiguous POST failure is a
   // genuine upstream failure (the breaker below must count it) that must never
   // be re-sent: the write may already have landed at Discord and only the
   // response was lost.
@@ -152,8 +152,8 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   // bubbles through WITHOUT incrementing the consecutive-failure counter. This matches Plan 8 §13: "Non-retryable Discord errors (4xx)
   // bubble through breaker WITHOUT incrementing failure count."
   // (Spec called for `handleAll.orType(DiscordRetryableError)` but that
-  // would treat every error as a circuit failure — including validation
-  // 4xx — which is misleading.)
+  // would treat every error as a circuit failure - including validation
+  // 4xx - which is misleading.)
   const breaker = config.MCP_CIRCUIT_ENABLED
     ? circuitBreaker(handleType(DiscordRetryableError), {
         halfOpenAfter: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
@@ -176,7 +176,7 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
         );
         circuitTransitions.add(1, { [ATTR_CIRCUIT_TO_STATE]: 'open' });
       } catch {
-        // Hooks must never throw out of cockatiel — swallow + continue.
+        // Hooks must never throw out of cockatiel - swallow + continue.
       }
     });
     breaker.onHalfOpen(() => {
@@ -225,7 +225,7 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   layers.push(timeoutPolicy as unknown as WrapInputs[number]);
 
   // Cast: cockatiel's `wrap` overloads cover up to 5 explicit args; we use
-  // the variadic form which is typed as `IPolicy<C, A>` — fine for our use.
+  // the variadic form which is typed as `IPolicy<C, A>` - fine for our use.
   const inner = (wrap as (...p: WrapInputs) => IPolicy)(...layers);
 
   // --- Dead-letter telemetry (Plan 8 D.5) ---
@@ -236,7 +236,7 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   // error that escapes the entire policy chain IS a terminal failure by
   // definition (retries exhausted, breaker opened, bulkhead rejected, etc.).
   // Transient failures handled internally by retry never bubble out, so they
-  // do not fire this hook — matching Plan 8 §9 D.5 semantics.
+  // do not fire this hook - matching Plan 8 §9 D.5 semantics.
   const final: IPolicy = {
     _altReturn: undefined as never,
     onSuccess: inner.onSuccess,

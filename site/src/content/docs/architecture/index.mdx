@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: How discord-mcp is built — tool registry, six-stage middleware, resilient REST adapter, optional Gateway, and protocol boundaries.
+description: How discord-mcp is built - tool registry, six-stage middleware, resilient REST adapter, optional Gateway, and protocol boundaries.
 type: explanation
 prev: false
 next: false
@@ -98,7 +98,7 @@ tests, but do not reimplement those controls.
     { title: 'Pipeline', href: '/discord-mcp/architecture/pipeline/', description: 'The mcp_pipeline executor: sequential fail-fast calls, {{stepN.path}} interpolation, recursion guard, and partial-failure semantics.' },
     { title: 'Gateway', href: '/discord-mcp/architecture/gateway/', description: 'The optional --gateway mode: five notification URI keys, five handlers, in-memory subscriptions, debounce, and REST-only fallback.' },
     { title: 'Error handling', href: '/discord-mcp/architecture/error-handling/', description: 'The error hierarchy (client vs server), formatErrorForUser shape, recovery-hint contract, DRY_RUN_PREVIEW pattern, Cockatiel mappings.' },
-    { title: 'Confirmation', href: '/discord-mcp/architecture/confirmation/', description: 'The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 29 explicitly registered high-risk tools—and its limits.' },
+    { title: 'Confirmation', href: '/discord-mcp/architecture/confirmation/', description: 'The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 29 explicitly registered high-risk tools-and its limits.' },
     { title: 'Sampling', href: '/discord-mcp/architecture/sampling/', description: 'Zero-API-key intelligence: how the 5 intelligence tools call back into the client’s LLM via MCP sampling, with a graceful host_llm_should_process fallback.' },
     { title: 'Rate limits', href: '/discord-mcp/architecture/rate-limits/', description: 'Discord’s global and route buckets, the @discordjs/rest scheduler, and the boundary with local resilience policies.' },
   ]}
@@ -120,12 +120,12 @@ fastest path is usually:
    find the exact file responsible.
 
 The architecture pages assume familiarity with Discord's API model and
-basic TypeScript. We do not re-explain MCP itself — see
+basic TypeScript. We do not re-explain MCP itself - see
 [modelcontextprotocol.io](https://modelcontextprotocol.io) for that.
 
 ## Related
 
-- [Get started](/discord-mcp/start/) — install and run the server.
-- [Tools](/discord-mcp/tools/) — auto-generated reference for all 192 tools.
-- [Recipes](/discord-mcp/recipes/) — multi-tool workflows that exercise these subsystems.
-- [Operations](/discord-mcp/operations/) — production-running concerns: telemetry, resilience, audit, client matrix.
+- [Get started](/discord-mcp/start/) - install and run the server.
+- [Tools](/discord-mcp/tools/) - auto-generated reference for all 192 tools.
+- [Recipes](/discord-mcp/recipes/) - multi-tool workflows that exercise these subsystems.
+- [Operations](/discord-mcp/operations/) - production-running concerns: telemetry, resilience, audit, client matrix.

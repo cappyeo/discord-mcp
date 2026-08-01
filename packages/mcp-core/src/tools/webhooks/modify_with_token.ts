@@ -25,7 +25,7 @@ export default defineTool({
     '- You hold the token but lack guild access.',
     '',
     '**Restrictions**:',
-    '- Cannot move the webhook (`channel_id` not accepted on this route — use `webhooks_modify`).',
+    '- Cannot move the webhook (`channel_id` not accepted on this route - use `webhooks_modify`).',
     '- Discord does not record audit reasons on token-auth routes, so `audit_reason` is intentionally absent.',
     '',
     '**Auth**: NO `Authorization: Bot …` header.',
@@ -34,7 +34,7 @@ export default defineTool({
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook to modify'),
-    token: WebhookToken.describe('Webhook secret — treat as credential, do not log'),
+    token: WebhookToken.describe('Webhook secret - treat as credential, do not log'),
     name: z.string().min(1).max(80).optional().describe('New display name'),
     avatar: z
       .string()

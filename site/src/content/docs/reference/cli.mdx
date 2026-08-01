@@ -14,7 +14,7 @@ sub-commands routed by [commander](https://www.npmjs.com/package/commander):
 discord-mcp <command> [options]
 ```
 
-`serve` is the default sub-command — running `discord-mcp` with no command
+`serve` is the default sub-command - running `discord-mcp` with no command
 boots the stdio MCP server, equivalent to `discord-mcp serve`. The other
 three (`doctor`, `init`, `migrate`) are operator tools.
 
@@ -27,7 +27,7 @@ Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mc
 | `--version`  | Print the package version and exit.      |
 | `--help`     | Print the help summary for the command.  |
 
-`--help` works at every level — `discord-mcp --help`, `discord-mcp doctor --help`,
+`--help` works at every level - `discord-mcp --help`, `discord-mcp doctor --help`,
 etc. Each sub-command has its own option list described below.
 
 ## `serve`
@@ -48,7 +48,7 @@ wires the audit sink, and blocks until the parent agent disconnects.
 ### Examples
 
 ```bash
-# Bare invocation — equivalent to `discord-mcp serve` (commander default).
+# Bare invocation - equivalent to `discord-mcp serve` (commander default).
 discord-mcp
 
 # Explicit serve.
@@ -67,7 +67,7 @@ discord-mcp --gateway
 | Code | Meaning                                                                                                          |
 | ---- | ---------------------------------------------------------------------------------------------------------------- |
 | `0`  | Process never returns under normal stdio operation. The transport runs until the parent agent disconnects.       |
-| `1`  | Boot failure — typically invalid config (missing `DISCORD_TOKEN`, unparseable env). Error message goes to stderr. |
+| `1`  | Boot failure - typically invalid config (missing `DISCORD_TOKEN`, unparseable env). Error message goes to stderr. |
 
 <Aside type="note">
 `serve` is the one sub-command that calls `process.exit(1)` directly on
@@ -78,8 +78,8 @@ connected, so there is nothing to flush). Every other sub-command sets
 
 ### See also
 
-- [Get started → Quickstart](/discord-mcp/start/quickstart/) — install and run.
-- [Architecture](/discord-mcp/architecture/) — what `serve` actually wires up.
+- [Get started → Quickstart](/discord-mcp/start/quickstart/) - install and run.
+- [Architecture](/discord-mcp/architecture/) - what `serve` actually wires up.
 
 ## `doctor`
 
@@ -108,7 +108,7 @@ discord-mcp doctor --json
 # Verify the token is accepted by Discord.
 DISCORD_TOKEN=Bot.xxx discord-mcp doctor --online
 
-# Full online + JSON report — typical pre-deploy gate.
+# Full online + JSON report - typical pre-deploy gate.
 discord-mcp doctor --online --json | jq .
 ```
 
@@ -125,8 +125,8 @@ The exit-code policy is uniform across `doctor`, `init`, and `migrate`:
 
 ### See also
 
-- [Operations → Audit](/discord-mcp/operations/audit/) — what audit-sink check covers.
-- [Operations → Telemetry](/discord-mcp/operations/telemetry/) — what otel-config check covers.
+- [Operations → Audit](/discord-mcp/operations/audit/) - what audit-sink check covers.
+- [Operations → Telemetry](/discord-mcp/operations/telemetry/) - what otel-config check covers.
 
 ## `init`
 
@@ -150,7 +150,7 @@ to stdout or writes to `--output <path>`.
 ### Examples
 
 ```bash
-# Interactive — prompts for client + token + gateway when stdin is a TTY.
+# Interactive - prompts for client + token + gateway when stdin is a TTY.
 discord-mcp init
 
 # Non-interactive: print a Claude Desktop snippet with the token placeholder.
@@ -173,12 +173,12 @@ discord-mcp init --client generic --json | jq .data.content
 | Code | Meaning                                                                              |
 | ---- | ------------------------------------------------------------------------------------ |
 | `0`  | Snippet generated (and written, if `--output` was used).                             |
-| `2`  | Couldn't run — unknown `--client`, `--output` path exists without `--force`.         |
+| `2`  | Couldn't run - unknown `--client`, `--output` path exists without `--force`.         |
 
 ### See also
 
-- [Get started → Client setup](/discord-mcp/start/client-setup/) — manual client wiring guides.
-- [Operations → Clients](/discord-mcp/operations/clients/) — capability matrix per client.
+- [Get started → Client setup](/discord-mcp/start/client-setup/) - manual client wiring guides.
+- [Operations → Clients](/discord-mcp/operations/clients/) - capability matrix per client.
 
 ## `migrate`
 
@@ -194,7 +194,7 @@ Migrate from another Discord MCP setup. **Four adapters ship** today:
 | `pasympa`          | PaSympa Discord MCP (TypeScript)                      | ~91   |
 | `quadslab`         | quadslab Discord MCP (`@quadslab.io`, TypeScript)     | ~139  |
 | `discord-ops`      | discord-ops by bookedsolidtech (TypeScript)           | ~49   |
-| `hubdustry-go-mcp` | Hubdustry Go MCP — **non-Discord reference adapter**  | 8     |
+| `hubdustry-go-mcp` | Hubdustry Go MCP - **non-Discord reference adapter**  | 8     |
 
 `hubdustry-go-mcp` exists as the adapter-authoring example. Its tools are not
 Discord tools, so running it against a real Hubdustry tree produces "0 mapped,
@@ -202,22 +202,22 @@ Discord tools, so running it against a real Hubdustry tree produces "0 mapped,
 
 | Flag             | Type    | Default | Description                                                                                                       |
 | ---------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `--list`         | boolean | `false` | List every registered adapter with its description, languages, tool-count estimate, and homepage. Informational — **always exits `0`**. Takes precedence over `--from`. |
-| `--from <id>`    | string  | (none)  | Source adapter id — one of the four above. Required to run a migration.                                            |
+| `--list`         | boolean | `false` | List every registered adapter with its description, languages, tool-count estimate, and homepage. Informational - **always exits `0`**. Takes precedence over `--from`. |
+| `--from <id>`    | string  | (none)  | Source adapter id - one of the four above. Required to run a migration.                                            |
 | `--source <path>`| string  | `cwd`   | Path to the source repo to migrate from. Defaults to the current working directory.                               |
 | `--json`         | boolean | `false` | Emit machine-readable JSON instead of pretty output.                                                              |
 
 <Aside type="caution">
 A bare `discord-mcp migrate` with no flags also prints the adapter list, but
 it is the legacy "missing `--from`" **error** path and exits `2`. Use
-`--list` for discovery — it is the only form that exits `0`, which is what a
+`--list` for discovery - it is the only form that exits `0`, which is what a
 CI step needs.
 </Aside>
 
 ### Examples
 
 ```bash
-# Discover adapters — exits 0, safe in CI.
+# Discover adapters - exits 0, safe in CI.
 discord-mcp migrate --list
 
 # Same, machine-readable.
@@ -229,7 +229,7 @@ discord-mcp migrate --from pasympa
 # Migrate from a sibling directory.
 discord-mcp migrate --from quadslab --source ../quadslab-discord-mcp
 
-# JSON output for tooling — capture the full migration report.
+# JSON output for tooling - capture the full migration report.
 discord-mcp migrate --from discord-ops --json > migrate-report.json
 ```
 
@@ -238,12 +238,12 @@ discord-mcp migrate --from discord-ops --json > migrate-report.json
 | Code | Meaning                                                                                                                            |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `0`  | `--list` (always), OR an adapter ran AND every source tool was mapped cleanly (no unmapped, no manual review).                     |
-| `1`  | Adapter ran but produced unmapped tools or items needing manual review. Successful run with work left — hand-edit the output.      |
-| `2`  | Couldn't run — bare `migrate` with no flags, unknown `--from`, source not detected at `--source`, IO failure.                      |
+| `1`  | Adapter ran but produced unmapped tools or items needing manual review. Successful run with work left - hand-edit the output.      |
+| `2`  | Couldn't run - bare `migrate` with no flags, unknown `--from`, source not detected at `--source`, IO failure.                      |
 
 ### See also
 
-- [Architecture](/discord-mcp/architecture/) — how the tool registry maps onto MCP.
+- [Architecture](/discord-mcp/architecture/) - how the tool registry maps onto MCP.
 
 ## Output formats
 

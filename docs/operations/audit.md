@@ -1,8 +1,8 @@
-# Audit Logging — Operator Guide
+# Audit Logging - Operator Guide
 
 Every **mutating** tool call (i.e. `idempotent: false`) emits a single
 audit event that captures who/what/when/result. Read-only tools (e.g.
-`messages_read`, `channels_get`) do NOT generate audit noise — their
+`messages_read`, `channels_get`) do NOT generate audit noise - their
 read patterns are already visible in telemetry.
 
 This document covers sink configuration, log forwarding, retention, and
@@ -16,7 +16,7 @@ the on-disk JSONL schema.
 | ---- | -------- | -------- |
 | `stderr` (default) | `MCP_AUDIT_SINK=stderr` | stdio MCP transports (the default), or any container that ships stderr to a log aggregator (Loki, CloudWatch, Datadog Logs). |
 | `file` | `MCP_AUDIT_SINK=file` + optional `MCP_AUDIT_FILE=/path/to/audit.jsonl` | Long-running daemon deployments where stderr is owned by another process. |
-| `otlp` (stub) | `MCP_AUDIT_SINK=otlp` | Reserved for the OTel Logs pipeline. **Currently a stub** — falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]` prefix so misconfiguration is visible. Will become real once `@opentelemetry/api-logs` LoggerProvider lands in mcp-server/otel.ts. |
+| `otlp` (stub) | `MCP_AUDIT_SINK=otlp` | Reserved for the OTel Logs pipeline. **Currently a stub** - falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]` prefix so misconfiguration is visible. Will become real once `@opentelemetry/api-logs` LoggerProvider lands in mcp-server/otel.ts. |
 | `none` | `MCP_AUDIT_SINK=none` or `MCP_AUDIT_ENABLED=false` | When the deployment is in a regulated context that explicitly bans logging the body of mutating ops, or for unit-test isolation. |
 
 `MCP_AUDIT_ENABLED=false` ALWAYS overrides `MCP_AUDIT_SINK`. There is no
@@ -32,7 +32,7 @@ export MCP_AUDIT_SINK=stderr
 npx discord-mcp 2> /var/log/discord-mcp/audit-$(date +%F).jsonl
 ```
 
-stderr is the only safe stream in stdio MCP — stdout is reserved for
+stderr is the only safe stream in stdio MCP - stdout is reserved for
 JSON-RPC frames. App logs and audit events both go to stderr, but
 audit events carry `"level":"audit"` so log routers can filter them
 into a separate destination.
@@ -56,7 +56,7 @@ before exiting (`auditSink.shutdown()` is called from
 ### Rotation
 
 `discord-mcp` does **not** ship in-process log rotation. This is
-deliberate — rotation is an OS-level concern with established
+deliberate - rotation is an OS-level concern with established
 solutions; embedding logrotate-equivalent logic in-process duplicates
 work and adds failure modes (partial writes during rotation, lock
 contention).
@@ -76,13 +76,13 @@ Use `logrotate` (Linux) or your container platform's native log driver:
 }
 ```
 
-`copytruncate` is critical — `discord-mcp` keeps the file descriptor
+`copytruncate` is critical - `discord-mcp` keeps the file descriptor
 open for the lifetime of the process, so renaming the file (the
 default `logrotate` strategy) leaves the bot writing to the renamed
 inode, which is invisible to your aggregator.
 
 For containerised deployments, prefer the platform's log driver
-(`json-file`, `awslogs`, `gelf`, etc.) and have it consume stderr —
+(`json-file`, `awslogs`, `gelf`, etc.) and have it consume stderr -
 i.e. use the `stderr` sink, not the `file` sink, in a container.
 
 ---
@@ -115,7 +115,7 @@ short-circuits when `tool.idempotent === true`. This covers all
 read-only operations:
 
 - `messages_read`, `messages_get`, `channels_list`, `channels_get`,
-  `members_search`, etc. — anything that returns data without
+  `members_search`, etc. - anything that returns data without
   mutation.
 
 The reasoning: SOC2 audit-trail requirements focus on **changes**, not
@@ -123,7 +123,7 @@ reads. Read patterns are still observable via telemetry (every tool
 call has a span with `mcp.tool.name`); duplicating that into audit
 records would balloon the log volume without adding compliance value.
 
-If your compliance regime requires read-trail logging (rare — usually
+If your compliance regime requires read-trail logging (rare - usually
 for HIPAA-scope deployments), there is currently no override flag.
 File an issue and we'll consider a `MCP_AUDIT_INCLUDE_READS` toggle
 for Plan 9+.
@@ -146,7 +146,7 @@ the sink. See `redact.ts` for the full policy:
   `100ch + "...[TRUNCATED]"` to bound record size.
 
 The audit JSONL is therefore safe to ingest into a SIEM that does not
-have field-level access controls — the bytes themselves are already
+have field-level access controls - the bytes themselves are already
 redacted.
 
 ### Retention
@@ -154,7 +154,7 @@ redacted.
 `discord-mcp` does not enforce retention. Use your log platform's
 retention policy:
 
-- CloudWatch Logs: per-log-group retention (default infinite — set
+- CloudWatch Logs: per-log-group retention (default infinite - set
   to 90/180/365 days per your policy).
 - Loki: retention via `compactor.retention_period`.
 - Datadog: per-index retention.
@@ -175,7 +175,7 @@ Fields:
 | `tool` | string | yes | Tool name, e.g. `messages_send`. |
 | `category` | string | yes | Tool category (e.g. `messages`, `webhooks`). |
 | `idempotent` | boolean | yes | Always `false` for emitted events (idempotent tools are skipped). |
-| `args_redacted` | object | yes | Redacted arg payload — see redaction section above. |
+| `args_redacted` | object | yes | Redacted arg payload - see redaction section above. |
 | `status` | `success` / `tool_error` / `thrown` | yes | Outcome: handler succeeded, returned `isError: true`, or threw. |
 | `duration_ms` | number | yes | Wall-clock duration of the tool call. |
 | `transport` | `stdio` / (future) | yes | MCP transport that received the call. |
@@ -185,7 +185,7 @@ Fields:
 
 Stderr-sink emissions also wrap the event with `{"level":"audit",...}`
 so log routers can filter by level. File-sink emissions are the bare
-event (no wrapper) — the file path itself is the routing.
+event (no wrapper) - the file path itself is the routing.
 
 ---
 

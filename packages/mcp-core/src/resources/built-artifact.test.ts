@@ -4,7 +4,7 @@
  * Every other test in this package imports from `src/`, where a path computed
  * from `import.meta.url` resolves correctly. The published package is a single
  * bundled `dist/index.js` with `files: ["dist"]`, so anything read from disk at
- * runtime relative to the module has a different — usually nonexistent — path
+ * runtime relative to the module has a different - usually nonexistent - path
  * there.
  *
  * That gap shipped a real defect: the five Components V2 templates were loaded
@@ -12,8 +12,8 @@
  * 'components-v2', 'templates')`. In `dist/` that resolves to
  * `packages/mcp-core/tools/...`, which does not exist, and the `.json` files
  * were not in the tarball at all. `resources/list` threw and
- * `components_v2_send_from_template` failed for every template — for every
- * consumer — while all 1000+ tests passed.
+ * `components_v2_send_from_template` failed for every template - for every
+ * consumer - while all 1000+ tests passed.
  *
  * `vitest.global-setup.ts` guarantees `dist/` exists before this runs.
  */

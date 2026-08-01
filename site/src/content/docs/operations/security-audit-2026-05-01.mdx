@@ -1,6 +1,6 @@
 ---
-title: Security audit — 2026-05-01
-description: Manual security review of discord-mcp v0.12.0 (pre-1.0) — token redaction, untrusted-wrap completeness, confirmation gates, audit redaction, OWASP top 10 spot checks.
+title: Security audit - 2026-05-01
+description: Manual security review of discord-mcp v0.12.0 (pre-1.0) - token redaction, untrusted-wrap completeness, confirmation gates, audit redaction, OWASP top 10 spot checks.
 sidebar:
   order: 5
 ---
@@ -15,11 +15,11 @@ for the current behavior and limitations.
 
 <Aside type="caution" title="Superseded">
 This page is a **point-in-time record** of the codebase at commit `438b679`.
-Its findings — including the dependency-audit counts — were accurate on
+Its findings - including the dependency-audit counts - were accurate on
 2026-05-01 and are deliberately left unchanged so the record stays citable.
 
 For the current state, see
-[Security audit — 2026-07-27](/discord-mcp/operations/security-audit-2026-07-27/).
+[Security audit - 2026-07-27](/discord-mcp/operations/security-audit-2026-07-27/).
 </Aside>
 
 - **Reviewer**: discord-mcp implementer subagent (Plan 12 Phase E)
@@ -29,26 +29,26 @@ For the current state, see
 The audit was performed before tagging v0.12.0 and pre-1.0 release. Findings
 are categorized:
 
-- **P0** — must fix before release. Blocks Phase F.
-- **P1** — should fix in Plan 12 Phase E.
-- **P2** — defer to Plan 13+ with documented rationale.
+- **P0** - must fix before release. Blocks Phase F.
+- **P1** - should fix in Plan 12 Phase E.
+- **P2** - defer to Plan 13+ with documented rationale.
 
 ## A. Token redaction
 
 `grep -rn "DISCORD_TOKEN" packages/` returns 12 source files (excluding tests
 and `config.ts`). Each call site was reviewed:
 
-- `packages/mcp-core/src/errors/client.ts:68` — references the env var name
+- `packages/mcp-core/src/errors/client.ts:68` - references the env var name
   in an error message ("Set DISCORD_TOKEN env to a fresh token"). No value
   echo.
-- `packages/mcp-server/src/cli.ts` — references the env var name in `--help`.
-- `packages/mcp-server/src/transports/stdio.ts:31,52-54` — passes the token
+- `packages/mcp-server/src/cli.ts` - references the env var name in `--help`.
+- `packages/mcp-server/src/transports/stdio.ts:31,52-54` - passes the token
   value to `discord.js` Client / REST, never logs it.
-- `packages/mcp-server/src/lib/checks/token-online.ts:65` — constructs
+- `packages/mcp-server/src/lib/checks/token-online.ts:65` - constructs
   `Authorization: Bot <token>` for the live `/users/@me` probe; no log.
-- `packages/mcp-server/src/lib/checks/token-format.ts` — reads
+- `packages/mcp-server/src/lib/checks/token-format.ts` - reads
   `process.env.DISCORD_TOKEN` and asserts shape; never logs the value.
-- `packages/mcp-server/src/commands/init.ts` — emits the literal placeholder
+- `packages/mcp-server/src/commands/init.ts` - emits the literal placeholder
   `${env:DISCORD_TOKEN}` into generated client configs (intentional UX, no
   value).
 
@@ -89,14 +89,14 @@ Verified each tool calls `wrapMessages` or `wrapUntrusted` at least once:
 
 Three additional tools surfaced by the broader `grep` were inspected:
 
-- `users_get_current` — returns the *bot's own* `/users/@me` profile. The
+- `users_get_current` - returns the *bot's own* `/users/@me` profile. The
   `username` field is operator-controlled, not attacker-influenced. **Not
   in scope** for the untrusted-wrap requirement.
-- `members_search` — renders user-authored `username` into the `text`
+- `members_search` - renders user-authored `username` into the `text`
   field via a list (`- $\{username\} (\`user:$\{user_id\}\`)`). The structured
   payload is fine but the rendered Markdown is agent-visible. **P2**:
   consider wrapping the rendered list in Plan 13.
-- `stickers_list_guild` — `text` only contains a count and the guild ID;
+- `stickers_list_guild` - `text` only contains a count and the guild ID;
   user-authored sticker names go to `data` only. **Not in scope** for the
   text-wrapping rule.
 
@@ -109,11 +109,11 @@ Three additional tools surfaced by the broader `grep` were inspected:
 
 Initial pass found **1 P1 finding**:
 
-- `reactions_delete_all` — destructive (clears reactions, irreversible)
+- `reactions_delete_all` - destructive (clears reactions, irreversible)
   but **missing `preconditions: ['confirm_required']`**.
 
 **Fixed in this audit commit** (`packages/mcp-core/src/tools/reactions/delete_all.ts`):
-added the precondition + `**DESTRUCTIVE — IRREVERSIBLE.**` description
+added the precondition + `**DESTRUCTIVE - IRREVERSIBLE.**` description
 prefix. Existing unit tests bypass the precondition by calling `t.run()`
 directly, so no test changes were needed.
 
@@ -154,8 +154,8 @@ The remaining 26 destructive tools all gate behind `confirm_required`:
 
 Both consumers of `redactArgs(args, toolName)` are wired:
 
-- `middleware/audit.ts:56` — used for the JSONL `args_redacted` field.
-- `middleware/telemetry.ts:110` — used as the `mcp.args.redacted` event
+- `middleware/audit.ts:56` - used for the JSONL `args_redacted` field.
+- `middleware/telemetry.ts:110` - used as the `mcp.args.redacted` event
   attribute on every `mcp.tool.*` span.
 
 The global sensitive-key set (`token`, `bearer_token`, `auth`, `password`,
@@ -184,9 +184,9 @@ comparison. String values longer than 200 chars are truncated to 100 +
 
 | Priority | Finding | Status |
 | --- | --- | --- |
-| P0 | — | None |
+| P0 | - | None |
 | P1 | `reactions_delete_all` missing `confirm_required` | **FIXED in this audit commit** |
 | P2 | `members_search` text rendering of usernames | Deferred to Plan 13 |
-| P2 | Astro 5.x `define:vars` XSS — site-only | Deferred to Plan 13 (bump to ≥6.1.6) |
+| P2 | Astro 5.x `define:vars` XSS - site-only | Deferred to Plan 13 (bump to ≥6.1.6) |
 
 No P0 findings. Phase F (tag v0.12.0) may proceed.

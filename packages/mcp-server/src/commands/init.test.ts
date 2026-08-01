@@ -1,5 +1,5 @@
 /**
- * Integration-ish tests for `initAction` — Plan 9 Phase D.
+ * Integration-ish tests for `initAction` - Plan 9 Phase D.
  *
  * The non-interactive paths are exercised here. Interactive prompts
  * are tested in `lib/prompt.test.ts` against mocked readline; this
@@ -13,7 +13,7 @@
 import * as nodePath from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mocked fs — set per-test by reassigning the impl variables. Default
+// Mocked fs - set per-test by reassigning the impl variables. Default
 // is a clean filesystem (existsSync → false, writeFileSync → no-op).
 let existsImpl: (path: string) => boolean = () => false;
 let writeImpl: (path: string, data: string) => void = () => undefined;
@@ -117,14 +117,14 @@ describe('resolveCliPath', () => {
   });
 
   it('produces a native path the OS accepts verbatim', () => {
-    // A URL pathname on Windows is `/C:/...` — absolute-looking but not a
+    // A URL pathname on Windows is `/C:/...` - absolute-looking but not a
     // real path; `path.resolve` rewrites it, so round-tripping catches it.
     const p = resolveCliPath('file:///C:/Program%20Files/discord-mcp/commands/init.js');
     expect(nodePath.resolve(p)).toBe(p);
   });
 });
 
-describe('initAction — non-interactive defaults', () => {
+describe('initAction - non-interactive defaults', () => {
   it('with no flags defaults to client=generic and the env-var token placeholder', async () => {
     await initAction({ json: true });
     expect(process.exitCode).toBe(0);
@@ -153,7 +153,7 @@ describe('initAction — non-interactive defaults', () => {
   });
 });
 
-describe('initAction — explicit flags', () => {
+describe('initAction - explicit flags', () => {
   it('with --client claude-desktop --token "Bot abc..." produces matching snippet', async () => {
     await initAction({ json: true, client: 'claude-desktop', token: 'Bot abc123' });
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
@@ -200,7 +200,7 @@ describe('initAction — explicit flags', () => {
   });
 });
 
-describe('initAction — unknown client', () => {
+describe('initAction - unknown client', () => {
   it('exits with code 2 and lists the available clients', async () => {
     await initAction({ json: true, client: 'no-such-client' });
     expect(process.exitCode).toBe(2);
@@ -214,7 +214,7 @@ describe('initAction — unknown client', () => {
   });
 });
 
-describe('initAction — --output file writing', () => {
+describe('initAction - --output file writing', () => {
   it('writes the snippet to --output and reports the path', async () => {
     let writtenPath: string | undefined;
     let writtenData: string | undefined;
@@ -275,7 +275,7 @@ describe('initAction — --output file writing', () => {
   });
 });
 
-describe('initAction — output formatting', () => {
+describe('initAction - output formatting', () => {
   it('--json mode produces parseable structured output', async () => {
     await initAction({ json: true, client: 'generic' });
     expect(() => JSON.parse(stdoutOutput())).not.toThrow();

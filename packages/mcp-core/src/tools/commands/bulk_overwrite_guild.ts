@@ -35,7 +35,7 @@ export default defineTool({
   description: [
     '**Purpose**: Atomically REPLACE the guild-scoped command registry. Any commands not in `commands` are deleted from this guild. An EMPTY array deletes every command in this guild.',
     '',
-    '**Caution**: this is a wholesale replace — call `commands_list_guild` first to confirm scope.',
+    '**Caution**: this is a wholesale replace - call `commands_list_guild` first to confirm scope.',
     '',
     '**Security**: gated by `ConfirmRequired`. Pass `__confirm:true` AND set `MCP_DRY_RUN=false` to actually apply the replace.',
     '',

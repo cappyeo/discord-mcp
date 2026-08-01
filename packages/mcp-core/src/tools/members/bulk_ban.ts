@@ -15,7 +15,7 @@ export default defineTool({
   category: 'members',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Ban many users at once (1-200 per call). **DESTRUCTIVE — IRREVERSIBLE without manual unban.**',
+    '**Purpose**: Ban many users at once (1-200 per call). **DESTRUCTIVE - IRREVERSIBLE without manual unban.**',
     '',
     '**When to use**:',
     '- Mass moderation (raid response).',

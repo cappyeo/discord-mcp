@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { PermissionString } from '../_lib/permissions.js';
 
 /**
- * Discord application command option (recursive — `options` may nest sub-options
+ * Discord application command option (recursive - `options` may nest sub-options
  * for SUB_COMMAND / SUB_COMMAND_GROUP types).
  *
  * Type values (APPLICATION_COMMAND_OPTION_TYPE):
@@ -39,7 +39,7 @@ export const CommandOption: z.ZodType<any> = z.lazy(() =>
 
 /**
  * Shared per-key fields used to build create/modify command schemas. These are
- * raw zod entries — spread them into a defineTool `inputSchema` and add
+ * raw zod entries - spread them into a defineTool `inputSchema` and add
  * any IDs (application_id, guild_id, command_id) at the call site.
  *
  * For modify, callers should wrap each entry's value in `.optional()` if not

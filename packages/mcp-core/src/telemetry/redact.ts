@@ -2,7 +2,7 @@
  * Discord REST route normalization for span attributes / metric labels.
  *
  * The Discord API uses snowflake IDs (17–20 digits) inside path segments
- * — `/channels/123456789012345678/messages/987654321098765432`. Sending
+ * - `/channels/123456789012345678/messages/987654321098765432`. Sending
  * those raw to a tracing backend produces high-cardinality routes that
  * overflow per-route metric series and leak guild/channel/user IDs to
  * operators viewing traces.
@@ -12,7 +12,7 @@
  * `/users/@me/...`) and the `@original` literal (interactions edge case)
  * are preserved verbatim; both are stable route segments, not IDs.
  *
- * Query strings are stripped — they contain pagination cursors and
+ * Query strings are stripped - they contain pagination cursors and
  * limits that are operationally interesting but bloat the cardinality
  * the same way IDs do. Surface them as separate span attributes when
  * needed, not via the route key.
@@ -29,7 +29,7 @@
  *
  * Two Discord routes carry a **credential** in the path rather than an ID:
  * `/webhooks/{id}/{token}` and `/interactions/{id}/{token}`. Those tokens are
- * bearer credentials — anyone holding one can execute the webhook or respond
+ * bearer credentials - anyone holding one can execute the webhook or respond
  * to the interaction without the bot token. They are not snowflakes, so the
  * digit-only rule above leaves them intact. They are collapsed positionally.
  *
@@ -48,7 +48,7 @@ export function redactRoute(path: string): string {
   // digits and the regex is digit-only by construction.
   const idsCollapsed = withoutQuery.replace(/\d{17,20}/g, ':id');
 
-  // Collapse the credential segment positionally — by where it sits in the
+  // Collapse the credential segment positionally - by where it sits in the
   // route, not by what it looks like. A webhook token has no fixed character
   // class, so any pattern-based rule would miss some of them.
   const segs = idsCollapsed.split('/');
@@ -67,7 +67,7 @@ export function redactRoute(path: string): string {
  * message, a stack frame, a URL).
  *
  * `redactRoute` is for a known-clean path with a known shape. This is for text
- * that merely *contains* a URL — `DiscordAPIError.message`, `err.url`, an
+ * that merely *contains* a URL - `DiscordAPIError.message`, `err.url`, an
  * exception thrown by fetch. It targets the two path-embedded credentials and
  * strips query strings, which is where Discord puts CDN signatures.
  */

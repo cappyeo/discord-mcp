@@ -1,4 +1,4 @@
-// FIXTURE: synthetic discord-ops-style code for adapter testing — not real code.
+// FIXTURE: synthetic discord-ops-style code for adapter testing - not real code.
 import type { ZodTypeAny } from 'zod';
 
 type ToolDefinition = {

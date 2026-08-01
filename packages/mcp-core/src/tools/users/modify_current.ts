@@ -10,7 +10,7 @@ interface RawUser {
   username: string;
   global_name: string | null;
   avatar: string | null;
-  // Optional on APIUser — omitted (not null) when the account has no banner.
+  // Optional on APIUser - omitted (not null) when the account has no banner.
   banner?: string | null;
   bot?: boolean;
 }
@@ -24,7 +24,7 @@ export default defineTool({
     '**When to use**:',
     '- Rename the bot, change avatar/banner.',
     '',
-    '**Note**: User-scoped endpoint — does NOT accept `audit_reason`.',
+    '**Note**: User-scoped endpoint - does NOT accept `audit_reason`.',
     '',
     '**Returns**: projected user shape `{id, username, global_name, avatar, banner}`.',
   ].join('\n'),

@@ -1,5 +1,5 @@
 /**
- * quadslab Discord MCP adapter — Plan 11 Phase C.
+ * quadslab Discord MCP adapter - Plan 11 Phase C.
  *
  * RESEARCH NOTE (cutoff date 2026-05-01):
  *
@@ -11,7 +11,7 @@
  *
  *   Tool surface (observed by inspecting `src/tools/*.ts` on the main
  *   branch HEAD): README claims "139 admin tools across 20 categories";
- *   per-file tally yields 138 — close enough that the off-by-one is
+ *   per-file tally yields 138 - close enough that the off-by-one is
  *   plausibly an overcounted helper or a since-removed entry. Per-module
  *   counts (file → number of tools):
  *     guild.ts        2   list_guilds, get_guild_info
@@ -62,7 +62,7 @@
  *     commands.ts     4   list/create/edit/delete_command
  *     onboarding.ts   2   get_onboarding, edit_onboarding
  *     ──────────────────
- *     total           138 (README says 139 — single-tool drift accepted)
+ *     total           138 (README says 139 - single-tool drift accepted)
  *
  *   Tool-registration pattern (per `src/tools/index.ts`):
  *     - Each module exports a `<category>Tools: Tool[]` array AND an
@@ -80,10 +80,10 @@
  *        scope that still mention quadslab).
  *     2. AND content match: at least one `*.ts` file under `src/tools/`
  *        defines BOTH a `<category>Tools` export AND a
- *        `execute<Category>Tool` function — this is quadslab's signature
+ *        `execute<Category>Tool` function - this is quadslab's signature
  *        and is unlikely to false-positive on a generic bare snake_case
  *        bot. The PaSympa fixture uses literal `'discord_*'` prefixes
- *        and `definitions:` exports — disjoint from this signature.
+ *        and `definitions:` exports - disjoint from this signature.
  *
  *   MCP Resources caveat:
  *     quadslab exposes MCP resources (per its README) through the
@@ -98,10 +98,10 @@
  *       collapse into discord-mcp's `messages_send` (which accepts
  *       `embeds[]`, `attachments[]`). Confidence: medium.
  *     - quadslab's `lock_channel` / `unlock_channel` are convenience
- *       wrappers for permission overwrites — map to
+ *       wrappers for permission overwrites - map to
  *       `channels_modify_permissions`. Confidence: medium.
  *     - quadslab's `set_slowmode`, `set_channel_topic`, `set_voice_status`
- *       are all PATCH-channel helpers — map to `channels_modify`.
+ *       are all PATCH-channel helpers - map to `channels_modify`.
  *       Confidence: medium (caller picks the field).
  *     - quadslab's `bulk_assign_role` / `bulk_remove_role` have no
  *       discord-mcp equivalent (caller iterates `members_add_role`
@@ -110,11 +110,11 @@
  *     - quadslab's `purge_user_messages` is a higher-level helper
  *       (search + bulk_delete). Map to `messages_bulk_delete` with
  *       confidence: low (caller composes the search step).
- *     - quadslab's `send_poll` has no discord-mcp tool equivalent —
+ *     - quadslab's `send_poll` has no discord-mcp tool equivalent -
  *       discord-mcp creates polls inline via `messages_send` payload
  *       (`poll: {...}`). Map → `messages_send`, confidence: low.
  *     - quadslab's templates module (`list_template`, etc.) maps to
- *       discord-mcp's `application/templates`-style tools — but
+ *       discord-mcp's `application/templates`-style tools - but
  *       discord-mcp does NOT currently expose guild-template REST
  *       wrappers (they're absent from the tool catalog as of cutoff).
  *       All four left unmapped.
@@ -156,12 +156,12 @@ import type { MappedTool, MigrationResult, MigrationSource } from './types.js';
 /**
  * Confidence-tagged map from quadslab tool name → discord-mcp tool name.
  *
- *   high   — name + arg shape are a 1:1 match.
- *   medium — name maps cleanly but the caller may need to massage args.
- *   low    — best-guess mapping; user MUST verify.
+ *   high   - name + arg shape are a 1:1 match.
+ *   medium - name maps cleanly but the caller may need to massage args.
+ *   low    - best-guess mapping; user MUST verify.
  *
  * Entries WITHOUT a discord-mcp equivalent (presence/templates/voice
- * helpers) are intentionally absent — `migrate()` reports them under
+ * helpers) are intentionally absent - `migrate()` reports them under
  * `unmappedTools`.
  */
 const NAME_MAP: Record<
@@ -434,7 +434,7 @@ const NAME_MAP: Record<
   list_webhooks: {
     mapped: 'webhooks_list_channel',
     confidence: 'medium',
-    notes: 'or webhooks_list_guild — pick the right scope',
+    notes: 'or webhooks_list_guild - pick the right scope',
   },
   create_webhook: { mapped: 'webhooks_create', confidence: 'high' },
   delete_webhook: { mapped: 'webhooks_delete', confidence: 'high' },
@@ -711,7 +711,7 @@ export const quadslabAdapter: MigrationSource = {
     // Signal 1: package.json with a quadslab-shaped `name`. Accept the
     // exact upstream name and any name containing `quadslab` (covers
     // private forks). Any IO failure on package.json is a hard rejection
-    // — better to under-detect than false-positive on every TS repo.
+    // - better to under-detect than false-positive on every TS repo.
     let nameMatches = false;
     try {
       const pkgPath = join(rootPath, 'package.json');
@@ -730,7 +730,7 @@ export const quadslabAdapter: MigrationSource = {
 
     // Signal 2: at least one `*.ts` file under `src/tools/` exports a
     // `<category>Tools` array AND defines an `execute<Category>Tool`
-    // function. This signature is unique to quadslab — PaSympa's
+    // function. This signature is unique to quadslab - PaSympa's
     // `definitions:` exports + `discord_*` literals don't match.
     const candidates = [join(rootPath, 'src', 'tools'), join(rootPath, 'src')];
     for (const dir of candidates) {
@@ -782,13 +782,13 @@ export const quadslabAdapter: MigrationSource = {
 
     if (!toolsDirExists) {
       warnings.push(
-        `src/tools/ not found under ${rootPath} — falling back to a recursive scan of src/`,
+        `src/tools/ not found under ${rootPath} - falling back to a recursive scan of src/`,
       );
     }
 
     // Walk `*.ts` and extract every `name: '<known_quadslab_tool>'`
     // literal. Generic snake_case matching would false-positive on
-    // variable names — intersecting against KNOWN_QUADSLAB_TOOLS keeps
+    // variable names - intersecting against KNOWN_QUADSLAB_TOOLS keeps
     // the result high-precision.
     for (const file of files) {
       let content: string;
@@ -810,7 +810,7 @@ export const quadslabAdapter: MigrationSource = {
     }
 
     if (allTools.length === 0) {
-      warnings.push('no quadslab tool names found — adapter may not match this quadslab version');
+      warnings.push('no quadslab tool names found - adapter may not match this quadslab version');
     }
 
     const mappedTools: MappedTool[] = [];

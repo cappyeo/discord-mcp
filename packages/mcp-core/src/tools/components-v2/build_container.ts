@@ -6,7 +6,7 @@ export default defineTool({
   name: 'components_v2_build_container',
   category: 'components_v2',
   description:
-    '**Purpose**: Build a Components V2 Container (type 17) JSON node ready to nest into `components_v2_send`.\n\n**When to use**: compose a card with accent color + multiple sections/separators.\n\n**Returns**: `{component}` — the JSON node. Pass it inside the `components` array of `components_v2_send`.',
+    '**Purpose**: Build a Components V2 Container (type 17) JSON node ready to nest into `components_v2_send`.\n\n**When to use**: compose a card with accent color + multiple sections/separators.\n\n**Returns**: `{component}` - the JSON node. Pass it inside the `components` array of `components_v2_send`.',
   inputSchema: {
     components: z
       .array(z.unknown())

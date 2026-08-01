@@ -110,7 +110,7 @@ describe('resilience circuit breaker integration (Plan 8 D.6)', () => {
       circuitHalfOpenAfterMs: halfOpenMs,
     });
 
-    // Three 503s — each rejects with the underlying Discord error.
+    // Three 503s - each rejects with the underlying Discord error.
     for (let i = 0; i < 3; i++) {
       await expect(rest.get('/channels/123')).rejects.toBeDefined();
     }
@@ -118,6 +118,6 @@ describe('resilience circuit breaker integration (Plan 8 D.6)', () => {
 
     // Fourth call: breaker is open, so the upstream is NOT contacted.
     await expect(rest.get('/channels/123')).rejects.toBeInstanceOf(CircuitOpenError);
-    expect(requestCount).toBe(3); // unchanged — request never went out.
+    expect(requestCount).toBe(3); // unchanged - request never went out.
   });
 });

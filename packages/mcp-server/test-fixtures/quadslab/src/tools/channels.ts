@@ -1,4 +1,4 @@
-// FIXTURE: synthetic quadslab-style code for adapter testing — not real code.
+// FIXTURE: synthetic quadslab-style code for adapter testing - not real code.
 export const channelTools = [
   {
     name: 'list_channels',

@@ -9,7 +9,7 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
-## v0.13.2 — Documentation architecture and runtime contract hardening
+## v0.13.2 - Documentation architecture and runtime contract hardening
 
 Released **2026-08-01**.
 
@@ -24,7 +24,7 @@ Released **2026-08-01**.
 - Corrected the npm `mcpName` ownership namespace and added an official
   `server.json` manifest for MCP Registry publication.
 
-## v0.13.1 — Correctness follow-up, default guild, and published package cleanup
+## v0.13.1 - Correctness follow-up, default guild, and published package cleanup
 
 Released **2026-08-01**.
 
@@ -37,7 +37,7 @@ Released **2026-08-01**.
 - Restored the public npm scope to `@discord-mcp/*` and published package
   version 0.13.1.
 
-## v0.13.0 — Correctness audit: the confirmation gate, the category gate, and 58 verified defects
+## v0.13.0 - Correctness audit: the confirmation gate, the category gate, and 58 verified defects
 
 Released **2026-07-27**.
 
@@ -50,12 +50,12 @@ release fixes them. Three were load-bearing.
 - **Destructive tools were unusable.** `validateMiddleware` runs before
   `preconditionMiddleware` and replaces `ctx.args` with the zod-parsed object.
   Zod strips unknown keys and no tool declared `__confirm`, so by the time
-  `ConfirmRequired` read the flag it was gone — every confirm-gated tool
+  `ConfirmRequired` read the flag it was gone - every confirm-gated tool
   returned `DRY_RUN_PREVIEW` forever, regardless of `MCP_DRY_RUN`. The wire
   half was broken too: `additionalProperties: false` meant a spec-conforming
   client could not legally send the flag, and an agent reading `tools/list`
   had no way to discover it. Both halves fixed. **If you depended on
-  destructive tools never executing, note that they now can** — the
+  destructive tools never executing, note that they now can** - the
   `MCP_DRY_RUN=false` + `__confirm:true` contract works as documented.
 - `@discordjs/rest`, `@modelcontextprotocol/sdk`, `zod` and `@sapphire/pieces`
   moved from `dependencies` to `peerDependencies` on `@discord-mcp/core`. Each
@@ -65,7 +65,7 @@ release fixes them. Three were load-bearing.
 - `discord.js` moved from `optionalDependencies` to an optional peer.
   `optionalDependencies` are installed by default, so every REST-only user was
   paying for a WebSocket stack.
-- `engines` floor raised to Node >= 22.12 — the lowest version CI verifies.
+- `engines` floor raised to Node >= 22.12 - the lowest version CI verifies.
 - `MCP_TIMEOUT_LONG_MS` removed: validated and documented, read by no code path.
 
 ### Security
@@ -88,7 +88,7 @@ release fixes them. Three were load-bearing.
 
 ### Correctness
 
-- Retry backoff never grew — `MCP_RETRY_MAX_DELAY_MS` and the exponent were
+- Retry backoff never grew - `MCP_RETRY_MAX_DELAY_MS` and the exponent were
   inert, and every retry waited the base delay.
 - POST was retried on ambiguous failures, so a POST that reached Discord with a
   lost response was replayed: duplicate messages, duplicate bans.
@@ -101,15 +101,15 @@ release fixes them. Three were load-bearing.
   the builder and the validator, so `components_v2_validate` returned
   `valid: true` for layouts that always 400. Four shipped templates were
   themselves broken; repaired.
-- The server advertised version `0.0.0` and instructions reading *"v0/Plan-1 —
-  only messages_send available"* — injected into the agent's system context on
+- The server advertised version `0.0.0` and instructions reading *"v0/Plan-1 -
+  only messages_send available"* - injected into the agent's system context on
   a 192-tool server.
 - `commands_bulk_overwrite_global` / `_guild` wipe the entire command registry
   and shipped `destructiveHint: false` with no confirmation gate.
 - `outputSchema` is now published for all 191 declaring tools and enforced
   against handler results under test. That immediately caught real drift: all
   five `intelligence_*` tools declared a schema their fallback path never
-  satisfied — and the fallback is the path every client without sampling
+  satisfied - and the fallback is the path every client without sampling
   capability takes.
 
 ### Documentation
@@ -129,38 +129,38 @@ snapshot freezes on the public exports, the CLI flag set, and the config
 surface. Load-sensitive tests fixed: the suite now passes on consecutive
 cold-cache runs under full parallel load, not only in isolation.
 
-## v0.12.0 — Test infra hardening + v1.0.0 readiness polish
+## v0.12.0 - Test infra hardening + v1.0.0 readiness polish
 
 Released **2026-05-01**. Tag: [`v0.12.0`](https://github.com/cappyeo/discord-mcp/releases/tag/v0.12.0).
 
 Plan 12 is the polish lap before v1.0.0. No new tools, no new runtime
-behavior — the test rig, build pipeline, and release surface all got
+behavior - the test rig, build pipeline, and release surface all got
 sharpened so v1.0.0 has a clean foundation. This is the **final plan** of
 the discord-mcp roadmap (Plans 0-12).
 
-- `@discord-mcp/server-mocks` workspace package — eliminates 165
+- `@discord-mcp/server-mocks` workspace package - eliminates 165
   relative-path imports across the test tree; consumers now `import from
   '@discord-mcp/server-mocks'`.
 - `ResourceStore` extracted from `server.ts` (matches `ToolStore` /
   `PreconditionStore` pattern).
 - Integration test reliability: 0 unconditional skips, `doctor.integration`
   stdout race fixed.
-- vitest `globalSetup` auto-builds `mcp-core` if `dist/` is missing — no
+- vitest `globalSetup` auto-builds `mcp-core` if `dist/` is missing - no
   more separate `pnpm build` step before `pnpm test`.
 - tsdown `external` migrated to `deps.neverBundle` (deprecation cleared).
 - GitHub Actions Node 24 opt-in matrix.
 - 10 biome `info`-level `useLiteralKeys` lints cleared.
 - 4 vitest bench files for hot paths (`messages_send`, `mcp_pipeline`,
   gateway debounce, REST policy chain).
-- Security audit pass — fixed P1 (`reactions_delete_all` missing
+- Security audit pass - fixed P1 (`reactions_delete_all` missing
   confirmation gate); P2 deferred to Plan 13.
-- Docs link audit — 1 broken link fixed; version coherence verified.
+- Docs link audit - 1 broken link fixed; version coherence verified.
 - npm publish dry-run verified for `@discord-mcp/core` and
-  `@discord-mcp/cli` — `prepack` ships root README + LICENSE in both
+  `@discord-mcp/cli` - `prepack` ships root README + LICENSE in both
   tarballs; mcp-core flipped to `private:false` with public publishConfig.
 - v1.0.0 readiness checklist shipped at `docs/v1.0.0-readiness.md`.
 
-## v0.11.0 — Migration adapters
+## v0.11.0 - Migration adapters
 
 Released **2026-05-01**. Tag: [`v0.11.0`](https://github.com/cappyeo/discord-mcp/releases/tag/v0.11.0).
 
@@ -168,14 +168,14 @@ Plan 11 ships four production migration adapters so teams can move to
 discord-mcp from the most-established community Discord MCP servers
 without re-tooling their agents from scratch.
 
-- **PaSympa** (`@pasympa/discord-mcp`) — ~91 tools, TypeScript, Zod-based
+- **PaSympa** (`@pasympa/discord-mcp`) - ~91 tools, TypeScript, Zod-based
   schemas. Adapter maps 78 tools, intentionally leaves 13 unmapped.
-- **quadslab** (`@quadslab.io/discord-mcp`) — ~138 tools with MCP
+- **quadslab** (`@quadslab.io/discord-mcp`) - ~138 tools with MCP
   Resources support. Adapter maps 96 tools, leaves 14 unmapped.
-- **discord-ops** (`bookedsolidtech/discord-ops`) — multi-guild routing,
+- **discord-ops** (`bookedsolidtech/discord-ops`) - multi-guild routing,
   tool profiles, dry-run mode, saved templates. Adapter maps 36 tools and
   documents the architectural mismatches that don't translate cleanly.
-- **Hubdustry** (reference adapter, non-Discord) — kept as the canonical
+- **Hubdustry** (reference adapter, non-Discord) - kept as the canonical
   adapter-authoring example.
 - `discord-mcp migrate --list` flag for adapter discovery (TTY + JSON).
 - 4-way cross-detection: every adapter rejects all other adapters'
@@ -183,7 +183,7 @@ without re-tooling their agents from scratch.
 - Migration docs section at [cappyeo.github.io/discord-mcp/migrate](https://cappyeo.github.io/discord-mcp/migrate/):
   per-adapter guides + adapter authoring guide for community contributors.
 
-## v0.10.0 — Documentation site
+## v0.10.0 - Documentation site
 
 Released **2026-05-01**. Tag cut from the Plan 10 merge commit on `main`.
 
@@ -200,7 +200,7 @@ you're reading now.
   confirmation, sampling, rate-limits.
 - This reference section: CLI, config, API, changelog.
 
-## v0.9.0 — CLI sub-commands
+## v0.9.0 - CLI sub-commands
 
 Released **2026-05-01**. Tag commit:
 [`038c1138`](https://github.com/cappyeo/discord-mcp/commit/038c1138).
@@ -208,17 +208,17 @@ Released **2026-05-01**. Tag commit:
 Plan 9 split the single binary into four sub-commands routed by commander
 and shipped a structured `emitResult` envelope shared across all of them.
 
-- `discord-mcp serve` — the existing stdio transport, still default sub-command.
-- `discord-mcp doctor [--json] [--online]` — config + connectivity diagnostics
+- `discord-mcp serve` - the existing stdio transport, still default sub-command.
+- `discord-mcp doctor [--json] [--online]` - config + connectivity diagnostics
   with offline / online check registries.
-- `discord-mcp init [--client] [--token] [--gateway] [--output]` — generate
+- `discord-mcp init [--client] [--token] [--gateway] [--output]` - generate
   Claude Desktop / Claude Code / Cursor / Generic client config snippets.
-- `discord-mcp migrate --from <adapter>` — Hubdustry-Go-MCP migration
+- `discord-mcp migrate --from <adapter>` - Hubdustry-Go-MCP migration
   scaffolding with a pluggable adapter registry.
 - Distribution polish: `.gitattributes`, README quickstart, npm pack
   verification, post-build CLI smoke tests.
 
-## v0.8.0 — Production hardening
+## v0.8.0 - Production hardening
 
 Released **2026-05-01**. Tag commit:
 [`b034bebf`](https://github.com/cappyeo/discord-mcp/commit/b034bebf).
@@ -238,7 +238,7 @@ makes discord-mcp safe to run in front of a real Discord guild.
   PII redaction policy, JSONL schema. 3 `MCP_AUDIT_*` env vars.
 - Integration tests covering the full cockatiel chain end-to-end.
 
-## v0.7.0 — Bulk REST surface (192 tools)
+## v0.7.0 - Bulk REST surface (192 tools)
 
 Released **2026-04-29**. Tag commit:
 [`947269d7`](https://github.com/cappyeo/discord-mcp/commit/947269d7).
@@ -253,7 +253,7 @@ every Discord REST endpoint that maps cleanly onto a single MCP tool.
 - Pagination helpers (`encodeCursor` / `decodeCursor`) for list endpoints.
 - Branded snowflake types extended to all ID classes.
 
-## v0.6.0 — Gateway resource subscriptions
+## v0.6.0 - Gateway resource subscriptions
 
 Released **2026-04-28**. Tag commit:
 [`4dbac6ec`](https://github.com/cappyeo/discord-mcp/commit/4dbac6ec).
@@ -263,14 +263,14 @@ events as MCP resources via the `subscribe` capability.
 
 - `createGatewayClient` lazy-imports `discord.js` so cold start without
   `--gateway` stays minimal (`serve` doesn't pay the import cost).
-- 5 Gateway event handlers — `guild_update`, `voice_state_update`,
+- 5 Gateway event handlers - `guild_update`, `voice_state_update`,
   `typing_start`, `presence_update`, `audit_log_poll`. Message events are not
   among them; there is no message handler.
 - `SubscriptionRegistry` tracks active resource URIs and fires
   `notifyResource(uri)` when relevant events arrive.
 - `--gateway` CLI flag on `serve` toggles the whole subsystem.
 
-## v0.5.0 — Intelligence sampling
+## v0.5.0 - Intelligence sampling
 
 Released **2026-04-28**. Tag commit:
 [`dcd49aa1`](https://github.com/cappyeo/discord-mcp/commit/dcd49aa1).
@@ -278,20 +278,20 @@ Released **2026-04-28**. Tag commit:
 Plan 5 (USP) introduced the five intelligence tools that delegate reasoning
 back to the agent via MCP sampling.
 
-- `intelligence_summarize_channel` — summarize recent messages.
-- `intelligence_classify_messages` — multi-label classification.
-- `intelligence_draft_response` — context-aware reply drafts.
-- `intelligence_moderate_content` — policy-aware moderation.
-- `intelligence_extract_entities` — structured entity extraction.
-- All five honor client `sampling` capability — degrade gracefully when
+- `intelligence_summarize_channel` - summarize recent messages.
+- `intelligence_classify_messages` - multi-label classification.
+- `intelligence_draft_response` - context-aware reply drafts.
+- `intelligence_moderate_content` - policy-aware moderation.
+- `intelligence_extract_entities` - structured entity extraction.
+- All five honor client `sampling` capability - degrade gracefully when
   the client doesn't advertise it.
 
-## v0.4.0 — Pipeline executor
+## v0.4.0 - Pipeline executor
 
 Released **2026-04-28**. Tag commit:
 [`07745aa0`](https://github.com/cappyeo/discord-mcp/commit/07745aa0).
 
-Plan 4 (USP) shipped `mcp_pipeline` — a single tool that lets the agent
+Plan 4 (USP) shipped `mcp_pipeline` - a single tool that lets the agent
 queue a sequence of dependent tool calls with interpolation and conditional
 execution.
 
@@ -301,7 +301,7 @@ execution.
 - 19 unit tests covering interpolation, conditionals, nested paths,
   error propagation.
 
-## v0.3.0 — Components V2
+## v0.3.0 - Components V2
 
 Released **2026-04-28**. Tag commit:
 [`b7f976e6`](https://github.com/cappyeo/discord-mcp/commit/b7f976e6).
@@ -316,7 +316,7 @@ Plan 3 made Components V2 a first-class category.
   V2 component shape.
 - Validate-then-send workflow with a structured preview before commit.
 
-## v0.2.0 — Hot-path tools
+## v0.2.0 - Hot-path tools
 
 Released **2026-04-28**. Tag commit:
 [`227dd28a`](https://github.com/cappyeo/discord-mcp/commit/227dd28a).
@@ -330,7 +330,7 @@ day-one operations Discord agents typically need.
 - Sapphire `loadPiece` auto-discovery so adding a tool is one import + one
   registration line.
 
-## v0.1.0 — Errors + middleware
+## v0.1.0 - Errors + middleware
 
 Released **2026-04-28**. Tag commit:
 [`acec9440`](https://github.com/cappyeo/discord-mcp/commit/acec9440).
@@ -345,7 +345,7 @@ and capability router that every subsequent plan builds on.
 - Capability router (`CapabilityRouter`) for client-feature gating.
 - Untrusted-content wrapping helpers (`wrapUntrusted` / `wrapMessages`).
 
-## v0.0.0 — Project skeleton
+## v0.0.0 - Project skeleton
 
 Released **2026-04-28**. Tag commit:
 [`3ab74826`](https://github.com/cappyeo/discord-mcp/commit/3ab74826).
@@ -359,5 +359,5 @@ Plan 0 stood up the monorepo and shipped the smallest viable tool surface.
 
 ## See also
 
-- [GitHub releases](https://github.com/cappyeo/discord-mcp/releases) — full release notes per tag.
-- [Architecture](/discord-mcp/architecture/) — how the pieces from each plan fit together today.
+- [GitHub releases](https://github.com/cappyeo/discord-mcp/releases) - full release notes per tag.
+- [Architecture](/discord-mcp/architecture/) - how the pieces from each plan fit together today.

@@ -21,7 +21,7 @@ export default defineTool({
   ].join('\n'),
   inputSchema: {
     interaction_id: InteractionId.describe(
-      'Interaction ID (snowflake) — from the interaction event',
+      'Interaction ID (snowflake) - from the interaction event',
     ),
     interaction_token: WebhookToken.describe(
       'Scoped interaction credential, reusable for follow-ups for up to 15 minutes. Treat as a credential.',
@@ -45,7 +45,7 @@ export default defineTool({
       .record(z.string(), z.unknown())
       .optional()
       .describe(
-        'Response payload — shape depends on `type`. Message body for type=4; modal for type=9.',
+        'Response payload - shape depends on `type`. Message body for type=4; modal for type=9.',
       ),
     with_response: z
       .boolean()

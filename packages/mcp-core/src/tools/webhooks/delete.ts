@@ -10,7 +10,7 @@ export default defineTool({
   category: 'webhooks',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a webhook by id. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a webhook by id. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Decommission a stale or compromised webhook.',

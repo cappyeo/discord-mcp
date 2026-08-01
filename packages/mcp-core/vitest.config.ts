@@ -8,7 +8,7 @@ export default defineConfig({
     // Registry-wide suites (tools/registry.invariants, audit/redact) walk the
     // tools tree and dynamically import all 192 modules. That takes ~4s alone
     // and exceeds the 5000ms default once 250 other files are competing for
-    // worker threads — the same load sensitivity that made the CLI doctor
+    // worker threads - the same load sensitivity that made the CLI doctor
     // suite flaky. 20s still trips on a genuine hang.
     testTimeout: 20_000,
     // registry.invariants does its walk in beforeAll, which is governed by
@@ -36,7 +36,7 @@ export default defineConfig({
         branches: 73,
       },
     },
-    // Plan 12 Phase E.1 — benchmarks run only via `vitest bench`. The explicit
+    // Plan 12 Phase E.1 - benchmarks run only via `vitest bench`. The explicit
     // `include` above scopes `vitest run` (test mode) to *.test.ts so .bench.ts
     // never executes as a test. In bench mode vitest swaps in its own include
     // (defaults to *.{bench,benchmark}.?(c|m)[jt]s?(x)), so we set

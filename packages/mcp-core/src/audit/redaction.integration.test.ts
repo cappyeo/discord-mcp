@@ -28,7 +28,7 @@ import type { AuditSink } from './sink.js';
  * The raw "secret data" string MUST NOT appear in either output.
  *
  * Uses the in-memory MCP transport (no child process) and an in-memory
- * span exporter (no OTLP exporter wired) — the full stack but with
+ * span exporter (no OTLP exporter wired) - the full stack but with
  * deterministic capture points.
  */
 
@@ -89,7 +89,7 @@ describe('redaction integration (Plan 8 F.3)', () => {
     captured.events.length = 0;
     spanExporter.reset();
 
-    // "secret data" is 11 characters — assertion-friendly length.
+    // "secret data" is 11 characters - assertion-friendly length.
     const SECRET = 'secret data';
     expect(SECRET.length).toBe(11);
 
@@ -99,7 +99,7 @@ describe('redaction integration (Plan 8 F.3)', () => {
     });
     expect(r.isError).toBe(false);
 
-    // 1. Audit path — args_redacted.content === '[REDACTED:11ch]'.
+    // 1. Audit path - args_redacted.content === '[REDACTED:11ch]'.
     expect(captured.events).toHaveLength(1);
     const ev = captured.events[0]!;
     expect(ev.args_redacted).toMatchObject({
@@ -109,7 +109,7 @@ describe('redaction integration (Plan 8 F.3)', () => {
     // Stringified event must NOT contain the raw secret.
     expect(JSON.stringify(ev)).not.toContain(SECRET);
 
-    // 2. Span path — mcp.tool.args event's mcp.args.redacted attribute.
+    // 2. Span path - mcp.tool.args event's mcp.args.redacted attribute.
     const spans = spanExporter.getFinishedSpans();
     const toolSpan = spans.find((s) => s.name === 'mcp.tool.messages_send') as
       | ReadableSpan
@@ -123,7 +123,7 @@ describe('redaction integration (Plan 8 F.3)', () => {
     expect(redactedJson).not.toContain(SECRET);
 
     // 3. Cross-check: no span attribute anywhere on the tool span
-    //    leaks "secret data" — defense in depth against future regressions.
+    //    leaks "secret data" - defense in depth against future regressions.
     for (const [, v] of Object.entries(toolSpan?.attributes ?? {})) {
       expect(String(v)).not.toContain(SECRET);
     }

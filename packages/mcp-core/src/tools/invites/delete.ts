@@ -10,7 +10,7 @@ export default defineTool({
   category: 'invites',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Revoke a Discord invite by code. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Revoke a Discord invite by code. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Cut off an over-shared or compromised invite link.',

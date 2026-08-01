@@ -1,19 +1,19 @@
 /**
- * Migration adapter pattern — Plan 9 Phase E.
+ * Migration adapter pattern - Plan 9 Phase E.
  *
  * A {@link MigrationSource} represents one supported "source" project
  * shape (e.g. the Hubdustry Go MCP server, a legacy discord-bot config).
  * Each adapter knows how to:
  *
- *   1. {@link MigrationSource.detect} — answer "is this filesystem a
+ *   1. {@link MigrationSource.detect} - answer "is this filesystem a
  *      project I understand?" without throwing on missing files.
- *   2. {@link MigrationSource.migrate} — walk the source tree and emit
+ *   2. {@link MigrationSource.migrate} - walk the source tree and emit
  *      a {@link MigrationResult} listing tools mapped onto discord-mcp,
  *      tools that have no equivalent yet (`unmappedTools`), and items
  *      that need a human eye (`manualReview`).
  *
  * The `migrate` command iterates this pattern: it never imports an
- * adapter implementation directly — it only consumes the registry in
+ * adapter implementation directly - it only consumes the registry in
  * `./index.ts`. Plan 11 will add Discord-using adapters
  * (PaSympa / quadslab / discord-ops / barryyip) without touching this
  * type or the command surface.
@@ -54,7 +54,7 @@ export interface MigrationSource {
   readonly toolCountEstimate?: number;
   /**
    * Return true if `rootPath` looks like this kind of source. MUST NOT
-   * throw — wrap fs ops in try/catch and return false on missing paths.
+   * throw - wrap fs ops in try/catch and return false on missing paths.
    */
   detect(rootPath: string): Promise<boolean>;
   /**
@@ -69,9 +69,9 @@ export interface MigrationSource {
  * One source tool successfully mapped onto a discord-mcp equivalent.
  *
  * `confidence` is the adapter's self-assessment:
- *   - `high`   — name + arg shape are a 1:1 match.
- *   - `medium` — name matches but args may need tweaking.
- *   - `low`    — best-guess; user MUST verify.
+ *   - `high`   - name + arg shape are a 1:1 match.
+ *   - `medium` - name matches but args may need tweaking.
+ *   - `low`    - best-guess; user MUST verify.
  */
 export interface MappedTool {
   readonly original: string;
@@ -96,7 +96,7 @@ export interface ManualReviewItem {
  *
  * `mappedTools` + `unmappedTools` + `manualReview` sum to the total
  * number of source tools the adapter found. `unmappedTools` is allowed
- * to be non-empty — that's still a valid run (exit code 1, not 2).
+ * to be non-empty - that's still a valid run (exit code 1, not 2).
  *
  * `warnings` carries non-blocking notices (e.g. "no tools found in
  * fixture", "regex may have missed multi-line calls").

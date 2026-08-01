@@ -21,7 +21,7 @@ export default defineTool({
     '- Broadcast an existing announcement to subscriber servers.',
     '',
     '**When NOT to use**:',
-    '- Channel is not type 5 (Announcement) — Discord returns 400.',
+    '- Channel is not type 5 (Announcement) - Discord returns 400.',
     '- Sending fresh content → use `messages_send` then `messages_crosspost`.',
     '',
     '**Returns**: `{message_id, channel_id, crossposted}`.',

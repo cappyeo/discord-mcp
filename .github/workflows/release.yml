@@ -1,7 +1,7 @@
 name: release
 
 # Both publishable manifests set `publishConfig.provenance: true`, which
-# requires an OIDC token — publishing from a laptop hard-fails and the usual
+# requires an OIDC token - publishing from a laptop hard-fails and the usual
 # workaround silently drops the attestation. This workflow supplies `id-token:
 # write` and only runs after an explicit `workflow_dispatch` for an existing tag.
 on:

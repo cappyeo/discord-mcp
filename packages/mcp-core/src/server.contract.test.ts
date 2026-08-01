@@ -205,8 +205,8 @@ describe('MCP protocol contract', () => {
   });
 
   it('sends instructions that describe the actual tool surface', () => {
-    // Was 'v0/Plan-1 — only messages_send available', injected into the
-    // agent's system context on a 192-tool server — actively steering the
+    // Was 'v0/Plan-1 - only messages_send available', injected into the
+    // agent's system context on a 192-tool server - actively steering the
     // model away from 191 of them.
     const instructions = client.getInstructions() ?? '';
     expect(instructions).not.toContain('only messages_send');
@@ -223,7 +223,7 @@ describe('MCP protocol contract', () => {
     expect((gated?.inputSchema.properties as Record<string, { type: string }>).__confirm.type).toBe(
       'boolean',
     );
-    // Not in `required` — the flag is optional; omitting it yields DRY_RUN_PREVIEW.
+    // Not in `required` - the flag is optional; omitting it yields DRY_RUN_PREVIEW.
     expect((gated?.inputSchema.required as string[]) ?? []).not.toContain('__confirm');
     // Ungated tools must not advertise it.
     const ungated = tools.find((t) => t.name === 'messages_send');
@@ -290,9 +290,9 @@ describe('MCP protocol contract', () => {
 /**
  * The authorization path for every destructive tool.
  *
- * `__confirm` is not declared by any tool inputSchema, so validateMiddleware —
+ * `__confirm` is not declared by any tool inputSchema, so validateMiddleware -
  * which runs before preconditionMiddleware and replaces ctx.args with the
- * zod-parsed object — strips it. Before this suite existed the only coverage
+ * zod-parsed object - strips it. Before this suite existed the only coverage
  * was the negative case above, which passes whether the gate works or is
  * permanently closed. This asserts a confirm-gated tool can actually execute.
  *

@@ -110,11 +110,11 @@ describe('audit sink integration (Plan 8 F.3)', () => {
 
   it('redacts globally sensitive keys (token) before reaching the sink', async () => {
     captured.events.length = 0;
-    // messages_send schema does NOT accept `token` — validation will fail.
+    // messages_send schema does NOT accept `token` - validation will fail.
     // Use a tool that has a flexible/object arg path. components_v2_send
     // accepts `content` (per-tool redacted) so let's use messages_send
     // with valid args and confirm `content` redaction reaches the sink
-    // (already covered above) — here we check global token-style key
+    // (already covered above) - here we check global token-style key
     // would have been redacted IF supplied via a tool that allows it.
     // Since redactArgs is the same code path, the unit tests cover this
     // exhaustively. This test asserts the integration stack passes args

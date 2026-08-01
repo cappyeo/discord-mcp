@@ -7,8 +7,8 @@ sidebar:
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-When a workflow is a **strict sequence** — each step depends on the previous
-one's output — issuing N independent `tools/call` requests wastes round-trips
+When a workflow is a **strict sequence** - each step depends on the previous
+one's output - issuing N independent `tools/call` requests wastes round-trips
 and exposes intermediate state. The `mcp_pipeline` meta-tool batches them into
 one request, with `{{step_id.path}}` interpolation between steps.
 
@@ -57,7 +57,7 @@ use the dedicated bulk tool for that resource instead.
            "tool": "events_create",
            "args": {
              "guild_id": "111122223333444455",
-            "name": "Office hours — January 1",
+            "name": "Office hours - January 1",
             "scheduled_start_time": "2030-01-01T17:00:00Z",
             "scheduled_end_time": "2030-01-01T18:00:00Z",
              "entity_type": 3,
@@ -109,7 +109,7 @@ use the dedicated bulk tool for that resource instead.
              "result": {
                "id": "333344445555666677",
                "guild_id": "111122223333444455",
-              "name": "Office hours — January 1",
+              "name": "Office hours - January 1",
                "description": "Linked to announcement 888899990000111122",
               "scheduled_start_time": "2030-01-01T17:00:00.000Z",
               "scheduled_end_time": "2030-01-01T18:00:00.000Z",
@@ -133,7 +133,7 @@ use the dedicated bulk tool for that resource instead.
          ],
          "variables": {
            "announce": { "message_id": "888899990000111122", "channel_id": "222233334444555566" },
-           "event": { "id": "333344445555666677", "name": "Office hours — May 1" },
+           "event": { "id": "333344445555666677", "name": "Office hours - May 1" },
            "grant": { "added": true, "user_id": "777788889999000011", "role_id": "555566667777888899" }
          },
          "total_duration_ms": 456,
@@ -173,10 +173,10 @@ use the dedicated bulk tool for that resource instead.
 
 - **Default abort-on-error.** When a step returns an error, the pipeline sets
   `aborted: true` and stops immediately. Subsequent steps are not dispatched
-  and do **not** appear in `steps` — the array simply ends at the failing step.
+  and do **not** appear in `steps` - the array simply ends at the failing step.
   The agent sees exactly which step blew up and what the partial state is.
 - **Continue past errors.** Set `continue_on_error: true` on a step to keep
-  going. Use sparingly — it implies later steps must tolerate missing
+  going. Use sparingly - it implies later steps must tolerate missing
   interpolation values.
 - **Recursion guard.** A step whose `tool` is `mcp_pipeline` is rejected up
   front with the error code `PIPELINE_RECURSION`. The pipeline aborts before
@@ -200,13 +200,13 @@ must be compensated explicitly if your workflow requires reversal.
 
 ## See also
 
-- [`mcp_pipeline`](/discord-mcp/tools/meta/mcp_pipeline/) — full step schema
+- [`mcp_pipeline`](/discord-mcp/tools/meta/mcp_pipeline/) - full step schema
   including `save_as` and `if`.
 - [`messages_send`](/discord-mcp/tools/messages/send/),
   [`events_create`](/discord-mcp/tools/events/create/),
-  [`members_add_role`](/discord-mcp/tools/members/add_role/) — the three
+  [`members_add_role`](/discord-mcp/tools/members/add_role/) - the three
   building blocks used in this recipe.
-- [Recipe: bulk ban a raid](/discord-mcp/recipes/moderation-bulk-ban/) —
+- [Recipe: bulk ban a raid](/discord-mcp/recipes/moderation-bulk-ban/) -
   alternative pattern for parallelizable identical operations.
-- [Architecture: pipeline executor](/discord-mcp/architecture/pipeline/) — how
+- [Architecture: pipeline executor](/discord-mcp/architecture/pipeline/) - how
   interpolation, abort, and variables work internally.

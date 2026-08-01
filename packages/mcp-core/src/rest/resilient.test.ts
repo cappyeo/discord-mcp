@@ -100,7 +100,7 @@ describe('wrapRestWithResilience (Plan 8 C.3)', () => {
       REQ_BODY,
     );
     // GET, not POST: 5xx on a POST is ambiguous (the write may have landed)
-    // and is deliberately non-retryable — see classifyDiscordError.
+    // and is deliberately non-retryable - see classifyDiscordError.
     const { rest } = buildFakeRest({
       get: () => {
         count++;
@@ -115,7 +115,7 @@ describe('wrapRestWithResilience (Plan 8 C.3)', () => {
     expect(count).toBe(2);
   });
 
-  it('non-retryable error (400) is NOT retried — original error bubbles', async () => {
+  it('non-retryable error (400) is NOT retried - original error bubbles', async () => {
     const apiErr400 = new DiscordAPIError(
       { code: 50035, message: 'Invalid form body' },
       50035,

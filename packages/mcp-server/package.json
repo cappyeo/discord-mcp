@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",
-  "description": "Discord MCP server — stdio transport CLI",
+  "description": "Discord MCP server - stdio transport CLI",
   "bin": {
     "discord-mcp": "./dist/cli.js",
     "discord-mcp-server": "./dist/cli.js"

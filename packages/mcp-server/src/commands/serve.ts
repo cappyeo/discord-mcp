@@ -1,5 +1,5 @@
 /**
- * `discord-mcp serve` — start the stdio MCP server.
+ * `discord-mcp serve` - start the stdio MCP server.
  *
  * Plan 9 Phase A. This is the sub-command form of the original
  * top-level action in cli.ts; it remains the default sub-command
@@ -10,7 +10,7 @@
  * boot failure (the transport never connected, so there is nothing
  * to flush; the process is otherwise idle waiting on the event loop
  * via signal handlers registered inside startStdio). serve is the
- * ONE command that calls process.exit — every other command uses
+ * ONE command that calls process.exit - every other command uses
  * process.exitCode + return so Node drains stdout/stderr first.
  */
 import { startStdio } from '../transports/stdio.js';

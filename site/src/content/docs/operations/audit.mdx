@@ -21,7 +21,7 @@ on-disk JSONL schema.
 | ---- | -------- | -------- |
 | `stderr` (default) | `MCP_AUDIT_SINK=stderr` | stdio MCP transports (the default), or any container that ships stderr to a log aggregator (Loki, CloudWatch, Datadog Logs). |
 | `file` | `MCP_AUDIT_SINK=file` + optional `MCP_AUDIT_FILE=/path/to/audit.jsonl` | Long-running daemon deployments where stderr is owned by another process. |
-| `otlp` (stub) | `MCP_AUDIT_SINK=otlp` | Reserved for the OTel Logs pipeline. **Currently a stub** — falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]` prefix so misconfiguration is visible. Will become real once `@opentelemetry/api-logs` LoggerProvider lands in `mcp-server/otel.ts`. |
+| `otlp` (stub) | `MCP_AUDIT_SINK=otlp` | Reserved for the OTel Logs pipeline. **Currently a stub** - falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]` prefix so misconfiguration is visible. Will become real once `@opentelemetry/api-logs` LoggerProvider lands in `mcp-server/otel.ts`. |
 | `none` | `MCP_AUDIT_SINK=none` or `MCP_AUDIT_ENABLED=false` | When the deployment is in a regulated context that explicitly bans logging the body of mutating ops, or for unit-test isolation. |
 
 <Aside type="note">
@@ -40,7 +40,7 @@ to "force-on" audit when it's disabled at the master switch.
   discord-mcp serve 2> /var/log/discord-mcp/audit-$(date +%F).jsonl
   ```
 
-  stderr is the only safe stream in stdio MCP — stdout is reserved for
+  stderr is the only safe stream in stdio MCP - stdout is reserved for
   JSON-RPC frames. App logs and audit events both go to stderr, but audit
   events carry `"level":"audit"` so log routers can filter them into a
   separate destination.
@@ -70,7 +70,7 @@ to "force-on" audit when it's disabled at the master switch.
   ```
 
   Today this falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]`
-  prefix. It is intentionally not silent — enabling `otlp` should not drop
+  prefix. It is intentionally not silent - enabling `otlp` should not drop
   events when the LoggerProvider is not yet wired.
 
   The full OTLP path requires:
@@ -99,7 +99,7 @@ to "force-on" audit when it's disabled at the master switch.
 
 ## File rotation
 
-discord-mcp does **not** ship in-process log rotation. This is deliberate —
+discord-mcp does **not** ship in-process log rotation. This is deliberate -
 rotation is an OS-level concern with established solutions; embedding
 logrotate-equivalent logic in-process duplicates work and adds failure modes
 (partial writes during rotation, lock contention).
@@ -120,14 +120,14 @@ Use `logrotate(8)` (Linux) or your container platform's native log driver:
 ```
 
 <Aside type="caution">
-`copytruncate` is critical — discord-mcp keeps the file descriptor open for
+`copytruncate` is critical - discord-mcp keeps the file descriptor open for
 the lifetime of the process, so renaming the file (the default `logrotate`
 strategy) leaves the bot writing to the renamed inode, which is invisible to
 your aggregator.
 </Aside>
 
 For containerised deployments, prefer the platform's log driver
-(`json-file`, `awslogs`, `gelf`, etc.) and have it consume stderr — i.e. use
+(`json-file`, `awslogs`, `gelf`, etc.) and have it consume stderr - i.e. use
 the `stderr` sink, not the `file` sink, in a container.
 
 ## Coverage and compliance limits
@@ -139,7 +139,7 @@ covers read-only operations, but it also excludes idempotent writes. The
 current catalog contains write tools that therefore do not emit an event.
 
 - `messages_read`, `messages_get`, `channels_list`, `channels_get`,
-  `members_search`, etc. — anything that returns data without mutation.
+  `members_search`, etc. - anything that returns data without mutation.
 
 Read patterns remain visible through telemetry when it is enabled, but spans
 and audit events have different retention and integrity properties. There is
@@ -172,7 +172,7 @@ platform, and review new tool arguments before forwarding events to a SIEM.
 discord-mcp does not enforce retention. Use your log platform's retention
 policy:
 
-- **CloudWatch Logs**: per-log-group retention (default infinite — set to
+- **CloudWatch Logs**: per-log-group retention (default infinite - set to
   90/180/365 days per your policy).
 - **Loki**: retention via `compactor.retention_period`.
 - **Datadog**: per-index retention.
@@ -190,7 +190,7 @@ Every event written to the sink is a single JSON object on one line. Fields:
 | `tool` | string | yes | Tool name, e.g. `messages_send`. |
 | `category` | string | yes | Tool category (e.g. `messages`, `webhooks`). |
 | `idempotent` | boolean | yes | Always `false` for emitted events (idempotent tools are skipped). |
-| `args_redacted` | object | yes | Redacted arg payload — see redaction section above. |
+| `args_redacted` | object | yes | Redacted arg payload - see redaction section above. |
 | `status` | `success` / `tool_error` / `thrown` | yes | Outcome: handler succeeded, returned `isError: true`, or threw. |
 | `duration_ms` | number | yes | Wall-clock duration of the tool call. |
 | `transport` | `stdio` / (future) | yes | MCP transport that received the call. |
@@ -200,7 +200,7 @@ Every event written to the sink is a single JSON object on one line. Fields:
 
 Stderr-sink emissions also wrap the event with `{"level":"audit",...}` so
 log routers can filter by level. File-sink emissions are the bare event (no
-wrapper) — the file path itself is the routing.
+wrapper) - the file path itself is the routing.
 
 ## Reference: env vars
 
@@ -212,7 +212,7 @@ wrapper) — the file path itself is the routing.
 
 ## Related
 
-- [Telemetry](/discord-mcp/operations/telemetry/) — read patterns are observable here even when audit is off.
-- [Architecture → Middleware chain](/discord-mcp/architecture/middleware-chain/) — where the audit middleware sits in the call path.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the `__confirm` contract for destructive mutations.
+- [Telemetry](/discord-mcp/operations/telemetry/) - read patterns are observable here even when audit is off.
+- [Architecture → Middleware chain](/discord-mcp/architecture/middleware-chain/) - where the audit middleware sits in the call path.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - the `__confirm` contract for destructive mutations.
 - Source: [`packages/mcp-core/src/middleware/audit.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts).

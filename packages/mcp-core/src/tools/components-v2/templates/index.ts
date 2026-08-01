@@ -12,7 +12,7 @@
  *
  * Static imports make the bundler inline the JSON, so there is no filesystem
  * access and no path to resolve at runtime. Adding a template means adding a
- * line here — which is a feature: a template that is not registered is also
+ * line here - which is a feature: a template that is not registered is also
  * not silently half-shipped.
  */
 import announcement from './announcement.json' with { type: 'json' };

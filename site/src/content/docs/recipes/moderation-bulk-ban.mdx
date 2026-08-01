@@ -17,7 +17,7 @@ A moderator says: **"Ban the 10 spam accounts that joined our server in the last
 hour. Their usernames look like `crypto-airdrop-NNNN`."**
 
 The agent has to (1) find those accounts, (2) confirm the destructive operation
-with the human, and (3) issue a single batched ban — not ten separate REST calls
+with the human, and (3) issue a single batched ban - not ten separate REST calls
 that would each consume a rate-limit token.
 
 <Aside type="caution">
@@ -37,7 +37,7 @@ approval in the MCP client or UI before re-issuing the destructive call.
    This request needs `joined_at` and `roles`, so use `members_list` and
    paginate with `after` when the guild has more than 1000 members.
    `members_search` is useful for name lookup, but its result contains only
-   `user_id`, `username`, `global_name`, and `nick`—not join time or roles.
+   `user_id`, `username`, `global_name`, and `nick`-not join time or roles.
 
    <Tabs>
      <TabItem label="Input">
@@ -143,13 +143,13 @@ approval in the MCP client or UI before re-issuing the destructive call.
 
 ## See also
 
-- [`members_bulk_ban`](/discord-mcp/tools/members/bulk_ban/) — full schema and
+- [`members_bulk_ban`](/discord-mcp/tools/members/bulk_ban/) - full schema and
   output envelope.
-- [`members_search`](/discord-mcp/tools/members/search/) — fuzzy search by
+- [`members_search`](/discord-mcp/tools/members/search/) - fuzzy search by
   username/nick.
-- [`members_list`](/discord-mcp/tools/members/list/) — paginated listing for
+- [`members_list`](/discord-mcp/tools/members/list/) - paginated listing for
   whole-guild scans.
-- [Recipe: multi-step pipeline](/discord-mcp/recipes/pipeline-multistep/) — for
+- [Recipe: multi-step pipeline](/discord-mcp/recipes/pipeline-multistep/) - for
   chaining search → ban into one sequential call. Completed earlier steps are not rolled back.
-- [Confirmation and dry-run](/discord-mcp/architecture/confirmation/) — how the
+- [Confirmation and dry-run](/discord-mcp/architecture/confirmation/) - how the
   destructive-action gate works under the hood.

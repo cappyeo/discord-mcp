@@ -10,7 +10,7 @@ export default defineTool({
   category: 'guild',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete an integration from a guild. **DESTRUCTIVE — also disconnects associated webhooks.**',
+    '**Purpose**: Delete an integration from a guild. **DESTRUCTIVE - also disconnects associated webhooks.**',
     '',
     '**When to use**:',
     '- Remove a stale or compromised third-party integration.',

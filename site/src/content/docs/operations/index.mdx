@@ -1,6 +1,6 @@
 ---
 title: Operations
-description: Production hardening reference for operators running discord-mcp at scale — observability, resilience, audit, and client capability matrix.
+description: Production hardening reference for operators running discord-mcp at scale - observability, resilience, audit, and client capability matrix.
 type: operations
 sidebar:
   order: 0
@@ -10,7 +10,7 @@ import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 Start with a safe runtime baseline, then add observability, resilience, and an
 audit sink deliberately. These pages distinguish startup configuration from
-mutable session state and document where a control does — and does not — apply.
+mutable session state and document where a control does - and does not - apply.
 
 <DocsCardGrid
   links={[
@@ -24,14 +24,14 @@ mutable session state and document where a control does — and does not — app
 
 ## Quick environment-variable orientation
 
-If you only read one section, read [Resilience](/discord-mcp/operations/resilience/) —
+If you only read one section, read [Resilience](/discord-mcp/operations/resilience/) -
 it's the one set of knobs that affects every Discord call the server makes.
 Telemetry is opt-in (`OTEL_ENABLED=false` by default, zero overhead) and
 audit is on by default but can be tuned per-sink.
 
 For the exact environment-variable contract (token, category allowlist, dry-run
 mode), see [Environment variables](/discord-mcp/reference/config/).
-Note that there is **no guild allowlist** — `ALLOWED_GUILDS` is not read by
+Note that there is **no guild allowlist** - `ALLOWED_GUILDS` is not read by
 any code path and per-guild restriction is deferred post-1.0.
 
 ## Looking for something else?

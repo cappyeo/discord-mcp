@@ -1,5 +1,5 @@
 /**
- * `audit-sink` check — Plan 9 Phase B.
+ * `audit-sink` check - Plan 9 Phase B.
  *
  * Verifies the configured audit sink can actually be written to,
  * WITHOUT performing an intrusive write:
@@ -10,7 +10,7 @@
  *     get a clear actionable message before runtime.
  *
  * If `cfg === null` (env-vars failed to parse) we skip the file probe
- * and report 'warn' — env-vars will already have failed, so we don't
+ * and report 'warn' - env-vars will already have failed, so we don't
  * double-fail the run.
  */
 import * as fs from 'node:fs';
@@ -55,7 +55,7 @@ export const auditSinkCheck: DoctorCheck = {
       return {
         id: 'audit-sink',
         status: 'warn',
-        message: 'Skipped — config did not parse (see env-vars)',
+        message: 'Skipped - config did not parse (see env-vars)',
       };
     }
 

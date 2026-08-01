@@ -5,7 +5,7 @@
  * a breaking observability change for downstream dashboards/alerts.
  * Centralizing them here makes drift visible.
  *
- * `mcp.*` keys are project-private — there is no published OTel namespace
+ * `mcp.*` keys are project-private - there is no published OTel namespace
  * for MCP yet. We keep the shape close to the OTel rpc.* conventions for
  * forward compatibility.
  */

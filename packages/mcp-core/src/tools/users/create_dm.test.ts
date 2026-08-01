@@ -9,7 +9,7 @@ import '../../container.js';
 const DISCORD_API = 'https://discord.com/api/v10';
 
 describe('users_create_dm', () => {
-  // Routes.userChannels() is a template literal — `@me` passes through unencoded.
+  // Routes.userChannels() is a template literal - `@me` passes through unencoded.
   it('POSTs /users/@me/channels with raw @me in URL', async () => {
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     let capturedUrl: string | null = null;

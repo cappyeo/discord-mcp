@@ -1,8 +1,8 @@
 /**
- * `client-caps` check — Plan 9 Phase B.
+ * `client-caps` check - Plan 9 Phase B.
  *
  * Reports the MCP capabilities discord-mcp ADVERTISES at server boot.
- * This is OFFLINE-only — actual client capability negotiation happens
+ * This is OFFLINE-only - actual client capability negotiation happens
  * during the MCP `initialize` handshake, which doctor cannot observe
  * without spawning the server. The list below mirrors what
  * `mcp-server/src/server.ts` registers on the SDK Server instance.

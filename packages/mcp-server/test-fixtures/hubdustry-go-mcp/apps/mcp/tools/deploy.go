@@ -1,6 +1,6 @@
-// FIXTURE: minimal Go for adapter testing — not real code
+// FIXTURE: minimal Go for adapter testing - not real code
 // Two NewTool calls (trigger/status). Combined with files.go the
-// fixture exposes 5 tools total — the adapter must report all 5 as
+// fixture exposes 5 tools total - the adapter must report all 5 as
 // unmappedTools (NAME_MAP is empty for Hubdustry).
 package tools
 

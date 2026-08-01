@@ -17,7 +17,7 @@ export default defineTool({
     '**When NOT to use**:',
     '- Replacing the entire role set → use `members_modify` with `roles`.',
     '',
-    '**Returns**: `{added, user_id, role_id}`. Idempotent — re-adding is a no-op.',
+    '**Returns**: `{added, user_id, role_id}`. Idempotent - re-adding is a no-op.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the member'),

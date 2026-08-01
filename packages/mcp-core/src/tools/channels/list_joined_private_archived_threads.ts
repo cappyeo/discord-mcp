@@ -30,7 +30,7 @@ export default defineTool({
     '- Recover private threads the bot once participated in.',
     '',
     '**When NOT to use**:',
-    "- Threads the bot didn't join — use `channels_list_private_archived_threads` (requires MANAGE_THREADS).",
+    "- Threads the bot didn't join - use `channels_list_private_archived_threads` (requires MANAGE_THREADS).",
     '',
     '**Returns**: `{threads, has_more, count, channel_id}`. Structured names remain raw Discord data; the human-readable text response fences them.',
   ].join('\n'),
@@ -39,7 +39,7 @@ export default defineTool({
     before: z
       .string()
       .optional()
-      .describe('Snowflake — return threads with id < this (Discord pages by id here)'),
+      .describe('Snowflake - return threads with id < this (Discord pages by id here)'),
     limit: z.number().int().min(1).max(100).optional().describe('Max results (1-100)'),
   },
   outputSchema: {

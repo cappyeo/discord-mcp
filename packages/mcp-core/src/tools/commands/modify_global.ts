@@ -25,7 +25,7 @@ export default defineTool({
   name: 'commands_modify_global',
   category: 'commands',
   description: [
-    '**Purpose**: Edit a global application command. All command-body fields are optional — pass only what changes.',
+    '**Purpose**: Edit a global application command. All command-body fields are optional - pass only what changes.',
     '',
     '**Returns**: updated `{id, name, description, type, application_id}`.',
   ].join('\n'),

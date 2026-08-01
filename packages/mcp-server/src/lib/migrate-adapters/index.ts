@@ -1,5 +1,5 @@
 /**
- * Registry of all known migration adapters — Plan 9 Phase E + Plan 11.
+ * Registry of all known migration adapters - Plan 9 Phase E + Plan 11.
  *
  * `migrate` reads this array exclusively; no other module imports an
  * adapter implementation directly. To add a new source: implement
@@ -7,13 +7,13 @@
  * the singleton here, and add a test.
  *
  * Plan 9 Phase E shipped the Hubdustry adapter as a reference
- * implementation (its tools are non-Discord — intentionally produces
+ * implementation (its tools are non-Discord - intentionally produces
  * "0 mapped, 8 unmapped, 0 manual review" against a real Hubdustry tree).
- * Plan 11 Phase B adds the PaSympa adapter — the first Discord-using
+ * Plan 11 Phase B adds the PaSympa adapter - the first Discord-using
  * adapter with a real {@link NAME_MAP} covering ~91 tools across 14
  * modules. Plan 11 Phase C adds quadslab. Plan 11 Phase D adds
  * discord-ops by bookedsolidtech (multi-guild routing, dry-run mode,
- * tool profiles — see file-level "Architectural mismatches" in
+ * tool profiles - see file-level "Architectural mismatches" in
  * `discord-ops.ts`). Future phases add barryyip.
  */
 import { discordOpsAdapter } from './discord-ops.js';

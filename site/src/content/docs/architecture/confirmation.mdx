@@ -9,8 +9,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 discord-mcp's confirmation contract is a **mechanical two-key guard** for
 selected high-risk operations. A tool that declares the `confirm_required`
-precondition — **29 of the 192 tools**, listed
-[below](#which-tools-require-it) — does not fire unless **both** of these
+precondition - **29 of the 192 tools**, listed
+[below](#which-tools-require-it) - does not fire unless **both** of these
 hold at the same time:
 
 1. The operator launched the server with `MCP_DRY_RUN=false`.
@@ -21,8 +21,8 @@ redacted arguments instead of executing. The MCP client may show that preview
 to a human before re-issuing the call, but the server does not require or
 verify human approval.
 
-Tools that do **not** declare the precondition — including ordinary mutations
-like `messages_send` and `members_add_role` — are unaffected by both halves
+Tools that do **not** declare the precondition - including ordinary mutations
+like `messages_send` and `members_add_role` - are unaffected by both halves
 and execute immediately.
 
 Source: [`packages/mcp-core/src/preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts).
@@ -69,14 +69,14 @@ Client or agent (optionally after human approval, re-issues with __confirm:true)
 
 The middleware never inspects what the tool *does*; it only checks the two
 halves and either passes through or raises. The gate therefore behaves
-identically everywhere it is attached — but **it only runs on tools that
+identically everywhere it is attached - but **it only runs on tools that
 declare it**. See [Which tools require it](#which-tools-require-it) for the
 exact list, and do not assume a tool is covered because it mutates Discord.
 
 ## Why double-underscore
 
 `__confirm` is **not part of any tool's zod `inputSchema`**. It is an
-authorization flag, not a handler parameter — handlers must never see it:
+authorization flag, not a handler parameter - handlers must never see it:
 
 - If it were in a tool's zod shape, every destructive handler would receive
   it as a business argument and each one would have to remember to ignore it.
@@ -98,7 +98,7 @@ So `server.ts` injects `__confirm` into the **published JSON Schema of the
 29 gated tools only**, after the zod → JSON Schema conversion:
 
 ```ts
-// From server.ts — ListTools handler
+// From server.ts - ListTools handler
 if (tool.preconditions.includes('confirm_required')) {
   jsonSchema.properties ??= {};
   jsonSchema.properties.__confirm = { type: 'boolean', description: '...' };
@@ -114,7 +114,7 @@ Two consequences worth being precise about:
   `__confirm`, so the parsed args that handlers receive have it stripped.
   `server.ts` stashes the pre-validation payload in `ctx.meta` under
   `rawArgs`, and `ConfirmRequired` reads the boolean from there. That is the
-  **one** place we accept pre-validation state — narrowly scoped to one
+  **one** place we accept pre-validation state - narrowly scoped to one
   boolean.
 
 <Aside type="caution">
@@ -128,7 +128,7 @@ schema entry exists only so the flag is discoverable and transmissible.
 
 `MCP_DRY_RUN` defaults to `true` (safe). The operator must **explicitly**
 set it to `false` (i.e. `MCP_DRY_RUN=false`) to enable real execution.
-This is "fail closed" — a misconfigured deployment never accidentally
+This is "fail closed" - a misconfigured deployment never accidentally
 mutates Discord state.
 
 The literal-string check matters: `MCP_DRY_RUN=0`, `MCP_DRY_RUN=no`, and
@@ -164,7 +164,7 @@ There is **no automatic rule**. `confirm_required` is attached explicitly,
 per tool, in each tool's own `defineTool({ preconditions: ['confirm_required'] })`
 call. A tool is gated if and only if it names the precondition itself.
 
-As of v0.12.0 that is exactly **29 tools** out of 192 — every irreversible
+As of v0.12.0 that is exactly **29 tools** out of 192 - every irreversible
 delete, plus ban / kick / prune / leave-guild and the two command
 bulk-overwrites (which replace a guild's entire command set in one call):
 
@@ -207,7 +207,7 @@ on the first call, in dry-run mode or not, with no `__confirm` required:
 - `members_add_role`
 - `components_v2_send`
 
-That list is not exhaustive — it is the set operators most often assume is
+That list is not exhaustive - it is the set operators most often assume is
 covered. The confirmation gate protects against **irreversible destruction**,
 not against mutation in general. `MCP_DRY_RUN=true` does **not** put the
 server into a global read-only mode: a tool with no `confirm_required`
@@ -239,7 +239,7 @@ explicit.
 
 ## Related
 
-- [Architecture → Error handling](/discord-mcp/architecture/error-handling/) — `DRY_RUN_PREVIEW` is the most-thrown error in the hierarchy.
-- [Architecture → Middleware chain](/discord-mcp/architecture/middleware-chain/) — where preconditions sit in the chain.
-- [Operations → Client capability matrix](/discord-mcp/operations/clients/) — what each client supports; the `__confirm` contract is universal.
-- [`moderation-bulk-ban` recipe](/discord-mcp/recipes/moderation-bulk-ban/) — worked example using the `__confirm:true` flow on a high-impact tool.
+- [Architecture → Error handling](/discord-mcp/architecture/error-handling/) - `DRY_RUN_PREVIEW` is the most-thrown error in the hierarchy.
+- [Architecture → Middleware chain](/discord-mcp/architecture/middleware-chain/) - where preconditions sit in the chain.
+- [Operations → Client capability matrix](/discord-mcp/operations/clients/) - what each client supports; the `__confirm` contract is universal.
+- [`moderation-bulk-ban` recipe](/discord-mcp/recipes/moderation-bulk-ban/) - worked example using the `__confirm:true` flow on a high-impact tool.

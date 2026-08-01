@@ -20,7 +20,7 @@ export default defineTool({
   description: [
     '**Purpose**: Create or upsert a global application command. Global commands propagate within ~1 hour.',
     '',
-    '**Body**: standard command shape — `name` is required. `description` is required for CHAT_INPUT (type=1) but optional for USER (2) / MESSAGE (3) commands.',
+    '**Body**: standard command shape - `name` is required. `description` is required for CHAT_INPUT (type=1) but optional for USER (2) / MESSAGE (3) commands.',
     '',
     '**Idempotent**: posting the same `name`+`type` updates the existing command (Discord upsert semantics).',
     '',

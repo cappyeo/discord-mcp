@@ -10,7 +10,7 @@ interface RawChannel {
   name: string;
   type: number;
   position: number;
-  // Optional on APIGuildChannel — absent (not null) for top-level channels.
+  // Optional on APIGuildChannel - absent (not null) for top-level channels.
   parent_id?: string | null;
   nsfw?: boolean;
 }

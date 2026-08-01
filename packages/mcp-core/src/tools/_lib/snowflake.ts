@@ -47,7 +47,7 @@ export const WebhookToken = z
   .min(60)
   .max(100)
   .brand<'WebhookToken'>()
-  .describe('Discord webhook token (secret — treat as credential, do not log)');
+  .describe('Discord webhook token (secret - treat as credential, do not log)');
 
 // Inferred branded types for compile-time safety:
 export type ChannelId = z.infer<typeof ChannelId>;

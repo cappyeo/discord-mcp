@@ -48,7 +48,7 @@ export default defineTool({
     '',
     '**When to use**: when a workflow needs ≥2 sequential calls (e.g., list channels → find by name → send message). Reduces N round-trips to 1.',
     '',
-    '**When NOT to use**: parallel-safe independent calls — issue them as separate tools/call requests. Long-running batch ops — use the dedicated bulk tool (Plan 7+) so each operation can fail independently.',
+    '**When NOT to use**: parallel-safe independent calls - issue them as separate tools/call requests. Long-running batch ops - use the dedicated bulk tool (Plan 7+) so each operation can fail independently.',
     '',
     '**Step shape**: `{id?, tool, args, save_as?, if?, continue_on_error?}`. `args` may contain `{{step_id.path}}` placeholders. `if` is a path check; the step skips when the path resolves to falsy.',
     '',
@@ -133,13 +133,13 @@ export default defineTool({
       signal: runCtx.signal,
     });
     const summary =
-      `**Pipeline ${result.aborted ? '⚠️ aborted' : '✅ complete'}** — ` +
+      `**Pipeline ${result.aborted ? '⚠️ aborted' : '✅ complete'}** - ` +
       `${result.steps.filter((s) => s.status === 'success').length}/${result.steps.length} success` +
       ` (${result.total_duration_ms.toFixed(0)}ms)\n` +
       result.steps
         .map(
           (s) =>
-            `- ${s.id} (${s.tool}) — ${s.status}${s.error !== undefined ? ` [${s.error.code}]` : ''} (${s.duration_ms.toFixed(0)}ms)`,
+            `- ${s.id} (${s.tool}) - ${s.status}${s.error !== undefined ? ` [${s.error.code}]` : ''} (${s.duration_ms.toFixed(0)}ms)`,
         )
         .join('\n');
 

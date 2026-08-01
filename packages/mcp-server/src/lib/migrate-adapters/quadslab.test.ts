@@ -1,12 +1,12 @@
 /**
- * quadslab adapter unit tests — Plan 11 Phase C.
+ * quadslab adapter unit tests - Plan 11 Phase C.
  *
  * Tests run against the synthetic fixture under
  * `packages/mcp-server/test-fixtures/quadslab/`. The fixture lives outside
  * `src/` so it isn't compiled, isn't packed (the package `files: ["dist",
  * ...]` allowlist excludes it), and isn't lint-checked.
  *
- * Fixture contents — 8 known tool literals across four modules:
+ * Fixture contents - 8 known tool literals across four modules:
  *   messages.ts:  send_message, edit_message, get_messages          (3 mapped)
  *   channels.ts:  list_channels, create_text_channel                (2 mapped)
  *   presence.ts:  set_bot_status, get_bot_info                      (2 unmapped)
@@ -30,7 +30,7 @@ const PACKAGE_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'quadslab');
 const PASYMPA_FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'pasympa');
 
-describe('quadslabAdapter — id + description + Plan 11 Phase A metadata', () => {
+describe('quadslabAdapter - id + description + Plan 11 Phase A metadata', () => {
   it('exposes a stable kebab-case id', () => {
     expect(quadslabAdapter.id).toBe('quadslab');
   });
@@ -50,7 +50,7 @@ describe('quadslabAdapter — id + description + Plan 11 Phase A metadata', () =
   });
 });
 
-describe('quadslabAdapter — detect()', () => {
+describe('quadslabAdapter - detect()', () => {
   it('returns true for the synthetic fixture (package.json + tools dir)', async () => {
     expect(await quadslabAdapter.detect(FIXTURE_ROOT)).toBe(true);
   });
@@ -70,7 +70,7 @@ describe('quadslabAdapter — detect()', () => {
 
   it('returns false when package.json matches but no quadslab-shape file exists', async () => {
     // Multi-signal detection: name alone isn't enough. Build a temp
-    // directory with a quadslab-named package.json but no source files —
+    // directory with a quadslab-named package.json but no source files -
     // detect() must reject because the content signal is missing.
     const dir = mkdtempSync(join(tmpdir(), 'quadslab-detect-namelyok-'));
     try {
@@ -127,7 +127,7 @@ describe('quadslabAdapter — detect()', () => {
   });
 });
 
-describe('quadslabAdapter — migrate()', () => {
+describe('quadslabAdapter - migrate()', () => {
   it('reports 5 mapped tools and 3 unmapped tools against the fixture', async () => {
     const result = await quadslabAdapter.migrate(FIXTURE_ROOT);
     expect(result.source).toBe('quadslab');

@@ -1,5 +1,5 @@
 /**
- * Unit tests for `tokenOnlineCheck` — Plan 9 Phase C.
+ * Unit tests for `tokenOnlineCheck` - Plan 9 Phase C.
  *
  * We mock global `fetch` via `vi.stubGlobal` per Phase C plan; vitest
  * auto-restores stubbed globals between tests but we still call
@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenOnlineCheck } from './token-online.js';
 
 function makeConfig(token: string): Config {
-  // tokenOnlineCheck only reads DISCORD_TOKEN — structural cast keeps the
+  // tokenOnlineCheck only reads DISCORD_TOKEN - structural cast keeps the
   // test focused without constructing every Config field.
   return { DISCORD_TOKEN: token } as unknown as Config;
 }
@@ -66,7 +66,7 @@ describe('tokenOnlineCheck', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    // Pass a token already prefixed with "Bot " — we should still send
+    // Pass a token already prefixed with "Bot " - we should still send
     // exactly one "Bot " prefix in the Authorization header.
     await tokenOnlineCheck.run(makeConfig(`Bot ${'x'.repeat(60)}`));
     const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> }).headers;
@@ -133,7 +133,7 @@ describe('tokenOnlineCheck', () => {
 
   it('returns warn on timeout (AbortError)', async () => {
     // Simulate a fetch that respects AbortSignal and rejects with AbortError
-    // when aborted. We don't actually wait the 5s timeout — we trigger abort
+    // when aborted. We don't actually wait the 5s timeout - we trigger abort
     // by returning a never-resolving promise that rejects when signal aborts.
     const fetchMock = vi.fn((_url: string, init: { signal: AbortSignal }) => {
       return new Promise((_resolve, reject) => {

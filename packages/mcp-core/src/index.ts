@@ -114,7 +114,7 @@ export {
 } from './tools/_lib/untrusted.js';
 
 /**
- * Package version, derived from package.json — the single source of truth.
+ * Package version, derived from package.json - the single source of truth.
  *
  * The explicit `: string` annotation is load-bearing: without it the emitted
  * .d.ts bakes a string *literal* type into the about-to-be-frozen public

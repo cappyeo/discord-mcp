@@ -2,7 +2,7 @@ import { type Resource, resourceFromAttributes } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import type { Config } from '../config.js';
 
-// Static — Plan 8 Phase A keeps tool count locked at 192.
+// Static - Plan 8 Phase A keeps tool count locked at 192.
 const PLAN8_TOOL_COUNT = '192';
 
 // Inlined since these come from `/incubating` in semconv 1.34 and we'd

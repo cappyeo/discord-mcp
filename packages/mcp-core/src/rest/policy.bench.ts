@@ -5,13 +5,13 @@ import { DiscordRetryableError } from './errors.js';
 import { buildPolicy } from './policy.js';
 
 /**
- * Plan 12 Phase E.1 — performance bench for `buildPolicy` execute overhead.
+ * Plan 12 Phase E.1 - performance bench for `buildPolicy` execute overhead.
  *
  * Three scenarios isolate the cost of:
- *   1. Pure policy.execute(noop) — bulkhead+timeout outermost wrapping.
- *   2. retry-once recovery (single transient → success) — exercises the
+ *   1. Pure policy.execute(noop) - bulkhead+timeout outermost wrapping.
+ *   2. retry-once recovery (single transient → success) - exercises the
  *      retry decorator + custom backoff sampling.
- *   3. timeout fast-fail — confirms TaskCancelledError raises in <50ms
+ *   3. timeout fast-fail - confirms TaskCancelledError raises in <50ms
  *      with MCP_TIMEOUT_DEFAULT_MS=10.
  *
  * Run via `pnpm --filter @discord-mcp/core bench`. CI does NOT gate on

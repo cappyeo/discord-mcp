@@ -44,7 +44,7 @@ export default defineTool({
     '',
     '**When NOT to use**:',
     '- Modify existing sticker → use `stickers_modify_guild_sticker`.',
-    "- Format mismatch — Discord rejects payload that doesn't match `file_format`.",
+    "- Format mismatch - Discord rejects payload that doesn't match `file_format`.",
     '',
     '**Example**: `{guild_id:"…", name:"WaveHi", description:"a wave", tags:"wave,hello", file_format:1, file_data:"data:image/png;base64,…"}`',
     '',

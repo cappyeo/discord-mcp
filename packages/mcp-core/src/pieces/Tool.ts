@@ -16,7 +16,7 @@ export abstract class Tool extends Piece<Tool.Options, 'tools'> {
   /** Markdown description following NLT template (purpose / when_to_use / when_not / example / returns). */
   public abstract readonly description: string;
 
-  /** Bare zod shape — keys become input parameter names. Use .describe() on every field. */
+  /** Bare zod shape - keys become input parameter names. Use .describe() on every field. */
   public abstract readonly inputSchema: Record<string, z.ZodTypeAny>;
 
   /** Optional zod shape for structuredContent validation. */
@@ -28,7 +28,7 @@ export abstract class Tool extends Piece<Tool.Options, 'tools'> {
   /** True if the tool is GET-shaped and safe to single-flight-coalesce. */
   public readonly idempotent: boolean = false;
 
-  /** Tool category — used by CategoryEnabled precondition + tools/list grouping. */
+  /** Tool category - used by CategoryEnabled precondition + tools/list grouping. */
   public readonly category: string = 'misc';
 
   /** Identifiers of preconditions to run before the handler. */

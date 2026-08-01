@@ -15,7 +15,7 @@ export default defineTool({
   name: 'onboarding_modify',
   category: 'onboarding',
   description: [
-    "**Purpose**: Replace a guild's onboarding configuration (PUT — full replace).",
+    "**Purpose**: Replace a guild's onboarding configuration (PUT - full replace).",
     '',
     '`prompts` is an array of Discord-shaped prompt objects. See:',
     'https://docs.discord.com/developers/resources/guild#guild-onboarding-object-onboarding-prompt-structure',
@@ -28,7 +28,7 @@ export default defineTool({
     guild_id: GuildId.describe('Target guild'),
     prompts: z
       .array(z.record(z.string(), z.unknown()))
-      .describe('Onboarding prompts (full replace) — see Discord docs for prompt object shape'),
+      .describe('Onboarding prompts (full replace) - see Discord docs for prompt object shape'),
     default_channel_ids: z
       .array(ChannelId)
       .describe('Channels members see by default after onboarding'),

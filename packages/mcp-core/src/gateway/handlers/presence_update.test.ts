@@ -81,7 +81,7 @@ describe('bindPresenceUpdateHandler', () => {
       vi.advanceTimersByTime(200);
     }
 
-    // Leading fire + one per 1s window — never starved, never per-event.
+    // Leading fire + one per 1s window - never starved, never per-event.
     expect(notify.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(notify.mock.calls.length).toBeLessThanOrEqual(6);
   });

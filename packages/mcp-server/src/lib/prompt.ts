@@ -1,10 +1,10 @@
 /**
- * Tiny readline prompt helper — Plan 9 Phase D.
+ * Tiny readline prompt helper - Plan 9 Phase D.
  *
  * `init` is the only sub-command (so far) that needs interactive input.
  * Rather than pull `inquirer`/`prompts`/`enquirer` for a single command
  * we wrap `node:readline/promises` with three thin helpers. Zero new
- * runtime deps, zero ANSI terminal handling — Node's readline already
+ * runtime deps, zero ANSI terminal handling - Node's readline already
  * does line editing and ^C handling for us.
  *
  * `isInteractive()` is the canonical TTY gate. Both `stdin` and `stdout`
@@ -22,7 +22,7 @@ import * as readline from 'node:readline/promises';
  * True iff both stdin and stdout are TTYs.
  *
  * When false the caller MUST NOT call `ask()` / `askYesNo()` / `askChoice()`
- * — those would block forever on piped stdin or write garbage to a
+ * - those would block forever on piped stdin or write garbage to a
  * non-TTY stdout. Use the function flags / defaults instead.
  */
 export function isInteractive(): boolean {
@@ -34,7 +34,7 @@ export function isInteractive(): boolean {
  * the user submits an empty string, the default is returned; otherwise
  * the trimmed input is returned.
  *
- * The readline interface is created and disposed per call — this keeps
+ * The readline interface is created and disposed per call - this keeps
  * the helpers stateless and safe to call from anywhere.
  */
 export async function ask(question: string, defaultValue?: string): Promise<string> {

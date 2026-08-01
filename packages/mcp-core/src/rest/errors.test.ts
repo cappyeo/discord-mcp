@@ -37,7 +37,7 @@ describe('classifyDiscordError (Plan 8 C.2)', () => {
   });
 
   it('classifies a Discord 429 (DiscordAPIError with rawError.retry_after seconds)', () => {
-    // Discord JSON 429 body has retry_after in seconds — we convert to ms.
+    // Discord JSON 429 body has retry_after in seconds - we convert to ms.
     const err = new DiscordAPIError(
       { code: 0, message: 'rate-limit', retry_after: 0.75 } as unknown as {
         code: number;

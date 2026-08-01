@@ -30,7 +30,7 @@ export default defineTool({
   name: 'components_v2_send_from_template',
   category: 'components_v2',
   description:
-    '**Purpose**: Apply variables to a built-in V2 template and send the result.\n\n**Templates v1**: announcement, release_notes, welcome_card, poll_results, incident_status. Each declares a `variables` list — pass values in `vars`.\n\n**Returns**: `{message_id, jump_url, template}`.',
+    '**Purpose**: Apply variables to a built-in V2 template and send the result.\n\n**Templates v1**: announcement, release_notes, welcome_card, poll_results, incident_status. Each declares a `variables` list - pass values in `vars`.\n\n**Returns**: `{message_id, jump_url, template}`.',
   inputSchema: {
     channel_id: ChannelId,
     template: z.enum(KNOWN_TEMPLATES).describe('Built-in template name'),

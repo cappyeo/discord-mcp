@@ -199,7 +199,7 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
       recoveryHint: e.recoveryHint ?? 'retry shortly',
       text:
         `**Concurrency Limit Exceeded**\n\n` +
-        `Local bulkhead rejected the request — too many concurrent Discord REST calls in flight.\n\n` +
+        `Local bulkhead rejected the request - too many concurrent Discord REST calls in flight.\n\n` +
         `**Recovery**: ${e.recoveryHint}`,
       structured: {},
     });
@@ -212,7 +212,7 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
       recoveryHint: 'concurrency limit exceeded; retry shortly',
       text:
         `**Concurrency Limit Exceeded**\n\n` +
-        `Local bulkhead rejected the request — too many concurrent Discord REST calls in flight.\n\n` +
+        `Local bulkhead rejected the request - too many concurrent Discord REST calls in flight.\n\n` +
         `**Recovery**: concurrency limit exceeded; retry shortly`,
       structured: {},
     });

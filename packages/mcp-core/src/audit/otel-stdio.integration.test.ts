@@ -15,7 +15,7 @@ import { createLogger } from '../logger.js';
 import { buildServer } from '../server.js';
 
 /**
- * Plan 8 Phase F.3 — in-process variant of the deferred Phase A
+ * Plan 8 Phase F.3 - in-process variant of the deferred Phase A
  * otel-stdio integration test.
  *
  * The original plan called for spawning the mcp-server CLI with

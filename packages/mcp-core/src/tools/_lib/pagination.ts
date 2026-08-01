@@ -27,7 +27,7 @@ export function decodeCursor(s: string): CursorPayload {
     throw new ValidationError([
       {
         path: 'cursor',
-        message: 'Invalid cursor — must be opaque base64url issued by a previous response.',
+        message: 'Invalid cursor - must be opaque base64url issued by a previous response.',
         code: 'invalid_cursor',
       },
     ]);

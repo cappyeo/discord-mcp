@@ -25,18 +25,18 @@ per-entry notes.
 
 ## Why migrate to discord-mcp
 
-- **Production hardening** — first-class OpenTelemetry traces and Cockatiel
+- **Production hardening** - first-class OpenTelemetry traces and Cockatiel
   resilience policies (retry / circuit breaker / bulkhead) on the central
   Discord REST path.
   See [Operations: telemetry](/discord-mcp/operations/telemetry/) and
   [Architecture: rate limits](/discord-mcp/architecture/rate-limits/).
-- **Broad 192-tool Discord surface** — the catalog includes stickers, automod, polls, application
+- **Broad 192-tool Discord surface** - the catalog includes stickers, automod, polls, application
   commands, onboarding, voice state, stage instances, scheduled events
   (subscribers + invites), and the Components V2 layout primitives.
-- **Components V2 first-class** — dedicated `components_v2_send` and
+- **Components V2 first-class** - dedicated `components_v2_send` and
   `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Gateway event notifications** — `resources/subscribe` can signal that
+- **Gateway event notifications** - `resources/subscribe` can signal that
   Discord state changed; fetch current state with the corresponding REST tool.
   It complements polling but does not replace the read step. See
   [Architecture: gateway](/discord-mcp/architecture/gateway/) and the
@@ -52,7 +52,7 @@ per-entry notes.
    git clone https://github.com/PaSympa/discord-mcp.git ~/pasympa-clone
    ```
 
-   The adapter does not fetch over the network — it requires a real
+   The adapter does not fetch over the network - it requires a real
    filesystem path so it can walk `src/tools/*.ts`.
 
 2. **Run the migration report.**
@@ -71,13 +71,13 @@ per-entry notes.
 
    The output groups tools into three buckets:
 
-   - **mapped** — the adapter found a discord-mcp equivalent. Check the
+   - **mapped** - the adapter found a discord-mcp equivalent. Check the
      `confidence` field on each entry and read the `notes` for every
      `medium` or `low` mapping.
-   - **unmapped** — PaSympa tools with no discord-mcp equivalent (typically
+   - **unmapped** - PaSympa tools with no discord-mcp equivalent (typically
      scheduled events, `audit_permissions`, `copy_permissions`, `server_stats`,
      `clone_channel`, forum getters).
-   - **manual review** — empty for PaSympa as of cutoff; the adapter never
+   - **manual review** - empty for PaSympa as of cutoff; the adapter never
      defers to a human.
 
 4. **Update agent prompts.**
@@ -112,28 +112,28 @@ for the complete list.
 
 | PaSympa tool                       | discord-mcp tool                  | Confidence | Notes                                                          |
 | ---------------------------------- | --------------------------------- | ---------- | -------------------------------------------------------------- |
-| `discord_list_guilds`              | `users_list_current_user_guilds`  | high       | —                                                              |
-| `discord_get_guild_info`           | `guild_get`                       | high       | —                                                              |
-| `discord_list_channels`            | `channels_list`                   | high       | —                                                              |
-| `discord_send_message`             | `messages_send`                   | high       | —                                                              |
-| `discord_read_messages`            | `messages_read`                   | high       | —                                                              |
-| `discord_edit_message`             | `messages_edit`                   | high       | —                                                              |
-| `discord_delete_message`           | `messages_delete`                 | high       | —                                                              |
-| `discord_pin_message`              | `messages_pin`                    | high       | —                                                              |
-| `discord_search_messages`          | `messages_search_recent`          | high       | —                                                              |
-| `discord_add_reaction`             | `reactions_create`                | high       | —                                                              |
-| `discord_get_reactions`            | `reactions_list`                  | high       | —                                                              |
-| `discord_create_channel`           | `channels_create_guild_channel`   | high       | —                                                              |
-| `discord_edit_channel`             | `channels_modify`                 | high       | —                                                              |
-| `discord_list_members`             | `members_list`                    | high       | —                                                              |
-| `discord_kick_member`              | `members_kick`                    | high       | —                                                              |
-| `discord_ban_member`               | `members_ban`                     | high       | —                                                              |
-| `discord_search_members`           | `members_search`                  | high       | —                                                              |
-| `discord_list_roles`               | `roles_list`                      | high       | —                                                              |
-| `discord_create_role`              | `roles_create`                    | high       | —                                                              |
-| `discord_get_audit_log`            | `audit_log_get`                   | high       | —                                                              |
+| `discord_list_guilds`              | `users_list_current_user_guilds`  | high       | -                                                              |
+| `discord_get_guild_info`           | `guild_get`                       | high       | -                                                              |
+| `discord_list_channels`            | `channels_list`                   | high       | -                                                              |
+| `discord_send_message`             | `messages_send`                   | high       | -                                                              |
+| `discord_read_messages`            | `messages_read`                   | high       | -                                                              |
+| `discord_edit_message`             | `messages_edit`                   | high       | -                                                              |
+| `discord_delete_message`           | `messages_delete`                 | high       | -                                                              |
+| `discord_pin_message`              | `messages_pin`                    | high       | -                                                              |
+| `discord_search_messages`          | `messages_search_recent`          | high       | -                                                              |
+| `discord_add_reaction`             | `reactions_create`                | high       | -                                                              |
+| `discord_get_reactions`            | `reactions_list`                  | high       | -                                                              |
+| `discord_create_channel`           | `channels_create_guild_channel`   | high       | -                                                              |
+| `discord_edit_channel`             | `channels_modify`                 | high       | -                                                              |
+| `discord_list_members`             | `members_list`                    | high       | -                                                              |
+| `discord_kick_member`              | `members_kick`                    | high       | -                                                              |
+| `discord_ban_member`               | `members_ban`                     | high       | -                                                              |
+| `discord_search_members`           | `members_search`                  | high       | -                                                              |
+| `discord_list_roles`               | `roles_list`                      | high       | -                                                              |
+| `discord_create_role`              | `roles_create`                    | high       | -                                                              |
+| `discord_get_audit_log`            | `audit_log_get`                   | high       | -                                                              |
 
-A handful of PaSympa wrappers fold onto a single discord-mcp tool — these are
+A handful of PaSympa wrappers fold onto a single discord-mcp tool - these are
 the medium-confidence collapses you should re-read before swapping:
 
 | PaSympa tool                       | discord-mcp tool                  | Confidence | Notes                                                          |
@@ -149,7 +149,7 @@ the medium-confidence collapses you should re-read before swapping:
 About 13 PaSympa tools have no discord-mcp equivalent and surface in the
 report's `unmapped` list:
 
-- **Scheduled events (7 tools)** — `discord_list_scheduled_events`,
+- **Scheduled events (7 tools)** - `discord_list_scheduled_events`,
   `discord_get_scheduled_event`, `discord_create_scheduled_event`,
   `discord_edit_scheduled_event`, `discord_delete_scheduled_event`,
   `discord_get_event_subscribers`, `discord_create_event_invite`. discord-mcp
@@ -157,25 +157,25 @@ report's `unmapped` list:
   treats these as unmapped because the verb prefixes don't match the
   string-extraction step. Manual swap: `events_list`, `events_get`,
   `events_create`, etc.
-- **Permissions helpers (2)** — `discord_audit_permissions`,
+- **Permissions helpers (2)** - `discord_audit_permissions`,
   `discord_copy_permissions`. These are higher-level compositions on top
   of the channel-permissions REST endpoint; rebuild client-side from
   `channels_get` + `channels_modify_permissions`.
-- **Server stats (1)** — `discord_get_server_stats` is a client-side
+- **Server stats (1)** - `discord_get_server_stats` is a client-side
   computation in PaSympa (counts derived from `members_list` +
   `channels_list`). discord-mcp expects the agent to compute this itself.
-- **Channel clone (1)** — `discord_clone_channel`. Compose from
+- **Channel clone (1)** - `discord_clone_channel`. Compose from
   `channels_get` (read source overwrites + topic + slowmode) + 
   `channels_create_guild_channel` (apply to new channel).
-- **Forum getters (2)** — `discord_get_forum_channels`, `discord_get_forum_post`.
+- **Forum getters (2)** - `discord_get_forum_channels`, `discord_get_forum_post`.
   Use `channels_list` filtered by `type === 15` and `channels_get` respectively.
 
 ## See also
 
-- [Adapter authoring guide](/discord-mcp/migrate/authoring/) — for adding
+- [Adapter authoring guide](/discord-mcp/migrate/authoring/) - for adding
   more source servers to this list.
-- [discord-mcp tools (192)](/discord-mcp/tools/) — auto-generated reference.
-- [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate) — flags
+- [discord-mcp tools (192)](/discord-mcp/tools/) - auto-generated reference.
+- [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate) - flags
   and exit codes.
-- [Architecture: gateway](/discord-mcp/architecture/gateway/) — how
+- [Architecture: gateway](/discord-mcp/architecture/gateway/) - how
   notifications and authoritative REST reads work together.

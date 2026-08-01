@@ -10,7 +10,7 @@ export default defineTool({
   category: 'webhooks',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a webhook using its token. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a webhook using its token. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Self-decommission when the agent only holds the token.',
@@ -21,7 +21,7 @@ export default defineTool({
   ].join('\n'),
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook to delete'),
-    token: WebhookToken.describe('Webhook secret — treat as credential, do not log'),
+    token: WebhookToken.describe('Webhook secret - treat as credential, do not log'),
   },
   outputSchema: {
     deleted: z.literal(true),

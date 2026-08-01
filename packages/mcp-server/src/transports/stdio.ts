@@ -38,7 +38,7 @@ export async function startStdio(
   // owns retry semantics from this point on; leaving the default (3) would
   // double-retry on 5xx and stack delays on 429.
   const baseRest = new REST({ version: '10', retries: 0 }).setToken(
-    // Discord REST does not want the "Bot " prefix here — discord.js's REST adds it.
+    // Discord REST does not want the "Bot " prefix here - discord.js's REST adds it.
     config.DISCORD_TOKEN.startsWith('Bot ') ? config.DISCORD_TOKEN.slice(4) : config.DISCORD_TOKEN,
   );
 
@@ -72,7 +72,7 @@ export async function startStdio(
     } catch (e) {
       logger.warn(
         { err: e instanceof Error ? e.message : String(e) },
-        'Discord Gateway failed to start — continuing in REST-only mode',
+        'Discord Gateway failed to start - continuing in REST-only mode',
       );
       gatewayClient = null;
     }
@@ -97,7 +97,7 @@ export async function startStdio(
       }
     }
     await server.close();
-    // Flush audit sink before OTel — sinks may write JSON lines to
+    // Flush audit sink before OTel - sinks may write JSON lines to
     // disk that we want persisted even if OTel teardown stalls.
     if (auditSink.shutdown !== undefined) {
       try {

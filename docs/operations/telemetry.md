@@ -1,4 +1,4 @@
-# Telemetry (OpenTelemetry) — Operator Guide
+# Telemetry (OpenTelemetry) - Operator Guide
 
 `discord-mcp` ships with OpenTelemetry traces and metrics built on top of
 the official OTel JS SDK. This document covers how to enable telemetry,
@@ -115,14 +115,14 @@ that spans fire.
 
 Common labels on every metric: `mcp.tool.name`, `mcp.tool.category`,
 `mcp.tool.idempotent`, `mcp.transport`, `status`. **`mcp.request_id`
-is intentionally NOT a label** — it would explode cardinality and make
+is intentionally NOT a label** - it would explode cardinality and make
 the histograms useless.
 
 ### Resilience metrics
 
 | Metric | Type | Description |
 | ------ | ---- | ----------- |
-| `mcp.circuit.transitions` | Counter | Circuit breaker state transitions. One label: `to_state` ∈ `{open, half-open, closed}`. There is no `from` label — the destination state alone identifies the transition. |
+| `mcp.circuit.transitions` | Counter | Circuit breaker state transitions. One label: `to_state` ∈ `{open, half-open, closed}`. There is no `from` label - the destination state alone identifies the transition. |
 | `mcp.bulkhead.rejected.count` | Counter | Calls fast-rejected because the bulkhead semaphore was full. **No labels.** |
 | `mcp.deadletter.count` | Counter | Calls that exhausted retries / were circuit-rejected and surfaced to the client as a structured error. One label: `error.type`. |
 
@@ -170,7 +170,7 @@ For Grafana + Prometheus, useful starter queries:
 - **Dead letters by cause**:
   `sum by (error_type) (rate(mcp_deadletter_count_total[5m]))`
 
-The label is `to_state`, not `to` — a query written as `{to="open"}`
+The label is `to_state`, not `to` - a query written as `{to="open"}`
 matches nothing and silently reports a permanently healthy circuit.
 Neither the bulkhead nor the circuit metric has a `route` label to group
 by.
@@ -182,7 +182,7 @@ For Honeycomb, useful starting BubbleUp / triggers:
 - `mcp.deadletter.count` > 0 (every dead-letter is a real failure
   the client saw).
 
-The shipped repository does NOT include exported board JSON — every
+The shipped repository does NOT include exported board JSON - every
 deployment has different SLOs. Use the queries above as a starting
 point and tune to your environment.
 
@@ -200,7 +200,7 @@ export OTEL_TRACES_SAMPLER=parentbased_traceidratio
 export OTEL_TRACES_SAMPLER_ARG=0.05    # 5% sampling
 ```
 
-Metrics are NOT affected by trace sampling — counters and histograms
+Metrics are NOT affected by trace sampling - counters and histograms
 are always reported.
 
 ---

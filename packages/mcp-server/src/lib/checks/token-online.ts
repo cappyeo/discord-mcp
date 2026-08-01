@@ -1,5 +1,5 @@
 /**
- * `token-online` check — Plan 9 Phase C.
+ * `token-online` check - Plan 9 Phase C.
  *
  * Verifies the configured DISCORD_TOKEN against the live Discord REST API
  * by hitting `GET /users/@me`. This is the only check that proves the
@@ -13,7 +13,7 @@
  * Test-only escape hatch: `DISCORD_API_BASE_URL` env override. Defaults
  * to `https://discord.com/api/v10`. Integration tests set this to a
  * loopback `node:http` server (see doctor.integration.test.ts). NEVER
- * documented in user-facing help — it exists purely to avoid pulling in
+ * documented in user-facing help - it exists purely to avoid pulling in
  * `nock` / `msw` for ONLINE network tests.
  *
  * Timeout: 5 seconds via AbortController. On abort we report 'warn'
@@ -50,7 +50,7 @@ export const tokenOnlineCheck: DoctorCheck = {
       return {
         id: 'token-online',
         status: 'warn',
-        message: 'cannot verify — config invalid',
+        message: 'cannot verify - config invalid',
       };
     }
 
@@ -69,7 +69,7 @@ export const tokenOnlineCheck: DoctorCheck = {
       });
 
       if (res.status === 200) {
-        // Parse defensively — a 200 with malformed body still implies the
+        // Parse defensively - a 200 with malformed body still implies the
         // token is accepted, so we degrade gracefully if JSON parse fails.
         let data: DiscordUserResponse = {};
         try {
@@ -127,7 +127,7 @@ export const tokenOnlineCheck: DoctorCheck = {
       };
     } catch (e) {
       // AbortError (timeout) and network errors (DNS, ECONNREFUSED, etc.)
-      // both surface as 'warn' — the doctor user can still proceed offline.
+      // both surface as 'warn' - the doctor user can still proceed offline.
       const message = e instanceof Error ? e.message : String(e);
       return {
         id: 'token-online',

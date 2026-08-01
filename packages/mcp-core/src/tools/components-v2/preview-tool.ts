@@ -7,7 +7,7 @@ export default defineTool({
   name: 'components_v2_preview',
   category: 'components_v2',
   description:
-    '**Purpose**: Render a Components V2 layout as ASCII so the agent can sanity-check structure without sending. Pairs with `components_v2_validate` for offline iteration.\n\n**Returns**: `{ascii}` — multi-line string visualizing the layout.',
+    '**Purpose**: Render a Components V2 layout as ASCII so the agent can sanity-check structure without sending. Pairs with `components_v2_validate` for offline iteration.\n\n**Returns**: `{ascii}` - multi-line string visualizing the layout.',
   inputSchema: {
     components: z.array(z.unknown()).describe('Components array to render'),
   },

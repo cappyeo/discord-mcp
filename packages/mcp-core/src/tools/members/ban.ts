@@ -10,7 +10,7 @@ export default defineTool({
   category: 'members',
   preconditions: ['confirm_required'] as const,
   description: [
-    "**Purpose**: Ban a user from a guild. **DESTRUCTIVE — user can't rejoin until unbanned.**",
+    "**Purpose**: Ban a user from a guild. **DESTRUCTIVE - user can't rejoin until unbanned.**",
     '',
     '**When to use**:',
     '- Permanent removal of a malicious user.',
@@ -21,7 +21,7 @@ export default defineTool({
     '',
     "**Optional `delete_message_seconds`** (0..604800) deletes that user's recent messages.",
     '',
-    '**Returns**: `{banned, user_id, guild_id}`. Idempotent — re-banning is a no-op.',
+    '**Returns**: `{banned, user_id, guild_id}`. Idempotent - re-banning is a no-op.',
     '',
     '**Security**: gated by `ConfirmRequired`. Pass `__confirm:true` AND set `MCP_DRY_RUN=false` to actually ban.',
   ].join('\n'),

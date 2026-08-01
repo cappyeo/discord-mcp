@@ -1,5 +1,5 @@
 /**
- * `node-version` check — Plan 9 Phase B.
+ * `node-version` check - Plan 9 Phase B.
  *
  * Verifies the running Node.js >= 22.12.0. The package.json `engines.node`
  * field declares `">=22.12"` (Node 22 LTS minimum, and the lowest version
@@ -8,7 +8,7 @@
  * import or syntax failure later.
  *
  * Implementation reads `process.versions.node` (e.g. "22.12.1") and
- * does a manual semver compare on the major/minor/patch tuple — we
+ * does a manual semver compare on the major/minor/patch tuple - we
  * don't pull in the `semver` package because that would violate the
  * "no new runtime deps" rule for Phase B.
  */
@@ -23,7 +23,7 @@ function parseNodeVersion(v: string): [number, number, number] | null {
   if (m === null) {
     return null;
   }
-  // Coerce via Number() — the regex group already constrains to digits,
+  // Coerce via Number() - the regex group already constrains to digits,
   // so NaN is impossible. Coalesce-or-throw belt-and-braces is overkill.
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }

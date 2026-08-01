@@ -98,7 +98,7 @@ describe('resilience timeout integration (Plan 8 C.5)', () => {
     const elapsed = Date.now() - start;
 
     // Either cockatiel's TaskCancelledError, or a fetch AbortError that the
-    // aggressive timeout produces by aborting the signal — both are
+    // aggressive timeout produces by aborting the signal - both are
     // acceptable evidence the timeout fired.
     const isCancelled = caught instanceof TaskCancelledError;
     const isAbort =

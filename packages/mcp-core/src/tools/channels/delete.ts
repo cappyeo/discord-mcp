@@ -10,7 +10,7 @@ export default defineTool({
   category: 'channels',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a channel (or close a DM). **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a channel (or close a DM). **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Tear down stale or compromised channels.',

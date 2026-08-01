@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.mock must be hoisted ABOVE the audit-sink.js import. ESM namespace
 // objects (e.g. `import * as fs from 'node:fs'`) are non-configurable, so
-// vi.spyOn(fs, 'accessSync') throws — we have to mock the module instead.
+// vi.spyOn(fs, 'accessSync') throws - we have to mock the module instead.
 // `accessSyncImpl` is a runtime-mutable function that each test rebinds
 // before calling auditSinkCheck.run().
 let accessSyncImpl: (...args: unknown[]) => void = () => undefined;

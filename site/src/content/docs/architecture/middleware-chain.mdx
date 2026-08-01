@@ -1,6 +1,6 @@
 ---
 title: Middleware chain
-description: The six-stage middleware chain wrapping every tool call — telemetry, default guild, validation, category gate, preconditions, and audit.
+description: The six-stage middleware chain wrapping every tool call - telemetry, default guild, validation, category gate, preconditions, and audit.
 sidebar:
   order: 2
 ---
@@ -45,7 +45,7 @@ Source: [`middleware/telemetry.ts`](https://github.com/cappyeo/discord-mcp/blob/
 
 Wraps the entire call in an OTel SERVER span and emits the three tool-level
 metrics (`mcp.tool.duration_ms`, `mcp.tool.calls`, `mcp.tool.errors`). Always
-fires — even for calls that fail validation or preconditions, because we
+fires - even for calls that fail validation or preconditions, because we
 want to **see** those failures in dashboards.
 
 Why outermost: a call that gets rejected by validation should still be
@@ -73,14 +73,14 @@ Runs the tool's zod schema against `arguments`. On failure, throws
 `message`, `code`).
 
 Why before policy gates: if args are invalid, later stages cannot safely inspect them
-(e.g. `ConfirmRequired` reads `args.__confirm` — if `args` is the wrong
+(e.g. `ConfirmRequired` reads `args.__confirm` - if `args` is the wrong
 shape, that read might throw before the validation message ever surfaces).
 Validating first means preconditions and the handler both work with a
 typed, well-formed payload.
 
 <Aside type="note">
 Validation strips unknown keys by default (zod's `.strict()` is opt-in
-per-tool). The `__confirm` raw flag is **not** in any tool's schema — it's
+per-tool). The `__confirm` raw flag is **not** in any tool's schema - it's
 extracted from the raw arg payload **before** zod runs (see
 [Confirmation](/discord-mcp/architecture/confirmation/)). This is the one
 place the chain reads pre-validation args.
@@ -105,16 +105,16 @@ Runs every `Precondition` piece declared by the tool. The store contains two
 built-in pieces, but only identifiers in that tool's metadata run:
 
 - **`ConfirmRequired`** ([`preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts))
-  — gates destructive tools behind `__confirm:true` + `MCP_DRY_RUN=false`.
+  - gates destructive tools behind `__confirm:true` + `MCP_DRY_RUN=false`.
 - **`CategoryEnabled`** ([`preconditions/CategoryEnabled.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/CategoryEnabled.ts))
-  — remains available for embedders; the built-in server applies the category
+  - remains available for embedders; the built-in server applies the category
   gate globally in layer 4.
 
 Preconditions throw structured errors; the handler never runs if any
 precondition fails.
 
 Why before audit: a precondition that rejects (for example, missing confirmation) shouldn't
-audit the tool body — the tool didn't actually execute.
+audit the tool body - the tool didn't actually execute.
 
 ## Layer 6: audit (innermost)
 
@@ -122,7 +122,7 @@ Source: [`middleware/audit.ts`](https://github.com/cappyeo/discord-mcp/blob/main
 
 Captures the redacted args, the result (success / `tool_error` / thrown), the
 duration, and the OTel trace/span IDs (if active). Emits **once per call** to
-the configured sink. Skips calls where `tool.idempotent === true` — read
+the configured sink. Skips calls where `tool.idempotent === true` - read
 patterns are already in telemetry.
 
 Why innermost: audit is meaningful only for actually-attempted operations.
@@ -136,7 +136,7 @@ specific**:
 
 | Stage | Sees | Stops or skips on |
 | ----- | ---- | ----------------- |
-| Telemetry | every call | nothing — always observes |
+| Telemetry | every call | nothing - always observes |
 | Default guild | raw call plus selected tool schema | no matching field/default |
 | Validate | defaulted arguments | malformed args |
 | Category gate | validated calls | disallowed category |
@@ -147,7 +147,7 @@ Each inner stage assumes the outer guarantees: audit receives a valid,
 category-allowed call; preconditions receive parsed args; validation receives
 any configured default guild.
 
-Reversing the order breaks each guarantee in a subtle way — e.g. moving
+Reversing the order breaks each guarantee in a subtle way - e.g. moving
 audit outside preconditions means logging "would have audited" events that
 never executed, which is worse than silence for compliance review.
 
@@ -165,7 +165,7 @@ interface MiddlewareContext<Args = unknown> {
 
 `meta` is the bag for cross-layer state (e.g. telemetry stashes the active
 span; audit reads it to attach `trace_id`/`span_id`). Layers communicate via
-this map rather than monkey-patching the context — keeps the type contract
+this map rather than monkey-patching the context - keeps the type contract
 clean.
 
 ## Adding a stage
@@ -176,7 +176,7 @@ validated arguments; cover that ordering decision with a dispatcher-level test.
 
 ## Related
 
-- [Operations → Telemetry](/discord-mcp/operations/telemetry/) — the metrics emitted by layer 1.
-- [Operations → Audit](/discord-mcp/operations/audit/) — the AuditEvent schema emitted by layer 6.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the precondition behavior in layer 5.
-- [Architecture → Error handling](/discord-mcp/architecture/error-handling/) — how layer-thrown errors surface to the client.
+- [Operations → Telemetry](/discord-mcp/operations/telemetry/) - the metrics emitted by layer 1.
+- [Operations → Audit](/discord-mcp/operations/audit/) - the AuditEvent schema emitted by layer 6.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - the precondition behavior in layer 5.
+- [Architecture → Error handling](/discord-mcp/architecture/error-handling/) - how layer-thrown errors surface to the client.

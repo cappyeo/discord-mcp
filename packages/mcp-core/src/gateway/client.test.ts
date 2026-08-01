@@ -103,7 +103,7 @@ describe('createGatewayClient', () => {
     await expect(gateway.start()).rejects.toThrow('DisallowedIntents');
     expect(fakeClient.destroy).toHaveBeenCalled();
 
-    // The 60s audit-log poller must be gone — no REST traffic after the failure.
+    // The 60s audit-log poller must be gone - no REST traffic after the failure.
     await vi.advanceTimersByTimeAsync(180_000);
     expect(fakeClient.rest.get).not.toHaveBeenCalled();
     expect(fakeClient.listenerCount('guildUpdate')).toBe(0);

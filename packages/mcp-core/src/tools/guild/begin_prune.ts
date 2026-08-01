@@ -14,7 +14,7 @@ export default defineTool({
   category: 'guild',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Kick inactive members. **DESTRUCTIVE — kicked members must rejoin manually.**',
+    '**Purpose**: Kick inactive members. **DESTRUCTIVE - kicked members must rejoin manually.**',
     '',
     '**When to use**:',
     '- Reduce inactive bloat in large communities.',
@@ -23,7 +23,7 @@ export default defineTool({
     '',
     '**`include_roles`** WIDENS the prune (does not narrow it). An inactive member is pruned only if ALL of their roles appear in this list; a member holding ANY role not listed is never pruned. Members with no roles are always pruned regardless. Max 100.',
     '',
-    '**Returns**: `{pruned, guild_id}` — `pruned` is null if `compute_prune_count` was false.',
+    '**Returns**: `{pruned, guild_id}` - `pruned` is null if `compute_prune_count` was false.',
     '',
     '**Security**: gated by `ConfirmRequired`. Pass `__confirm:true` AND set `MCP_DRY_RUN=false` to actually prune.',
   ].join('\n'),

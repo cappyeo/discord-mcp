@@ -10,7 +10,7 @@ export default defineTool({
   category: 'monetization',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a test entitlement (dev tool). **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a test entitlement (dev tool). **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**Returns**: `{deleted, application_id, entitlement_id}`.',
     '',

@@ -25,13 +25,13 @@ const EXCLUDED_DIRS = [join(ROOT, 'site/src/content/docs/tools'), join(ROOT, 'do
 
 /**
  * Names that are real but are not (and should not be) conventions exports.
- * Keep this list short and justified — every entry is a hole in the guard.
+ * Keep this list short and justified - every entry is a hole in the guard.
  */
 const EXTRAS = new Set<string>([
   // Span event name + its attribute, emitted inline by middleware/telemetry.ts.
   'mcp.tool.args',
   'mcp.args.redacted',
-  // Templated span name — `<tool_name>` is a placeholder, not a literal.
+  // Templated span name - `<tool_name>` is a placeholder, not a literal.
   'mcp.tool.<tool_name>',
   'mcp.tool.<name>',
   // Resource attribute set in telemetry/resource.ts, not conventions.ts.

@@ -3,14 +3,14 @@
  * the real registry.
  *
  * The generated pages under `src/content/docs/tools/` are rebuilt from
- * `__toolMetadata` and cannot drift. The hand-written pages can, and did — for
+ * `__toolMetadata` and cannot drift. The hand-written pages can, and did - for
  * twelve releases they advertised `roles_add`, `components_v2_build_action_row`
  * and five fabricated `intelligence_*` names that an agent would happily try to
  * call.
  *
  * Method:
  *   1. Walk every hand-written .mdx / .md, excluding the generated tools tree.
- *   2. STRIP FENCED CODE BLOCKS FIRST — worked examples legitimately contain
+ *   2. STRIP FENCED CODE BLOCKS FIRST - worked examples legitimately contain
  *      hypothetical tools, other projects' tool names (migration guides), and
  *      JSON payloads we do not want to police.
  *   3. Match backticked snake_case identifiers whose prefix is a known tool
@@ -28,10 +28,10 @@ const DOC_ROOTS = [join(ROOT, 'site/src/content/docs'), join(ROOT, 'docs')];
 const GATEWAY_HANDLERS_DIR = join(ROOT, 'packages/mcp-core/src/gateway/handlers');
 
 const EXCLUDED_DIRS = [
-  // Auto-generated from the registry — cannot drift.
+  // Auto-generated from the registry - cannot drift.
   join(ROOT, 'site/src/content/docs/tools'),
   // Internal plans and specs. Gitignored, never published, and they name tools
-  // that were *proposed* — being unbuilt is the point, not a defect.
+  // that were *proposed* - being unbuilt is the point, not a defect.
   join(ROOT, 'docs/superpowers'),
   // Migration guides describe OTHER projects' tool surfaces (`messages_lite`,
   // `discord_send_message`, …). Foreign names there are correct by definition.
@@ -120,7 +120,7 @@ describe('hand-written docs only reference registered tools', () => {
 
 /**
  * The prose guard above strips fenced blocks wholesale, which is right for
- * migration guides and hypothetical snippets — but it also blinded it to the
+ * migration guides and hypothetical snippets - but it also blinded it to the
  * two places a wrong tool name does the most damage: the `"tool"` field of a
  * pipeline example, and a mermaid sequence diagram. `roles_add` (which has
  * never existed; the real name is `members_add_role`) lived in exactly those
@@ -131,7 +131,7 @@ describe('hand-written docs only reference registered tools', () => {
  * reproduce the tool name verbatim.
  */
 describe('tool names inside code examples', () => {
-  /** `"tool": "x"` — the pipeline step schema. Unambiguous, no false positives. */
+  /** `"tool": "x"` - the pipeline step schema. Unambiguous, no false positives. */
   const PIPELINE_TOOL_FIELD = /"tool"\s*:\s*"([a-z0-9_]+)"/g;
 
   it('every `"tool": "..."` in a worked example is a real tool', async () => {

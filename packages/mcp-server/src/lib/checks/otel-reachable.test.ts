@@ -1,9 +1,9 @@
 /**
- * Unit tests for `otelReachableCheck` — Plan 9 Phase C.
+ * Unit tests for `otelReachableCheck` - Plan 9 Phase C.
  *
  * Like token-online.test.ts we mock `fetch` via `vi.stubGlobal`. The
- * privacy invariant — OTEL_EXPORTER_OTLP_HEADERS never appears in
- * `details` or `message` — is exercised by a dedicated test that uses
+ * privacy invariant - OTEL_EXPORTER_OTLP_HEADERS never appears in
+ * `details` or `message` - is exercised by a dedicated test that uses
  * a recognizable token-shaped header value.
  */
 import type { Config } from '@discord-mcp/core';
@@ -202,7 +202,7 @@ describe('otelReachableCheck', () => {
     const dump = JSON.stringify(r);
     expect(dump).not.toContain('s3cret-api-key');
     expect(dump).not.toContain('collector:');
-    // Host and port stay visible — that's the diagnostically useful part.
+    // Host and port stay visible - that's the diagnostically useful part.
     expect(r.details?.endpoint).toContain('otlp.example.com:4318');
   });
 

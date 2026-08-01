@@ -1,4 +1,4 @@
-// FIXTURE: minimal Go for adapter testing — not real code
+// FIXTURE: minimal Go for adapter testing - not real code
 // Synthetic stand-in for hubdustry/apps/mcp/main.go used by
 // hubdustry-go-mcp.test.ts. Only needs to mention `hubdustry` (or
 // the mcp.NewTool pattern) so the adapter's detect() returns true.

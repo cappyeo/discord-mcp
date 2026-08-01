@@ -38,7 +38,7 @@ export default defineTool({
   description: [
     '**Purpose**: Replace the application role-connection metadata records (max 5).',
     '',
-    '**This is a wholesale replace** — any existing record not in `records` is removed.',
+    '**This is a wholesale replace** - any existing record not in `records` is removed.',
     '',
     '**Returns**: `{records, count}` after the update.',
   ].join('\n'),
@@ -47,7 +47,7 @@ export default defineTool({
     records: z
       .array(RoleConnectionMetadataRecord)
       .max(5)
-      .describe('Up to 5 metadata records — wholesale replace.'),
+      .describe('Up to 5 metadata records - wholesale replace.'),
   },
   outputSchema: {
     records: z.array(

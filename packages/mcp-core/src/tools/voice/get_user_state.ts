@@ -6,7 +6,7 @@ import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId, UserId } from '../_lib/snowflake.js';
 
 interface RawVoiceState {
-  // Optional on APIVoiceState — Discord may omit it on guild-scoped lookups.
+  // Optional on APIVoiceState - Discord may omit it on guild-scoped lookups.
   guild_id?: string;
   channel_id: string | null;
   user_id: string;

@@ -1,15 +1,15 @@
 /**
  * Production boot-path coverage for `startStdio()`.
  *
- * Every other suite stubs this function out, so the real chain — loadConfig →
- * buildPolicy → wrapRestWithResilience → buildServer → gateway → connect —
+ * Every other suite stubs this function out, so the real chain - loadConfig →
+ * buildPolicy → wrapRestWithResilience → buildServer → gateway → connect -
  * had zero assertions on it. Here we run it end to end against an in-memory
  * MCP transport and a real `Client`, so dropping `server.connect(transport)`
  * or reordering the `wrapRestWithResilience` arguments fails the suite.
  *
  * `@discord-mcp/core` is only PARTIALLY mocked: everything keeps its real
  * implementation except `createLogger` (replaced by a capturing stub so the
- * ready/warn records are assertable — pino writes straight to fd 2 and would
+ * ready/warn records are assertable - pino writes straight to fd 2 and would
  * bypass a process.stderr spy) and `createGatewayClient` (which would
  * otherwise open a real Discord websocket).
  */
@@ -103,7 +103,7 @@ describe('startStdio', () => {
     const client = await boot();
     try {
       expect(wrapRestWithResilience).toHaveBeenCalledTimes(1);
-      // Third arg is optional, so tsc cannot catch its loss — assert it here.
+      // Third arg is optional, so tsc cannot catch its loss - assert it here.
       expect(vi.mocked(wrapRestWithResilience).mock.calls[0]?.[2]).toEqual({
         circuitHalfOpenAfterMs: HALF_OPEN_MS,
       });
@@ -139,7 +139,7 @@ describe('startStdio', () => {
     try {
       expect(lastLogger().warn).toHaveBeenCalledWith(
         { err: 'gateway boom' },
-        'Discord Gateway failed to start — continuing in REST-only mode',
+        'Discord Gateway failed to start - continuing in REST-only mode',
       );
       expect(readyRecord()).toMatchObject({ gateway: false });
       // REST-only continuation: the server is still fully operational.

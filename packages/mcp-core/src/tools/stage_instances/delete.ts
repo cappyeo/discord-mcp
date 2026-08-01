@@ -10,7 +10,7 @@ export default defineTool({
   category: 'stage_instances',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: End the live Stage instance for a channel. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: End the live Stage instance for a channel. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**: stop a stage talk.',
     '',

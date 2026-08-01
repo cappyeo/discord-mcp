@@ -2,7 +2,7 @@ import { bench, describe } from 'vitest';
 import { createDebouncer } from './debounce.js';
 
 /**
- * Plan 12 Phase E.1 — performance bench for the gateway debouncer.
+ * Plan 12 Phase E.1 - performance bench for the gateway debouncer.
  *
  * Each scenario builds a fresh debouncer, fires N events synchronously,
  * then awaits a single tick past the window so the timer drains. We
@@ -23,7 +23,7 @@ describe('debounce bench', () => {
       const debounced = createDebouncer<[number]>(() => {
         fired++;
       }, 100);
-      // No firings — confirm no work happens (and no timer leaks).
+      // No firings - confirm no work happens (and no timer leaks).
       void debounced;
       void fired;
     },

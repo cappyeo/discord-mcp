@@ -1,6 +1,6 @@
 ---
 title: Components V2
-description: The V2 component model — Container, Section, MediaGallery, ActionRow. Schema validator, preview, templates, and the flags = 32768 contract.
+description: The V2 component model - Container, Section, MediaGallery, ActionRow. Schema validator, preview, templates, and the flags = 32768 contract.
 sidebar:
   order: 3
 ---
@@ -44,10 +44,10 @@ Discord cannot resolve.
 
 There is no **build_action_row** tool. ActionRow nodes are passed
 in hand-written, as entries in the `components` array of
-`components_v2_build_container` (or of `components_v2_send` directly) — they
+`components_v2_build_container` (or of `components_v2_send` directly) - they
 have no dedicated builder.
 
-The `build_*` tools are pure construction helpers — they don't hit Discord;
+The `build_*` tools are pure construction helpers - they don't hit Discord;
 and produce JSON the agent can stitch together. A builder is not a substitute
 for validating the final composed tree: `build_container` accepts unknown child
 values, so invalid combinations can still be assembled. `validate`
@@ -67,16 +67,16 @@ clear `VALIDATION_FAILED` error rather than Discord's terse 400 response:
 
 - **Max 40 components recursively** in a single message tree; each Container
   can have at most 10 direct children.
-- **Container ⊂ Section / MediaGallery / ActionRow** — Containers cannot
+- **Container ⊂ Section / MediaGallery / ActionRow** - Containers cannot
   contain Containers.
-- **ActionRow ⊂ Button / SelectMenu** — only interactive children allowed.
-- **ActionRow cardinality** — one to five Buttons, or exactly one select; no
+- **ActionRow ⊂ Button / SelectMenu** - only interactive children allowed.
+- **ActionRow cardinality** - one to five Buttons, or exactly one select; no
   button/select mixing.
-- **Button style contracts** — styles 1–4 require `custom_id`, style 5 requires
+- **Button style contracts** - styles 1–4 require `custom_id`, style 5 requires
   `url`, and premium style 6 requires only `sku_id` plus optional `disabled`.
-- **Top-level placement** — Button, select, and Thumbnail nodes must use their
+- **Top-level placement** - Button, select, and Thumbnail nodes must use their
   permitted ActionRow or Section parent.
-- **Interaction identity** — every `custom_id` is unique across the complete
+- **Interaction identity** - every `custom_id` is unique across the complete
   message tree.
 - **MediaGallery items**: 1–10 entries, each with a URL.
 - **Required fields**: every Container needs at least one child; every
@@ -134,7 +134,7 @@ and emits the fully-resolved tree.
 A V2 message **must** be sent with `flags = 32768` (`1 << 15`,
 `IS_COMPONENTS_V2`). Without that flag, Discord ignores the V2 payload and
 renders an empty message. discord-mcp sets the flag automatically in
-`components_v2_send` and `components_v2_send_from_template` — but if you're
+`components_v2_send` and `components_v2_send_from_template` - but if you're
 calling Discord through a different path and copying a V2 tree into the
 payload, set the flag yourself.
 </Aside>
@@ -155,6 +155,6 @@ mutually exclusive with the legacy embed path.
 
 ## Related
 
-- [`components-v2-announcement` recipe](/discord-mcp/recipes/components-v2-announcement/) — full end-to-end build + validate + send.
-- [Architecture → Pipeline](/discord-mcp/architecture/pipeline/) — chain a V2 send with later role and event calls in one sequential request.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — note that `components_v2_send` / `_edit` / `_send_from_template` are **not** confirm-gated: they write to the channel on the first call, with no `__confirm` and regardless of `MCP_DRY_RUN`.
+- [`components-v2-announcement` recipe](/discord-mcp/recipes/components-v2-announcement/) - full end-to-end build + validate + send.
+- [Architecture → Pipeline](/discord-mcp/architecture/pipeline/) - chain a V2 send with later role and event calls in one sequential request.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - note that `components_v2_send` / `_edit` / `_send_from_template` are **not** confirm-gated: they write to the channel on the first call, with no `__confirm` and regardless of `MCP_DRY_RUN`.

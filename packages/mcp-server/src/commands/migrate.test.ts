@@ -1,12 +1,12 @@
 /**
- * `migrateAction` unit tests — Plan 9 Phase E.
+ * `migrateAction` unit tests - Plan 9 Phase E.
  *
  * Drives the command directly (no commander). Captures stdout via a
  * vi.spyOn write hook so tests can assert pretty-mode strings and
  * parse JSON-mode payloads. Uses the synthetic Hubdustry fixture for
  * the happy-path "ran with unmapped" assertion.
  *
- * cwd is mutated for the "no --source" branch — restored in afterEach.
+ * cwd is mutated for the "no --source" branch - restored in afterEach.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,7 +75,7 @@ interface MigrateJsonResult {
   errors?: string[];
 }
 
-describe('migrateAction — no --from', () => {
+describe('migrateAction - no --from', () => {
   it('exits 2 and lists available adapters in JSON', async () => {
     await migrateAction({ json: true });
     expect(process.exitCode).toBe(2);
@@ -96,7 +96,7 @@ describe('migrateAction — no --from', () => {
   });
 });
 
-describe('migrateAction — unknown --from', () => {
+describe('migrateAction - unknown --from', () => {
   it('exits 2 with the requested id and the available list', async () => {
     await migrateAction({ json: true, from: 'no-such-adapter' });
     expect(process.exitCode).toBe(2);
@@ -107,7 +107,7 @@ describe('migrateAction — unknown --from', () => {
   });
 });
 
-describe('migrateAction — source not detected', () => {
+describe('migrateAction - source not detected', () => {
   it('exits 2 when the source path has no Hubdustry markers', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'migrate-no-source-'));
     try {
@@ -140,7 +140,7 @@ describe('migrateAction — source not detected', () => {
   });
 });
 
-describe('migrateAction — Hubdustry fixture run', () => {
+describe('migrateAction - Hubdustry fixture run', () => {
   it('exits 1 (unmapped) and surfaces the 5 fixture tools', async () => {
     await migrateAction({ json: true, from: 'hubdustry-go-mcp', source: FIXTURE_ROOT });
     expect(process.exitCode).toBe(1);
@@ -165,7 +165,7 @@ describe('migrateAction — Hubdustry fixture run', () => {
   });
 });
 
-describe('migrateAction — JSON output is parseable', () => {
+describe('migrateAction - JSON output is parseable', () => {
   it('every code path produces valid JSON when --json is set', async () => {
     // Each branch parses cleanly.
     await migrateAction({ json: true });
@@ -181,7 +181,7 @@ describe('migrateAction — JSON output is parseable', () => {
   });
 });
 
-describe('migrateAction — --list flag (Plan 11 Phase A)', () => {
+describe('migrateAction - --list flag (Plan 11 Phase A)', () => {
   it('TTY mode prints the listing with id, description, languages, tools, homepage', async () => {
     await migrateAction({ list: true });
     const out = stdoutOutput();

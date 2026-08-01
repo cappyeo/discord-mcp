@@ -1,10 +1,10 @@
 /**
- * Integration-ish tests for `doctorAction` — Plan 9 Phase B.
+ * Integration-ish tests for `doctorAction` - Plan 9 Phase B.
  *
  * Covers the doctor command's aggregation logic, exit code mapping,
  * and JSON / pretty-mode output. Per-check unit tests live alongside
  * each check under `lib/checks/*.test.ts`. We mock `fs.accessSync`
- * here only for the audit-sink scenarios — everything else uses real
+ * here only for the audit-sink scenarios - everything else uses real
  * env-var manipulation against the real check implementations.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,7 +25,7 @@ vi.mock('node:fs', async () => {
 const { doctorAction } = await import('./doctor.js');
 
 // Default fetch mock: any --online test that exercises the online checks
-// without explicitly stubbing fetch will see a network warn — fine for
+// without explicitly stubbing fetch will see a network warn - fine for
 // the ID-set assertions that don't care about per-check status.
 const DEFAULT_FETCH_MOCK = () => vi.fn().mockResolvedValue(new Response('', { status: 500 }));
 
@@ -110,7 +110,7 @@ function hasAnsi(s: string): boolean {
   return s.includes(CSI_BYTE);
 }
 
-describe('doctorAction — online check selection', () => {
+describe('doctorAction - online check selection', () => {
   it('runs only the 5 offline checks when --online is absent', async () => {
     process.env.DISCORD_TOKEN = VALID_TOKEN;
     const fetchMock = DEFAULT_FETCH_MOCK();
@@ -128,7 +128,7 @@ describe('doctorAction — online check selection', () => {
   it('runs all 7 checks (5 offline + 2 online) when --online is true', async () => {
     process.env.DISCORD_TOKEN = VALID_TOKEN;
     // OTEL_ENABLED defaults to false → otel-reachable skips its fetch.
-    // token-online still calls fetch — return a 200 so the test reports ok.
+    // token-online still calls fetch - return a 200 so the test reports ok.
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: '1', username: 'bot', bot: true }), {
         status: 200,
@@ -156,7 +156,7 @@ describe('doctorAction — online check selection', () => {
   });
 });
 
-describe('doctorAction — exit code mapping', () => {
+describe('doctorAction - exit code mapping', () => {
   it('returns exit code 2 when token-format fails', async () => {
     // No DISCORD_TOKEN → token-format + env-vars both fail.
     const out = await runAndCapture(() => doctorAction({ json: true }));
@@ -190,7 +190,7 @@ describe('doctorAction — exit code mapping', () => {
   });
 });
 
-describe('doctorAction — audit-sink branches', () => {
+describe('doctorAction - audit-sink branches', () => {
   it('reports audit-sink ok when stderr sink is selected', async () => {
     process.env.DISCORD_TOKEN = VALID_TOKEN;
     process.env.MCP_AUDIT_SINK = 'stderr';
@@ -219,7 +219,7 @@ describe('doctorAction — audit-sink branches', () => {
   });
 });
 
-describe('doctorAction — output formatting', () => {
+describe('doctorAction - output formatting', () => {
   it('pretty mode includes ANSI color codes when stdout is a TTY', async () => {
     setTTY(true);
     process.env.DISCORD_TOKEN = VALID_TOKEN;

@@ -1,5 +1,5 @@
 /**
- * `discord-mcp migrate` — Plan 9 Phase E + Plan 11 Phase A `--list`.
+ * `discord-mcp migrate` - Plan 9 Phase E + Plan 11 Phase A `--list`.
  *
  * Drives the {@link MigrationSource} registry: pick an adapter via
  * `--from`, detect it against `--source` (or cwd), and emit the
@@ -10,13 +10,13 @@
  * backwards compatibility.
  *
  * Exit code policy (per plan §E.6 + Plan 11 §A.3):
- *   - `0` — adapter ran AND every source tool was mapped (i.e.
+ *   - `0` - adapter ran AND every source tool was mapped (i.e.
  *     unmappedTools.length === 0 && manualReview.length === 0). Also
- *     `--list` (informational query — always exit 0).
- *   - `1` — adapter ran but produced unmapped or manual-review items.
- *     This is a "successful run with work left" — the user is told to
+ *     `--list` (informational query - always exit 0).
+ *   - `1` - adapter ran but produced unmapped or manual-review items.
+ *     This is a "successful run with work left" - the user is told to
  *     hand-edit the output, not that the migration failed.
- *   - `2` — couldn't run at all: missing/unknown `--from`, source not
+ *   - `2` - couldn't run at all: missing/unknown `--from`, source not
  *     detected, IO failures inside the adapter.
  *
  * The command never imports adapter implementations directly; it only
@@ -112,7 +112,7 @@ export async function migrateAction(opts: MigrateOptions = {}): Promise<void> {
   const asJson = opts.json === true;
 
   // 1a. Explicit `--list` flag (Plan 11 Phase A): always exit 0 with
-  //     the full adapter listing — this is an informational query, not
+  //     the full adapter listing - this is an informational query, not
   //     an error.
   if (opts.list === true) {
     emitAdapterList(asJson);
@@ -139,7 +139,7 @@ export async function migrateAction(opts: MigrateOptions = {}): Promise<void> {
         },
         details: [
           'Available adapters:',
-          ...ALL_ADAPTERS.map((a) => `  ${a.id} — ${a.description}`),
+          ...ALL_ADAPTERS.map((a) => `  ${a.id} - ${a.description}`),
           '',
           'Run `discord-mcp migrate --list` for full metadata.',
         ],
@@ -171,7 +171,7 @@ export async function migrateAction(opts: MigrateOptions = {}): Promise<void> {
 
   // 3. Resolve the source path (default to cwd) and run detect().
   //    `detect` MUST NOT throw per the adapter contract, so we don't
-  //    wrap this — any throw is an honest internal bug worth surfacing.
+  //    wrap this - any throw is an honest internal bug worth surfacing.
   const sourcePath = opts.source ?? process.cwd();
   if (!(await adapter.detect(sourcePath))) {
     emitResult(
@@ -181,7 +181,7 @@ export async function migrateAction(opts: MigrateOptions = {}): Promise<void> {
         summary: `source not detected at ${sourcePath}`,
         data: { adapter: adapter.id, sourcePath },
         errors: [
-          `adapter ${adapter.id} did not match the source — check --source path`,
+          `adapter ${adapter.id} did not match the source - check --source path`,
           `looked for adapter-specific markers in ${sourcePath}`,
         ],
       },

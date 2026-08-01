@@ -10,7 +10,7 @@ export default defineTool({
   category: 'stickers',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a guild sticker. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a guild sticker. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Retire a stale or off-brand sticker.',

@@ -85,7 +85,7 @@ export function telemetryMiddleware(): ToolMiddleware {
 
       // Metric labels: bounded-cardinality only. tool.name (~192),
       // tool.category (~25), tool.idempotent (2), transport (1-3),
-      // status (3). No request_id — that would explode the series
+      // status (3). No request_id - that would explode the series
       // count and make the histograms useless.
       const metricLabels: Record<string, string | boolean> = {
         [ATTR_MCP_TOOL_NAME]: ctx.tool.name,
@@ -103,7 +103,7 @@ export function telemetryMiddleware(): ToolMiddleware {
       // an event (rather than a high-cardinality attribute on every
       // span) keeps the trace storage cost bounded and clearly marks
       // the payload as user-input. Redaction MUST go through
-      // redactArgs(args, toolName) — it applies the per-tool sensitive
+      // redactArgs(args, toolName) - it applies the per-tool sensitive
       // key map + global keys + length truncation. Span redaction
       // happens at the middleware boundary; tools never see telemetry.
       span.addEvent('mcp.tool.args', {

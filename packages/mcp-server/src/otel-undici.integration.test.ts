@@ -45,11 +45,11 @@ const undiciInstrumentation = new UndiciInstrumentation({
     // production while keeping the real path.
     const headersStr = Array.isArray(req.headers) ? req.headers.join('') : String(req.headers);
     if (headersStr.includes('x-fake-discord-origin')) {
-      // `https://discord.com` — scheme+host only, EXACTLY the shape undici
+      // `https://discord.com` - scheme+host only, EXACTLY the shape undici
       // produces (it reconstructs the URL as `new URL(path, origin)`).
       // Passing 'https://discord.com/api' here is what let a gate of
-      // `origin.includes('discord.com/api')` — which can never match in
-      // production — sail through this suite.
+      // `origin.includes('discord.com/api')` - which can never match in
+      // production - sail through this suite.
       discordRequestHook(span, {
         origin: 'https://discord.com',
         path: req.path,
@@ -151,7 +151,7 @@ describe('UndiciInstrumentation integration (Plan 8 B.5)', () => {
   });
 
   it('respects ignoreRequestHook=true to suppress self-traces', async () => {
-    // Re-install with a hook that drops every request — emulates the
+    // Re-install with a hook that drops every request - emulates the
     // OTLP exporter URL filter used by mcp-server/src/otel.ts.
     undiciInstrumentation.disable();
     const dropping = new UndiciInstrumentation({ ignoreRequestHook: () => true });
@@ -180,7 +180,7 @@ describe('UndiciInstrumentation integration (Plan 8 B.5)', () => {
   // list (intentional future work) instead of the skipped count
   // (operational warning). Re-enable once one of:
   //  - msw exposes a dispatch-aware interceptor compatible with undici
-  //    instrumentation (tracked upstream — https://github.com/mswjs/msw).
+  //    instrumentation (tracked upstream - https://github.com/mswjs/msw).
   //  - we add a stand-alone HTTP fixture (similar to the local server in
   //    this file) under buildServer's REST instance instead of msw.
   it.todo('emits parent SERVER + child CLIENT span under one trace via buildServer');

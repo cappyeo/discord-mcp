@@ -118,7 +118,7 @@ export default defineTool({
         'extract_entities',
       );
       return dualResult({
-        text: '[sampling unavailable — host LLM should extract from raw_messages]',
+        text: '[sampling unavailable - host LLM should extract from raw_messages]',
         data,
       });
     }
@@ -165,7 +165,7 @@ export default defineTool({
       });
     }
     return dualResult({
-      text: '[parse error — LLM returned non-JSON]',
+      text: '[parse error - LLM returned non-JSON]',
       data: {
         entities: [] as ExtractedEntity[],
         count: 0,

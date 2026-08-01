@@ -1,4 +1,4 @@
-# Resilience — Operator Guide
+# Resilience - Operator Guide
 
 `discord-mcp` wraps every Discord REST call in a composite resilience
 policy: **retry → 429-aware delay → circuit breaker → bulkhead →
@@ -38,7 +38,7 @@ headroom on a request that will never succeed.
   `MCP_RETRY_MAX_DELAY_MS=20000`. Higher attempt count + longer cap
   protects against extended Discord outages without thrashing.
 - **Long-running bulk operations** (e.g. bulk-ban, archive sweep):
-  consider raising `MCP_TIMEOUT_DEFAULT_MS` rather than retry count —
+  consider raising `MCP_TIMEOUT_DEFAULT_MS` rather than retry count -
   the operation that's already in flight is more valuable than
   starting over.
 
@@ -56,7 +56,7 @@ Two scopes:
 - **Per-route**: routes in Discord are bucketed by major parameters
   (e.g. `/channels/:id/messages` is bucketed by `channel_id`). Hitting
   the per-route limit pauses only that route.
-- **Global**: `X-RateLimit-Global: true` is treated the same way —
+- **Global**: `X-RateLimit-Global: true` is treated the same way -
   pause and respect `retry_after`. Global hits are rare and almost
   always indicate a bug (e.g. tight loop without yielding).
 
@@ -65,7 +65,7 @@ Both surface a `mcp.tool.errors` increment with `error_code:
 by a successful retry is invisible at the audit/error layer (counted
 in metrics as a normal call).
 
-There is no separate env var for 429 behavior — it's gated by
+There is no separate env var for 429 behavior - it's gated by
 `MCP_RETRY_ENABLED` and bounded by `MCP_RETRY_MAX_ATTEMPTS`. Setting
 attempts to 1 turns 429 retry off (the call surfaces immediately).
 
@@ -79,7 +79,7 @@ One budget:
 | --- | ------- | ----- | ----------- |
 | `MCP_TIMEOUT_DEFAULT_MS` | `30000` | 1000–120000 | Per-call ceiling for the standard REST path. |
 
-Timeout fires AFTER retry — i.e. each individual attempt can take up
+Timeout fires AFTER retry - i.e. each individual attempt can take up
 to the timeout, then the policy retries (until `MAX_ATTEMPTS` is
 reached). The total wall-clock budget for a tool call is roughly
 `MAX_ATTEMPTS * TIMEOUT_MS + sum(backoffs)`. With defaults: ~95
@@ -125,7 +125,7 @@ won't trip `/channels`.
 
 The bulkhead semaphore caps **in-flight Discord REST calls** across
 all tools. When the limit is reached, new calls **fast-reject** with
-`error_code: "bulkhead_saturated"` rather than queueing — head-of-line
+`error_code: "bulkhead_saturated"` rather than queueing - head-of-line
 blocking is worse than a clear "back off" signal.
 
 | Var | Default | Range | Notes |
@@ -155,7 +155,7 @@ bulkhead will kick in and the over-spilled calls return
 `bulkhead_saturated`, which the pipeline propagates back up as a
 partial-result with the failed children flagged.
 
-Bottom line: pipelines do NOT amplify the bulkhead — they share it.
+Bottom line: pipelines do NOT amplify the bulkhead - they share it.
 This is intentional. If you raise `MCP_BULKHEAD_LIMIT`, you're also
 raising the pipeline's effective fan-out before saturation.
 
@@ -172,7 +172,7 @@ the circuit, then dispatched through the retry policy (which honors
 429s and times out individual attempts).
 
 If you stack the layers in a different mental model, debugging
-becomes confusing — keep this picture in mind when reading
+becomes confusing - keep this picture in mind when reading
 `packages/mcp-core/src/rest/policy.ts`.
 
 ---
@@ -183,6 +183,6 @@ becomes confusing — keep this picture in mind when reading
 | ----- | ---------------- | ----------- |
 | Retry | 3 attempts, exponential w/ full jitter | `MCP_RETRY_ENABLED=false` or `MCP_RETRY_MAX_ATTEMPTS=1` |
 | 429 retry-after | Honored, capped by retry budget | (gated by retry) |
-| Timeout | 30s default, 60s long | (no toggle — set ms to max range) |
+| Timeout | 30s default, 60s long | (no toggle - set ms to max range) |
 | Circuit | 10 failures → open 60s | `MCP_CIRCUIT_ENABLED=false` |
 | Bulkhead | 100 in-flight, fast-reject | `MCP_BULKHEAD_LIMIT=1000` (effectively off for normal load) |

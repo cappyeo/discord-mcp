@@ -1,5 +1,5 @@
 /**
- * PaSympa adapter unit tests — Plan 11 Phase B.
+ * PaSympa adapter unit tests - Plan 11 Phase B.
  *
  * Tests run against the synthetic fixture under
  * `packages/mcp-server/test-fixtures/pasympa/`. The fixture lives outside
@@ -26,7 +26,7 @@ import { pasympaAdapter } from './pasympa.js';
 const PACKAGE_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'pasympa');
 
-describe('pasympaAdapter — id + description + Plan 11 Phase A metadata', () => {
+describe('pasympaAdapter - id + description + Plan 11 Phase A metadata', () => {
   it('exposes a stable kebab-case id', () => {
     expect(pasympaAdapter.id).toBe('pasympa');
   });
@@ -46,7 +46,7 @@ describe('pasympaAdapter — id + description + Plan 11 Phase A metadata', () =>
   });
 });
 
-describe('pasympaAdapter — detect()', () => {
+describe('pasympaAdapter - detect()', () => {
   it('returns true for the synthetic fixture (package.json + tools dir)', async () => {
     expect(await pasympaAdapter.detect(FIXTURE_ROOT)).toBe(true);
   });
@@ -66,7 +66,7 @@ describe('pasympaAdapter — detect()', () => {
 
   it('returns false when package.json matches but no discord_* literals exist', async () => {
     // Multi-signal detection: name alone isn't enough. Build a temp
-    // directory with a PaSympa-named package.json but no source files —
+    // directory with a PaSympa-named package.json but no source files -
     // detect() must reject because the content signal is missing.
     const dir = mkdtempSync(join(tmpdir(), 'pasympa-detect-namelyok-'));
     try {
@@ -94,7 +94,7 @@ describe('pasympaAdapter — detect()', () => {
       // Even with a matching content signal, the name guard should bail.
       const tools = join(dir, 'src', 'tools');
       // build dirs manually since mkdirSync isn't imported here; piggyback
-      // on writeFileSync's path creation? No — Node won't auto-mkdir.
+      // on writeFileSync's path creation? No - Node won't auto-mkdir.
       // Use fs.mkdirSync via dynamic import to keep imports minimal.
       const { mkdirSync } = await import('node:fs');
       mkdirSync(tools, { recursive: true });
@@ -110,7 +110,7 @@ describe('pasympaAdapter — detect()', () => {
   });
 });
 
-describe('pasympaAdapter — migrate()', () => {
+describe('pasympaAdapter - migrate()', () => {
   it('reports 5 mapped tools and 1 unmapped tool against the fixture', async () => {
     const result = await pasympaAdapter.migrate(FIXTURE_ROOT);
     expect(result.source).toBe('pasympa');
@@ -164,6 +164,6 @@ describe('pasympaAdapter — migrate()', () => {
 
   // Defensive cleanup in case any test left a temp dir behind.
   afterAll(() => {
-    // No persistent state to clean here — temp dirs are scoped per-test.
+    // No persistent state to clean here - temp dirs are scoped per-test.
   });
 });

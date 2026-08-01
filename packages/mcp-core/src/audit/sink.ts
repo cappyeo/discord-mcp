@@ -6,7 +6,7 @@ import type { AuditEvent } from './schema.js';
  * Audit sink contract (Plan 8 Phase E).
  *
  * Implementations encode an `AuditEvent` to their target. `emit` MUST NOT
- * throw — sinks are best-effort. `shutdown` (optional) flushes / closes
+ * throw - sinks are best-effort. `shutdown` (optional) flushes / closes
  * any underlying file or network resource on SIGTERM. The default file
  * path used when `MCP_AUDIT_SINK=file` and `MCP_AUDIT_FILE` is unset.
  */
@@ -18,11 +18,11 @@ export interface AuditSink {
 }
 
 /**
- * StderrAuditSink — writes one JSON line to `process.stderr` per event,
+ * StderrAuditSink - writes one JSON line to `process.stderr` per event,
  * with a `level: 'audit'` field so log aggregators can route audit
  * records separately from app logs.
  *
- * Stderr is the only safe stream in stdio MCP transports — stdout is
+ * Stderr is the only safe stream in stdio MCP transports - stdout is
  * reserved for JSON-RPC frames. See transports/stdio.ts.
  */
 export class StderrAuditSink implements AuditSink {
@@ -37,7 +37,7 @@ export class StderrAuditSink implements AuditSink {
 }
 
 /**
- * FileAuditSink — append-only JSON-lines file. Stream is opened once
+ * FileAuditSink - append-only JSON-lines file. Stream is opened once
  * with `flags: 'a'` so concurrent process restarts append cleanly. The
  * file path defaults to `DEFAULT_AUDIT_FILE` when undefined.
  *
@@ -50,7 +50,7 @@ export class FileAuditSink implements AuditSink {
 
   constructor(filePath: string = DEFAULT_AUDIT_FILE) {
     this.stream = createWriteStream(filePath, { flags: 'a', encoding: 'utf8' });
-    // Swallow async stream errors — surface via stderr instead of throwing.
+    // Swallow async stream errors - surface via stderr instead of throwing.
     this.stream.on('error', (err) => {
       try {
         process.stderr.write(
@@ -61,7 +61,7 @@ export class FileAuditSink implements AuditSink {
           })}\n`,
         );
       } catch {
-        // ignore — last-resort; never throw from a sink.
+        // ignore - last-resort; never throw from a sink.
       }
     });
   }
@@ -72,7 +72,7 @@ export class FileAuditSink implements AuditSink {
       const line = `${JSON.stringify(event)}\n`;
       this.stream.write(line);
     } catch {
-      // Best-effort — same contract as Stderr sink.
+      // Best-effort - same contract as Stderr sink.
     }
   }
 
@@ -86,9 +86,9 @@ export class FileAuditSink implements AuditSink {
 }
 
 /**
- * OtlpAuditSink — STUB (Plan 8 Phase E).
+ * OtlpAuditSink - STUB (Plan 8 Phase E).
  *
- * Phase E does not wire `@opentelemetry/api-logs` LoggerProvider — that
+ * Phase E does not wire `@opentelemetry/api-logs` LoggerProvider - that
  * requires extending mcp-server/otel.ts to add a logs exporter pipeline,
  * which is deferred to Phase F (or later). This stub falls back to
  * stderr, prefixing each line with `[FALLBACK:logs-pipeline-not-wired]`
@@ -110,7 +110,7 @@ export class OtlpAuditSink implements AuditSink {
 }
 
 /**
- * NoopAuditSink — used when audit is disabled (`MCP_AUDIT_ENABLED=false`)
+ * NoopAuditSink - used when audit is disabled (`MCP_AUDIT_ENABLED=false`)
  * or `MCP_AUDIT_SINK=none`. The middleware still runs (cheap), but
  * `emit` is a no-op so no I/O happens.
  */

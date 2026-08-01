@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index — 192 + 28 + 1
+ * tool, one index per category, and a top-level tools index - 192 + 28 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -13,7 +13,7 @@
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// Resolve zod via the mcp-core workspace package — pnpm ensures
+// Resolve zod via the mcp-core workspace package - pnpm ensures
 // packages/mcp-core/node_modules/zod is always present for the workspace,
 // avoiding a duplicate zod copy at site/node_modules that would conflict
 // with Astro's content schema (which uses its own bundled zod via
@@ -69,7 +69,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
         const toolClass = mod.default;
         const metadata = (toolClass as { __toolMetadata?: unknown })?.__toolMetadata;
         if (!metadata || typeof metadata !== 'object') {
-          console.warn(`[skip] ${relative(ROOT, sourcePath)} — no __toolMetadata`);
+          console.warn(`[skip] ${relative(ROOT, sourcePath)} - no __toolMetadata`);
           continue;
         }
         const m = metadata as Record<string, unknown>;
@@ -100,7 +100,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 192 tools. Headings are bold-asterisk markdown — capture body text up to
+ * 192 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -543,7 +543,7 @@ export function buildOutputExample(tool: ToolMetadata): Record<string, unknown> 
       sampling_used: true,
     },
     intelligence_draft_response: {
-      draft: 'Thanks — we are checking this now.',
+      draft: 'Thanks - we are checking this now.',
       reasoning: 'Acknowledges the report without overpromising.',
       sampling_used: true,
     },
@@ -946,7 +946,7 @@ export async function generate(opts: GenerateOptions = {}): Promise<{
   written++;
   console.log('[generate-tool-docs] wrote top-level index');
 
-  console.log(`[generate-tool-docs] done — ${written} files total`);
+  console.log(`[generate-tool-docs] done - ${written} files total`);
 
   return { tools, filesWritten: written };
 }

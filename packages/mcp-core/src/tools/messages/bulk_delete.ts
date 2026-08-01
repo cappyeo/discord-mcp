@@ -10,7 +10,7 @@ export default defineTool({
   category: 'messages',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Bulk-delete 2-100 messages from a channel in one request. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Bulk-delete 2-100 messages from a channel in one request. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Sweep spam / raid messages.',
@@ -18,7 +18,7 @@ export default defineTool({
     '',
     '**When NOT to use**:',
     '- Single message → use `messages_delete`.',
-    '- Messages older than 14 days — Discord rejects with 400.',
+    '- Messages older than 14 days - Discord rejects with 400.',
     '',
     '**Example**: `{channel_id:"111122223333444455", message_ids:["111122223333444456","111122223333444457"], __confirm:true}`',
     '',

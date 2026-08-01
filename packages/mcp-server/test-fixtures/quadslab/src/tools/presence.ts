@@ -1,6 +1,6 @@
-// FIXTURE: synthetic quadslab-style code for adapter testing — not real code.
+// FIXTURE: synthetic quadslab-style code for adapter testing - not real code.
 // `presence` tools are gateway-only and intentionally LEFT OUT of
-// NAME_MAP — they should appear in the migrate() unmappedTools list.
+// NAME_MAP - they should appear in the migrate() unmappedTools list.
 export const presenceTools = [
   {
     name: 'set_bot_status',

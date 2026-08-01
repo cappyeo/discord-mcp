@@ -25,7 +25,7 @@ export default defineTool({
     '**When to use**:',
     '- Inspect a webhook you discovered via `webhooks_list_channel` or `webhooks_list_guild`.',
     '',
-    '**Asymmetry**: This bot-auth path **strips `token` from the response** — the token is only re-issued by `webhooks_create` and `webhooks_get_with_token`. Use `webhooks_get_with_token` when you already hold the token and want the freshest record.',
+    '**Asymmetry**: This bot-auth path **strips `token` from the response** - the token is only re-issued by `webhooks_create` and `webhooks_get_with_token`. Use `webhooks_get_with_token` when you already hold the token and want the freshest record.',
     '',
     '**Returns**: Webhook fields without `token`. `name` remains raw creator-controlled data; `untrusted_name` provides a separately fenced copy.',
   ].join('\n'),

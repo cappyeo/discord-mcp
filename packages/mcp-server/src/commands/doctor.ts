@@ -1,5 +1,5 @@
 /**
- * `discord-mcp doctor` — Plan 9 Phase B.
+ * `discord-mcp doctor` - Plan 9 Phase B.
  *
  * Replaces the Phase A placeholder. Iterates the registered offline
  * checks (Phase C will add online ones) and aggregates their results
@@ -12,7 +12,7 @@
  *
  * `--online` flag is wired but only filters checks (online-tagged ones
  * are skipped when false). The actual online checks are introduced in
- * Phase C — for now the flag is a no-op gating mechanism, kept here so
+ * Phase C - for now the flag is a no-op gating mechanism, kept here so
  * Phase A's option shape stays stable.
  *
  * Config parse: we attempt `loadConfig(process.env)` once and pass the
@@ -40,7 +40,7 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
   try {
     cfg = loadConfig(process.env);
   } catch {
-    // env-vars check is the canonical reporter — leave cfg as null and
+    // env-vars check is the canonical reporter - leave cfg as null and
     // let each check decide what to do (most fall back to raw env).
     cfg = null;
   }

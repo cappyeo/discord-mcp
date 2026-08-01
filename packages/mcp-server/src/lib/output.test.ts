@@ -46,7 +46,7 @@ function hasAnsi(s: string): boolean {
   return s.includes(CSI_BYTE);
 }
 
-describe('emitResult — JSON mode', () => {
+describe('emitResult - JSON mode', () => {
   it('produces parseable JSON for an ok result', () => {
     const result: CommandResult = {
       ok: true,
@@ -91,7 +91,7 @@ describe('emitResult — JSON mode', () => {
   });
 });
 
-describe('emitResult — pretty TTY mode', () => {
+describe('emitResult - pretty TTY mode', () => {
   it('includes color codes when stdout.isTTY is true', () => {
     setTTY(true);
     const result: CommandResult = {
@@ -171,7 +171,7 @@ describe('emitResult — pretty TTY mode', () => {
   });
 });
 
-describe('emitResult — exit code', () => {
+describe('emitResult - exit code', () => {
   it('sets process.exitCode to 0 for ok', () => {
     emitResult({ ok: true, summary: 'ok', exitCode: 0 }, true);
     expect(process.exitCode).toBe(0);

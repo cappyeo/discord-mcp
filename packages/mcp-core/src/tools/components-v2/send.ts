@@ -20,7 +20,7 @@ export default defineTool({
   name: 'components_v2_send',
   category: 'components_v2',
   description:
-    '**Purpose**: Send a Components V2 message — rich layout (Container, Section, MediaGallery, ActionRow, ...). MUTUALLY EXCLUSIVE with content/embed/poll/sticker. Flag `IS_COMPONENTS_V2` is irreversible per-message.\n\n**When to use**: announcements, release notes, dashboards, polls — anything beyond plain text.\n\n**When NOT to use**: simple text reply → use `messages_send`.\n\n**Validation**: components are validated via `validateComponentsV2` before sending; the call rejects with VALIDATION_FAILED if the layout is illegal (no API call made).\n\n**Returns**: `{message_id, channel_id, jump_url, component_count}`.',
+    '**Purpose**: Send a Components V2 message - rich layout (Container, Section, MediaGallery, ActionRow, ...). MUTUALLY EXCLUSIVE with content/embed/poll/sticker. Flag `IS_COMPONENTS_V2` is irreversible per-message.\n\n**When to use**: announcements, release notes, dashboards, polls - anything beyond plain text.\n\n**When NOT to use**: simple text reply → use `messages_send`.\n\n**Validation**: components are validated via `validateComponentsV2` before sending; the call rejects with VALIDATION_FAILED if the layout is illegal (no API call made).\n\n**Returns**: `{message_id, channel_id, jump_url, component_count}`.',
   inputSchema: {
     channel_id: ChannelId.describe('Target channel'),
     components: z

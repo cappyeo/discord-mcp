@@ -1,12 +1,12 @@
 /**
- * `env-vars` check — Plan 9 Phase B.
+ * `env-vars` check - Plan 9 Phase B.
  *
  * Validates the full Config schema by attempting `loadConfig(process.env)`.
  * On success, status='ok'. On failure we surface the thrown message as a
  * single-issue list so users see exactly which env vars are wrong
  * (without leaking values).
  *
- * We re-parse here even though doctor.ts has already attempted parse —
+ * We re-parse here even though doctor.ts has already attempted parse -
  * the doctor entry point passes `cfg | null` to checks for re-use, but
  * env-vars is the canonical reporter for parse failures, so we own the
  * full re-parse to capture the failure message.
@@ -30,7 +30,7 @@ export const envVarsCheck: DoctorCheck = {
       // loadConfig never lets the ZodError escape: it formats the issues
       // into `new Error("Invalid configuration:\n  - <path>: <message>")`
       // (see @discord-mcp/core config.ts) and throws that. So there is no
-      // structured issues array to unwrap here — the message already
+      // structured issues array to unwrap here - the message already
       // lists path + message per issue.
       //
       // loadConfig throws Error with multi-line message like

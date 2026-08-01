@@ -1,4 +1,4 @@
-// FIXTURE: minimal Go for adapter testing — not real code
+// FIXTURE: minimal Go for adapter testing - not real code
 // Three NewTool calls (list/read/write) so the hubdustry-go-mcp
 // adapter's regex picks up exactly three names from this file.
 package tools

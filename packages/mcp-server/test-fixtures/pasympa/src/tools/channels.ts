@@ -1,4 +1,4 @@
-// FIXTURE: synthetic PaSympa-style code for adapter testing — not real code.
+// FIXTURE: synthetic PaSympa-style code for adapter testing - not real code.
 export const listChannels = {
   name: 'discord_list_channels',
   description: 'List all channels in a guild',

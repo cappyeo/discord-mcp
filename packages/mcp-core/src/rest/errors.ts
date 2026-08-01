@@ -14,8 +14,8 @@ import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
  *    and network errors where we fall back to exponential backoff.
  *  - `replaySafe`: whether the call may actually be re-sent.  Separating this
  *    from "is an upstream failure" matters: an ambiguous POST failure (5xx or
- *    a post-send network reset) must NOT be replayed — the write may already
- *    have landed — but it is still an upstream failure and must feed the
+ *    a post-send network reset) must NOT be replayed - the write may already
+ *    have landed - but it is still an upstream failure and must feed the
  *    circuit breaker.  Classifying it as non-retryable by returning `null`
  *    instead would leave a POST-heavy workload hammering a fully-down Discord
  *    forever, because the breaker only counts `DiscordRetryableError`.
@@ -47,7 +47,7 @@ const RETRYABLE_NETWORK_CODES = new Set([
 ]);
 
 /**
- * Network codes that fire AFTER the request may already have reached Discord —
+ * Network codes that fire AFTER the request may already have reached Discord -
  * the response, not the request, is what was lost.  Replaying these on a
  * non-idempotent verb duplicates the side effect (double message, double ban,
  * double webhook execution).  The remaining codes (`ECONNREFUSED`,
@@ -64,7 +64,7 @@ const AMBIGUOUS_NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EN
  *
  * Handles three classes:
  *  1. `RateLimitError` (Discord 429, surfaced by `@discordjs/rest` when
- *     `rejectOnRateLimit` matches the route — currently unused in our
+ *     `rejectOnRateLimit` matches the route - currently unused in our
  *     setup, but supported for completeness).
  *  2. `DiscordAPIError` with `status >= 500`. 4xx (auth, permission,
  *     not-found, validation) is non-retryable and falls through.
@@ -73,7 +73,7 @@ const AMBIGUOUS_NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EN
  *  4. Plain `Error` whose `code` matches a known retryable network code.
  *
  * `opts.method` is the HTTP verb the call was made with.  For `post` the
- * AMBIGUOUS classes — 5xx and the post-send network codes — are reported as
+ * AMBIGUOUS classes - 5xx and the post-send network codes - are reported as
  * non-retryable, because a POST whose response was lost may already have
  * created the resource.  429 and the pre-send network codes are explicit
  * rejections with no duplicate risk and stay retryable for POST too.
@@ -96,7 +96,7 @@ export function classifyDiscordError(
       // POST: surface it (the breaker must count it) but mark it un-replayable.
       return new DiscordRetryableError(err, null, !isPost);
     }
-    // Some Discord 4xx responses include a 429 status — handle defensively.
+    // Some Discord 4xx responses include a 429 status - handle defensively.
     if (err.status === 429) {
       // The body may carry retry_after seconds; convert to ms.
       const raw = (err.rawError as { retry_after?: number } | undefined)?.retry_after;
@@ -126,7 +126,7 @@ export function classifyDiscordError(
     if (isNetworkFailure(code)) {
       return new DiscordRetryableError(err, null, replaySafeFor(code));
     }
-    // undici wraps low-level errors in `cause` — peek one level deep.
+    // undici wraps low-level errors in `cause` - peek one level deep.
     const inner = (err as Error & { cause?: unknown }).cause;
     if (inner instanceof Error) {
       const innerCode = (inner as Error & { code?: unknown }).code;

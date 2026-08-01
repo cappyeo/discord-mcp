@@ -23,7 +23,7 @@ export default defineTool({
     '**When to use**:',
     '- Inventory guild stickers; pick one for a message.',
     '',
-    '**Returns**: `{stickers:[{id, name, tags, format_type, available}], count}`. `description` is omitted from list output for brevity — fetch via `stickers_get_guild_sticker` if needed.',
+    '**Returns**: `{stickers:[{id, name, tags, format_type, available}], count}`. `description` is omitted from list output for brevity - fetch via `stickers_get_guild_sticker` if needed.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild to inspect'),

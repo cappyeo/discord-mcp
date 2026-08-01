@@ -1,5 +1,5 @@
 /**
- * discord-ops adapter unit tests — Plan 11 Phase D.
+ * discord-ops adapter unit tests - Plan 11 Phase D.
  *
  * Tests run against the synthetic fixture under
  * `packages/mcp-server/test-fixtures/discord-ops/`. The fixture lives
@@ -7,7 +7,7 @@
  * `files: ["dist", ...]` allowlist excludes it), and isn't lint-checked
  * by tsc. Biome still formats it.
  *
- * Fixture contents — 7 tool literals across four modules:
+ * Fixture contents - 7 tool literals across four modules:
  *   messaging/send-message.ts:    send_message, get_messages, edit_message  (3 mapped, high)
  *   channels/list-channels.ts:    list_channels, set_slowmode               (2 mapped: high + medium)
  *   system/health-check.ts:       health_check, list_projects               (2 unmapped)
@@ -16,7 +16,7 @@
  * Five tools have a discord-mcp equivalent in NAME_MAP; the other two
  * are intentional unmapped cases (system tools have no REST equivalent).
  *
- * 4-WAY CROSS-DETECTION — discord-ops's detect() must reject the PaSympa,
+ * 4-WAY CROSS-DETECTION - discord-ops's detect() must reject the PaSympa,
  * quadslab, and Hubdustry fixtures, and the inverse must hold (each of
  * those adapters must reject the discord-ops fixture). This guards
  * against accidental adapter overlap when new fixtures are added.
@@ -39,7 +39,7 @@ const PASYMPA_FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'pasympa');
 const QUADSLAB_FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'quadslab');
 const HUBDUSTRY_FIXTURE_ROOT = join(PACKAGE_ROOT, 'test-fixtures', 'hubdustry-go-mcp');
 
-describe('discordOpsAdapter — id + description + Plan 11 Phase A metadata', () => {
+describe('discordOpsAdapter - id + description + Plan 11 Phase A metadata', () => {
   it('exposes a stable kebab-case id with hyphen', () => {
     expect(discordOpsAdapter.id).toBe('discord-ops');
   });
@@ -60,7 +60,7 @@ describe('discordOpsAdapter — id + description + Plan 11 Phase A metadata', ()
   });
 });
 
-describe('discordOpsAdapter — detect()', () => {
+describe('discordOpsAdapter - detect()', () => {
   it('returns true for the synthetic fixture (package.json + defineTool/category)', async () => {
     expect(await discordOpsAdapter.detect(FIXTURE_ROOT)).toBe(true);
   });
@@ -80,7 +80,7 @@ describe('discordOpsAdapter — detect()', () => {
 
   it('returns false when package.json matches but no defineTool/category file exists', async () => {
     // Multi-signal detection: name alone isn't enough. Build a temp
-    // directory with a discord-ops-named package.json but no source files —
+    // directory with a discord-ops-named package.json but no source files -
     // detect() must reject because the content signal is missing.
     const dir = mkdtempSync(join(tmpdir(), 'discord-ops-detect-namelyok-'));
     try {
@@ -139,30 +139,30 @@ describe('discordOpsAdapter — detect()', () => {
   });
 });
 
-describe('discordOpsAdapter — 4-way cross-detection', () => {
+describe('discordOpsAdapter - 4-way cross-detection', () => {
   // discord-ops's detect() MUST reject every other adapter's fixture.
   it('returns false on the PaSympa fixture (cross-detection)', async () => {
-    // PaSympa's package.json is `@pasympa/discord-mcp` — does not match
+    // PaSympa's package.json is `@pasympa/discord-mcp` - does not match
     // /discord[-_]ops/. Even if the content signal hit, the name guard
     // short-circuits.
     expect(await discordOpsAdapter.detect(PASYMPA_FIXTURE_ROOT)).toBe(false);
   });
 
   it('returns false on the quadslab fixture (cross-detection)', async () => {
-    // quadslab's package.json is `@quadslab.io/discord-mcp` — name guard
+    // quadslab's package.json is `@quadslab.io/discord-mcp` - name guard
     // rejects. Content also lacks `defineTool(` / `category:` fields.
     expect(await discordOpsAdapter.detect(QUADSLAB_FIXTURE_ROOT)).toBe(false);
   });
 
   it('returns false on the Hubdustry fixture (cross-detection, no package.json)', async () => {
-    // Hubdustry fixture has no package.json at all (it's a Go repo) —
+    // Hubdustry fixture has no package.json at all (it's a Go repo) -
     // the name-guard try/catch must return false on the read error.
     expect(await discordOpsAdapter.detect(HUBDUSTRY_FIXTURE_ROOT)).toBe(false);
   });
 
   // Inverse: every other adapter's detect() MUST reject discord-ops's fixture.
   it('PaSympa.detect() returns false on the discord-ops fixture (inverse)', async () => {
-    // PaSympa requires `pasympa` in the package.json name — discord-ops
+    // PaSympa requires `pasympa` in the package.json name - discord-ops
     // package name is `discord-ops` and doesn't contain `pasympa`. PaSympa
     // also requires `'discord_*'` literals, which the discord-ops fixture
     // doesn't ship.
@@ -178,12 +178,12 @@ describe('discordOpsAdapter — 4-way cross-detection', () => {
 
   it('Hubdustry.detect() returns false on the discord-ops fixture (inverse)', async () => {
     // Hubdustry expects `main.go` at root or under `apps/mcp/`. The
-    // discord-ops fixture is pure TypeScript — no Go files anywhere.
+    // discord-ops fixture is pure TypeScript - no Go files anywhere.
     expect(await hubdustryGoMcpAdapter.detect(FIXTURE_ROOT)).toBe(false);
   });
 });
 
-describe('discordOpsAdapter — migrate()', () => {
+describe('discordOpsAdapter - migrate()', () => {
   it('reports 6 mapped tools and 2 unmapped tools against the fixture', async () => {
     const result = await discordOpsAdapter.migrate(FIXTURE_ROOT);
     expect(result.source).toBe('discord-ops');
@@ -275,7 +275,7 @@ describe('discordOpsAdapter — migrate()', () => {
       expect(result.unmappedTools.length).toBe(0);
       expect(result.warnings.some((w) => w.includes('no discord-ops tool names found'))).toBe(true);
       // Architectural-mismatch warnings should NOT appear on an empty
-      // run — there's nothing to warn about. The early-exit ensures the
+      // run - there's nothing to warn about. The early-exit ensures the
       // user isn't spammed when running against the wrong directory.
       expect(result.warnings.some((w) => w.includes('multi-guild'))).toBe(false);
     } finally {

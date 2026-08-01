@@ -27,7 +27,7 @@ const sampleDesc = [
   '- Avoid for components.',
   '',
   '**When NOT to use**:',
-  '- Embeds — use rich_send instead.',
+  '- Embeds - use rich_send instead.',
   '',
   '**Returns**: `{message_id, channel_id}`.',
 ].join('\n');
@@ -38,7 +38,7 @@ describe('parseDescription', () => {
     expect(out.purpose).toBe('Send a plain text message to a channel.');
     expect(out.whenToUse).toContain('Quick notification');
     expect(out.whenToUse).toContain('Avoid for components.');
-    expect(out.whenNotToUse).toContain('Embeds — use rich_send');
+    expect(out.whenNotToUse).toContain('Embeds - use rich_send');
     expect(out.returns).toContain('message_id');
     expect(out.extraSections).toEqual([]);
   });

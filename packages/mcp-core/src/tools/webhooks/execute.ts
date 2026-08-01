@@ -22,7 +22,7 @@ export default defineTool({
     '',
     '**Prefer instead**:',
     '- `messages_send` for normal bot output.',
-    '- `components_v2_send` for V2 component layouts (this tool is the raw escape hatch — V2 validation is intentionally `z.record`).',
+    '- `components_v2_send` for V2 component layouts (this tool is the raw escape hatch - V2 validation is intentionally `z.record`).',
     '',
     '**Auth**: NO `Authorization: Bot …` header. Discord rejects bot auth on the execute route.',
     '',
@@ -33,10 +33,10 @@ export default defineTool({
     '**Returns**: When `wait:true`, `{message_id, channel_id, webhook_id}`. Otherwise `{enqueued:true}`.',
   ].join('\n'),
   // The "at least one of content/embeds/components/attachments/poll" rule is enforced inside
-  // the handler — defineTool's per-key inputSchema does not currently surface cross-field refinements.
+  // the handler - defineTool's per-key inputSchema does not currently surface cross-field refinements.
   inputSchema: {
     webhook_id: WebhookId.describe('Webhook id'),
-    token: WebhookToken.describe('Webhook secret — treat as credential, do not log'),
+    token: WebhookToken.describe('Webhook secret - treat as credential, do not log'),
     content: z.string().max(2000).optional().describe('Message text (max 2000 chars)'),
     username: z.string().optional().describe('Override the webhook display name for this message'),
     avatar_url: z.string().optional().describe('Override the webhook avatar URL for this message'),
@@ -88,7 +88,7 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args) => {
-    // Cross-field refinement (mirrors the InputObject .refine — defineTool only knows per-key shapes).
+    // Cross-field refinement (mirrors the InputObject .refine - defineTool only knows per-key shapes).
     const hasPayload =
       args.content !== undefined ||
       (args.embeds !== undefined && args.embeds.length > 0) ||

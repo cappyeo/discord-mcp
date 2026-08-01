@@ -10,7 +10,7 @@ export default defineTool({
   category: 'commands',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a global application command. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a global application command. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**Effect**: removes the command from every guild within ~1 hour of propagation.',
     '',

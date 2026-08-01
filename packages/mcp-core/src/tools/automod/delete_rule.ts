@@ -10,7 +10,7 @@ export default defineTool({
   category: 'automod',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete an AutoMod rule. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete an AutoMod rule. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Permanently remove an obsolete rule.',

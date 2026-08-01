@@ -13,7 +13,7 @@ export default defineTool({
   name: 'components_v2_edit',
   category: 'components_v2',
   description:
-    '**Purpose**: Edit a Components V2 message previously sent by this bot. The `IS_COMPONENTS_V2` flag is irreversible — V2 messages stay V2.\n\n**Returns**: `{message_id, channel_id, edited_timestamp}`.',
+    '**Purpose**: Edit a Components V2 message previously sent by this bot. The `IS_COMPONENTS_V2` flag is irreversible - V2 messages stay V2.\n\n**Returns**: `{message_id, channel_id, edited_timestamp}`.',
   inputSchema: {
     channel_id: ChannelId,
     message_id: MessageId,

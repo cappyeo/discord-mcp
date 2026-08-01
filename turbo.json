@@ -9,8 +9,8 @@
     "test": {
       // `build` (self), not just `^build` (dependencies): cli.smoke.test.ts
       // spawns this package's own dist/cli.js as a subprocess. With only
-      // `^build`, a change to the package itself — a version bump, a new CLI
-      // flag — left dist stale and the smoke test asserted against the
+      // `^build`, a change to the package itself - a version bump, a new CLI
+      // flag - left dist stale and the smoke test asserted against the
       // previous build. vitest.global-setup.ts only rebuilds when dist is
       // absent, so it did not catch this either.
       "dependsOn": ["^build", "build"],
@@ -44,7 +44,7 @@
       // under both doc roots, and the mcp-core sources they compare them
       // against (the tool registry is loaded from source, not from dist).
       // With only `scripts/**` in the inputs, editing a doc page or adding a
-      // tool left a cached PASS and the guard never ran — which is exactly
+      // tool left a cached PASS and the guard never ran - which is exactly
       // the drift these guards exist to catch.
       "inputs": [
         "scripts/**",

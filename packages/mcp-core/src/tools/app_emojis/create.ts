@@ -18,7 +18,7 @@ export default defineTool({
     '**Purpose**: Upload a new application-scoped custom emoji.',
     '',
     '**When to use**:',
-    '- Register an emoji available wherever the bot is — independent of guild.',
+    '- Register an emoji available wherever the bot is - independent of guild.',
     '',
     '**When NOT to use**:',
     '- Guild-only emoji → use `emojis_create`.',

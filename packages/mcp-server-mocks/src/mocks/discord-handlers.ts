@@ -7,7 +7,7 @@ const DISCORD_API = 'https://discord.com/api/v10';
  *
  * Discord ids are 17-20 digit strings. Fixtures previously used readable
  * tokens (`msg_1`, `user_2`, `111`), which meant every schema declaring a
- * snowflake was never actually exercised — the tools' published outputSchemas
+ * snowflake was never actually exercised - the tools' published outputSchemas
  * drifted from reality and nothing failed.
  */
 function snowflake(seed: string): string {
@@ -89,7 +89,7 @@ export const handlers = [
       },
     ]);
   }),
-  // channels_get — must come AFTER the :channelId/messages route
+  // channels_get - must come AFTER the :channelId/messages route
   http.get(`${DISCORD_API}/channels/:channelId`, async ({ params }) => {
     return HttpResponse.json({
       id: params.channelId,
@@ -166,7 +166,7 @@ export const handlers = [
       },
     ]);
   }),
-  // events_list — must come BEFORE guilds/:guildId to avoid prefix match
+  // events_list - must come BEFORE guilds/:guildId to avoid prefix match
   http.get(`${DISCORD_API}/guilds/:guildId/scheduled-events`, async () => {
     return HttpResponse.json([
       {
@@ -197,7 +197,7 @@ export const handlers = [
       features: ['COMMUNITY', 'NEWS'],
     });
   }),
-  // users_get_current — @me is percent-encoded as %40me in the actual request URL
+  // users_get_current - @me is percent-encoded as %40me in the actual request URL
   http.get(`${DISCORD_API}/users/%40me`, async () => {
     return HttpResponse.json({
       id: snowflake('bot_self'),

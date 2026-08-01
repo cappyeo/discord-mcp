@@ -39,7 +39,7 @@ export default defineTool({
     '**When to use**:',
     '- CI deploy: re-sync the canonical command list from source-of-truth.',
     '',
-    '**Caution**: this is a wholesale replace — call `commands_list_global` first to confirm scope. An EMPTY array deletes every global command.',
+    '**Caution**: this is a wholesale replace - call `commands_list_global` first to confirm scope. An EMPTY array deletes every global command.',
     '',
     '**Security**: gated by `ConfirmRequired`. Pass `__confirm:true` AND set `MCP_DRY_RUN=false` to actually apply the replace.',
     '',

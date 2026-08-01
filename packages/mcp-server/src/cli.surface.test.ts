@@ -1,9 +1,9 @@
 /**
  * The frozen CLI surface.
  *
- * v1.0.0 commits to "CLI flag set frozen — `discord-mcp serve | doctor | init
+ * v1.0.0 commits to "CLI flag set frozen - `discord-mcp serve | doctor | init
  * | migrate`". Nothing enforced that, which is how the docs came to promise a
- * `start` and a `version` subcommand that never existed — and because `serve`
+ * `start` and a `version` subcommand that never existed - and because `serve`
  * is the default command, `discord-mcp version` silently booted a stdio server
  * instead of failing.
  *

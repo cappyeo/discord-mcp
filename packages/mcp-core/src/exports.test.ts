@@ -1,7 +1,7 @@
 /**
  * The frozen public surface of `@discord-mcp/core`.
  *
- * v1.0.0 commits to "exports frozen — no removals, only additions" for 6+
+ * v1.0.0 commits to "exports frozen - no removals, only additions" for 6+
  * months. That was a promise with nothing enforcing it: any refactor could
  * drop a re-export and no test would notice until a consumer's build broke.
  *

@@ -10,7 +10,7 @@ export default defineTool({
   category: 'roles',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a role from a guild. **DESTRUCTIVE — IRREVERSIBLE.** All members holding this role lose it.',
+    '**Purpose**: Delete a role from a guild. **DESTRUCTIVE - IRREVERSIBLE.** All members holding this role lose it.',
     '',
     '**When to use**:',
     '- Tear down deprecated/integration roles.',

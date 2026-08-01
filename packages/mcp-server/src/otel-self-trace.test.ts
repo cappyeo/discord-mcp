@@ -1,7 +1,7 @@
 /**
  * `isOtlpSelfTrace` is the predicate that stops the tracer from tracing its own
  * exports. Without it each OTLP export request produces a span, which the next
- * batch flushes, which produces a span — an unbounded feedback loop against the
+ * batch flushes, which produces a span - an unbounded feedback loop against the
  * collector.
  *
  * It had zero coverage: the existing OTel suite asserted that undici's

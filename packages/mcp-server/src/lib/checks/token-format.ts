@@ -1,5 +1,5 @@
 /**
- * `token-format` check — Plan 9 Phase B.
+ * `token-format` check - Plan 9 Phase B.
  *
  * Validates the *shape* of `DISCORD_TOKEN` without making any network
  * calls. We read `process.env.DISCORD_TOKEN` directly (NOT the parsed
@@ -14,7 +14,7 @@ import type { DoctorCheck } from './index.js';
 // Discord bot tokens are typically 70+ chars (3 base64url segments
 // separated by dots). 50 is a conservative lower bound that matches
 // the Config schema's min(50). We accept an optional `Bot ` prefix
-// because Discord.js auto-adds it when missing — but we still warn
+// because Discord.js auto-adds it when missing - but we still warn
 // if it's missing because some libraries (e.g. raw fetch) require it.
 const TOKEN_REGEX = /^(Bot )?[A-Za-z0-9._-]{50,}$/;
 

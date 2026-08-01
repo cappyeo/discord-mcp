@@ -39,7 +39,7 @@ export default defineTool({
   name: 'intelligence_draft_response',
   category: 'intelligence',
   description:
-    "**Purpose**: Draft a reply to a Discord channel using the client's LLM. Returns a SUGGESTED draft for human review — does NOT auto-post.\n\n**When to use**: prepare a moderator response, suggest replies for staff, draft outreach.\n\n**Returns**: `{draft, reasoning, sampling_used}`. The agent decides whether to actually call `messages_send` after review.",
+    "**Purpose**: Draft a reply to a Discord channel using the client's LLM. Returns a SUGGESTED draft for human review - does NOT auto-post.\n\n**When to use**: prepare a moderator response, suggest replies for staff, draft outreach.\n\n**Returns**: `{draft, reasoning, sampling_used}`. The agent decides whether to actually call `messages_send` after review.",
   inputSchema: {
     channel_id: ChannelId.describe('Channel for context'),
     context_message_count: z
@@ -91,7 +91,7 @@ export default defineTool({
         'draft_response',
       );
       return dualResult({
-        text: '[sampling unavailable — host LLM should draft from raw_context + intent + tone]',
+        text: '[sampling unavailable - host LLM should draft from raw_context + intent + tone]',
         data,
       });
     }
@@ -106,7 +106,7 @@ export default defineTool({
     );
     const messages = buildSamplingPrompt({
       systemPrompt:
-        'You are a Discord moderator drafting a reply. Match the requested tone exactly. Do NOT send the reply — output strict JSON {"draft": "...", "reasoning": "..."} for human review.',
+        'You are a Discord moderator drafting a reply. Match the requested tone exactly. Do NOT send the reply - output strict JSON {"draft": "...", "reasoning": "..."} for human review.',
       userPrompt: `Tone: ${args.tone}. Intent: ${args.intent}.`,
       untrustedContent: wrapped,
     });

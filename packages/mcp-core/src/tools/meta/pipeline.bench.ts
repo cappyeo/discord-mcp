@@ -3,7 +3,7 @@ import { bench, describe } from 'vitest';
 import { executePipeline, type Step } from '../../pipeline/executor.js';
 
 /**
- * Plan 12 Phase E.1 — performance bench for `mcp_pipeline`.
+ * Plan 12 Phase E.1 - performance bench for `mcp_pipeline`.
  *
  * Measures the pipeline executor itself (orchestration overhead +
  * interpolation), with a synthetic `invoke` that returns immediately so

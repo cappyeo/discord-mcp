@@ -45,7 +45,7 @@ const TEST_REQUEST_CTX = {
   signal: new AbortController().signal,
 };
 
-describe('auditMiddleware — mutating tools', () => {
+describe('auditMiddleware - mutating tools', () => {
   it('emits AuditEvent with status=success when next() returns isError=false', async () => {
     const sink = new CapturingSink();
     const mw = auditMiddleware(sink);
@@ -119,7 +119,7 @@ describe('auditMiddleware — mutating tools', () => {
   });
 });
 
-describe('auditMiddleware — idempotent tools (skip)', () => {
+describe('auditMiddleware - idempotent tools (skip)', () => {
   it('does NOT emit for read-only tools (idempotent: true)', async () => {
     const sink = new CapturingSink();
     const mw = auditMiddleware(sink);
@@ -143,7 +143,7 @@ describe('auditMiddleware — idempotent tools (skip)', () => {
   });
 });
 
-describe('auditMiddleware — trace correlation', () => {
+describe('auditMiddleware - trace correlation', () => {
   let spanExporter: InMemorySpanExporter;
   let tracerProvider: BasicTracerProvider;
   let ctxManager: AsyncLocalStorageContextManager;
@@ -155,7 +155,7 @@ describe('auditMiddleware — trace correlation', () => {
     });
     trace.setGlobalTracerProvider(tracerProvider);
     // Without a context manager, context.with() is a no-op and
-    // trace.getActiveSpan() returns undefined inside the callback —
+    // trace.getActiveSpan() returns undefined inside the callback -
     // matching what NodeSDK installs at runtime.
     ctxManager = new AsyncLocalStorageContextManager();
     ctxManager.enable();
@@ -190,7 +190,7 @@ describe('auditMiddleware — trace correlation', () => {
   });
 });
 
-describe('auditMiddleware — no active span', () => {
+describe('auditMiddleware - no active span', () => {
   beforeEach(() => {
     trace.disable();
   });
@@ -210,7 +210,7 @@ describe('auditMiddleware — no active span', () => {
   });
 });
 
-describe('auditMiddleware — sink failure isolation', () => {
+describe('auditMiddleware - sink failure isolation', () => {
   it('does not break tool execution when sink.emit throws (sink contract is best-effort)', async () => {
     const failingSink: AuditSink = {
       async emit() {

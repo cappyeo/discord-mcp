@@ -10,7 +10,7 @@ export default defineTool({
   category: 'soundboard',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a guild soundboard sound. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a guild soundboard sound. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**Returns**: `{deleted, sound_id, guild_id}`.',
     '',

@@ -20,7 +20,7 @@ export default defineTool({
     '- Mirror release announcements from a partner server into your own.',
     '',
     '**When NOT to use**:',
-    '- Source channel is not type 5 (GUILD_ANNOUNCEMENT) — Discord rejects.',
+    '- Source channel is not type 5 (GUILD_ANNOUNCEMENT) - Discord rejects.',
     '',
     '**Returns**: `{channel_id, webhook_id}` (webhook_id is the auto-created delivery webhook on the target).',
   ].join('\n'),

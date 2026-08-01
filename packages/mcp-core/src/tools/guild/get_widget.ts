@@ -18,7 +18,7 @@ export default defineTool({
   name: 'guild_get_widget',
   category: 'guild',
   description: [
-    '**Purpose**: Get the public guild widget JSON. **No bot auth required** — Discord serves this anonymously.',
+    '**Purpose**: Get the public guild widget JSON. **No bot auth required** - Discord serves this anonymously.',
     '',
     '**When to use**:',
     '- Render a public-facing widget on a website. The widget must be enabled (see `guild_get_widget_settings`).',

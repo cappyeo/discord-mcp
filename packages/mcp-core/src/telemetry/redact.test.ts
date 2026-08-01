@@ -22,7 +22,7 @@ describe('redactRoute', () => {
     );
   });
 
-  it('collapses the webhook token — it is a bearer credential, not an ID', () => {
+  it('collapses the webhook token - it is a bearer credential, not an ID', () => {
     // Anyone holding this segment can execute the webhook without the bot
     // token. It is not a snowflake, so the digit rule alone leaves it intact.
     const out = redactRoute(

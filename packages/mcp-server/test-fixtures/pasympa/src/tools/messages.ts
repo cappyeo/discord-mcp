@@ -1,4 +1,4 @@
-// FIXTURE: synthetic PaSympa-style code for adapter testing — not real code.
+// FIXTURE: synthetic PaSympa-style code for adapter testing - not real code.
 // The adapter regex matches `'discord_*'` / `"discord_*"` literals; the
 // shape of the surrounding object only needs to expose `name:` strings.
 export const sendMessage = {

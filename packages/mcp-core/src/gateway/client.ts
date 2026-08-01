@@ -18,7 +18,7 @@ export interface GatewayClientDeps {
   token: string;
   registry: SubscriptionRegistry;
   notifyResource: (uri: string) => Promise<void> | void;
-  /** Optional factory for testing — production lazy-imports discord.js. */
+  /** Optional factory for testing - production lazy-imports discord.js. */
   clientFactory?: () => MinimalDiscordClient;
 }
 
@@ -71,7 +71,7 @@ export function createGatewayClient(deps: GatewayClientDeps): GatewayClient {
         );
         await client.login(deps.token);
       } catch (err) {
-        // Unwind listeners + poll interval before dropping the client — the
+        // Unwind listeners + poll interval before dropping the client - the
         // fetchAuditLog closure dereferences `client`.
         for (const td of teardowns) td();
         teardowns.length = 0;

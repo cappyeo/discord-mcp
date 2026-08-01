@@ -8,8 +8,8 @@ sidebar:
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
 discord-ops is bookedsolidtech's TypeScript Discord MCP. Its defining
-features are deployment / DX patterns — multi-guild project routing, tool
-profiles, dry-run mode, saved templates — NOT tool-level surface differences.
+features are deployment / DX patterns - multi-guild project routing, tool
+profiles, dry-run mode, saved templates - NOT tool-level surface differences.
 Most tool names map cleanly; the architectural patterns need a small mindset
 shift, covered below.
 
@@ -26,17 +26,17 @@ shift, covered below.
 
 ## Why migrate to discord-mcp
 
-- **Production hardening** — first-class OpenTelemetry traces and Cockatiel
+- **Production hardening** - first-class OpenTelemetry traces and Cockatiel
   resilience policies on the central Discord REST path.
   See [Operations: telemetry](/discord-mcp/operations/telemetry/).
-- **Broad 192-tool Discord surface** — discord-mcp covers about
+- **Broad 192-tool Discord surface** - discord-mcp covers about
   4x the discord-ops tool count, including the 100+ helpers discord-ops omits
   (forums, stickers, automod, polls, scheduled events, voice, stage
   instances, application commands, onboarding).
-- **Components V2 first-class** — dedicated `components_v2_send` and
+- **Components V2 first-class** - dedicated `components_v2_send` and
   `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Pipeline sequencing** — `mcp_pipeline` chains multiple tool calls in
+- **Pipeline sequencing** - `mcp_pipeline` chains multiple tool calls in
   a single round-trip, replacing discord-ops's client-side templates.
   See [Architecture: pipeline](/discord-mcp/architecture/pipeline/).
 
@@ -84,8 +84,8 @@ the same discord-mcp tool with `confidence: medium`.
 before they hit the Discord REST API.
 
 **discord-mcp**: `MCP_DRY_RUN=true` protects only the 29 tools registered with
-`confirm_required`. Ordinary writes—including many send, edit, and create
-tools—can still execute on the first call.
+`confirm_required`. Ordinary writes-including many send, edit, and create
+tools-can still execute on the first call.
 
 **Migration**: do not treat the environment variables as equivalent. Inventory
 every write in the old profile, check the destination tool's **Confirmation
@@ -162,27 +162,27 @@ The most common mapped operations are:
 
 | discord-ops tool   | discord-mcp tool                | Confidence | Notes                                                          |
 | ------------------ | ------------------------------- | ---------- | -------------------------------------------------------------- |
-| `send_message`     | `messages_send`                 | high       | —                                                              |
-| `get_messages`     | `messages_read`                 | high       | —                                                              |
-| `edit_message`     | `messages_edit`                 | high       | —                                                              |
-| `delete_message`   | `messages_delete`               | high       | —                                                              |
-| `add_reaction`     | `reactions_create`              | high       | —                                                              |
-| `pin_message`      | `messages_pin`                  | high       | —                                                              |
-| `unpin_message`    | `messages_unpin`                | high       | —                                                              |
-| `search_messages`  | `messages_search_recent`        | high       | —                                                              |
-| `list_channels`    | `channels_list`                 | high       | —                                                              |
-| `get_channel`      | `channels_get`                  | high       | —                                                              |
-| `create_channel`   | `channels_create_guild_channel` | high       | —                                                              |
-| `edit_channel`     | `channels_modify`               | high       | —                                                              |
-| `delete_channel`   | `channels_delete`               | high       | —                                                              |
-| `set_permissions`  | `channels_modify_permissions`   | high       | —                                                              |
-| `list_guilds`      | `users_list_current_user_guilds`| high       | —                                                              |
-| `get_guild`        | `guild_get`                     | high       | —                                                              |
-| `create_invite`    | `invites_create_channel`        | high       | —                                                              |
-| `list_members`     | `members_list`                  | high       | —                                                              |
-| `kick_member`      | `members_kick`                  | high       | —                                                              |
-| `ban_member`       | `members_ban`                   | high       | —                                                              |
-| `query_audit_log`  | `audit_log_get`                 | high       | —                                                              |
+| `send_message`     | `messages_send`                 | high       | -                                                              |
+| `get_messages`     | `messages_read`                 | high       | -                                                              |
+| `edit_message`     | `messages_edit`                 | high       | -                                                              |
+| `delete_message`   | `messages_delete`               | high       | -                                                              |
+| `add_reaction`     | `reactions_create`              | high       | -                                                              |
+| `pin_message`      | `messages_pin`                  | high       | -                                                              |
+| `unpin_message`    | `messages_unpin`                | high       | -                                                              |
+| `search_messages`  | `messages_search_recent`        | high       | -                                                              |
+| `list_channels`    | `channels_list`                 | high       | -                                                              |
+| `get_channel`      | `channels_get`                  | high       | -                                                              |
+| `create_channel`   | `channels_create_guild_channel` | high       | -                                                              |
+| `edit_channel`     | `channels_modify`               | high       | -                                                              |
+| `delete_channel`   | `channels_delete`               | high       | -                                                              |
+| `set_permissions`  | `channels_modify_permissions`   | high       | -                                                              |
+| `list_guilds`      | `users_list_current_user_guilds`| high       | -                                                              |
+| `get_guild`        | `guild_get`                     | high       | -                                                              |
+| `create_invite`    | `invites_create_channel`        | high       | -                                                              |
+| `list_members`     | `members_list`                  | high       | -                                                              |
+| `kick_member`      | `members_kick`                  | high       | -                                                              |
+| `ban_member`       | `members_ban`                   | high       | -                                                              |
+| `query_audit_log`  | `audit_log_get`                 | high       | -                                                              |
 
 The medium-confidence collapse table:
 
@@ -193,7 +193,7 @@ The medium-confidence collapse table:
 | `move_channel`    | `channels_modify`      | medium     | Pass `parent_id` and/or `position`.                                                |
 | `archive_thread`  | `channels_modify`      | medium     | Pass `archived: true`.                                                             |
 | `timeout_member`  | `members_modify`       | medium     | Pass `communication_disabled_until`.                                               |
-| `get_invites`     | `invites_list_channel` | medium     | discord-mcp invites are channel-scoped — iterate channels for guild-wide listing.  |
+| `get_invites`     | `invites_list_channel` | medium     | discord-mcp invites are channel-scoped - iterate channels for guild-wide listing.  |
 | `messages_lite`   | `messages_send`        | medium     | Profile-variant; collapses onto the full `messages_send`.                          |
 | `messages_full`   | `messages_send`        | medium     | Profile-variant; collapses onto the full `messages_send`.                          |
 
@@ -208,11 +208,11 @@ The low-confidence entries you should always re-read:
 
 5 discord-ops tools surface in the report's `unmapped` list:
 
-- **System (3)** — `health_check`, `list_projects`, `list_bots`. discord-ops-only
+- **System (3)** - `health_check`, `list_projects`, `list_bots`. discord-ops-only
   introspection. discord-mcp surfaces runtime health via the gateway client +
   MCP capability negotiation, not via tools. Drop these calls from your
   agent prompts.
-- **Templates (2)** — `send_template`, `list_templates`. Client-side feature
+- **Templates (2)** - `send_template`, `list_templates`. Client-side feature
   in discord-ops; no discord-mcp equivalent. Inline the template strings into
   your agent prompt's system message.
 
@@ -221,7 +221,7 @@ The low-confidence entries you should always re-read:
 - [Adapter authoring guide](/discord-mcp/migrate/authoring/)
 - [discord-mcp tools (192)](/discord-mcp/tools/)
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate)
-- [Operations: audit](/discord-mcp/operations/audit/) — dry-run audit-log shape.
-- [Architecture: pipeline](/discord-mcp/architecture/pipeline/) — replaces
+- [Operations: audit](/discord-mcp/operations/audit/) - dry-run audit-log shape.
+- [Architecture: pipeline](/discord-mcp/architecture/pipeline/) - replaces
   discord-ops client-side templates with fail-fast multi-call chains. Earlier
   Discord side effects remain if a later step fails.

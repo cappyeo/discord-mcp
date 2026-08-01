@@ -113,7 +113,7 @@ describe('resilience retry integration (Plan 8 C.5)', () => {
     expect(requestCount).toBe(3);
   });
 
-  it('does NOT retry on 400 — single request, original error bubbles', async () => {
+  it('does NOT retry on 400 - single request, original error bubbles', async () => {
     scriptedResponses = [{ status: 400, body: '{"code":50035,"message":"Invalid form body"}' }];
     const rest = wrapRestWithResilience(buildRest(), buildPolicy(cfg()));
 
@@ -141,7 +141,7 @@ describe('resilience retry integration (Plan 8 C.5)', () => {
 
 /**
  * A POST that reached Discord but whose RESPONSE was lost must NOT be
- * replayed — that duplicates the message / ban / webhook execution.  Only the
+ * replayed - that duplicates the message / ban / webhook execution.  Only the
  * ambiguous classes (5xx + post-send network codes) are affected; explicit
  * rejections (429) and pre-send network failures (ECONNREFUSED) still retry.
  */
@@ -161,7 +161,7 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
     }).setToken('fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   }
 
-  it('does NOT retry POST on 503 — single request', async () => {
+  it('does NOT retry POST on 503 - single request', async () => {
     scriptedResponses = Array.from({ length: 6 }, () => ({
       status: 503,
       body: '{"message":"service unavailable"}',
@@ -204,7 +204,7 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
     // Exactly 3 requests: each POST failed once and was never replayed.
     expect(requestCount).toBe(3);
 
-    // The 4th is short-circuited by the open breaker — no request reaches
+    // The 4th is short-circuited by the open breaker - no request reaches
     // Discord at all.
     await expect(
       rest.post('/channels/123/messages', { body: { content: 'x' } }),
@@ -242,7 +242,7 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
     expect(requestCount).toBe(5);
   });
 
-  it('does NOT retry POST on ECONNRESET — single request', async () => {
+  it('does NOT retry POST on ECONNRESET - single request', async () => {
     const rest = wrapRestWithResilience(buildNetworkFailingRest('ECONNRESET'), buildPolicy(cfg()));
 
     await expect(
@@ -251,7 +251,7 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
     expect(requestCount).toBe(1);
   });
 
-  it('DOES retry POST on ECONNREFUSED — the request never left the host', async () => {
+  it('DOES retry POST on ECONNREFUSED - the request never left the host', async () => {
     const rest = wrapRestWithResilience(
       buildNetworkFailingRest('ECONNREFUSED'),
       buildPolicy(cfg({ MCP_RETRY_MAX_ATTEMPTS: 2 })),
@@ -263,7 +263,7 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
     expect(requestCount).toBe(3);
   });
 
-  it('DOES retry POST on 429 — an explicit rejection carries no duplicate risk', async () => {
+  it('DOES retry POST on 429 - an explicit rejection carries no duplicate risk', async () => {
     scriptedResponses = [
       {
         status: 429,
@@ -286,7 +286,7 @@ describe('resilience retry integration: POST is not replayed on ambiguous failur
     expect(requestCount).toBe(2);
   });
 
-  it('still retries GET on 503 — idempotent verbs are unaffected', async () => {
+  it('still retries GET on 503 - idempotent verbs are unaffected', async () => {
     scriptedResponses = [
       { status: 503, body: '{"message":"down"}' },
       { status: 200, body: '{"id":"ok"}' },

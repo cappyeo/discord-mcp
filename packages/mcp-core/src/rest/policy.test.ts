@@ -7,7 +7,7 @@ import { buildPolicy } from './policy.js';
 
 const REQ_BODY = { files: undefined, json: undefined } as const;
 
-/** Minimal in-test `Config` shaped object — only the fields buildPolicy reads. */
+/** Minimal in-test `Config` shaped object - only the fields buildPolicy reads. */
 function cfg(partial: Partial<Config> = {}): Config {
   return {
     DISCORD_TOKEN: 'Bot fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -88,7 +88,7 @@ describe('buildPolicy (Plan 8 C.1)', () => {
     expect(elapsed).toBeGreaterThanOrEqual(200);
   });
 
-  it('does NOT retry non-DiscordRetryableError (raw 4xx) — bubbles immediately', async () => {
+  it('does NOT retry non-DiscordRetryableError (raw 4xx) - bubbles immediately', async () => {
     const policy = buildPolicy(cfg({ MCP_RETRY_MAX_ATTEMPTS: 5 }));
 
     let attempts = 0;
@@ -109,7 +109,7 @@ describe('buildPolicy (Plan 8 C.1)', () => {
     expect(attempts).toBe(1);
   });
 
-  it('does NOT retry HTTPError 418 — non-retryable bubbles', async () => {
+  it('does NOT retry HTTPError 418 - non-retryable bubbles', async () => {
     const policy = buildPolicy(cfg({ MCP_RETRY_MAX_ATTEMPTS: 5 }));
 
     let attempts = 0;
@@ -163,7 +163,7 @@ describe('buildPolicy (Plan 8 C.1)', () => {
     });
     expect(result).toBe('ok');
     expect(attempts).toBe(2);
-    // A single full-jitter backoff off a 50ms base draws from [0, 50) — the
+    // A single full-jitter backoff off a 50ms base draws from [0, 50) - the
     // whole run must finish well inside 200ms (100ms+ of scheduler slack).
     expect(Date.now() - start).toBeLessThan(200);
   });
@@ -206,7 +206,7 @@ describe('buildPolicy (Plan 8 C.1)', () => {
   it('grows the backoff geometrically across retries', async () => {
     // The bug: `exponential` is an IBackoffFactory, so calling .next() fresh
     // each attempt always returned an attempt-0 instance and the delay never
-    // grew — every retry waited the base delay and MCP_RETRY_MAX_DELAY_MS was
+    // grew - every retry waited the base delay and MCP_RETRY_MAX_DELAY_MS was
     // inert. A flat chain yields [50, 50, 50].
     const delays = await recordRetryDelays(
       cfg({
@@ -235,7 +235,7 @@ describe('buildPolicy (Plan 8 C.1)', () => {
 
 describe('buildPolicy: circuit breaker (Plan 8 D.1)', () => {
   // Tests use MCP_RETRY_ENABLED=false so each .execute() call hits the
-  // breaker exactly once — making consecutive-failure counting predictable.
+  // breaker exactly once - making consecutive-failure counting predictable.
   const circuitOnly = (partial: Partial<Config> = {}): Config =>
     cfg({
       MCP_RETRY_ENABLED: false,
@@ -284,7 +284,7 @@ describe('buildPolicy: circuit breaker (Plan 8 D.1)', () => {
       REQ_BODY,
     );
 
-    // 5 attempts of a non-retryable 400 — far beyond the threshold of 3.
+    // 5 attempts of a non-retryable 400 - far beyond the threshold of 3.
     // Since the breaker filter is handleType(DiscordRetryableError), 400
     // bubbles through without being counted.
     for (let i = 0; i < 5; i++) {

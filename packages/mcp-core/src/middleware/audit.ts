@@ -25,28 +25,28 @@ function extractToolErrorCode(result: ToolResultLike | null | undefined): string
 /**
  * Audit middleware (Plan 8 Phase E, Task E.3).
  *
- * **INNERMOST** in the chain — installed after telemetry / validate /
+ * **INNERMOST** in the chain - installed after telemetry / validate /
  * precondition. By design, audit only fires for actually-attempted
  * operations (after validation + preconditions pass). Blocked
- * operations should NOT generate audit noise — telemetry already
+ * operations should NOT generate audit noise - telemetry already
  * records them.
  *
  * Skips read-only / idempotent tools (`ctx.tool.idempotent === true`).
  * Mutating tools (`idempotent: false`) emit one AuditEvent per call:
  *
- *   - `success`     — handler returned without `isError: true`.
- *   - `tool_error`  — handler returned `{ isError: true, ... }`.
- *   - `thrown`      — handler threw a JS exception (we re-throw after
+ *   - `success`     - handler returned without `isError: true`.
+ *   - `tool_error`  - handler returned `{ isError: true, ... }`.
+ *   - `thrown`      - handler threw a JS exception (we re-throw after
  *                     emitting).
  *
  * Trace correlation is OPTIONAL: when no active OTel span exists (e.g.
- * OTEL_ENABLED=false), `trace_id`/`span_id` are left **undefined** —
+ * OTEL_ENABLED=false), `trace_id`/`span_id` are left **undefined** -
  * never empty string. See plan §10 critical rule 4.
  */
 export function auditMiddleware(sink: AuditSink): ToolMiddleware {
   return {
     async onCallTool(ctx, next) {
-      // Skip read-only tools — see plan §10 Task E.3.
+      // Skip read-only tools - see plan §10 Task E.3.
       if (ctx.tool.idempotent) {
         return next();
       }
@@ -56,7 +56,7 @@ export function auditMiddleware(sink: AuditSink): ToolMiddleware {
       const argsRedacted = redactArgs(ctx.args, ctx.tool.name);
       const start = performance.now();
 
-      // Active span (if any) — trace.getActiveSpan() returns undefined
+      // Active span (if any) - trace.getActiveSpan() returns undefined
       // when no SDK is registered or no parent span is on the stack.
       const span = trace.getActiveSpan();
       const spanCtx = span?.spanContext();

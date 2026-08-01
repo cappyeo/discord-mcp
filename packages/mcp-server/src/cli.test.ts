@@ -8,7 +8,7 @@ vi.mock('./transports/stdio.js', () => ({
   }),
 }));
 
-// Now import cli — its top-level auto-parse is gated behind VITEST=true.
+// Now import cli - its top-level auto-parse is gated behind VITEST=true.
 const { buildProgram } = await import('./cli.js');
 const { startStdio } = await import('./transports/stdio.js');
 
@@ -65,7 +65,7 @@ async function runCli(args: string[]): Promise<void> {
       stdoutWrites.push(str);
     },
   });
-  // Sub-commands keep their own exit/output config — propagate to all of
+  // Sub-commands keep their own exit/output config - propagate to all of
   // them so `discord-mcp init --help` doesn't call process.exit() directly.
   for (const sub of program.commands) {
     sub.exitOverride();
@@ -95,7 +95,7 @@ async function runCli(args: string[]): Promise<void> {
   }
 }
 
-describe('cli — version + help', () => {
+describe('cli - version + help', () => {
   it('--version prints package version', async () => {
     await runCli(['--version']);
     expect(stdoutOutput()).toContain(packageJson.version);
@@ -111,7 +111,7 @@ describe('cli — version + help', () => {
   });
 });
 
-describe('cli — serve (default sub-command)', () => {
+describe('cli - serve (default sub-command)', () => {
   it('bare invocation routes to serve', async () => {
     await runCli([]);
     expect(startStdio).toHaveBeenCalledTimes(1);
@@ -130,7 +130,7 @@ describe('cli — serve (default sub-command)', () => {
   });
 });
 
-describe('cli — doctor sub-command (Plan 9 Phase B)', () => {
+describe('cli - doctor sub-command (Plan 9 Phase B)', () => {
   // Without DISCORD_TOKEN env, env-vars + token-format checks fail → exit 2.
   // We deliberately rely on the test runner's real env (no token) to get a
   // deterministic fail; if a developer has DISCORD_TOKEN exported in their
@@ -182,7 +182,7 @@ describe('cli — doctor sub-command (Plan 9 Phase B)', () => {
   });
 });
 
-describe('cli — init sub-command (Plan 9 Phase D)', () => {
+describe('cli - init sub-command (Plan 9 Phase D)', () => {
   // Force non-interactive so init takes the deterministic flag-only path.
   const originalStdinTTY = process.stdin.isTTY;
   const originalStdoutTTY = process.stdout.isTTY;
@@ -236,7 +236,7 @@ describe('cli — init sub-command (Plan 9 Phase D)', () => {
   });
 });
 
-describe('cli — migrate sub-command (Plan 9 Phase E)', () => {
+describe('cli - migrate sub-command (Plan 9 Phase E)', () => {
   it('migrate without --from exits 2 and lists available adapters', async () => {
     await runCli(['migrate']);
     expect(process.exitCode).toBe(2);
@@ -255,7 +255,7 @@ describe('cli — migrate sub-command (Plan 9 Phase E)', () => {
   });
 });
 
-describe('cli — migrate --list (Plan 11 Phase A)', () => {
+describe('cli - migrate --list (Plan 11 Phase A)', () => {
   it('migrate --list --help shows the --list flag', async () => {
     await runCli(['migrate', '--list', '--help']);
     const out = stdoutOutput();

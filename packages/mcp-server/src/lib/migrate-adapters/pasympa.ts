@@ -1,5 +1,5 @@
 /**
- * PaSympa Discord MCP adapter — Plan 11 Phase B.
+ * PaSympa Discord MCP adapter - Plan 11 Phase B.
  *
  * RESEARCH NOTE (cutoff date 2026-05-01):
  *
@@ -57,7 +57,7 @@
  *   Known mapping ambiguities (see NAME_MAP `notes` for per-tool detail):
  *     - PaSympa exposes embed-specific helpers (`discord_send_embed`,
  *       `discord_edit_embed`, `discord_send_multiple_embeds`) that fold
- *       into discord-mcp's general `messages_send` / `messages_edit` —
+ *       into discord-mcp's general `messages_send` / `messages_edit` -
  *       confidence: medium because args differ.
  *     - PaSympa's `discord_get_message_with_context` is a context-window
  *       fetch; nearest discord-mcp equivalent is `messages_read` (which
@@ -65,19 +65,19 @@
  *     - PaSympa lumps timeouts into `members` (`discord_timeout_member`)
  *       which discord-mcp models via `members_modify` (the underlying
  *       Discord REST patches `communication_disabled_until`). Confidence:
- *       medium — caller must supply the timestamp.
+ *       medium - caller must supply the timestamp.
  *     - PaSympa's "permissions" module overlays the channel-permissions
  *       REST surface that discord-mcp exposes as
  *       `channels_modify_permissions` / `channels_delete_permissions`.
  *       Confidence: medium for the set/reset variants.
  *     - PaSympa surfaces "audit_permissions" / "copy_permissions" as
- *       higher-level helpers with no 1:1 discord-mcp equivalent — left
+ *       higher-level helpers with no 1:1 discord-mcp equivalent - left
  *       unmapped (caller composes from `channels_modify_permissions`).
  *     - PaSympa's `dm` helpers wrap `users_create_dm` + `messages_send`
  *       under one tool. We map `discord_send_dm` to `messages_send` with
  *       confidence: low and a note pointing at `users_create_dm`.
  *     - `discord_get_server_stats` has no discord-mcp equivalent (PaSympa
- *       computes it client-side from member/channel counts) — unmapped.
+ *       computes it client-side from member/channel counts) - unmapped.
  *
  *   Tools deliberately left out of NAME_MAP:
  *     - High-level helpers without a 1:1 discord-mcp tool:
@@ -98,13 +98,13 @@ import type { MappedTool, MigrationResult, MigrationSource } from './types.js';
 /**
  * Confidence-tagged map from PaSympa tool name → discord-mcp tool name.
  *
- *   high   — name + arg shape are a 1:1 match (verified against the
+ *   high   - name + arg shape are a 1:1 match (verified against the
  *            discord-mcp tool definitions under `packages/mcp-core/src/tools/`).
- *   medium — name maps cleanly but the caller may need to massage args.
- *   low    — best-guess mapping; user MUST verify before use.
+ *   medium - name maps cleanly but the caller may need to massage args.
+ *   low    - best-guess mapping; user MUST verify before use.
  *
  * Entries WITHOUT a discord-mcp equivalent (e.g. `discord_audit_permissions`,
- * `discord_get_server_stats`) are intentionally absent — `migrate()` will
+ * `discord_get_server_stats`) are intentionally absent - `migrate()` will
  * report them under `unmappedTools` so the user sees what didn't translate.
  */
 const NAME_MAP: Record<
@@ -294,7 +294,7 @@ const NAME_MAP: Record<
   discord_list_webhooks: {
     mapped: 'webhooks_list_channel',
     confidence: 'medium',
-    notes: 'or webhooks_list_guild — pick the right scope',
+    notes: 'or webhooks_list_guild - pick the right scope',
   },
   discord_edit_webhook_message: { mapped: 'webhooks_edit_message', confidence: 'high' },
   discord_delete_webhook_message: { mapped: 'webhooks_delete_message', confidence: 'high' },
@@ -335,7 +335,7 @@ const NAME_MAP: Record<
 
 /**
  * Recursively walk `dir` returning every `*.ts` file (excluding
- * `*.test.ts`). Returns [] if `dir` is missing or unreadable — callers
+ * `*.test.ts`). Returns [] if `dir` is missing or unreadable - callers
  * surface the empty result via a `warnings` entry.
  */
 function readDirTsFiles(dir: string): string[] {
@@ -377,7 +377,7 @@ export const pasympaAdapter: MigrationSource = {
     // Signal 1: package.json with PaSympa-shaped `name`. We accept the
     // exact upstream name and any name containing `pasympa` (catches
     // private forks). Failures (missing/unparseable package.json) short-
-    // circuit to false — better to under-detect than false-positive on
+    // circuit to false - better to under-detect than false-positive on
     // every TypeScript repo.
     let nameMatches = false;
     try {
@@ -396,8 +396,8 @@ export const pasympaAdapter: MigrationSource = {
     }
 
     // Signal 2: at least one `*.ts` file under `src/tools/` contains a
-    // `'discord_<x>'` literal. We don't require the directory itself —
-    // a fork might rename it — but we DO require the prefix appearing
+    // `'discord_<x>'` literal. We don't require the directory itself -
+    // a fork might rename it - but we DO require the prefix appearing
     // somewhere under `src/`.
     const candidates = [join(rootPath, 'src', 'tools'), join(rootPath, 'src')];
     for (const dir of candidates) {
@@ -448,7 +448,7 @@ export const pasympaAdapter: MigrationSource = {
 
     if (!toolsDirExists) {
       warnings.push(
-        `src/tools/ not found under ${rootPath} — falling back to a recursive scan of src/`,
+        `src/tools/ not found under ${rootPath} - falling back to a recursive scan of src/`,
       );
     }
 
@@ -473,7 +473,7 @@ export const pasympaAdapter: MigrationSource = {
     }
 
     if (allTools.length === 0) {
-      warnings.push('no discord_* tool names found — adapter may not match this PaSympa version');
+      warnings.push('no discord_* tool names found - adapter may not match this PaSympa version');
     }
 
     const mappedTools: MappedTool[] = [];

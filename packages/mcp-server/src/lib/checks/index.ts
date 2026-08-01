@@ -1,5 +1,5 @@
 /**
- * Doctor check registry — Plan 9 Phase B.
+ * Doctor check registry - Plan 9 Phase B.
  *
  * Each check implements the {@link DoctorCheck} interface and is registered
  * in {@link ALL_CHECKS}. The doctor command iterates the array, filters by

@@ -15,9 +15,9 @@ export default defineTool({
     '- Indicate a long-running operation is producing a response.',
     '',
     '**When NOT to use**:',
-    '- Replacement for actual messages — typing indicator alone does not deliver content.',
+    '- Replacement for actual messages - typing indicator alone does not deliver content.',
     '',
-    '**Returns**: `{ok, channel_id}`. Idempotent — repeat calls extend the indicator.',
+    '**Returns**: `{ok, channel_id}`. Idempotent - repeat calls extend the indicator.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel to type in'),

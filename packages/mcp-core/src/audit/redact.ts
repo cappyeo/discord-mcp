@@ -3,17 +3,17 @@
  *
  * Phase F upgrades the Phase E placeholder with:
  *
- *   1. **Per-tool sensitive-key map** (`SENSITIVE_KEYS_BY_TOOL`) — explicit
+ *   1. **Per-tool sensitive-key map** (`SENSITIVE_KEYS_BY_TOOL`) - explicit
  *      allowlist keyed by tool name. Tools NOT in the map fall back to
  *      the global rules only (length truncation + global key set). This
  *      is intentionally allowlist-style: new tools added in future plans
  *      MUST opt in to per-tool redaction. We prefer leaving an arg in
  *      the audit record over silently dropping it for a tool nobody
  *      knew to add to the map.
- *   2. **Recursive walk** — nested objects and arrays are descended.
+ *   2. **Recursive walk** - nested objects and arrays are descended.
  *      Per-tool keys match at any depth, global sensitive keys match at
  *      any depth, and string truncation applies to every leaf string.
- *   3. **Length-aware redaction marker** —
+ *   3. **Length-aware redaction marker** -
  *      `[REDACTED:${len}ch]` for strings (preserves the size signal) and
  *      `[REDACTED:value]` for non-string scalars / objects so the audit
  *      record still hints at the original shape.
@@ -57,7 +57,7 @@ function isSensitiveKey(lk: string): boolean {
 const SENSITIVE_KEYS_BY_TOOL: Record<string, ReadonlySet<string>> = {
   messages_send: new Set(['content']),
   messages_edit: new Set(['content']),
-  // length only, no IDs leaked — the redactor will replace the array
+  // length only, no IDs leaked - the redactor will replace the array
   // with `[REDACTED:${arr.length}ch]`-style marker via the value path.
   messages_bulk_delete: new Set(['message_ids']),
   // `payload_json` carries the same body as `content`/`embeds`/… as an opaque
@@ -141,7 +141,7 @@ function walk(value: unknown, perToolKeys: ReadonlySet<string>): unknown {
 /**
  * `mcp_pipeline` args are `{steps:[{tool, args}]}`, where each step's `args`
  * are another tool's arguments. Walking them under the pipeline's own key set
- * would audit them in full — `messages_send` run through a pipeline would log
+ * would audit them in full - `messages_send` run through a pipeline would log
  * the content a direct call redacts. So each step's `args` is re-redacted
  * under its own `tool`'s rules; a step whose `tool` is not a string (malformed
  * input, rejected later by validation) has its `args` dropped wholesale.
@@ -176,7 +176,7 @@ function redactPipelineArgs(args: Record<string, unknown>): Record<string, unkno
  *
  * @param args     Tool arguments as received by the middleware (already
  *                 validated). Non-object inputs return an empty record.
- * @param toolName Tool name — used to look up `SENSITIVE_KEYS_BY_TOOL`.
+ * @param toolName Tool name - used to look up `SENSITIVE_KEYS_BY_TOOL`.
  *                 Tools missing from the map only get global redaction
  *                 + length truncation (allowlist semantics).
  */

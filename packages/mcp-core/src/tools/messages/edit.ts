@@ -16,7 +16,7 @@ export default defineTool({
   name: 'messages_edit',
   category: 'messages',
   description:
-    '**Purpose**: Edit a Discord message previously sent by this bot.\n\n**When to use**: correct typos; update status text; rewrite embeds.\n\n**When NOT to use**: edit messages NOT sent by this bot — Discord rejects (403).\n\n**Returns**: `{message_id, channel_id, edited_timestamp}`.',
+    '**Purpose**: Edit a Discord message previously sent by this bot.\n\n**When to use**: correct typos; update status text; rewrite embeds.\n\n**When NOT to use**: edit messages NOT sent by this bot - Discord rejects (403).\n\n**Returns**: `{message_id, channel_id, edited_timestamp}`.',
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the message'),
     message_id: MessageId.describe('Message to edit'),

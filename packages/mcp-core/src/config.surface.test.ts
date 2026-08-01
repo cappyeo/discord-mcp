@@ -13,7 +13,7 @@
  *
  * The resolved object alone is not the surface. A var declared `.optional()`
  * with no default is absent from `loadConfig()`'s result entirely, so renaming
- * or dropping one moved nothing here — the schema's own key set is snapshotted
+ * or dropping one moved nothing here - the schema's own key set is snapshotted
  * separately for that reason, plus an explicit list of the vars read outside
  * the schema.
  */
@@ -49,7 +49,7 @@ describe('config surface', () => {
     // never contains a token-shaped string.
     const {
       DISCORD_TOKEN: _token,
-      // Derived from package.json — asserted in version.test.ts. Excluded here
+      // Derived from package.json - asserted in version.test.ts. Excluded here
       // so a routine version bump does not churn this snapshot, which exists to
       // catch renames and changed defaults.
       OTEL_SERVICE_VERSION: _version,
@@ -91,7 +91,7 @@ describe('config surface', () => {
   });
 
   it('reads every documented variable from the environment it is given', () => {
-    // loadConfig must not fall through to process.env for anything — the
+    // loadConfig must not fall through to process.env for anything - the
     // doctor command and the contract tests both depend on being able to
     // evaluate a hypothetical environment.
     const config = loadConfig({ ...MINIMAL_ENV, LOG_LEVEL: 'debug', MCP_BULKHEAD_LIMIT: '7' });

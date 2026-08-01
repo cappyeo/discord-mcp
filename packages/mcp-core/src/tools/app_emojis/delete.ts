@@ -10,7 +10,7 @@ export default defineTool({
   category: 'app_emojis',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete an application emoji. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete an application emoji. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Retire an obsolete app emoji.',

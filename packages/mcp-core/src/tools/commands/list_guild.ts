@@ -54,7 +54,7 @@ export default defineTool({
     return dualResult({
       text:
         `**${cmds.length} command(s)**:\n` +
-        cmds.map((c) => `- /${c.name} — ${c.description} (\`cmd:${c.id}\`)`).join('\n'),
+        cmds.map((c) => `- /${c.name} - ${c.description} (\`cmd:${c.id}\`)`).join('\n'),
       data: { commands: cmds, count: cmds.length },
     });
   },

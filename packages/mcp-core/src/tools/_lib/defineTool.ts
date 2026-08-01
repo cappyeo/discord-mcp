@@ -25,7 +25,7 @@ export interface ToolDefinition<I extends Record<string, z.ZodTypeAny>, O> {
  * `(ToolClass as { __toolMetadata?: ToolMetadataStatic }).__toolMetadata`.
  *
  * Sapphire piece loading reads instance fields (set by the constructor),
- * not statics — so this is purely additive and does not affect runtime.
+ * not statics - so this is purely additive and does not affect runtime.
  */
 export interface ToolMetadataStatic {
   name: string;
@@ -44,7 +44,7 @@ export interface ToolMetadataStatic {
  *
  * This lives HERE, at the point the result is produced, rather than in
  * `server.ts`'s `invokeTool`. When it lived in invokeTool it validated only the
- * handful of tools reachable through the MCP contract test — the other ~190
+ * handful of tools reachable through the MCP contract test - the other ~190
  * tool tests instantiate the tool class and call `.run()` directly, bypassing
  * the dispatcher entirely. A guard that covers 7 of 191 tools reports safety it
  * does not provide.
@@ -52,7 +52,7 @@ export interface ToolMetadataStatic {
  * Test-only: a production call must never fail because of a schema mismatch
  * that can be corrected in a patch. Since v0.13.0 publishes these schemas and
  * SDK >= 1.20 clients validate against them, a mismatch is now a client-side
- * throw on a successful call — which is exactly why it must be caught here.
+ * throw on a successful call - which is exactly why it must be caught here.
  */
 const ENFORCE_OUTPUT_SCHEMA = process.env.VITEST === 'true';
 
@@ -116,7 +116,7 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
     }
   }
 
-  // Sapphire reads `name` from constructor.options at registration time —
+  // Sapphire reads `name` from constructor.options at registration time -
   // we set the static name as a hint only.
   Object.defineProperty(GeneratedTool, 'name', { value: def.name });
 
@@ -135,7 +135,7 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
     } satisfies ToolMetadataStatic,
   });
 
-  // Cast to `typeof Tool` — GeneratedTool is concrete but defineTool returns the
+  // Cast to `typeof Tool` - GeneratedTool is concrete but defineTool returns the
   // abstract base type so callers can instantiate via the concrete subclass.
   return GeneratedTool as unknown as typeof Tool;
 }

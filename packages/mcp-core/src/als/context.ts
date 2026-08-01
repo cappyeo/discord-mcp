@@ -18,7 +18,7 @@ export function runWithCtx<T>(ctx: ToolRequestContext, fn: () => Promise<T>): Pr
 export function getCtx(): ToolRequestContext {
   const ctx = als.getStore();
   if (ctx === undefined) {
-    throw new Error('No active tool request context — getCtx() called outside runWithCtx().');
+    throw new Error('No active tool request context - getCtx() called outside runWithCtx().');
   }
   return ctx;
 }

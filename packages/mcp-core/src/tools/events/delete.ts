@@ -10,7 +10,7 @@ export default defineTool({
   category: 'events',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a scheduled event. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a scheduled event. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**When to use**:',
     '- Cancel and remove a scheduled event entirely (vs. setting status=4 which keeps the record).',

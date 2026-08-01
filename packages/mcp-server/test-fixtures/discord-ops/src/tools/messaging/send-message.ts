@@ -1,4 +1,4 @@
-// FIXTURE: synthetic discord-ops-style code for adapter testing — not real code.
+// FIXTURE: synthetic discord-ops-style code for adapter testing - not real code.
 // The adapter's detect() looks for: (a) `defineTool(` call AND (b) a
 // `category: '<cat>'` field somewhere in the same file. Tool names are
 // extracted from `name: '<known>'` literals and intersected against the
@@ -17,7 +17,7 @@ function defineTool(t: ToolDefinition): ToolDefinition {
   return t;
 }
 
-// Synthetic Zod stub — fixture does not depend on the real zod package
+// Synthetic Zod stub - fixture does not depend on the real zod package
 // at type-check time; the adapter only reads source text.
 const inputSchema = { _def: 'fixture' } as unknown as ZodTypeAny;
 

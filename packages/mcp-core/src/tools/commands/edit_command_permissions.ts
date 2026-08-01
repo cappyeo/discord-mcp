@@ -39,12 +39,12 @@ export default defineTool({
         }),
       )
       .max(100)
-      .describe('Permission overrides — max 100 per command'),
+      .describe('Permission overrides - max 100 per command'),
     bearer_token: z
       .string()
       .min(1)
       .describe(
-        'Required user OAuth2 access token (NOT bot token). Treated as a credential — do not log.',
+        'Required user OAuth2 access token (NOT bot token). Treated as a credential - do not log.',
       ),
   },
   outputSchema: {
@@ -73,7 +73,7 @@ export default defineTool({
     // Build a one-shot REST instance with the user token + Bearer prefix.
     const { REST } = await import('@discordjs/rest');
     // makeRequest cast: test config (msw) and runtime fetch have slightly different
-    // signatures (undici vs undici-types). Bridge via unknown — runtime semantics are identical.
+    // signatures (undici vs undici-types). Bridge via unknown - runtime semantics are identical.
     const altRest = new REST({
       version: '10',
       authPrefix: 'Bearer',

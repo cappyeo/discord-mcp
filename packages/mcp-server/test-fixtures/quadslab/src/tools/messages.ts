@@ -1,6 +1,6 @@
-// FIXTURE: synthetic quadslab-style code for adapter testing — not real code.
+// FIXTURE: synthetic quadslab-style code for adapter testing - not real code.
 // The adapter looks for: (a) `export const <category>Tools` array AND
-// (b) `export function execute<Category>Tool` — both must appear in the
+// (b) `export function execute<Category>Tool` - both must appear in the
 // same file. Tool names are extracted from `name: '<known>'` literals
 // and intersected against the adapter's KNOWN_QUADSLAB_TOOLS set.
 
@@ -23,7 +23,7 @@ export const messageTools = [
 ];
 
 export async function executeMessageTool(name: string): Promise<unknown> {
-  // Synthetic stub — no real handler. The detection signal needs only
+  // Synthetic stub - no real handler. The detection signal needs only
   // the function name to match `execute<Category>Tool`.
   return { ok: true, name };
 }

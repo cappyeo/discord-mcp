@@ -22,7 +22,7 @@ export default defineTool({
     '**When to use**:',
     '- Tweak keyword list, change actions, toggle enabled.',
     '',
-    '**Note**: `trigger_type` is immutable — to change it, delete and recreate.',
+    '**Note**: `trigger_type` is immutable - to change it, delete and recreate.',
     '',
     '**Returns**: `{id, name, trigger_type, enabled}`.',
   ].join('\n'),

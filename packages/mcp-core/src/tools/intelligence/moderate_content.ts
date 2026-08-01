@@ -30,7 +30,7 @@ export default defineTool({
   name: 'intelligence_moderate_content',
   category: 'intelligence',
   description:
-    '**Purpose**: Apply a plain-language moderation policy to a piece of text using the client\'s LLM. No Discord API call — purely a moderation utility.\n\n**When to use**: pre-check user-submitted content; second-opinion on AutoMod decisions; classify ambiguous messages.\n\n**Returns**: `{decision: "allow"|"flag"|"block", reasons[], confidence, sampling_used}`.',
+    '**Purpose**: Apply a plain-language moderation policy to a piece of text using the client\'s LLM. No Discord API call - purely a moderation utility.\n\n**When to use**: pre-check user-submitted content; second-opinion on AutoMod decisions; classify ambiguous messages.\n\n**Returns**: `{decision: "allow"|"flag"|"block", reasons[], confidence, sampling_used}`.',
   inputSchema: {
     content: z.string().min(1).max(4000).describe('Text to moderate'),
     policy: z
@@ -70,7 +70,7 @@ export default defineTool({
         'moderate',
       );
       return dualResult({
-        text: '[sampling unavailable — host LLM should moderate using policy]',
+        text: '[sampling unavailable - host LLM should moderate using policy]',
         data,
       });
     }
@@ -102,7 +102,7 @@ export default defineTool({
       });
     }
     return dualResult({
-      text: '[parse error — defaulting to flag]',
+      text: '[parse error - defaulting to flag]',
       data: {
         decision: 'flag' as const,
         reasons: ['LLM returned non-JSON; review manually'],

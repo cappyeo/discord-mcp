@@ -13,13 +13,13 @@ import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 Switch from another Discord MCP server with a guided three-command flow:
 
-1. `discord-mcp migrate --list` — see available adapters.
-2. `discord-mcp migrate --from <id> --source <path>` — get a tool-by-tool mapping report.
-3. `discord-mcp init --client <name>` — generate the client config for the new server.
+1. `discord-mcp migrate --list` - see available adapters.
+2. `discord-mcp migrate --from <id> --source <path>` - get a tool-by-tool mapping report.
+3. `discord-mcp init --client <name>` - generate the client config for the new server.
 
 The migration framework is read-only and best-effort: it walks your old server's
 source tree, extracts every tool name it can find, and reports which ones map
-onto discord-mcp's 192-tool surface — with explicit confidence levels and
+onto discord-mcp's 192-tool surface - with explicit confidence levels and
 explanatory notes on every non-obvious entry.
 
 ## Available adapters
@@ -29,7 +29,7 @@ explanatory notes on every non-obvious entry.
     { title: 'PaSympa', href: '/discord-mcp/migrate/pasympa/', description: 'TypeScript, ~91 tools, discord_* prefix.' },
     { title: 'quadslab', href: '/discord-mcp/migrate/quadslab/', description: '@quadslab.io, ~138 tools, includes MCP Resources surface.' },
     { title: 'discord-ops', href: '/discord-mcp/migrate/discord-ops/', description: 'Multi-guild routing, dry-run mode, tool profiles, ~49 tools.' },
-    { title: 'Hubdustry', href: '/discord-mcp/migrate/hubdustry/', description: 'Reference adapter (Go MCP, non-Discord) — framework smoke test.' },
+    { title: 'Hubdustry', href: '/discord-mcp/migrate/hubdustry/', description: 'Reference adapter (Go MCP, non-Discord) - framework smoke test.' },
   ]}
 />
 
@@ -51,7 +51,7 @@ convention, and the cross-detection test pattern every adapter must pass.
    ```
 
    Prints every adapter's `id`, description, homepage, languages, and
-   estimated tool count — pick the one matching your old server.
+   estimated tool count - pick the one matching your old server.
 
 2. **Run the migration report.**
 
@@ -61,11 +61,11 @@ convention, and the cross-detection test pattern every adapter must pass.
 
    Outputs a structured report with three sections:
 
-   - **mapped tools** — old tool name, new discord-mcp tool name, confidence
+   - **mapped tools** - old tool name, new discord-mcp tool name, confidence
      (`high` / `medium` / `low`), and per-entry notes for non-obvious mappings.
-   - **unmapped tools** — old tools with no discord-mcp equivalent, listed by
+   - **unmapped tools** - old tools with no discord-mcp equivalent, listed by
      name so you can search your agent prompts for usages.
-   - **manual review** — items the adapter recognised but couldn't auto-map;
+   - **manual review** - items the adapter recognised but couldn't auto-map;
      each carries a reason and (when known) a suggested discord-mcp tool.
 
    Add `--json` to pipe the report into `jq` or stash it as a CI artifact.
@@ -84,10 +84,10 @@ convention, and the cross-detection test pattern every adapter must pass.
 
 ## What "migration" means here
 
-- Tool name mapping — which old tool corresponds to which discord-mcp tool.
+- Tool name mapping - which old tool corresponds to which discord-mcp tool.
 - Confidence levels (`high` / `medium` / `low`) with explanatory notes on every
   medium- and low-confidence entry.
-- Surface-area gap analysis — what the old server exposed that discord-mcp
+- Surface-area gap analysis - what the old server exposed that discord-mcp
   doesn't (yet), so you know what to drop from agent prompts.
 
 What it does NOT do:
@@ -101,9 +101,9 @@ What it does NOT do:
 
 ## See also
 
-- [discord-mcp tools (192)](/discord-mcp/tools/) — the auto-generated tool
+- [discord-mcp tools (192)](/discord-mcp/tools/) - the auto-generated tool
   reference. Use this to look up the destination shape before swapping.
-- [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate) — full flag
+- [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate) - full flag
   surface, exit codes, and the JSON envelope shape.
-- [Adapter authoring guide](/discord-mcp/migrate/authoring/) — for community
+- [Adapter authoring guide](/discord-mcp/migrate/authoring/) - for community
   contributors adding support for new source servers.

@@ -255,7 +255,7 @@ export interface BuildServerResult {
  * The envelope every error result carries (see errors/format.ts `makeError`).
  * Published as the second arm of each tool's outputSchema so a validating
  * client accepts an `isError: true` result instead of throwing on it.
- * Deliberately open — individual error classes add their own fields
+ * Deliberately open - individual error classes add their own fields
  * (`retry_after_ms`, `issues`, `missing`, `preview`, …).
  */
 const ERROR_ENVELOPE_JSON_SCHEMA = {
@@ -279,7 +279,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   const preconditionStore = new PreconditionStore();
   const resourceStore = new ResourceStore();
 
-  // defineTool returns `typeof Tool` (abstract) — cast to concrete for Sapphire's loadPiece API.
+  // defineTool returns `typeof Tool` (abstract) - cast to concrete for Sapphire's loadPiece API.
   type ConcreteTool = new (...args: ConstructorParameters<typeof Tool>) => Tool;
   await toolStore.loadPiece({
     name: 'messages_send',
@@ -1076,7 +1076,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   //     validation/precondition errors and middleware overhead).
   //   - default guild: fills an omitted top-level guild_id before validation.
   //   - validate / precondition: argument and policy gates.
-  //   - audit: INNERMOST per plan §10 critical rule 2 — only fires for
+  //   - audit: INNERMOST per plan §10 critical rule 2 - only fires for
   //     actually-attempted operations. Blocked operations are visible
   //     in telemetry already; audit shouldn't generate noise for them.
   //   - category: the MCP_CATEGORIES allowlist, after validate (so args are
@@ -1096,7 +1096,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     {
       capabilities: { tools: {}, resources: { subscribe: true } },
       // Injected into the agent's system context on every initialize. Keep it
-      // short and true — it is read by the model before any tools/list.
+      // short and true - it is read by the model before any tools/list.
       instructions: [
         'Discord MCP server: 192 tools over the Discord REST API (messages, channels,',
         'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
@@ -1143,7 +1143,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         jsonSchema.required = jsonSchema.required.filter((field) => field !== 'guild_id');
       }
       // `__confirm` is deliberately absent from every tool's zod inputSchema
-      // (it is an authorization flag, not a handler parameter — handlers must
+      // (it is an authorization flag, not a handler parameter - handlers must
       // never see it). But z.toJSONSchema emits `additionalProperties: false`,
       // so a spec-conforming client cannot legally send it, and an agent
       // reading tools/list has no way to discover it. Advertise it here, on
@@ -1167,7 +1167,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       // clients could not use it and nothing validated against it. Publish it
       // as a union with the error envelope: SDK >=1.20 clients validate
       // `structuredContent` even when `isError` is true, and our error results
-      // carry the envelope shape rather than the success shape — emitting the
+      // carry the envelope shape rather than the success shape - emitting the
       // success schema alone turns every error into a client-side throw.
       if (tool.outputSchema !== undefined) {
         entry.outputSchema = {
@@ -1201,7 +1201,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     return result;
   };
 
-  // Sampling wrapper — calls server.createMessage(params) per MCP spec.
+  // Sampling wrapper - calls server.createMessage(params) per MCP spec.
   interface SamplingMessage {
     role: 'user' | 'assistant';
     content: { type: 'text'; text: string };
@@ -1229,7 +1229,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       server as unknown as { createMessage?: (p: SamplingParams) => Promise<SamplingResult> }
     ).createMessage;
     if (typeof fn !== 'function') {
-      throw new Error('SDK does not expose createMessage — sampling unavailable');
+      throw new Error('SDK does not expose createMessage - sampling unavailable');
     }
     return fn.call(server, params);
   };
@@ -1253,7 +1253,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         ['toolPiece', tool],
         ['toolPreconditions', tool.preconditions],
         // Pre-validation payload. validateMiddleware replaces ctx.args with
-        // the zod-parsed object, which strips keys no inputSchema declares —
+        // the zod-parsed object, which strips keys no inputSchema declares -
         // including the `__confirm` authorization flag. This is the only
         // surviving copy, and it also covers mcp_pipeline (which re-enters
         // invokeTool per step). Read by ConfirmRequired.
@@ -1276,7 +1276,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       // escape to the runner rather than be reshaped into a plausible-looking
       // INTERNAL_ERROR that no assertion would notice.
       if (e instanceof OutputSchemaViolation) throw e;
-      // Whitelisted projection — never `{ err: e }`. A DiscordAPIError carries
+      // Whitelisted projection - never `{ err: e }`. A DiscordAPIError carries
       // `requestBody` and the full request URL, so the default pino serializer
       // writes webhook/interaction tokens (which live in the URL path) and the
       // unredacted request body to stderr at the default log level.

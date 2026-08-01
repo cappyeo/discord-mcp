@@ -1,5 +1,5 @@
 /**
- * `otel-reachable` check — Plan 9 Phase C.
+ * `otel-reachable` check - Plan 9 Phase C.
  *
  * Probes the configured OTLP endpoint with an HTTP HEAD request to
  * `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`. We treat 200/204/405 as
@@ -10,7 +10,7 @@
  * Privacy: `OTEL_EXPORTER_OTLP_HEADERS` value is NEVER included in the
  * result (it can contain bearer tokens, API keys, etc.). We surface
  * only a count when relevant. The endpoint itself is reported with any
- * inline basic-auth credentials stripped — collector URLs commonly
+ * inline basic-auth credentials stripped - collector URLs commonly
  * carry them (`https://user:APIKEY@otlp.example.com`) and `doctor
  * --json` is exactly what people paste into issues and CI logs.
  *
@@ -29,7 +29,7 @@ const REQUEST_TIMEOUT_MS = 3000;
 /**
  * Count the number of comma-separated key=value pairs in
  * OTEL_EXPORTER_OTLP_HEADERS without exposing any value. Used only for
- * surfacing `headers_configured: <n>` in details — never the raw string.
+ * surfacing `headers_configured: <n>` in details - never the raw string.
  */
 function countHeaders(raw: string | undefined): number {
   if (raw === undefined || raw === '') {
@@ -43,7 +43,7 @@ function countHeaders(raw: string | undefined): number {
 
 /**
  * Blank out `user:password@` from an endpoint before it is reported.
- * Host/port stay visible — that is the diagnostically useful part.
+ * Host/port stay visible - that is the diagnostically useful part.
  * The credential-free case returns the raw string so the reported value
  * stays byte-identical to what the operator configured (`new URL()`
  * normalization would otherwise add a trailing slash).
@@ -67,7 +67,7 @@ export const otelReachableCheck: DoctorCheck = {
       return {
         id: 'otel-reachable',
         status: 'warn',
-        message: 'cannot verify — config invalid',
+        message: 'cannot verify - config invalid',
       };
     }
 
@@ -91,7 +91,7 @@ export const otelReachableCheck: DoctorCheck = {
     // Trim trailing slash so `${endpoint}/v1/traces` doesn't double-up.
     const base = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
     const url = `${base}/v1/traces`;
-    // Reported form only — the request itself uses `url`, credentials included.
+    // Reported form only - the request itself uses `url`, credentials included.
     const safeEndpoint = redactEndpoint(endpoint);
     const headersConfigured = countHeaders(config.OTEL_EXPORTER_OTLP_HEADERS);
 
@@ -105,7 +105,7 @@ export const otelReachableCheck: DoctorCheck = {
       });
 
       // 200/204 → server explicitly accepted HEAD.
-      // 405 → "method not allowed" — server is alive but only accepts POST,
+      // 405 → "method not allowed" - server is alive but only accepts POST,
       // which is what the OTLP HTTP exporter actually uses. Treat as ok.
       if (res.status === 200 || res.status === 204 || res.status === 405) {
         return {
@@ -121,14 +121,14 @@ export const otelReachableCheck: DoctorCheck = {
         };
       }
 
-      // Other 4xx — endpoint exists but rejected our request. Likely an
+      // Other 4xx - endpoint exists but rejected our request. Likely an
       // auth/header issue; surface as warn so users can investigate but
       // don't block.
       if (res.status >= 400 && res.status < 500) {
         return {
           id: 'otel-reachable',
           status: 'warn',
-          message: 'endpoint reachable but rejected — check headers/auth/path',
+          message: 'endpoint reachable but rejected - check headers/auth/path',
           details: {
             endpoint: safeEndpoint,
             method: 'HEAD',
@@ -138,7 +138,7 @@ export const otelReachableCheck: DoctorCheck = {
         };
       }
 
-      // 5xx — server is up but unhealthy. Warn (recoverable).
+      // 5xx - server is up but unhealthy. Warn (recoverable).
       if (res.status >= 500 && res.status < 600) {
         return {
           id: 'otel-reachable',
@@ -153,7 +153,7 @@ export const otelReachableCheck: DoctorCheck = {
         };
       }
 
-      // 1xx/3xx — unusual. Surface as warn with status.
+      // 1xx/3xx - unusual. Surface as warn with status.
       return {
         id: 'otel-reachable',
         status: 'warn',
@@ -166,7 +166,7 @@ export const otelReachableCheck: DoctorCheck = {
         },
       };
     } catch (e) {
-      // ECONNREFUSED, ENOTFOUND, AbortError (timeout) — collector unreachable.
+      // ECONNREFUSED, ENOTFOUND, AbortError (timeout) - collector unreachable.
       // This is a fail (not warn) because if you've enabled OTEL_ENABLED and
       // set an endpoint, you almost certainly want spans to actually export.
       const message = e instanceof Error ? e.message : String(e);

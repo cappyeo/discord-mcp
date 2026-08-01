@@ -24,7 +24,7 @@ export default defineTool({
     '- Rebrand or re-tag an existing sticker.',
     '',
     '**When NOT to use**:',
-    '- Replacing the sticker file — Discord does not allow editing the file; create a new one and delete the old.',
+    '- Replacing the sticker file - Discord does not allow editing the file; create a new one and delete the old.',
     '',
     '**Returns**: `{id, name, description, tags, format_type, available}`.',
   ].join('\n'),

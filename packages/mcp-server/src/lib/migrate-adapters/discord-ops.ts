@@ -1,5 +1,5 @@
 /**
- * discord-ops Discord MCP adapter — Plan 11 Phase D.
+ * discord-ops Discord MCP adapter - Plan 11 Phase D.
  *
  * RESEARCH NOTE (cutoff date 2026-05-01):
  *
@@ -30,7 +30,7 @@
  *     system      3   health_check, list_projects, list_bots
  *     ──────────────────
  *     total       ~49 (README claims "49 tools across full profile";
- *                      tools/index.ts aggregation enumerates 48 — within
+ *                      tools/index.ts aggregation enumerates 48 - within
  *                      single-tool drift, accepted as upstream measurement
  *                      noise)
  *
@@ -64,7 +64,7 @@
  *          `discord_*` literals (no `defineTool`, no `category:`).
  *        - quadslab uses `<x>Tools = [...]` arrays + `execute<X>Tool`
  *          functions (no `defineTool`, no per-tool `category:` field).
- *        - Hubdustry uses Go (`mcp.NewTool` calls in `*.go`) — wholly
+ *        - Hubdustry uses Go (`mcp.NewTool` calls in `*.go`) - wholly
  *          disjoint file extension.
  *
  *   ## Architectural mismatches
@@ -74,7 +74,7 @@
  *   `migrate()` warnings, but DO NOT appear as NAME_MAP entries because
  *   there's nothing to translate at the tool level:
  *
- *   1. **Multi-guild project routing** —
+ *   1. **Multi-guild project routing** -
  *      discord-ops accepts `{ project: 'my-app', channel: 'builds' }` and
  *      resolves to a `(guild_id, channel_id)` pair via `~/.discord-ops.json`.
  *      The TOOL set is the same; only the input shape differs. One discord-mcp
@@ -83,20 +83,20 @@
  *      Separate processes are only needed for different tokens or explicit
  *      isolation boundaries.
  *
- *   2. **Tool profiles (slim cuts for token budget)** —
+ *   2. **Tool profiles (slim cuts for token budget)** -
  *      discord-ops ships profiles like `monitoring` (7 tools), `readonly`
  *      (7), `moderation` (7), `messaging` (5), `channels` (7), `webhooks`
  *      (6), and `full` (49). They reduce schema overhead by hiding tools
  *      from the client. discord-mcp ships the full surface (192 tools at
  *      Phase D) and filters the advertised registry server-side with
  *      `MCP_CATEGORIES`. This isn't a translation
- *      problem — there's no source code for "the lite profile" that
+ *      problem - there's no source code for "the lite profile" that
  *      needs migrating. If a discord-ops fork exposes profile-variant
  *      tool names like `messages_lite` / `messages_full`, NAME_MAP folds
  *      ALL variants onto the same discord-mcp tool with `confidence: medium`
  *      and a note pointing back at this section.
  *
- *   3. **Dry-run mode** —
+ *   3. **Dry-run mode** -
  *      discord-ops uses `DISCORD_OPS_DRY_RUN=1` to short-circuit destructive
  *      calls before they hit the Discord REST API. `MCP_DRY_RUN=true` only
  *      gates discord-mcp's 29 `confirm_required` tools; other writes can
@@ -108,11 +108,11 @@
  *       templates (named message bodies stored in `~/.discord-ops.json`),
  *       NOT Discord guild templates. They have no discord-mcp equivalent
  *       (a future Plan would add a "saved messages" feature). Left
- *       unmapped — see unmappedTools.
+ *       unmapped - see unmappedTools.
  *     - discord-ops's `notify_owners` looks up the project's owner snowflake
  *       and DMs them. Maps to `messages_send` with confidence: low and a
  *       note about the multi-step compose (`users_create_dm` first).
- *     - discord-ops's `purge_messages` is a search + bulk_delete helper —
+ *     - discord-ops's `purge_messages` is a search + bulk_delete helper -
  *       maps to `messages_bulk_delete` with confidence: low and a note.
  *     - discord-ops's `set_permissions` is the channel-overwrite endpoint;
  *       maps to `channels_modify_permissions` with confidence: high.
@@ -126,12 +126,12 @@
  *       not as tools. Left unmapped.
  *     - discord-ops's `create_invite` / `get_invites` map to
  *       `invites_create_channel` / `invites_list_channel` (note `get_invites`
- *       in discord-ops returns guild-wide via per-channel fanout —
+ *       in discord-ops returns guild-wide via per-channel fanout -
  *       confidence: medium).
  *
  *   Tools deliberately left out of NAME_MAP (intentional unmapped):
- *     - System: health_check, list_projects, list_bots — discord-ops-only
- *     - Templates: send_template, list_templates — client-side feature
+ *     - System: health_check, list_projects, list_bots - discord-ops-only
+ *     - Templates: send_template, list_templates - client-side feature
  *
  *   Repo state at cutoff: bookedsolidtech/discord-ops main branch was
  *   reachable via raw GitHub fetches; per-file inspection succeeded for
@@ -153,15 +153,15 @@ import type { MappedTool, MigrationResult, MigrationSource } from './types.js';
 /**
  * Confidence-tagged map from discord-ops tool name → discord-mcp tool name.
  *
- *   high   — name + arg shape are a 1:1 match (verified against
+ *   high   - name + arg shape are a 1:1 match (verified against
  *            `packages/mcp-core/src/tools/<category>/`).
- *   medium — name maps cleanly but the caller may need to massage args
+ *   medium - name maps cleanly but the caller may need to massage args
  *            (or, in profile-variant cases, multiple discord-ops names
  *            collapse onto a single discord-mcp tool).
- *   low    — best-guess mapping; user MUST verify.
+ *   low    - best-guess mapping; user MUST verify.
  *
  * Entries WITHOUT a discord-mcp equivalent (system/templates) are
- * intentionally absent — `migrate()` reports them under `unmappedTools`.
+ * intentionally absent - `migrate()` reports them under `unmappedTools`.
  */
 const NAME_MAP: Record<
   string,
@@ -191,7 +191,7 @@ const NAME_MAP: Record<
   // Profile-variant aliases (discord-ops's `messaging` profile cuts).
   // ALL profile variants collapse onto the same discord-mcp tool with
   // confidence: medium because discord-mcp ships the full surface and
-  // the agent filters at runtime — see "Architectural mismatches" #2 in
+  // the agent filters at runtime - see "Architectural mismatches" #2 in
   // the file header.
   messages_lite: {
     mapped: 'messages_send',
@@ -237,7 +237,7 @@ const NAME_MAP: Record<
     mapped: 'invites_list_channel',
     confidence: 'medium',
     notes:
-      'discord-ops aggregates guild-wide; discord-mcp invites are scoped per-channel — iterate channels',
+      'discord-ops aggregates guild-wide; discord-mcp invites are scoped per-channel - iterate channels',
   },
 
   // members
@@ -276,7 +276,7 @@ const NAME_MAP: Record<
   list_webhooks: {
     mapped: 'webhooks_list_channel',
     confidence: 'medium',
-    notes: 'or webhooks_list_guild — pick the right scope',
+    notes: 'or webhooks_list_guild - pick the right scope',
   },
   edit_webhook: { mapped: 'webhooks_modify', confidence: 'high' },
   delete_webhook: { mapped: 'webhooks_delete', confidence: 'high' },
@@ -295,7 +295,7 @@ const NAME_MAP: Record<
  * false-positive-prone `[a-z_]+` matching.
  *
  * Includes the profile-variant aliases (`messages_lite`, `messages_full`)
- * even though they aren't in the main upstream — they show up in private
+ * even though they aren't in the main upstream - they show up in private
  * forks that customise the profile catalog and must still resolve cleanly.
  */
 const KNOWN_DISCORD_OPS_TOOLS: ReadonlySet<string> = new Set([
@@ -357,7 +357,7 @@ const KNOWN_DISCORD_OPS_TOOLS: ReadonlySet<string> = new Set([
   'execute_webhook',
   // audit
   'query_audit_log',
-  // system (intentionally unmapped — see file header)
+  // system (intentionally unmapped - see file header)
   'health_check',
   'list_projects',
   'list_bots',
@@ -406,7 +406,7 @@ export const discordOpsAdapter: MigrationSource = {
     // Signal 1: package.json with discord-ops-shaped `name`. Accept the
     // exact upstream name and any name containing `discord-ops` (covers
     // private forks). Any IO failure on package.json is a hard rejection
-    // — better to under-detect than false-positive on every TS repo.
+    // - better to under-detect than false-positive on every TS repo.
     let nameMatches = false;
     try {
       const pkgPath = join(rootPath, 'package.json');
@@ -478,13 +478,13 @@ export const discordOpsAdapter: MigrationSource = {
 
     if (!toolsDirExists) {
       warnings.push(
-        `src/tools/ not found under ${rootPath} — falling back to a recursive scan of src/`,
+        `src/tools/ not found under ${rootPath} - falling back to a recursive scan of src/`,
       );
     }
 
     // Walk `*.ts` and extract every `name: '<known_discord_ops_tool>'`
     // literal. Generic snake_case matching would false-positive on
-    // variable names — intersecting against KNOWN_DISCORD_OPS_TOOLS keeps
+    // variable names - intersecting against KNOWN_DISCORD_OPS_TOOLS keeps
     // the result high-precision.
     for (const file of files) {
       let content: string;
@@ -505,7 +505,7 @@ export const discordOpsAdapter: MigrationSource = {
 
     if (allTools.length === 0) {
       warnings.push(
-        'no discord-ops tool names found — adapter may not match this discord-ops version',
+        'no discord-ops tool names found - adapter may not match this discord-ops version',
       );
     }
 
@@ -534,14 +534,14 @@ export const discordOpsAdapter: MigrationSource = {
     }
 
     // Architectural-mismatch reminder. ALWAYS emitted, even for an empty
-    // fixture — these patterns apply to any discord-ops migration regardless
+    // fixture - these patterns apply to any discord-ops migration regardless
     // of NAME_MAP coverage. See file-level "## Architectural mismatches".
     if (allTools.length > 0) {
       warnings.push(
         'multi-guild project routing changes shape: one discord-mcp process can reach every guild visible to its bot token; use guild_id or DISCORD_DEFAULT_GUILD_ID, and split processes only for different tokens or isolation',
       );
       warnings.push(
-        'tool profiles (lite/full/monitoring/...) are not migrated directly — translate them to the server-side MCP_CATEGORIES allowlist and verify tools/list',
+        'tool profiles (lite/full/monitoring/...) are not migrated directly - translate them to the server-side MCP_CATEGORIES allowlist and verify tools/list',
       );
       warnings.push(
         'dry-run is not equivalent: MCP_DRY_RUN=true gates only the 29 confirm_required tools; inventory ordinary writes and use restricted permissions or a test guild for the rest',

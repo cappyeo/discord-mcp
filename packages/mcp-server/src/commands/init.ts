@@ -1,5 +1,5 @@
 /**
- * `discord-mcp init` — Plan 9 Phase D.
+ * `discord-mcp init` - Plan 9 Phase D.
  *
  * Replaces the Phase A placeholder. Bootstraps an MCP client config
  * snippet that the user can paste into their client's config file (or
@@ -14,7 +14,7 @@
  *   3. Resolve the gateway flag (`--gateway` OR interactive yes/no OR
  *      false by default).
  *   4. Pick a serverPath/serverArgs strategy. We use the current Node
- *      binary + the resolved CLI script — works for any installation
+ *      binary + the resolved CLI script - works for any installation
  *      (workspace, global npm, npx) at the cost of an absolute path
  *      that may need editing if the user later moves the project.
  *      The output explicitly tells the user how to switch to
@@ -24,7 +24,7 @@
  *      protection) or print to stdout / structured payload.
  *
  * Token redaction: in pretty mode the snippet text contains whatever
- * `--token` was passed — including raw secrets. The CLI flag's help
+ * `--token` was passed - including raw secrets. The CLI flag's help
  * text warns about this. The placeholder default avoids the issue
  * entirely. We do NOT echo the token in any other log line.
  */
@@ -60,7 +60,7 @@ const TOKEN_PLACEHOLDER = '${env:DISCORD_TOKEN}';
  * output may reshape directory layout; resolving via URL is portable
  * across both source-mode (vitest) and bundled-mode (production).
  *
- * `fileURLToPath` — NOT `URL.pathname`. A pathname is percent-encoded
+ * `fileURLToPath` - NOT `URL.pathname`. A pathname is percent-encoded
  * (a path with a space or a non-ASCII segment comes out as `%20` /
  * `%C3%B6`) and on Windows it carries a leading slash with forward
  * slashes (`/C:/Users/...`). Both forms are unspawnable by the MCP

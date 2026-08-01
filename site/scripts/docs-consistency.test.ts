@@ -128,7 +128,7 @@ describe('confirmation.mdx enumerates the real confirm-gated tool set', () => {
     for (const name of mustWarnAbout) {
       // Guard the guard: if one of these ever becomes gated, this list is stale.
       expect(registered.has(name), `${name} should be a registered tool`).toBe(true);
-      expect(gated.has(name), `${name} is now gated — update the NOT-gated callout`).toBe(false);
+      expect(gated.has(name), `${name} is now gated - update the NOT-gated callout`).toBe(false);
       expect(mdx.includes(`\`${name}\``), `confirmation.mdx must name \`${name}\``).toBe(true);
     }
   });

@@ -23,7 +23,7 @@ export default defineTool({
     '',
     '**When NOT to use**:',
     '- Anchored thread on an existing message → use `messages_create_thread`.',
-    '- Plain text channels — Discord rejects.',
+    '- Plain text channels - Discord rejects.',
     '',
     '**Body shape**: requires nested `message` (the initial post). At least one of `message.content`, `message.embeds`, or `message.components` must be present.',
     '',

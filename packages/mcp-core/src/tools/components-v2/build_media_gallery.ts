@@ -6,7 +6,7 @@ export default defineTool({
   name: 'components_v2_build_media_gallery',
   category: 'components_v2',
   description:
-    '**Purpose**: Build a Components V2 MediaGallery (type 12) — 1-10 media items.\n\n**Returns**: `{component}` — MediaGallery JSON node.',
+    '**Purpose**: Build a Components V2 MediaGallery (type 12) - 1-10 media items.\n\n**Returns**: `{component}` - MediaGallery JSON node.',
   inputSchema: {
     items: z
       .array(

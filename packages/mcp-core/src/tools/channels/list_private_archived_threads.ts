@@ -39,7 +39,7 @@ export default defineTool({
     before: z
       .string()
       .optional()
-      .describe('ISO 8601 timestamp — return threads archived before this'),
+      .describe('ISO 8601 timestamp - return threads archived before this'),
     limit: z.number().int().min(1).max(100).optional().describe('Max results (1-100)'),
   },
   outputSchema: {

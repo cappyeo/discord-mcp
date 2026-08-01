@@ -1,4 +1,4 @@
-// FIXTURE: synthetic discord-ops-style code for adapter testing — not real code.
+// FIXTURE: synthetic discord-ops-style code for adapter testing - not real code.
 // This module simulates a private-fork that exposes `messages_lite` /
 // `messages_full` profile-variant tools. NAME_MAP folds them onto the
 // same discord-mcp tool (messages_send) with confidence: medium plus a

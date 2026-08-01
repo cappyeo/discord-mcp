@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Plan 12 Phase A.4 — one-time migration to rewrite relative imports of
+// Plan 12 Phase A.4 - one-time migration to rewrite relative imports of
 // the root test/setup.js (now packages/mcp-server-mocks/src/setup.ts)
 // to the workspace specifier '@discord-mcp/server-mocks'.
 //

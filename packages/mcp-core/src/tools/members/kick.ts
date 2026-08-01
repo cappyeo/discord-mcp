@@ -10,7 +10,7 @@ export default defineTool({
   category: 'members',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Kick (remove) a member from a guild. **DESTRUCTIVE — they lose roles and must rejoin.**',
+    '**Purpose**: Kick (remove) a member from a guild. **DESTRUCTIVE - they lose roles and must rejoin.**',
     '',
     '**When to use**:',
     '- Force-disconnect a member without banning them.',

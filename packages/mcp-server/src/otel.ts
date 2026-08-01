@@ -111,7 +111,7 @@ export function isOtlpSelfTrace(url: string): boolean {
  *    so this write wins.
  *
  * MATCHING IS ON HOST OR PATH SHAPE, NEVER ON `origin + path`. undici's
- * `request.origin` is scheme://host with NO path — upstream reconstructs the
+ * `request.origin` is scheme://host with NO path - upstream reconstructs the
  * URL as `new URL(request.path, request.origin)`. An earlier version of this
  * gate tested `origin.includes('discord.com/api')`, which can never be true,
  * so the hook silently did nothing in production while its test passed by
@@ -134,7 +134,7 @@ export function discordRequestHook(
   try {
     isDiscordHost = DISCORD_HOST.test(new URL(req.origin).hostname);
   } catch {
-    // Non-URL origin (shouldn't happen via undici) — fall back to path shape.
+    // Non-URL origin (shouldn't happen via undici) - fall back to path shape.
   }
   if (!isDiscordHost && !CREDENTIAL_PATH.test(req.path)) return;
 
@@ -169,7 +169,7 @@ function buildInstrumentations(): (UndiciInstrumentation | PinoInstrumentation)[
  * otherwise. The handle's `shutdown()` flushes spans and metrics with a
  * 5s timeout; callers (stdio transport) wire it to SIGTERM/SIGINT.
  *
- * Default behavior (OTEL_ENABLED unset) is identical to v0.7.0 — no
+ * Default behavior (OTEL_ENABLED unset) is identical to v0.7.0 - no
  * SDK boot, no global provider mutation.
  */
 export function startOtel(config: Config): OtelHandle | null {

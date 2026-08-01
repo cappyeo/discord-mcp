@@ -22,7 +22,7 @@ export default defineTool({
     '',
     '**Body**: array of `{id, position?}`. Discord renumbers other roles automatically to make room.',
     '',
-    '**Returns**: `{roles:[{id, name, position}], count}` — full role list after the change.',
+    '**Returns**: `{roles:[{id, name, position}], count}` - full role list after the change.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the roles'),

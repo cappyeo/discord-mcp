@@ -1,4 +1,4 @@
-# site — discord-mcp documentation
+# site - discord-mcp documentation
 
 Astro Starlight site published at <https://cappyeo.github.io/discord-mcp/>.
 
@@ -24,7 +24,7 @@ Output goes to `site/dist/`. Pagefind search index is built in
 pnpm --filter site preview
 ```
 
-Serves `dist/` locally on port 4321 — useful to verify Pagefind search
+Serves `dist/` locally on port 4321 - useful to verify Pagefind search
 before deploying.
 
 ## Regenerate tool reference
@@ -40,18 +40,18 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
 
 ## Structure
 
-- `astro.config.ts` — Starlight config (sidebar, base path)
-- `src/content/docs/` — all MDX content
-  - `start/` — quickstart pages (5)
-  - `tools/` — auto-generated tool reference (192 tools + 28 categories + 1 index)
-  - `recipes/` — cookbook recipes (6)
-  - `operations/` — operator guides (4)
-  - `architecture/` — deep-dives (9)
-  - `reference/` — CLI, config, API, changelog (5)
-- `src/components/docs/` — reusable MDX building blocks
-  - `DocsCardGrid.astro` — data-driven cards for section hubs
-  - `ClientTabs.astro` — synchronized Claude Desktop / Claude Code / Cursor / generic tabs
-- `scripts/generate-tool-docs.ts` — tool MDX generator
+- `astro.config.ts` - Starlight config (sidebar, base path)
+- `src/content/docs/` - all MDX content
+  - `start/` - quickstart pages (5)
+  - `tools/` - auto-generated tool reference (192 tools + 28 categories + 1 index)
+  - `recipes/` - cookbook recipes (6)
+  - `operations/` - operator guides (4)
+  - `architecture/` - deep-dives (9)
+  - `reference/` - CLI, config, API, changelog (5)
+- `src/components/docs/` - reusable MDX building blocks
+  - `DocsCardGrid.astro` - data-driven cards for section hubs
+  - `ClientTabs.astro` - synchronized Claude Desktop / Claude Code / Cursor / generic tabs
+- `scripts/generate-tool-docs.ts` - tool MDX generator
 
 ## Authoring hand-written docs
 

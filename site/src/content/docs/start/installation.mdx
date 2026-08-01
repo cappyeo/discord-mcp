@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install discord-mcp via npm, pnpm, or yarn — including the optional gateway runtime.
+description: Install discord-mcp via npm, pnpm, or yarn - including the optional gateway runtime.
 type: tutorial
 sidebar:
   order: 21
@@ -63,7 +63,7 @@ discord-mcp --help       # prints the subcommand list
 
 :::caution
 There is no `version` subcommand. `serve` is registered as commander's
-**default** subcommand, so an unrecognized first argument falls through to it —
+**default** subcommand, so an unrecognized first argument falls through to it -
 `discord-mcp version` does not print anything, it **boots a stdio MCP server**
 that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
 :::
@@ -72,23 +72,23 @@ that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
 
 | Subcommand | What it does |
 | ---------- | ------------ |
-| `serve` | Start the stdio MCP server. **Default** — a bare `discord-mcp` runs this. |
+| `serve` | Start the stdio MCP server. **Default** - a bare `discord-mcp` runs this. |
 | `doctor` | Diagnose config, token shape, and (with `--online`) connectivity. |
 | `init` | Print an MCP client config snippet for Claude Desktop / Claude Code / Cursor / generic. |
 | `migrate` | Map another Discord MCP server's tools onto discord-mcp's. |
 
-There is no `start` subcommand either — it is `serve`. See
+There is no `start` subcommand either - it is `serve`. See
 [Reference → CLI](/discord-mcp/reference/cli/) for every flag.
 
 ## Optional: Gateway mode
 
-The default transport is REST-only — every tool call hits the Discord HTTP API.
+The default transport is REST-only - every tool call hits the Discord HTTP API.
 For real-time events (presence updates, voice state changes, typing, guild
 updates), discord-mcp can subscribe to the **Gateway** WebSocket via
 `discord.js`.
 
 `discord.js` is not installed by default so REST users do not pay for it. It is
-lazy-imported, and it must be resolvable **from the same install as the CLI** —
+lazy-imported, and it must be resolvable **from the same install as the CLI** -
 a separately global-installed package is not on another global package's module
 resolution path. Install both together:
 

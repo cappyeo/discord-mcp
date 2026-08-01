@@ -9,7 +9,7 @@ export default defineTool({
   name: 'guild_get_widget_image_url',
   category: 'guild',
   description: [
-    '**Purpose**: Synthesize a public widget PNG URL. **No REST call is performed** — the agent decides whether to fetch.',
+    '**Purpose**: Synthesize a public widget PNG URL. **No REST call is performed** - the agent decides whether to fetch.',
     '',
     '**When to use**:',
     '- Embed a guild widget image on a webpage or in markdown.',

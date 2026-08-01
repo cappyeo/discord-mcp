@@ -45,7 +45,7 @@ const KNOWN_TYPES = new Set<number>(Object.values(ComponentTypeId));
 /**
  * Collect nodes carrying a type id the schema does not know. Reported as their
  * own soft issue instead of letting the zod union blow up with a wall of
- * unrelated branch errors — a component type Discord ships later should not
+ * unrelated branch errors - a component type Discord ships later should not
  * make the tool unusable until the schema is bumped.
  */
 function collectUnknownTypes(nodes: readonly Node[], path: string, out: ValidatorIssue[]): void {

@@ -17,7 +17,7 @@ export default defineTool({
     '**When NOT to use**:',
     '- Adding another user → use `threads_add_member`.',
     '',
-    '**Returns**: `{joined, thread_id}`. Idempotent — re-joining is a no-op.',
+    '**Returns**: `{joined, thread_id}`. Idempotent - re-joining is a no-op.',
   ].join('\n'),
   inputSchema: {
     thread_id: ChannelId.describe('Thread to join'),

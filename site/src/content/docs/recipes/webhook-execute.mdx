@@ -20,7 +20,7 @@ Two tool calls split across time: provision the webhook once (capture the
 token), then call `webhooks_execute` from there on out.
 
 <Aside type="caution">
-The webhook **token** is a credential. Treat it like a database password —
+The webhook **token** is a credential. Treat it like a database password -
 store it in a secrets manager, never log it, rotate it if it leaks. Anyone who
 holds the token can post anything to that channel **without** appearing as a
 bot. discord-mcp marks the token field `do not log` and will redact it from
@@ -35,7 +35,7 @@ audit log output, but the agent must do the same on the client side.
 
    `webhooks_create` returns the full webhook record including the **token**.
    Capture the `id` and `token` and store them outside the agent's working
-   memory — typically in a secrets manager or a sealed config file.
+   memory - typically in a secrets manager or a sealed config file.
 
    <Tabs>
      <TabItem label="Input">
@@ -69,7 +69,7 @@ audit log output, but the agent must do the same on the client side.
 2. **Post via `webhooks_execute`.**
 
    The token replaces bot authentication. **No `Authorization` header is sent**
-   on this call—the MCP argument becomes part of the Discord route URL, not
+   on this call-the MCP argument becomes part of the Discord route URL, not
    the JSON request body. This is the tool's `auth: false` behavior.
 
    <Tabs>
@@ -80,7 +80,7 @@ audit log output, but the agent must do the same on the client side.
          "arguments": {
            "webhook_id": "444455556666777788",
            "token": "REPLACE_WITH_WEBHOOK_TOKEN_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-           "content": "Build #4127 failed on `main` — https://github.com/cappyeo/discord-mcp/actions/runs/4127",
+           "content": "Build #4127 failed on `main` - https://github.com/cappyeo/discord-mcp/actions/runs/4127",
            "username": "GitHub Actions",
            "wait": true
          }
@@ -102,7 +102,7 @@ audit log output, but the agent must do the same on the client side.
                "accent_color": 16711680,
                "components": [
                  { "type": 10, "content": "## Build #4127 failed" },
-                 { "type": 10, "content": "Branch: `main` — Run: [4127](https://github.com/cappyeo/discord-mcp/actions/runs/4127)" }
+                 { "type": 10, "content": "Branch: `main` - Run: [4127](https://github.com/cappyeo/discord-mcp/actions/runs/4127)" }
                ]
              }
            ],
@@ -136,8 +136,8 @@ audit log output, but the agent must do the same on the client side.
 
 When sending Components V2 through a webhook, you must set both:
 
-- `flags: 32768` — the `IS_COMPONENTS_V2` bit (`1 << 15`).
-- `with_components: true` — query parameter telling Discord to include the
+- `flags: 32768` - the `IS_COMPONENTS_V2` bit (`1 << 15`).
+- `with_components: true` - query parameter telling Discord to include the
   component tree in the returned message (only matters when `wait: true`).
 
 ## Caveats
@@ -153,14 +153,14 @@ When sending Components V2 through a webhook, you must set both:
 
 ## See also
 
-- [`webhooks_create`](/discord-mcp/tools/webhooks/create/) — schema for
+- [`webhooks_create`](/discord-mcp/tools/webhooks/create/) - schema for
   provisioning, including the token field.
-- [`webhooks_execute`](/discord-mcp/tools/webhooks/execute/) — full execute
+- [`webhooks_execute`](/discord-mcp/tools/webhooks/execute/) - full execute
   schema (content, embeds, components, threads).
 - [`webhooks_modify_with_token`](/discord-mcp/tools/webhooks/modify_with_token/),
   [`webhooks_delete_with_token`](/discord-mcp/tools/webhooks/delete_with_token/)
-  — token-only mutations (no bot auth required).
+  - token-only mutations (no bot auth required).
 - [Recipe: Components V2 announcement](/discord-mcp/recipes/components-v2-announcement/)
-  — the rich-layout flow this recipe pairs with.
-- [Architecture: rate limits](/discord-mcp/architecture/rate-limits/) — the
+  - the rich-layout flow this recipe pairs with.
+- [Architecture: rate limits](/discord-mcp/architecture/rate-limits/) - the
   boundary between discord.js scheduling and local resilience.

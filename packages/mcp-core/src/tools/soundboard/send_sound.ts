@@ -12,7 +12,7 @@ export default defineTool({
     '**Purpose**: Play a soundboard sound in a voice channel.',
     '',
     '**Pre-requisite**: the bot MUST be voice-connected to `channel_id`.',
-    'Without `--gateway` enabled the bot cannot join voice — Discord will return an error.',
+    'Without `--gateway` enabled the bot cannot join voice - Discord will return an error.',
     '',
     '**Returns**: `{sent, channel_id, sound_id}`.',
   ].join('\n'),

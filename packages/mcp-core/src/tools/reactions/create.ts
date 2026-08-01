@@ -15,7 +15,7 @@ export default defineTool({
     '- Acknowledge a message; signal a vote/poll preference; quick affirmation.',
     '',
     '**When NOT to use**:',
-    '- Reacting on behalf of another user — not possible via REST.',
+    '- Reacting on behalf of another user - not possible via REST.',
     '',
     '**Example**: `{channel_id:"111122223333444401", message_id:"999000999000999000", emoji:"thumbsup:850000000000000001"}`',
     '',

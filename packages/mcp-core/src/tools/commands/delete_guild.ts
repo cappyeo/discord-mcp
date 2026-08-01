@@ -10,7 +10,7 @@ export default defineTool({
   category: 'commands',
   preconditions: ['confirm_required'] as const,
   description: [
-    '**Purpose**: Delete a guild-scoped command. **DESTRUCTIVE — IRREVERSIBLE.**',
+    '**Purpose**: Delete a guild-scoped command. **DESTRUCTIVE - IRREVERSIBLE.**',
     '',
     '**Returns**: `{deleted, command_id, guild_id}`. Pass `__confirm:true` AND `MCP_DRY_RUN=false` to actually delete.',
   ].join('\n'),

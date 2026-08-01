@@ -40,7 +40,7 @@ export default defineTool({
   handler: async (args) => {
     const b = (await container.rest.get(Routes.guildBan(args.guild_id, args.user_id))) as RawBan;
     return dualResult({
-      text: `Ban: \`${b.user.username}\` (\`user:${b.user.id}\`) — reason: ${b.reason ?? '_(none)_'}`,
+      text: `Ban: \`${b.user.username}\` (\`user:${b.user.id}\`) - reason: ${b.reason ?? '_(none)_'}`,
       data: { user_id: b.user.id, username: b.user.username, reason: b.reason },
     });
   },

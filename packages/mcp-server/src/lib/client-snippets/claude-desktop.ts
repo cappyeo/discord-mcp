@@ -4,7 +4,7 @@
  * Claude Desktop reads `mcpServers` from a JSON file. The path differs
  * by OS; we document all three so users on any platform can find it.
  *
- * Restart Claude Desktop after editing — the file is read once at app
+ * Restart Claude Desktop after editing - the file is read once at app
  * startup and not watched.
  */
 import { renderMcpServersJson } from './_shared.js';

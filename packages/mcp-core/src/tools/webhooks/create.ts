@@ -28,7 +28,7 @@ export default defineTool({
     '**When NOT to use**:',
     '- Sending one-off bot messages → `messages_send`.',
     '',
-    '**Returns**: Full webhook record INCLUDING the `token` — store it as a secret. The agent needs the token to call `webhooks_execute`. `name` remains raw creator-controlled data; `untrusted_name` provides a separately fenced copy.',
+    '**Returns**: Full webhook record INCLUDING the `token` - store it as a secret. The agent needs the token to call `webhooks_execute`. `name` remains raw creator-controlled data; `untrusted_name` provides a separately fenced copy.',
     '',
     '**Note**: This is the only `webhooks_*_get`-style tool that exposes `token` in its response. `webhooks_get` projects token OUT.',
   ].join('\n'),
@@ -72,7 +72,7 @@ export default defineTool({
     })) as RawWebhook;
     const wrapped = wrapUntrusted(wh.name ?? '', 'username');
     return dualResult({
-      text: `Created webhook \`${wh.id}\` in <#${args.channel_id}>. Token returned — store it as a secret.`,
+      text: `Created webhook \`${wh.id}\` in <#${args.channel_id}>. Token returned - store it as a secret.`,
       data: {
         id: wh.id,
         type: wh.type,

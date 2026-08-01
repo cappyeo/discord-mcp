@@ -1,6 +1,6 @@
-// FIXTURE: synthetic discord-ops-style code for adapter testing — not real code.
+// FIXTURE: synthetic discord-ops-style code for adapter testing - not real code.
 // `system` tools are discord-ops-specific introspection helpers and are
-// intentionally LEFT OUT of NAME_MAP — they should appear in the migrate()
+// intentionally LEFT OUT of NAME_MAP - they should appear in the migrate()
 // unmappedTools list.
 import type { ZodTypeAny } from 'zod';
 
@@ -20,7 +20,7 @@ const inputSchema = { _def: 'fixture' } as unknown as ZodTypeAny;
 
 export const healthCheck = defineTool({
   name: 'health_check',
-  description: 'Report runtime health (no discord-mcp equivalent — gateway client).',
+  description: 'Report runtime health (no discord-mcp equivalent - gateway client).',
   category: 'system',
   inputSchema,
   handle: async () => ({ ok: true }),

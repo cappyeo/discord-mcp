@@ -1,5 +1,5 @@
 /**
- * Unit tests for the readline prompt helpers — Plan 9 Phase D.
+ * Unit tests for the readline prompt helpers - Plan 9 Phase D.
  *
  * `readline.createInterface` is mocked at the module level so we can
  * stub the `question()` method per test. Each test sets `mockAnswer` to

@@ -4,7 +4,7 @@
  * `@discordjs/rest` throws errors carrying the full request URL and, on
  * DiscordAPIError, the request body. Webhook and interaction tokens live in
  * the URL path, so pino's default `err` serializer wrote bearer credentials
- * and unredacted message content to stderr at the default log level — any
+ * and unredacted message content to stderr at the default log level - any
  * operator with journal access, and any log shipper, received them.
  */
 import { PassThrough } from 'node:stream';
@@ -15,7 +15,7 @@ import { createLogger, serializeErr } from './logger.js';
 /**
  * Drives the REAL serializer from logger.ts against a capturable destination.
  * `createLogger` writes to fd 2, which vitest does not capture, so the
- * serializer is wired into a PassThrough here — the code under test is the
+ * serializer is wired into a PassThrough here - the code under test is the
  * exported function itself, not a copy of it.
  */
 function captureLogger(): { logger: pino.Logger; output: () => string } {

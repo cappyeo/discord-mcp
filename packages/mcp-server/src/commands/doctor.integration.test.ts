@@ -1,6 +1,6 @@
 /**
  * Integration test: `doctorAction({ online: true, json: true })` against
- * a real loopback HTTP server — Plan 9 Phase C.
+ * a real loopback HTTP server - Plan 9 Phase C.
  *
  * Why a real server (not msw):
  *   - msw patches global `fetch` / ClientRequest at a layer that has
@@ -23,7 +23,7 @@
  *     it at the loopback server (this is its real production knob).
  *
  * The test asserts all 7 checks appear in the JSON output with their
- * expected status — including the 5 offline ones — so a regression in
+ * expected status - including the 5 offline ones - so a regression in
  * any phase shows up here as a clear assertion failure.
  */
 import { createServer, type Server as HttpServer } from 'node:http';
@@ -48,7 +48,7 @@ beforeAll(async () => {
     // GET /api/v10/users/@me → 200 with bot identity.
     if (req.method === 'GET' && req.url === '/api/v10/users/@me') {
       // Surface the Authorization header back to the test if needed,
-      // but never log the actual token (defensive — matches the privacy
+      // but never log the actual token (defensive - matches the privacy
       // contract). We just answer with a fixed bot identity.
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ id: '987654321098765432', username: 'doctor-bot', bot: true }));
@@ -135,7 +135,7 @@ async function runDoctorAndCapture(
   const out = stdoutOutput();
   if (out.length === 0) {
     throw new Error(
-      'doctorAction produced no stdout — spy missed all writes (race?). ' +
+      'doctorAction produced no stdout - spy missed all writes (race?). ' +
         `stdoutWrites.length=${stdoutWrites.length}`,
     );
   }
@@ -159,7 +159,7 @@ describe('doctorAction online integration (Plan 9 Phase C)', () => {
       data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
     };
 
-    // 7 checks, in order. Removed unused `out` reference — captured above.
+    // 7 checks, in order. Removed unused `out` reference - captured above.
     const ids = parsed.data.checks.map((c) => c.id);
     expect(ids).toEqual([
       'node-version',
@@ -190,7 +190,7 @@ describe('doctorAction online integration (Plan 9 Phase C)', () => {
   it('reports token-online fail when server returns 401 (token rejected)', async () => {
     // Swap the request handler to answer 401 for /users/@me only on the
     // next request, then restore. We do this by closing + relaunching a
-    // tiny override server isn't necessary — instead we set a one-shot
+    // tiny override server isn't necessary - instead we set a one-shot
     // response by toggling a flag the handler checks.
     //
     // Simpler approach: spin up a SECOND server for this test that always

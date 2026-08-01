@@ -19,7 +19,7 @@ on the abandoned project.
 - **Help users migrate quickly.** A working adapter turns a multi-day
   prompt-rewriting project into a one-command `discord-mcp migrate` report.
 - **Document the source.** Even a partial NAME_MAP is the most useful
-  documentation a community member can produce — it captures which tools
+  documentation a community member can produce - it captures which tools
   matter, which fold onto which destination calls, and where the rough edges
   are.
 - **Low surface area.** An adapter is one file under
@@ -47,22 +47,22 @@ export interface MigrationSource {
 
 Required fields:
 
-- **`id`** — kebab-case identifier passed via `--from <id>`. Must be unique
+- **`id`** - kebab-case identifier passed via `--from <id>`. Must be unique
   across all adapters.
-- **`description`** — single-line human-readable description shown by
+- **`description`** - single-line human-readable description shown by
   `migrate --list`.
-- **`languages`** — what the source project is written in. Helps users
+- **`languages`** - what the source project is written in. Helps users
   understand at a glance whether they need a Go clone, a TS clone, etc.
-- **`detect(rootPath)`** — fast yes/no answer to "is this filesystem the
-  shape I understand?" Must NOT throw — wrap fs ops in try/catch.
-- **`migrate(rootPath)`** — walk the source tree and return a
+- **`detect(rootPath)`** - fast yes/no answer to "is this filesystem the
+  shape I understand?" Must NOT throw - wrap fs ops in try/catch.
+- **`migrate(rootPath)`** - walk the source tree and return a
   `MigrationResult` listing mapped / unmapped / manual-review tools plus
   warnings.
 
 Optional fields:
 
-- **`homepage`** — link to the upstream repo, surfaced by `--list`.
-- **`toolCountEstimate`** — best-effort tool count for `--list`; helps
+- **`homepage`** - link to the upstream repo, surfaced by `--list`.
+- **`toolCountEstimate`** - best-effort tool count for `--list`; helps
   users gauge migration scope.
 
 See the four shipping adapters for working examples: hubdustry-go-mcp,
@@ -71,7 +71,7 @@ pasympa, quadslab, discord-ops.
 ## Detection
 
 `detect()` must answer `true` for a real clone of your source project and
-`false` for absolutely everything else — including the other shipping
+`false` for absolutely everything else - including the other shipping
 adapters' fixtures.
 
 ### Multi-signal requirement
@@ -79,9 +79,9 @@ adapters' fixtures.
 A single signal is too weak. Every shipping adapter combines AT LEAST two
 independent signals:
 
-- **Signal 1 — package metadata**: `package.json` `name` field matches a
+- **Signal 1 - package metadata**: `package.json` `name` field matches a
   pattern (literal name OR `/regex/i` covering forks).
-- **Signal 2 — content match**: at least one source file under `src/`
+- **Signal 2 - content match**: at least one source file under `src/`
   contains a syntactic pattern unique to this project. Patterns we use today:
   - PaSympa: `'discord_<x>'` literals (the `discord_` prefix is the
     fingerprint).
@@ -100,20 +100,20 @@ all four existing adapter fixtures. Add tests in both directions
 `detect()` is called for every adapter on every `migrate` invocation. Keep
 it cheap:
 
-- Wrap every fs op in `try { ... } catch { return false; }` — never let an
+- Wrap every fs op in `try { ... } catch { return false; }` - never let an
   IO failure bubble up.
 - Bail early on the cheapest signal first (typically `package.json`
   existence + name pattern).
-- Cap directory walks at the smallest scope you can — `src/tools/` first,
+- Cap directory walks at the smallest scope you can - `src/tools/` first,
   fall back to `src/` only if missing.
-- Return `true` on first match — don't keep walking.
+- Return `true` on first match - don't keep walking.
 
 ## Tool extraction
 
 `migrate()` walks the source tree and extracts every tool name it can find.
 Two patterns work:
 
-### Pattern A — generic regex over a known prefix
+### Pattern A - generic regex over a known prefix
 
 Use when the source server names every tool with a unique prefix
 (`discord_<x>` for PaSympa). The regex `/['"]discord_[a-z_0-9]+['"]/g`
@@ -121,7 +121,7 @@ matches every literal in the codebase. Risk: false positives on string
 literals that happen to match the pattern. Acceptable when the prefix is
 distinctive.
 
-### Pattern B — known-name intersection
+### Pattern B - known-name intersection
 
 Use when the source server uses generic snake_case (`send_message`,
 `list_channels`) that a regex would over-match. Maintain a
@@ -137,7 +137,7 @@ checked.
 ### Best-effort: missing tools is OK, false positives are NOT
 
 If your regex misses a multi-line `defineTool({...})` call or a
-concatenated tool name, that's acceptable — the user sees a slightly
+concatenated tool name, that's acceptable - the user sees a slightly
 shorter `unmapped` list and notices the gap manually. False positives are
 worse: they pollute the report with non-existent tools and erode trust.
 
@@ -166,12 +166,12 @@ const NAME_MAP: Record<
 
 ### Confidence levels
 
-- **`high`** — name and argument shape are a 1:1 match. Caller can swap
+- **`high`** - name and argument shape are a 1:1 match. Caller can swap
   names without thinking.
-- **`medium`** — name maps cleanly but the caller may need to massage
+- **`medium`** - name maps cleanly but the caller may need to massage
   args (e.g. embed-specific helper folds onto the general `messages_send`).
   Always include `notes`.
-- **`low`** — best-guess mapping; user MUST verify. Always include `notes`
+- **`low`** - best-guess mapping; user MUST verify. Always include `notes`
   describing the caveat.
 
 ### Notes are mandatory for medium and low
@@ -183,7 +183,7 @@ explain what the caller has to change about argument shape.
 
 If a source tool has no discord-mcp equivalent, omit it from NAME_MAP.
 `migrate()` will surface it under `unmappedTools`. **Document the omissions**
-in your file's research-note JSDoc — explain why each one is unmapped (no
+in your file's research-note JSDoc - explain why each one is unmapped (no
 equivalent / different surface / architectural mismatch). Future maintainers
 will read your notes when discord-mcp adds a new tool that closes the gap.
 
@@ -206,7 +206,7 @@ test-fixtures/<adapter-id>/
 Every fixture file MUST start with the comment:
 
 ```ts
-// FIXTURE: synthetic <name>-style code for adapter testing — not real code
+// FIXTURE: synthetic <name>-style code for adapter testing - not real code
 ```
 
 This prevents future grep-greppers from mistaking the fixture for live
@@ -216,11 +216,11 @@ code. Same applies to `package.json` (use the `description` field).
 
 Your fixture must exercise:
 
-- Happy path — at least one tool that maps to `high`, one to `medium`, one
+- Happy path - at least one tool that maps to `high`, one to `medium`, one
   to `low`.
-- Unmapped path — at least one tool intentionally omitted from NAME_MAP, so
+- Unmapped path - at least one tool intentionally omitted from NAME_MAP, so
   the test asserts it surfaces in `unmappedTools`.
-- Detection — the fixture must satisfy your `detect()` (positive case).
+- Detection - the fixture must satisfy your `detect()` (positive case).
 
 ### Synthetic, minimal, public-domain
 
@@ -332,16 +332,16 @@ CI runs both directions; failures here block the merge.
 
 ## See also
 
-- [Migration overview](/discord-mcp/migrate/) — what migration means and the
+- [Migration overview](/discord-mcp/migrate/) - what migration means and the
   three-step CLI flow.
 - [`MigrationSource` source](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/types.ts)
-  — the canonical interface definition.
-- Shipping adapters — read these for working patterns:
+  - the canonical interface definition.
+- Shipping adapters - read these for working patterns:
   - [`hubdustry-go-mcp.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/hubdustry-go-mcp.ts)
-    — minimal reference (Go, empty NAME_MAP).
+    - minimal reference (Go, empty NAME_MAP).
   - [`pasympa.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/pasympa.ts)
-    — TypeScript with prefix-based extraction (Pattern A).
+    - TypeScript with prefix-based extraction (Pattern A).
   - [`quadslab.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/quadslab.ts)
-    — TypeScript with known-name intersection (Pattern B).
+    - TypeScript with known-name intersection (Pattern B).
   - [`discord-ops.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/discord-ops.ts)
-    — TypeScript with architectural-mismatch warnings.
+    - TypeScript with architectural-mismatch warnings.

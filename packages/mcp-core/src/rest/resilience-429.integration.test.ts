@@ -98,7 +98,7 @@ afterEach(() => {
 });
 
 describe('resilience 429 retry-after integration (Plan 8 C.5)', () => {
-  it('honors Discord 429 retry_after — gap between attempts >= retry_after', async () => {
+  it('honors Discord 429 retry_after - gap between attempts >= retry_after', async () => {
     // First response: 429 with retry_after = 1.0 second.
     // Second response: 200 OK.
     scriptedResponses = [

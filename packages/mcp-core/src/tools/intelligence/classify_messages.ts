@@ -106,7 +106,7 @@ export default defineTool({
         'classify',
       );
       return dualResult({
-        text: '[sampling unavailable — host LLM should classify from raw_messages + categories]',
+        text: '[sampling unavailable - host LLM should classify from raw_messages + categories]',
         data,
       });
     }
@@ -135,7 +135,7 @@ export default defineTool({
     if (parsed.ok) {
       // Reconcile the model's output against the messages we actually fetched.
       // `message_id` here is echoed by the LLM from untrusted channel content,
-      // not read from a Discord response — a hallucinated or reformatted id
+      // not read from a Discord response - a hallucinated or reformatted id
       // would be handed to the agent as a verified snowflake, and the agent
       // may then act on the wrong message. Anything not in the batch we sent
       // is dropped rather than passed through.
@@ -153,7 +153,7 @@ export default defineTool({
       });
     }
     return dualResult({
-      text: '[parse error — LLM returned non-JSON]',
+      text: '[parse error - LLM returned non-JSON]',
       data: {
         classifications: [] as ClassifyOutput['classifications'],
         count: 0,

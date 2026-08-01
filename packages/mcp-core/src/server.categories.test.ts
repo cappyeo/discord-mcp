@@ -1,5 +1,5 @@
 /**
- * `MCP_CATEGORIES` — the least-privilege deployment control.
+ * `MCP_CATEGORIES` - the least-privilege deployment control.
  *
  * It was advertised in two published doc pages and in an error recovery hint,
  * but the `category_enabled` precondition that implemented it was referenced
@@ -8,7 +8,7 @@
  * members and delete channels.
  *
  * Both layers are asserted here. Hiding a tool from `tools/list` is not a
- * control — a client can call an unlisted tool by name — and gating without
+ * control - a client can call an unlisted tool by name - and gating without
  * hiding fills the agent's context with tools that only ever fail.
  */
 import { REST } from '@discordjs/rest';

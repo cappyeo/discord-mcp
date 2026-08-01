@@ -7,7 +7,7 @@
  * only shows up here.
  *
  * Loads `__toolMetadata` off each tool class by walking the tools tree and
- * dynamically importing every non-test module — the same mechanism
+ * dynamically importing every non-test module - the same mechanism
  * `site/scripts/generate-tool-docs.ts` uses to build the docs, so a tool that
  * is invisible here is also missing from the published reference.
  */
@@ -87,7 +87,7 @@ describe('tool registry invariants', () => {
 
   it('declares no precondition the server does not register', () => {
     // preconditionMiddleware throws at call time for an unknown id, so a typo
-    // here is a runtime 500 on the affected tool only — invisible until called.
+    // here is a runtime 500 on the affected tool only - invisible until called.
     for (const t of tools) {
       for (const p of t.preconditions) {
         expect(IMPLEMENTED_PRECONDITIONS.has(p), `${t.name} declares '${p}'`).toBe(true);
@@ -120,7 +120,7 @@ describe('tool registry invariants', () => {
   it('names every tool `<category>_<verb>` and keeps it MCP-legal', () => {
     // Two categories ship a prefix that differs from the directory name. Both
     // predate the freeze and renaming a tool is a breaking change, so they are
-    // allowlisted rather than "fixed" — the point of the check is to catch a
+    // allowlisted rather than "fixed" - the point of the check is to catch a
     // NEW tool landing under the wrong prefix.
     const PREFIX_EXCEPTIONS: Record<string, readonly string[]> = {
       meta: ['mcp_'],
@@ -138,8 +138,8 @@ describe('tool registry invariants', () => {
 
   it('never declares an input parameter no handler can receive', () => {
     // `__confirm` is an authorization flag stripped by validateMiddleware and
-    // read from the raw payload by ConfirmRequired. A tool that declares it —
-    // or a lookalike like `confirm` — is advertising a parameter that is
+    // read from the raw payload by ConfirmRequired. A tool that declares it -
+    // or a lookalike like `confirm` - is advertising a parameter that is
     // either silently dropped or duplicates the gate.
     for (const t of tools) {
       const keys = Object.keys(t.inputSchema);

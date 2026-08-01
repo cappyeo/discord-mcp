@@ -21,7 +21,7 @@ export interface V2ResourceContent {
 export async function listV2Resources(): Promise<readonly V2ResourceEntry[]> {
   const templates = TEMPLATE_NAMES.map((name) => ({
     uri: `${TEMPLATE_URI_PREFIX}${name}`,
-    name: `Components V2 template — ${name}`,
+    name: `Components V2 template - ${name}`,
     description: `Pre-built Components V2 layout for ${name}. Apply via components_v2_send_from_template.`,
     mimeType: 'application/json',
   }));

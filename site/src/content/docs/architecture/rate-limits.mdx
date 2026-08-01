@@ -57,7 +57,7 @@ Discord's bucket model or grant a higher request allowance.
   concurrency, not Discord's quota.
 - Pipelines are sequential. Their parent holds no REST slot, so a bulkhead limit
   of 1 does not deadlock the executor.
-- Use `MCP_RETRY_ENABLED=false`—not a retry count of 1—when testing the first
+- Use `MCP_RETRY_ENABLED=false`-not a retry count of 1-when testing the first
   surfaced transient failure.
 - If a webhook fits the product flow, remember that its route has its own
   Discord bucket semantics; it is not a universal bypass for Discord limits.

@@ -7,7 +7,7 @@ export default defineTool({
   name: 'components_v2_build_section',
   category: 'components_v2',
   description:
-    '**Purpose**: Build a Components V2 Section (type 9) — 1-3 TextDisplay lines plus a REQUIRED Thumbnail or Button accessory (Discord rejects a Section without one).\n\n**When to use**: card-like content with header + supporting text + image.\n\n**Returns**: `{component}` — Section JSON node.',
+    '**Purpose**: Build a Components V2 Section (type 9) - 1-3 TextDisplay lines plus a REQUIRED Thumbnail or Button accessory (Discord rejects a Section without one).\n\n**When to use**: card-like content with header + supporting text + image.\n\n**Returns**: `{component}` - Section JSON node.',
   inputSchema: {
     text: z.array(z.string().min(1).max(4000)).min(1).max(3).describe('1-3 markdown text lines'),
     accessory: z

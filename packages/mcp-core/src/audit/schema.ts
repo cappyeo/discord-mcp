@@ -2,7 +2,7 @@
  * Audit event schema (Plan 8 Phase E).
  *
  * One AuditEvent is emitted per **mutating** tool call (`idempotent: false`).
- * Read-only / idempotent tools are skipped — see middleware/audit.ts. The
+ * Read-only / idempotent tools are skipped - see middleware/audit.ts. The
  * event is JSON-line-encoded and routed through an `AuditSink` (stderr,
  * file, OTLP logs, or no-op).
  *
@@ -13,14 +13,14 @@
  *   - `tool`, `category`, `idempotent`: copied from MiddlewareToolInfo.
  *     `idempotent` is always `false` in practice (we skip the rest), but
  *     we keep the field for downstream consumers that filter by it.
- *   - `args_redacted`: tool args after `redactArgs(args, toolName)` —
+ *   - `args_redacted`: tool args after `redactArgs(args, toolName)` -
  *     Phase E ships a placeholder global redactor (see audit/redact.ts);
  *     Phase F adds per-tool sensitive keys.
  *   - `status`:
- *       - `'success'`     — handler returned without `isError: true`.
- *       - `'tool_error'`  — handler returned `{ isError: true, ... }`
+ *       - `'success'`     - handler returned without `isError: true`.
+ *       - `'tool_error'`  - handler returned `{ isError: true, ... }`
  *                           (structured error inside CallToolResult).
- *       - `'thrown'`      — handler threw a JS exception (re-thrown).
+ *       - `'thrown'`      - handler threw a JS exception (re-thrown).
  *   - `result_code`: present only when `status !== 'success'`. Carries a
  *     short machine-readable hint (error.name for `'thrown'`, or the
  *     structured-error `code` for `'tool_error'` if available).

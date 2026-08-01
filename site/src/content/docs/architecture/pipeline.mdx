@@ -1,6 +1,6 @@
 ---
 title: Pipeline
-description: The mcp_pipeline executor — sequential fail-fast tool calls with variable interpolation and a recursion guard.
+description: The mcp_pipeline executor - sequential fail-fast tool calls with variable interpolation and a recursion guard.
 sidebar:
   order: 4
 ---
@@ -10,7 +10,7 @@ import { Aside } from '@astrojs/starlight/components';
 `mcp_pipeline` is the meta-tool that executes **N tool calls in a single MCP
 request**, with later steps referring to earlier results via interpolation
 syntax. It exists because some workflows are one operator intent but require
-multiple Discord REST calls — e.g. "post the announcement, schedule the
+multiple Discord REST calls - e.g. "post the announcement, schedule the
 event, then grant the role." Without a pipeline, the agent makes
 three round-trips and has to handle partial failures itself; with one, the
 server captures intermediate state and propagates failures cleanly. It does
@@ -57,22 +57,22 @@ Source: [`packages/mcp-core/src/pipeline/interpolate.ts`](https://github.com/cap
 
 Every step has an **id**. Give it one explicitly with `"id": "announce"`, and
 reference it as `{{announce.field}}`. If you omit `id`, the executor assigns
-`step_<index>` using a **0-based** index — the first step is `step_0`, the
+`step_<index>` using a **0-based** index - the first step is `step_0`, the
 second `step_1`.
 
 <Aside type="caution">
 There is no `step1`. A template like `{{step1.field}}` resolves to nothing
-and, because it is a whole-string template, the arg becomes `undefined` —
+and, because it is a whole-string template, the arg becomes `undefined` -
 which is then rejected or transformed by the target tool's Zod schema. Name your
 steps explicitly; it is the only readable way to write a pipeline.
 </Aside>
 
 Syntax:
 
-- `{{announce.field}}` — read a field on the step whose id is `announce`.
-- `{{announce.field.subfield}}` — dotted path traversal.
-- `{{announce.array[0]}}` — bracket index for arrays.
-- `{{announce.array[0].id}}` — combine.
+- `{{announce.field}}` - read a field on the step whose id is `announce`.
+- `{{announce.field.subfield}}` - dotted path traversal.
+- `{{announce.array[0]}}` - bracket index for arrays.
+- `{{announce.array[0].id}}` - combine.
 - `save_as: "alias"` on a step also publishes its result under `alias`.
 
 Resolution happens at **dispatch time** for each step: the args are walked
@@ -81,16 +81,16 @@ recursively and every string is scanned for `{{...}}`.
 Unresolvable paths do **not** raise and do **not** abort. Two behaviors,
 depending on the shape of the string:
 
-- **Whole-string template** (`"{{missing.path}}"`) — the arg becomes
+- **Whole-string template** (`"{{missing.path}}"`) - the arg becomes
   `undefined`.
-- **Embedded template** (`"see {{missing.path}} now"`) — the literal
+- **Embedded template** (`"see {{missing.path}} now"`) - the literal
   `{{missing.path}}` text is left in place.
 
 Either way the step still runs, so a typo'd path surfaces as a downstream
-validation error or as literal braces posted into Discord — not as an
+validation error or as literal braces posted into Discord - not as an
 interpolation error.
 
-Resolved values keep their type — `{{announce.count}}` evaluating to a number
+Resolved values keep their type - `{{announce.count}}` evaluating to a number
 yields a real number in the next step's args, not the string `"42"`, as long
 as the template is the whole string.
 
@@ -134,7 +134,7 @@ Two failure modes:
 
 - **Mid-pipeline**: step N fails (validation, precondition, REST error).
   The pipeline records the error on that step in the `steps` array, sets
-  `aborted: true`, and **breaks** — subsequent steps are never dispatched and
+  `aborted: true`, and **breaks** - subsequent steps are never dispatched and
   never appear in `steps` at all. Earlier steps' Discord side effects already
   happened; the `steps` array tells you exactly what completed. Set
   `continue_on_error: true` on a step to keep going past its failure instead.
@@ -143,7 +143,7 @@ Two failure modes:
   its rejection never enters the inner retry policy; the pipeline itself does
   not retry the step. The caller can back off and start a new call later.
 
-Interpolation is not a failure mode — see
+Interpolation is not a failure mode - see
 [Variable interpolation](#variable-interpolation) for what an unresolvable
 path does instead.
 
@@ -163,7 +163,7 @@ The result envelope shape:
 
 Per-step `status` is `"success"`, `"error"`, or `"skipped"` (an `if` condition
 that evaluated falsy). `result` is present only on success, `error` only on
-error. `variables` is the interpolation namespace at completion — successful
+error. `variables` is the interpolation namespace at completion - successful
 steps only.
 
 To decide whether to retry / surface to the human, branch on:
@@ -176,7 +176,7 @@ const failed = result.aborted === true
 <Aside type="caution">
 There is no `summary` object and no `ok` field on a step. Code that branches
 on `summary.failed > 0` reads `undefined > 0`, which is `false`, so **every
-pipeline — including one that aborted on its first step — looks successful.**
+pipeline - including one that aborted on its first step - looks successful.**
 Use `aborted` or scan `steps` for `status === 'error'`.
 </Aside>
 
@@ -190,6 +190,6 @@ Use `aborted` or scan `steps` for `status === 'error'`.
 
 ## Related
 
-- [`pipeline-multistep` recipe](/discord-mcp/recipes/pipeline-multistep/) — worked example with three real tool calls.
-- [Operations → Resilience](/discord-mcp/operations/resilience/) — the bulkhead is shared across pipeline children, not amplified.
-- [Architecture → Components V2](/discord-mcp/architecture/components-v2/) — common pipeline destination is `components_v2_send`.
+- [`pipeline-multistep` recipe](/discord-mcp/recipes/pipeline-multistep/) - worked example with three real tool calls.
+- [Operations → Resilience](/discord-mcp/operations/resilience/) - the bulkhead is shared across pipeline children, not amplified.
+- [Architecture → Components V2](/discord-mcp/architecture/components-v2/) - common pipeline destination is `components_v2_send`.

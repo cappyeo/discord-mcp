@@ -18,7 +18,7 @@ describe('intelligence_draft_response', () => {
       role: 'assistant',
       content: {
         type: 'text',
-        text: '{"draft":"Hi! Sure thing — happy to help.","reasoning":"Friendly tone, opens door for follow-up."}',
+        text: '{"draft":"Hi! Sure thing - happy to help.","reasoning":"Friendly tone, opens door for follow-up."}',
       },
     });
     const r = (await t.run(

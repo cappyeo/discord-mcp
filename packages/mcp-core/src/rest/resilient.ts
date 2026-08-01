@@ -19,7 +19,7 @@ export interface WrapResilienceOptions {
   classifier?: ClassifierFn;
   /**
    * The configured `MCP_CIRCUIT_HALF_OPEN_AFTER_MS` so we can include a
-   * `wait Nms` `recoveryHint` on `CircuitOpenError`. Optional — defaults
+   * `wait Nms` `recoveryHint` on `CircuitOpenError`. Optional - defaults
    * to 60_000 (the same default as the Config field) when omitted.
    */
   circuitHalfOpenAfterMs?: number;
@@ -43,7 +43,7 @@ type Verb = (typeof VERBS)[number];
  *  1. The original method is `.bind(rest)`'d before reassignment so internal
  *     `this`-references (rate-limit queue manager, etc) still point at the
  *     same REST instance.
- *  2. The wrapper passes through ALL original arguments verbatim — both the
+ *  2. The wrapper passes through ALL original arguments verbatim - both the
  *     route string and the optional `RequestData` object.
  *  3. On retry exhaustion, cockatiel re-throws the LAST classified error.
  *     We unwrap it to surface the ORIGINAL error to callers (so the existing

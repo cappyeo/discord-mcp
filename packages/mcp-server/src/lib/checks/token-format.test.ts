@@ -15,7 +15,7 @@ afterEach(() => {
   }
 });
 
-// 60-char token body — comfortably above the 50-char floor and shaped
+// 60-char token body - comfortably above the 50-char floor and shaped
 // like a real Discord bot token (alnum + dot + dash + underscore).
 const VALID_BODY = `${'a'.repeat(24)}.${'b'.repeat(6)}.${'c'.repeat(28)}`;
 

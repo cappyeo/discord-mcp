@@ -1,6 +1,6 @@
 ---
-title: Security audit — 2026-07-27
-description: Dependency security review of discord-mcp — pnpm audit results as of 2026-07-27, after v0.13.0 remediation, with reachability analysis against the stdio-only shipping surface.
+title: Security audit - 2026-07-27
+description: Dependency security review of discord-mcp - pnpm audit results as of 2026-07-27, after v0.13.0 remediation, with reachability analysis against the stdio-only shipping surface.
 sidebar:
   order: 6
 ---
@@ -11,7 +11,7 @@ import { Aside } from '@astrojs/starlight/components';
 - **Scope**: dependency advisories only. The manual code review shipped as
   part of the v0.13.0 correctness audit (token redaction, untrusted-wrap
   completeness, confirmation gates, audit redaction) is not re-litigated here.
-- **Supersedes**: [Security audit — 2026-05-01](/discord-mcp/operations/security-audit-2026-05-01/),
+- **Supersedes**: [Security audit - 2026-05-01](/discord-mcp/operations/security-audit-2026-05-01/),
   whose "1 site-only moderate" figure was accurate on that date and had gone
   three months stale by this one.
 
@@ -39,7 +39,7 @@ Before v0.13.0 this command reported **27 high** advisories and exited 1.
 
 The single remaining moderate is a path-traversal advisory in
 `@hono/node-server`, reached via `@modelcontextprotocol/sdk`. It belongs to
-the SDK's Streamable-HTTP transport, which this project does not instantiate —
+the SDK's Streamable-HTTP transport, which this project does not instantiate -
 see [reachability](#why-the-raw-count-overstates-exposure) below.
 
 ### What remediation actually consisted of
@@ -47,13 +47,13 @@ see [reachability](#why-the-raw-count-overstates-exposure) below.
 - `@opentelemetry/*` bumped past the releases carrying the vulnerable
   `protobufjs` / `@grpc/grpc-js` ranges, and `@modelcontextprotocol/sdk`
   bumped past the one carrying vulnerable `ajv` → `fast-uri`.
-- Narrow `pnpm.overrides` for `ws` and `undici` — pinned by `discord.js` /
+- Narrow `pnpm.overrides` for `ws` and `undici` - pinned by `discord.js` /
   `@discordjs/ws`, and the only advisories that were on a default live code
   path. `protobufjs` was deliberately **not** blanket-overridden: forcing a
   major across the `@grpc/grpc-js` range is a wire-format risk for no benefit,
   and it sits behind `OTEL_ENABLED` regardless.
 - Three OpenTelemetry packages that `mcp-core` never imports were dropped
-  outright, and two more moved to `devDependencies` — the smallest production
+  outright, and two more moved to `devDependencies` - the smallest production
   tree is the cheapest thing to audit.
 - `astro`, `@astrojs/starlight` and `sharp` moved from `dependencies` to
   `devDependencies` in the `site` workspace. The docs site is `private: true`
@@ -80,7 +80,7 @@ contributor running this repo; they are not supply-chain exposure for anyone
 installing `@discord-mcp/cli`.
 
 CI gates on `--prod` for exactly that reason, and now runs weekly on a
-schedule rather than only on push — the absence of that schedule is why three
+schedule rather than only on push - the absence of that schedule is why three
 months of drift went unnoticed.
 
 ## Why the raw count overstates exposure
@@ -88,7 +88,7 @@ months of drift went unnoticed.
 `pnpm audit` walks the dependency graph. It cannot tell that the vulnerable
 code is never loaded by what discord-mcp actually ships.
 
-### Not reachable — the SDK's HTTP transport, which this project does not ship
+### Not reachable - the SDK's HTTP transport, which this project does not ship
 
 discord-mcp is **stdio-only at v1.0.0** (see
 [v1.0.0 readiness](https://github.com/cappyeo/discord-mcp/blob/main/docs/v1.0.0-readiness.md)).
@@ -99,14 +99,14 @@ remaining production advisory lives entirely inside it.
 Shipping an HTTP transport in a v1.x minor makes that subtree live. When that
 happens this analysis must be redone **before** the release, not after.
 
-### Not reachable by default — the OpenTelemetry export path
+### Not reachable by default - the OpenTelemetry export path
 
 `OTEL_ENABLED` defaults to `false`, and with it off `mcp-server` skips SDK
 boot entirely, so the gRPC/protobuf exporter stack is never imported.
 Operators who turn telemetry on should treat advisories in that subtree as
 live and pin accordingly.
 
-### Reachable — and therefore fixed rather than explained away
+### Reachable - and therefore fixed rather than explained away
 
 `undici` is the HTTP client behind every Discord REST call and `ws` is the
 WebSocket layer behind the optional Gateway. Both sit on a default or
@@ -118,9 +118,9 @@ squarely on live code.
 
 | Bucket | Live in a default stdio deployment? |
 | ------ | ----------------------------------- |
-| SDK HTTP-transport subtree (1 moderate) | No — HTTP transport not shipped |
-| OTLP exporter subtree | No — `OTEL_ENABLED=false` by default |
-| Build and test tooling (16 advisories) | No — absent from both tarballs |
+| SDK HTTP-transport subtree (1 moderate) | No - HTTP transport not shipped |
+| OTLP exporter subtree | No - `OTEL_ENABLED=false` by default |
+| Build and test tooling (16 advisories) | No - absent from both tarballs |
 
 **0 critical and 0 high in the production tree. 0 advisories with a
 demonstrated exploit path** from Discord content, agent input, or operator
@@ -130,8 +130,8 @@ config in the default stdio configuration.
 
 | Priority | Finding | Status |
 | -------- | ------- | ------ |
-| P0 | — | None |
-| P1 | — | None |
+| P0 | - | None |
+| P1 | - | None |
 | P2 | `@hono/node-server` path traversal via the SDK | Blocking for any future HTTP transport; inert today. Bump the SDK when a release ships `@hono/node-server >= 2.0.5`. |
 | P2 | Build-tooling advisories (`vitest`, `astro`, `turbo`, `sharp`) | Not shipped. Bump on the normal dependency cadence; dependabot now watches the workflow actions and can be extended to npm. |
 
@@ -139,7 +139,7 @@ config in the default stdio configuration.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm audit --audit-level=high --prod        # the CI gate — exit 0
+pnpm audit --audit-level=high --prod        # the CI gate - exit 0
 pnpm audit                                  # full tree, including dev
 pnpm why @hono/node-server                  # confirm the SDK HTTP-transport path
 ```
@@ -159,6 +159,6 @@ and cannot be repaired without a deprecate-and-republish.
 
 ## Related
 
-- [Security audit — 2026-05-01](/discord-mcp/operations/security-audit-2026-05-01/) — the superseded point-in-time record, including the manual code review.
-- [Reference → Environment variables](/discord-mcp/reference/config/) — `OTEL_ENABLED` defaults to `false`.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) — the destructive-operation gate.
+- [Security audit - 2026-05-01](/discord-mcp/operations/security-audit-2026-05-01/) - the superseded point-in-time record, including the manual code review.
+- [Reference → Environment variables](/discord-mcp/reference/config/) - `OTEL_ENABLED` defaults to `false`.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - the destructive-operation gate.

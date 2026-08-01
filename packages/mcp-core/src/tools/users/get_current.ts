@@ -10,7 +10,7 @@ interface RawUser {
   username: string;
   global_name: string | null;
   avatar: string | null;
-  // Optional on APIUser — absent means "not a bot".
+  // Optional on APIUser - absent means "not a bot".
   bot?: boolean;
   verified?: boolean;
 }

@@ -28,7 +28,7 @@ import { serveAction } from './commands/serve.js';
 
 export function buildProgram(): Command {
   const program = new Command('discord-mcp')
-    .description('Discord MCP server — stdio transport for AI agents')
+    .description('Discord MCP server - stdio transport for AI agents')
     .version(packageJson.version);
 
   program

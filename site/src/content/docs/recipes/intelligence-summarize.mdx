@@ -8,7 +8,7 @@ sidebar:
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
 The `intelligence_summarize_channel` tool turns "what did I miss in #support?"
-into a structured summary — **without the server holding any LLM API key**.
+into a structured summary - **without the server holding any LLM API key**.
 It does this through **MCP sampling**: the tool calls back to the host client's
 LLM via the `requestSampling` capability, then parses the response.
 
@@ -71,7 +71,7 @@ not a completed summary.
      <TabItem label="Output (sampling supported)">
        ```json
        {
-         "summary": "- Three users hit the new SSO flow with expired refresh tokens.\n- @alice shipped a hotfix at 14:22 UTC; @bob verified.\n- Open: customer #88241 still cannot log in — escalated to on-call.",
+         "summary": "- Three users hit the new SSO flow with expired refresh tokens.\n- @alice shipped a hotfix at 14:22 UTC; @bob verified.\n- Open: customer #88241 still cannot log in - escalated to on-call.",
          "key_topics": ["sso", "refresh tokens", "hotfix deploy"],
          "action_items": ["follow up with customer #88241"],
          "message_count_used": 50,
@@ -106,7 +106,7 @@ not a completed summary.
      "name": "messages_send",
      "arguments": {
        "channel_id": "333344445555666677",
-       "content": "## Support recap\n\n- Three users hit the new SSO flow with expired refresh tokens.\n- @alice shipped a hotfix at 14:22 UTC; @bob verified.\n- Open: customer #88241 still cannot log in — escalated to on-call."
+       "content": "## Support recap\n\n- Three users hit the new SSO flow with expired refresh tokens.\n- @alice shipped a hotfix at 14:22 UTC; @bob verified.\n- Open: customer #88241 still cannot log in - escalated to on-call."
      }
    }
    ```
@@ -140,12 +140,12 @@ not a completed summary.
 ## See also
 
 - [`intelligence_summarize_channel`](/discord-mcp/tools/intelligence/summarize_channel/)
-  — full schema and fallback envelope.
-- [`messages_read`](/discord-mcp/tools/messages/read/) — inspect raw messages
+  - full schema and fallback envelope.
+- [`messages_read`](/discord-mcp/tools/messages/read/) - inspect raw messages
   before summarizing.
-- [`messages_send`](/discord-mcp/tools/messages/send/) — post the summary back.
+- [`messages_send`](/discord-mcp/tools/messages/send/) - post the summary back.
 - [`intelligence_classify_messages`](/discord-mcp/tools/intelligence/classify_messages/),
   [`intelligence_moderate_content`](/discord-mcp/tools/intelligence/moderate_content/)
-  — sibling sampling-based intelligence tools.
-- [Architecture: MCP sampling](/discord-mcp/architecture/sampling/) — how the
+  - sibling sampling-based intelligence tools.
+- [Architecture: MCP sampling](/discord-mcp/architecture/sampling/) - how the
   fallback envelope is constructed.
