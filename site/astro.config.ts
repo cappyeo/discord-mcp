@@ -1,9 +1,10 @@
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
+import { siteBasePath, siteHead, siteOrigin } from './src/seo';
 
 export default defineConfig({
-  site: 'https://cappyeo.github.io',
-  base: '/discord-mcp',
+  site: siteOrigin,
+  base: siteBasePath,
   redirects: {
     '/architecture/overview': '/discord-mcp/architecture/',
   },
@@ -11,6 +12,7 @@ export default defineConfig({
     starlight({
       title: 'discord-mcp',
       description: 'Production-grade Discord MCP server for AI agents',
+      head: siteHead,
       disable404Route: true,
       favicon:
         'https://raw.githubusercontent.com/cappyeo/discord-mcp/main/site/src/assets/discord-mcp-logo-light.png',

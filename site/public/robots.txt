@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cappyeo.github.io/discord-mcp/sitemap-index.xml
