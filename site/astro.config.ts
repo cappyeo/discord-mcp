@@ -8,6 +8,11 @@ export default defineConfig({
     starlight({
       title: 'discord-mcp',
       description: 'Production-grade Discord MCP server for AI agents',
+      logo: {
+        light: './src/assets/discord-mcp-logo-light.png',
+        dark: './src/assets/discord-mcp-logo-dark.png',
+        alt: 'Discord MCP logo',
+      },
       social: [
         {
           icon: 'github',
