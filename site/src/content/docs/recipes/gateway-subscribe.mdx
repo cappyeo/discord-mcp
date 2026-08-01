@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-# Gateway: subscribe to live guild state
-
 The default discord-mcp transport is REST-only — every read is a fresh HTTP
 call. For dashboards, presence indicators, or any UI that should reflect the
 guild **as it changes**, polling burns rate limits and lags. The optional

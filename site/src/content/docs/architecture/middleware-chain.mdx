@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Middleware chain
-
 Every tool call goes through a four-layer middleware chain before reaching the
 tool's `run` method. The order is fixed and matters: each layer assumes the
 ones outside it have already run.

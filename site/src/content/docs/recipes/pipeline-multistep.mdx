@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-# Pipeline: chain three calls atomically
-
 When a workflow is a **strict sequence** — each step depends on the previous
 one's output — issuing N independent `tools/call` requests wastes round-trips
 and exposes intermediate state. The `mcp_pipeline` meta-tool batches them into

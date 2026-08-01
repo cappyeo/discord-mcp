@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-# Audit logging
-
 Every **mutating** tool call (i.e. `idempotent: false`) emits a single audit
 event that captures who/what/when/result. Read-only tools (e.g.
 `messages_read`, `channels_get`) do NOT generate audit noise — their read

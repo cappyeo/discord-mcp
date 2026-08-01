@@ -151,9 +151,10 @@ describe('renderToolMdx', () => {
     expect(mdx).toMatch(/^---\ntitle: messages_send\ndescription: '/);
   });
 
-  it('includes all four content sections + tables', () => {
+  it('relies on Starlight for the page H1 and includes all four content sections + tables', () => {
     const mdx = renderToolMdx(sampleTool);
-    expect(mdx).toContain('# `messages_send`');
+    expect(mdx).toContain('title: messages_send');
+    expect(mdx).not.toMatch(/^# /m);
     expect(mdx).toContain('## When to use');
     expect(mdx).toContain('## When NOT to use');
     expect(mdx).toContain('## Input');
@@ -196,7 +197,8 @@ describe('renderCategoryIndex', () => {
       },
     ];
     const md = renderCategoryIndex('messages', tools);
-    expect(md).toContain('# Messages');
+    expect(md).toContain('title: Messages');
+    expect(md).not.toMatch(/^# /m);
     expect(md).toContain('2 tools in this category');
     expect(md).toContain('messages_a');
     expect(md).toContain('messages_b');
@@ -245,7 +247,9 @@ describe('renderToolsIndex', () => {
       ],
     ]);
     const md = renderToolsIndex(byCat);
-    expect(md).toContain('# 2 Tools');
+    expect(md).toContain('title: Tools');
+    expect(md).toContain('discord-mcp exposes 2 tools');
+    expect(md).not.toMatch(/^# /m);
     expect(md).toContain('Messages (1)');
     expect(md).toContain('Channels (1)');
     // Categories sorted alphabetically (channels before messages)
@@ -366,6 +370,8 @@ describe('generate (smoke)', () => {
     expect(messageFiles).toContain('index.mdx');
 
     const topIndex = readFileSync(join(outDir, 'index.mdx'), 'utf8');
-    expect(topIndex).toContain('# 3 Tools');
+    expect(topIndex).toContain('title: Tools');
+    expect(topIndex).toContain('discord-mcp exposes 3 tools');
+    expect(topIndex).not.toMatch(/^# /m);
   });
 });

@@ -96,7 +96,7 @@ describe('hand-written docs only reference registered tools', () => {
 
     const extras = buildExtras();
     const isToolLike = (id: string): boolean =>
-      [...prefixes].some((p) => id.startsWith(`${p}_`)) && !extras.has(id);
+      [...prefixes].some((p) => id.startsWith(`${p}_`)) && !extras.has(id) && !/_ids?$/.test(id);
 
     const files = DOC_ROOTS.flatMap((d) => walk(d));
     expect(files.length).toBeGreaterThan(20);

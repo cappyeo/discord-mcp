@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-# Resilience
-
 discord-mcp wraps every Discord REST call in a composite resilience policy:
 **bulkhead → circuit breaker → 429-aware retry → timeout → REST**. Each layer
 is configurable via environment variables. This page explains what the

@@ -191,8 +191,6 @@ description: ${fmDesc}
 
 import { Aside } from '@astrojs/starlight/components';
 
-# \`${tool.name}\`
-
 **Category**: ${tool.category}
 
 <Aside type="tip">
@@ -271,8 +269,6 @@ sidebar:
 
 import { LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-# ${title}
-
 ${tools.length} tool${tools.length === 1 ? '' : 's'} in this category.
 
 <CardGrid>
@@ -299,8 +295,6 @@ sidebar:
 ---
 
 import { LinkCard, CardGrid } from '@astrojs/starlight/components';
-
-# ${total} Tools
 
 discord-mcp exposes ${total} tools across ${byCategory.size} categories. Every tool
 description follows the **Purpose / When to use / When NOT to use / Returns** structure
