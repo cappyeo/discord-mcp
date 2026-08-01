@@ -6,7 +6,7 @@
  * `details` or `message` — is exercised by a dedicated test that uses
  * a recognizable token-shaped header value.
  */
-import type { Config } from '@discord-mcp/core';
+import type { Config } from '@cappyeo/discord-mcp-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { otelReachableCheck } from './otel-reachable.js';
 

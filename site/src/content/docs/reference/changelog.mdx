@@ -33,9 +33,9 @@ release fixes them. Three were load-bearing.
   destructive tools never executing, note that they now can** — the
   `MCP_DRY_RUN=false` + `__confirm:true` contract works as documented.
 - `@discordjs/rest`, `@modelcontextprotocol/sdk`, `zod` and `@sapphire/pieces`
-  moved from `dependencies` to `peerDependencies` on `@discord-mcp/core`. Each
+  moved from `dependencies` to `peerDependencies` on `@cappyeo/discord-mcp-core`. Each
   crosses the public `.d.ts` surface nominally, so a consumer with a duplicate
-  copy could not call `buildServer` at all. `@discord-mcp/cli` users are
+  copy could not call `buildServer` at all. `@cappyeo/discord-mcp` users are
   unaffected.
 - `discord.js` moved from `optionalDependencies` to an optional peer.
   `optionalDependencies` are installed by default, so every REST-only user was
@@ -99,7 +99,7 @@ now checked against the code at test time.
 
 ### Tests
 
-909 → 1005, with a coverage gate on `@discord-mcp/core` (98.9% statements) and
+909 → 1005, with a coverage gate on `@cappyeo/discord-mcp-core` (98.9% statements) and
 snapshot freezes on the public exports, the CLI flag set, and the config
 surface. Load-sensitive tests fixed: the suite now passes on consecutive
 cold-cache runs under full parallel load, not only in isolation.
@@ -113,9 +113,9 @@ behavior — the test rig, build pipeline, and release surface all got
 sharpened so v1.0.0 has a clean foundation. This is the **final plan** of
 the discord-mcp roadmap (Plans 0-12).
 
-- `@discord-mcp/server-mocks` workspace package — eliminates 165
+- `@cappyeo/discord-mcp-server-mocks` workspace package — eliminates 165
   relative-path imports across the test tree; consumers now `import from
-  '@discord-mcp/server-mocks'`.
+  '@cappyeo/discord-mcp-server-mocks'`.
 - `ResourceStore` extracted from `server.ts` (matches `ToolStore` /
   `PreconditionStore` pattern).
 - Integration test reliability: 0 unconditional skips, `doctor.integration`
@@ -130,8 +130,8 @@ the discord-mcp roadmap (Plans 0-12).
 - Security audit pass — fixed P1 (`reactions_delete_all` missing
   confirmation gate); P2 deferred to Plan 13.
 - Docs link audit — 1 broken link fixed; version coherence verified.
-- npm publish dry-run verified for `@discord-mcp/core` and
-  `@discord-mcp/cli` — `prepack` ships root README + LICENSE in both
+- npm publish dry-run verified for `@cappyeo/discord-mcp-core` and
+  `@cappyeo/discord-mcp` — `prepack` ships root README + LICENSE in both
   tarballs; mcp-core flipped to `private:false` with public publishConfig.
 - v1.0.0 readiness checklist shipped at `docs/v1.0.0-readiness.md`.
 
@@ -328,7 +328,7 @@ Released **2026-04-28**. Tag commit:
 Plan 0 stood up the monorepo and shipped the smallest viable tool surface.
 
 - pnpm + Turbo + tsdown workspace layout.
-- `@discord-mcp/core` and `@discord-mcp/cli` packages.
+- `@cappyeo/discord-mcp-core` and `@cappyeo/discord-mcp` packages.
 - Single tool: `messages_send`.
 - Biome, vitest, tsc, baseline CI.
 

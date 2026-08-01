@@ -1,5 +1,5 @@
 {
-  "name": "@discord-mcp/server-mocks",
+  "name": "@cappyeo/discord-mcp-server-mocks",
   "version": "0.13.0",
   "private": true,
   "type": "module",

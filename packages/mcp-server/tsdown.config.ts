@@ -9,6 +9,6 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   deps: {
-    neverBundle: ['@discord-mcp/core', '@modelcontextprotocol/sdk', '@discordjs/rest'],
+    neverBundle: ['@cappyeo/discord-mcp-core', '@modelcontextprotocol/sdk', '@discordjs/rest'],
   },
 });

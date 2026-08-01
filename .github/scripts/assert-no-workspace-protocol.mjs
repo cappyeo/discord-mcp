@@ -2,12 +2,12 @@
  * Fails if a packed tarball still carries a `workspace:` dependency range.
  *
  * pnpm rewrites `workspace:*` to a real version on pack; npm does not. A
- * published manifest containing `"@discord-mcp/core": "workspace:*"` breaks
+ * published manifest containing `"@cappyeo/discord-mcp-core": "workspace:*"` breaks
  * every consumer install with `Unsupported URL Type "workspace:"` and cannot
  * be fixed without a deprecate + republish. So we assert against the actual
  * tarball rather than trusting whichever tool happened to build it.
  *
- * Scoped to `dependencies` on purpose: the private `@discord-mcp/server-mocks`
+ * Scoped to `dependencies` on purpose: the private `@cappyeo/discord-mcp-server-mocks`
  * devDependency is harmless in a tarball and would false-positive.
  */
 import { execFileSync } from 'node:child_process';

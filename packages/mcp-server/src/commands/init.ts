@@ -18,7 +18,7 @@
  *      (workspace, global npm, npx) at the cost of an absolute path
  *      that may need editing if the user later moves the project.
  *      The output explicitly tells the user how to switch to
- *      `npx @discord-mcp/cli` for portable distribution.
+ *      `npx @cappyeo/discord-mcp` for portable distribution.
  *   5. Generate the snippet via the chosen ClientGenerator.
  *   6. Either write to `--output <path>` (with `--force` for overwrite
  *      protection) or print to stdout / structured payload.
@@ -169,7 +169,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
   }
 
   const portabilityNote =
-    'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).';
+    'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@cappyeo/discord-mcp"]).';
 
   emitResult(
     {

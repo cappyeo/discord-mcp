@@ -4,7 +4,7 @@ import type { SnippetConfig } from './types.js';
 
 const baseConfig: SnippetConfig = {
   serverPath: 'npx',
-  serverArgs: ['@discord-mcp/cli'],
+  serverArgs: ['@cappyeo/discord-mcp'],
   // biome-ignore lint/suspicious/noTemplateCurlyInString: this IS the literal placeholder syntax used by MCP clients
   discordToken: '${env:DISCORD_TOKEN}',
 };
@@ -48,13 +48,13 @@ describe('claudeCodeGenerator', () => {
     const snippet = claudeCodeGenerator.generate(baseConfig);
     const parsed = parseSnippet(snippet.content);
     expect(parsed.mcpServers['discord-mcp'].command).toBe('npx');
-    expect(parsed.mcpServers['discord-mcp'].args).toEqual(['@discord-mcp/cli']);
+    expect(parsed.mcpServers['discord-mcp'].args).toEqual(['@cappyeo/discord-mcp']);
   });
 
   it('appends --gateway to args when gateway: true', () => {
     const snippet = claudeCodeGenerator.generate({ ...baseConfig, gateway: true });
     const args = parseSnippet(snippet.content).mcpServers['discord-mcp'].args;
-    expect(args).toEqual(['@discord-mcp/cli', '--gateway']);
+    expect(args).toEqual(['@cappyeo/discord-mcp', '--gateway']);
   });
 
   it('configFilePath is non-empty and mentions ~/.claude.json', () => {

@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@astrojs/starlight": "^0.37.0",
-    "@discord-mcp/core": "workspace:*",
+    "@cappyeo/discord-mcp-core": "workspace:*",
     "astro": "^5.0.0",
     "sharp": "^0.33.0",
     "tsx": "^4.19.0",

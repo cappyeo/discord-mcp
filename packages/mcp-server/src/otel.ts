@@ -1,4 +1,4 @@
-import { buildResource, type Config, redactRoute } from '@discord-mcp/core';
+import { buildResource, type Config, redactRoute } from '@cappyeo/discord-mcp-core';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { PinoInstrumentation } from '@opentelemetry/instrumentation-pino';

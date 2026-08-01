@@ -47,7 +47,7 @@ importers:
         specifier: ^9.5.0
         version: 9.14.0
     devDependencies:
-      '@discord-mcp/server-mocks':
+      '@cappyeo/discord-mcp-server-mocks':
         specifier: workspace:*
         version: link:../mcp-server-mocks
       '@discordjs/rest':
@@ -98,7 +98,7 @@ importers:
 
   packages/mcp-server:
     dependencies:
-      '@discord-mcp/core':
+      '@cappyeo/discord-mcp-core':
         specifier: workspace:*
         version: link:../mcp-core
       '@discordjs/rest':
@@ -144,7 +144,7 @@ importers:
         specifier: ^4.0.0
         version: 4.3.6
     devDependencies:
-      '@discord-mcp/server-mocks':
+      '@cappyeo/discord-mcp-server-mocks':
         specifier: workspace:*
         version: link:../mcp-server-mocks
       '@types/node':
@@ -171,7 +171,7 @@ importers:
       '@astrojs/starlight':
         specifier: ^0.37.0
         version: 0.37.7(astro@5.18.1(@types/node@24.12.2)(jiti@2.6.1)(rollup@4.60.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))
-      '@discord-mcp/core':
+      '@cappyeo/discord-mcp-core':
         specifier: workspace:*
         version: link:../packages/mcp-core
       astro:

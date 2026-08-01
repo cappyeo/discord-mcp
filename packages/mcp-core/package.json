@@ -1,5 +1,5 @@
 {
-  "name": "@discord-mcp/core",
+  "name": "@cappyeo/discord-mcp-core",
   "version": "0.13.0",
   "private": false,
   "type": "module",
@@ -70,7 +70,7 @@
     }
   },
   "devDependencies": {
-    "@discord-mcp/server-mocks": "workspace:*",
+    "@cappyeo/discord-mcp-server-mocks": "workspace:*",
     "@discordjs/rest": "^2.4.0",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "@mswjs/interceptors": "^0.41.3",

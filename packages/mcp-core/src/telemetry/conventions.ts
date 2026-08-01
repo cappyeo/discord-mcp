@@ -39,5 +39,5 @@ export const ATTR_CIRCUIT_TO_STATE = 'to_state';
 export const ATTR_ERROR_TYPE = 'error.type';
 
 // --- Tracer / Meter identity (also used by middleware) ---
-export const TELEMETRY_INSTRUMENTATION_NAME = '@discord-mcp/core';
+export const TELEMETRY_INSTRUMENTATION_NAME = '@cappyeo/discord-mcp-core';
 export const TELEMETRY_INSTRUMENTATION_VERSION: string = packageJson.version;

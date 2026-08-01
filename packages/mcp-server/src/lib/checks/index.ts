@@ -19,7 +19,7 @@
  * The array is intentionally simple `[a, b, c]` so future phases just
  * push more entries.
  */
-import type { Config } from '@discord-mcp/core';
+import type { Config } from '@cappyeo/discord-mcp-core';
 import { auditSinkCheck } from './audit-sink.js';
 import { clientCapsCheck } from './client-caps.js';
 import { envVarsCheck } from './env-vars.js';

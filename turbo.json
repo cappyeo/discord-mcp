@@ -34,7 +34,7 @@
     },
     "dev": { "cache": false, "persistent": true },
     "site#build": {
-      "dependsOn": ["@discord-mcp/core#build"],
+      "dependsOn": ["@cappyeo/discord-mcp-core#build"],
       "outputs": ["dist/**", ".astro/**"],
       "inputs": ["src/**", "scripts/**", "astro.config.ts", "package.json", "tsconfig.json"]
     },

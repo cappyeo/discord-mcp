@@ -11,7 +11,7 @@
  * env-vars is the canonical reporter for parse failures, so we own the
  * full re-parse to capture the failure message.
  */
-import { loadConfig } from '@discord-mcp/core';
+import { loadConfig } from '@cappyeo/discord-mcp-core';
 import type { DoctorCheck } from './index.js';
 
 export const envVarsCheck: DoctorCheck = {
@@ -29,7 +29,7 @@ export const envVarsCheck: DoctorCheck = {
     } catch (e) {
       // loadConfig never lets the ZodError escape: it formats the issues
       // into `new Error("Invalid configuration:\n  - <path>: <message>")`
-      // (see @discord-mcp/core config.ts) and throws that. So there is no
+      // (see @cappyeo/discord-mcp-core config.ts) and throws that. So there is no
       // structured issues array to unwrap here — the message already
       // lists path + message per issue.
       //

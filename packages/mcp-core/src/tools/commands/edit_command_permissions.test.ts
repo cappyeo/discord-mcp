@@ -1,4 +1,4 @@
-import { server } from '@discord-mcp/server-mocks';
+import { server } from '@cappyeo/discord-mcp-server-mocks';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import commandsEditCommandPermissions from './edit_command_permissions.js';

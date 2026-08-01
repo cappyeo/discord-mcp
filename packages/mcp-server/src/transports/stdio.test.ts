@@ -7,7 +7,7 @@
  * MCP transport and a real `Client`, so dropping `server.connect(transport)`
  * or reordering the `wrapRestWithResilience` arguments fails the suite.
  *
- * `@discord-mcp/core` is only PARTIALLY mocked: everything keeps its real
+ * `@cappyeo/discord-mcp-core` is only PARTIALLY mocked: everything keeps its real
  * implementation except `createLogger` (replaced by a capturing stub so the
  * ready/warn records are assertable — pino writes straight to fd 2 and would
  * bypass a process.stderr spy) and `createGatewayClient` (which would
@@ -26,8 +26,8 @@ const { makeLoggerStub } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('@discord-mcp/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@discord-mcp/core')>();
+vi.mock('@cappyeo/discord-mcp-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@cappyeo/discord-mcp-core')>();
   return {
     ...actual,
     createLogger: vi.fn(makeLoggerStub),
@@ -36,7 +36,11 @@ vi.mock('@discord-mcp/core', async (importOriginal) => {
   };
 });
 
-import { createGatewayClient, createLogger, wrapRestWithResilience } from '@discord-mcp/core';
+import {
+  createGatewayClient,
+  createLogger,
+  wrapRestWithResilience,
+} from '@cappyeo/discord-mcp-core';
 import { startStdio } from './stdio.js';
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;

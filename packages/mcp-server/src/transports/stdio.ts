@@ -6,7 +6,7 @@ import {
   type GatewayClient,
   loadConfig,
   wrapRestWithResilience,
-} from '@discord-mcp/core';
+} from '@cappyeo/discord-mcp-core';
 import { REST } from '@discordjs/rest';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';

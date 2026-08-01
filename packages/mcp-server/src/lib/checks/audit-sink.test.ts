@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import type { Config } from '@discord-mcp/core';
+import type { Config } from '@cappyeo/discord-mcp-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.mock must be hoisted ABOVE the audit-sink.js import. ESM namespace

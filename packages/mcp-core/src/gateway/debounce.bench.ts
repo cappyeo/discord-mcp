@@ -9,7 +9,7 @@ import { createDebouncer } from './debounce.js';
  * measure wall-clock for the whole burst (event-fan + drain). The
  * "no events" baseline measures debouncer-creation overhead alone.
  *
- * Run via `pnpm --filter @discord-mcp/core bench`. CI does NOT gate on
+ * Run via `pnpm --filter @cappyeo/discord-mcp-core bench`. CI does NOT gate on
  * bench p50/p95.
  */
 
