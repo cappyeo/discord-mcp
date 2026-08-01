@@ -7,8 +7,9 @@ import type { StarlightRouteData } from '@astrojs/starlight/route-data';
 import SidebarPanel from './SidebarPanel.astro';
 import SidebarTab from './SidebarTab.astro';
 import SidebarTabs from './SidebarTabs.astro';
+import { getToolDetailContext } from './toolNavigation';
 
-const { id, sidebar } = Astro.locals.starlightRoute;
+const { id, sidebar: routeSidebar } = Astro.locals.starlightRoute;
 
 type SidebarEntry = StarlightRouteData['sidebar'][number];
 type SidebarGroup = Extract<SidebarEntry, { type: 'group' }>;
@@ -23,6 +24,37 @@ function containsCurrent(entries: SidebarEntry[]): boolean {
   return entries.some((entry) =>
     entry.type === 'link' ? entry.isCurrent : containsCurrent(entry.entries),
   );
+}
+
+const normalizePath = (path: string) => path.replace(/\/+$/, '') || '/';
+const sidebar = structuredClone(routeSidebar);
+const tool = getToolDetailContext(id);
+
+function markCategoryLocation(entries: SidebarEntry[], href: string): boolean {
+  for (const entry of entries) {
+    if (entry.type === 'link' && normalizePath(entry.href) === normalizePath(href)) {
+      entry.attrs = {
+        ...entry.attrs,
+        'aria-current': 'location',
+        'data-current-location': 'true',
+      };
+      return true;
+    }
+
+    if (entry.type === 'group' && markCategoryLocation(entry.entries, href)) {
+      entry.collapsed = false;
+      return true;
+    }
+  }
+  return false;
+}
+
+if (tool) {
+  const basePath = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+  const categoryHref = `${basePath}tools/${tool.category}/`;
+  if (!markCategoryLocation(sidebar, categoryHref)) {
+    throw new Error(`Tool category "${tool.category}" is missing from the Reference sidebar.`);
+  }
 }
 
 assertGroups(sidebar);
@@ -65,6 +97,16 @@ const icons = ['rocket', 'open-book', 'magnifier', 'puzzle'] as const;
   </SidebarTabs>
 </SidebarPersister>
 
+<script is:inline>
+  document.querySelectorAll('.sidebar-pane [data-current-location="true"]').forEach((current) => {
+    let group = current.closest('details');
+    while (group) {
+      group.open = true;
+      group = group.parentElement?.closest('details') ?? null;
+    }
+  });
+</script>
+
 <div class="md:sl-hidden">
   <MobileMenuFooter />
 </div>
@@ -72,6 +114,13 @@ const icons = ['rocket', 'open-book', 'magnifier', 'puzzle'] as const;
 <style>
   :global(.sidebar-pane) {
     overflow-y: scroll;
+  }
+
+  :global(.sidebar-pane a[aria-current='location']) {
+    border-inline-start: 0.15rem solid var(--sl-color-accent);
+    color: var(--sl-color-text-accent);
+    background: var(--sl-color-accent-low);
+    font-weight: 650;
   }
 
   :global(sidebar-tabs > .tab-list) {

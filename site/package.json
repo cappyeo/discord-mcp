@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "postbuild": "tsx scripts/verify-tool-navigation.ts",
     "preview": "astro preview",
     "generate-tools": "tsx scripts/generate-tool-docs.ts",
     "predev": "pnpm generate-tools",

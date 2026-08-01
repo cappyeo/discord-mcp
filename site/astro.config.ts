@@ -24,6 +24,7 @@ export default defineConfig({
         Hero: './src/components/DiscordMcpHero.astro',
         Header: './src/components/starlight/Header.astro',
         PageSidebar: './src/components/starlight/PageSidebar.astro',
+        PageTitle: './src/components/starlight/PageTitle.astro',
         Sidebar: './src/components/starlight/Sidebar.astro',
       },
       editLink: {
