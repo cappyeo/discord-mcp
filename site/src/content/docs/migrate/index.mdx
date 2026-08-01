@@ -5,7 +5,8 @@ sidebar:
   order: 0
 ---
 
-import { Card, CardGrid, LinkCard, Aside, Steps } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
+import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 Switch from another Discord MCP server with a guided three-command flow:
 
@@ -20,28 +21,14 @@ explanatory notes on every non-obvious entry.
 
 ## Available adapters
 
-<CardGrid>
-  <LinkCard
-    title="PaSympa"
-    href="/discord-mcp/migrate/pasympa/"
-    description="TypeScript, ~91 tools, discord_* prefix."
-  />
-  <LinkCard
-    title="quadslab"
-    href="/discord-mcp/migrate/quadslab/"
-    description="@quadslab.io, ~138 tools, includes MCP Resources surface."
-  />
-  <LinkCard
-    title="discord-ops"
-    href="/discord-mcp/migrate/discord-ops/"
-    description="Multi-guild routing, dry-run mode, tool profiles, ~49 tools."
-  />
-  <LinkCard
-    title="Hubdustry"
-    href="/discord-mcp/migrate/hubdustry/"
-    description="Reference adapter (Go MCP, non-Discord) — framework smoke test."
-  />
-</CardGrid>
+<DocsCardGrid
+  links={[
+    { title: 'PaSympa', href: '/discord-mcp/migrate/pasympa/', description: 'TypeScript, ~91 tools, discord_* prefix.' },
+    { title: 'quadslab', href: '/discord-mcp/migrate/quadslab/', description: '@quadslab.io, ~138 tools, includes MCP Resources surface.' },
+    { title: 'discord-ops', href: '/discord-mcp/migrate/discord-ops/', description: 'Multi-guild routing, dry-run mode, tool profiles, ~49 tools.' },
+    { title: 'Hubdustry', href: '/discord-mcp/migrate/hubdustry/', description: 'Reference adapter (Go MCP, non-Discord) — framework smoke test.' },
+  ]}
+/>
 
 ## Authoring a new adapter
 
@@ -83,11 +70,12 @@ convention, and the cross-detection test pattern every adapter must pass.
 3. **Generate your new client config.**
 
    ```bash
-   discord-mcp init --client claude-desktop --token "Bot YOUR.TOKEN"
+   discord-mcp init --client claude-desktop
    ```
 
-   Writes the platform-appropriate config file pointing at the freshly
-   installed `discord-mcp` binary. Restart your MCP client and you're done.
+   Prints a platform-appropriate config snippet pointing at the freshly
+   installed `discord-mcp` binary. Merge it into your MCP client configuration,
+   set `DISCORD_TOKEN`, then restart the client.
 
 </Steps>
 

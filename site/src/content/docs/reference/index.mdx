@@ -5,7 +5,7 @@ sidebar:
   order: 0
 ---
 
-import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 This section is the **API surface reference** for discord-mcp. The
 [Tools](/discord-mcp/tools/) section already lists every MCP tool with its full
@@ -20,28 +20,14 @@ form of each surface. For background and decision rationale, see
 [Operations](/discord-mcp/operations/) (how to run them in production). For
 walkthroughs, see [Recipes](/discord-mcp/recipes/).
 
-<CardGrid>
-  <LinkCard
-    title="CLI"
-    description="discord-mcp serve | doctor | init | migrate. All flags, exit codes, and example invocations."
-    href="/discord-mcp/reference/cli/"
-  />
-  <LinkCard
-    title="Environment variables"
-    description="23+ env vars driving the server: token, logging, telemetry, retry/timeout, circuit/bulkhead, audit. Defaults and ranges sourced from the Zod schema."
-    href="/discord-mcp/reference/config/"
-  />
-  <LinkCard
-    title="@discord-mcp/core API"
-    description="Public TypeScript exports for embedding the server in custom transports or extending it with custom tools. defineTool, buildServer, error classes, branded types."
-    href="/discord-mcp/reference/api-core/"
-  />
-  <LinkCard
-    title="Changelog"
-    description="One section per release v0.0.0 → v0.12.0. Highlights, dates, links to merge commits."
-    href="/discord-mcp/reference/changelog/"
-  />
-</CardGrid>
+<DocsCardGrid
+  links={[
+    { title: 'CLI', href: '/discord-mcp/reference/cli/', description: 'discord-mcp serve | doctor | init | migrate. All flags, exit codes, and example invocations.' },
+    { title: 'Environment variables', href: '/discord-mcp/reference/config/', description: '23+ env vars driving the server: token, logging, telemetry, retry/timeout, circuit/bulkhead, audit. Defaults and ranges sourced from the Zod schema.' },
+    { title: '@discord-mcp/core API', href: '/discord-mcp/reference/api-core/', description: 'Public TypeScript exports for embedding the server in custom transports or extending it with custom tools. defineTool, buildServer, error classes, branded types.' },
+    { title: 'Changelog', href: '/discord-mcp/reference/changelog/', description: 'One section per release v0.0.0 → v0.13.0. Highlights, dates, links to merge commits.' },
+  ]}
+/>
 
 ## Looking for something else?
 

@@ -1,0 +1,18 @@
+---
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+---
+
+<Tabs syncKey="discord-mcp-client">
+  <TabItem label="Claude Desktop">
+    <slot name="claude-desktop" />
+  </TabItem>
+  <TabItem label="Claude Code">
+    <slot name="claude-code" />
+  </TabItem>
+  <TabItem label="Cursor">
+    <slot name="cursor" />
+  </TabItem>
+  <TabItem label="Generic MCP">
+    <slot name="generic" />
+  </TabItem>
+</Tabs>

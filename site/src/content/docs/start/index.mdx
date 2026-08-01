@@ -3,9 +3,15 @@ title: Get started
 description: Quickstart guides for installing, configuring, and using discord-mcp.
 ---
 
+import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
+
 Use the Get started section to install discord-mcp, configure your client, and run your first tool call.
 
-- [Quickstart](/discord-mcp/start/quickstart/)
-- [Installation](/discord-mcp/start/installation/)
-- [First tool call](/discord-mcp/start/first-tool-call/)
-- [Client setup](/discord-mcp/start/client-setup/)
+<DocsCardGrid
+  links={[
+    { title: 'Quickstart', href: '/discord-mcp/start/quickstart/', description: 'Install the CLI, generate a Claude Desktop snippet, validate it, and make your first call.' },
+    { title: 'Installation', href: '/discord-mcp/start/installation/', description: 'Choose npm, pnpm, or yarn and understand the optional Gateway runtime.' },
+    { title: 'Client setup', href: '/discord-mcp/start/client-setup/', description: 'Generate and merge a config snippet for Claude Desktop, Claude Code, Cursor, or any stdio MCP client.' },
+    { title: 'First tool call', href: '/discord-mcp/start/first-tool-call/', description: 'Follow a real Discord request from agent prompt through tool response.' },
+  ]}
+/>

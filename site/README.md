@@ -42,13 +42,31 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
 
 - `astro.config.ts` — Starlight config (sidebar, base path)
 - `src/content/docs/` — all MDX content
-  - `start/` — quickstart pages (4)
+  - `start/` — quickstart pages (5)
   - `tools/` — auto-generated tool reference (192 tools + 28 categories + 1 index)
   - `recipes/` — cookbook recipes (6)
   - `operations/` — operator guides (4)
   - `architecture/` — deep-dives (9)
   - `reference/` — CLI, config, API, changelog (5)
+- `src/components/docs/` — reusable MDX building blocks
+  - `DocsCardGrid.astro` — data-driven cards for section hubs
+  - `ClientTabs.astro` — synchronized Claude Desktop / Claude Code / Cursor / generic tabs
 - `scripts/generate-tool-docs.ts` — tool MDX generator
+
+## Authoring hand-written docs
+
+Keep product facts close to their source: generated tool docs come only from
+`generate-tool-docs.ts`, while hand-written guides compose Starlight components
+and the shared MDX building blocks in `src/components/docs/`.
+
+- Use `DocsCardGrid` for a section's primary navigation: MDX supplies an array
+  of `{ title, description, href }` data and the component owns the visual
+  markup.
+- Use `ClientTabs` for any client-specific instructions. Supply named slots
+  (`claude-desktop`, `claude-code`, `cursor`, `generic`) so the selected tab
+  stays synchronized across pages.
+- Verify every documentation change with `pnpm --filter site test` and
+  `pnpm --filter site build` before publishing.
 
 ## GitHub Pages setup (operators)
 

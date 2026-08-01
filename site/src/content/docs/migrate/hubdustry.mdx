@@ -60,10 +60,11 @@ If you're a Hubdustry user adding Discord capabilities to your agent:
 - **Use `discord-mcp init`** to generate the discord-mcp client config:
 
   ```bash
-  discord-mcp init --client claude-desktop --token "Bot YOUR.TOKEN"
+  discord-mcp init --client claude-desktop
   ```
 
-  Restart your MCP client. You now have N+1 servers configured, with
+  Merge the printed snippet, set `DISCORD_TOKEN`, then restart your MCP client.
+  You now have N+1 servers configured, with
   discord-mcp's 192 Discord tools added next to Hubdustry's 8 system tools.
 
 ## Test the framework

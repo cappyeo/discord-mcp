@@ -26,7 +26,7 @@ You will need:
 2. **Generate your client config snippet and merge it by hand.**
 
    ```bash
-   discord-mcp init --client claude-desktop --token "YOUR.TOKEN.HERE"
+   discord-mcp init --client claude-desktop
    ```
 
    `init` **prints** a snippet to stdout. It does not touch any file unless you
@@ -48,9 +48,10 @@ You will need:
    every other MCP server you have configured**. Merge by hand.
    </Aside>
 
-   The `Bot ` prefix is optional. `discord.js` adds it when it is missing;
-   `doctor` emits a warning if you leave it off, not a failure. Passing a token
-   that already starts with `Bot ` is equally fine.
+   The generated `env` block uses `${env:DISCORD_TOKEN}` by default, keeping the
+   secret out of the printed snippet. Leave it as-is when your client supports
+   environment interpolation; otherwise replace it only in your local client
+   config and never commit that config file.
 
 3. **Export the token into your shell.**
 

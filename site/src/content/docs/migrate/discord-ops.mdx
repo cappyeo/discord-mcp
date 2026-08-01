@@ -130,15 +130,16 @@ tools are reported as `unmapped`; remove the calls and inline the bodies.
    them down to one bot per workspace? Most users go with one process per
    project.
 
-4. **Generate a client config per project.**
+4. **Generate a client config for each process.**
 
    ```bash
-   discord-mcp init --client claude-desktop --token "Bot YOUR.TOKEN" --name discord-mcp-app1
-   discord-mcp init --client claude-desktop --token "Bot OTHER.TOKEN" --name discord-mcp-app2
+   discord-mcp init --client claude-desktop
    ```
 
-   Each invocation appends a new MCP server entry to your client config.
-   Restart your MCP client and you'll see N entries — one per project.
+   `init` prints a snippet; it does not append to your client config and it has
+   no `--name` flag. For multiple projects, merge copies under distinct
+   `mcpServers` keys (for example `discord-mcp-app1` and `discord-mcp-app2`),
+   set each process's `DISCORD_TOKEN`, then restart your MCP client.
 
 5. **Update agent prompts.**
 

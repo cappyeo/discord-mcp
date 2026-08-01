@@ -5,7 +5,7 @@ sidebar:
   order: 0
 ---
 
-import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 This section is the **contributor + advanced operator reference** for how
 discord-mcp is built. The other sections describe what the server does
@@ -30,53 +30,19 @@ rather than expect every tool to re-implement them. The pieces below are
 the answer to "what does the server need to do once, so each tool can be
 short."
 
-<CardGrid>
-  <LinkCard
-    title="Overview"
-    description="The big picture: layered architecture, the Sapphire piece + store model, repo layout, and a call-path mermaid diagram."
-    href="/discord-mcp/architecture/overview/"
-  />
-  <LinkCard
-    title="Middleware chain"
-    description="The four layers wrapping every tool call (telemetry → validate → preconditions → audit), why their order matters, and where to insert a hypothetical fifth layer."
-    href="/discord-mcp/architecture/middleware-chain/"
-  />
-  <LinkCard
-    title="Components V2"
-    description="The V2 layout primitives (Container, Section, MediaGallery, ActionRow), the schema validator, the preview renderer, the 5 templates, and the flags=32768 contract."
-    href="/discord-mcp/architecture/components-v2/"
-  />
-  <LinkCard
-    title="Pipeline"
-    description="The mcp_pipeline executor: atomic multi-tool calls, {{stepN.path}} interpolation, the recursion guard, partial-failure semantics, with a mermaid sequence diagram."
-    href="/discord-mcp/architecture/pipeline/"
-  />
-  <LinkCard
-    title="Gateway"
-    description="The optional --gateway mode: lazy-loaded discord.js, 5 subscribable URIs, 5 handlers, SubscriptionRegistry, the 300ms debounce on PRESENCE_UPDATE."
-    href="/discord-mcp/architecture/gateway/"
-  />
-  <LinkCard
-    title="Error handling"
-    description="The error hierarchy (client vs server), formatErrorForUser shape, recovery-hint contract, DRY_RUN_PREVIEW pattern, Cockatiel mappings."
-    href="/discord-mcp/architecture/error-handling/"
-  />
-  <LinkCard
-    title="Confirmation"
-    description="The __confirm:true + MCP_DRY_RUN=false dual-key contract that gates every destructive tool. Why double-underscore, why safe-by-default."
-    href="/discord-mcp/architecture/confirmation/"
-  />
-  <LinkCard
-    title="Sampling"
-    description="Zero-API-key intelligence: how the 5 intelligence tools call back into the client's LLM via MCP sampling, with a graceful host_llm_should_process fallback."
-    href="/discord-mcp/architecture/sampling/"
-  />
-  <LinkCard
-    title="Rate limits"
-    description="Discord's global vs per-route bucket model, why @discordjs/rest's queue is disabled, how cockatiel owns retry, when to use webhooks to bypass the bot bucket."
-    href="/discord-mcp/architecture/rate-limits/"
-  />
-</CardGrid>
+<DocsCardGrid
+  links={[
+    { title: 'Overview', href: '/discord-mcp/architecture/overview/', description: 'The big picture: layered architecture, the Sapphire piece + store model, repo layout, and a call-path mermaid diagram.' },
+    { title: 'Middleware chain', href: '/discord-mcp/architecture/middleware-chain/', description: 'The four layers wrapping every tool call (telemetry → validate → preconditions → audit), why their order matters, and where to insert a hypothetical fifth layer.' },
+    { title: 'Components V2', href: '/discord-mcp/architecture/components-v2/', description: 'The V2 layout primitives (Container, Section, MediaGallery, ActionRow), the schema validator, the preview renderer, the 5 templates, and the flags=32768 contract.' },
+    { title: 'Pipeline', href: '/discord-mcp/architecture/pipeline/', description: 'The mcp_pipeline executor: atomic multi-tool calls, {{stepN.path}} interpolation, the recursion guard, partial-failure semantics, with a mermaid sequence diagram.' },
+    { title: 'Gateway', href: '/discord-mcp/architecture/gateway/', description: 'The optional --gateway mode: lazy-loaded discord.js, 5 subscribable URIs, 5 handlers, SubscriptionRegistry, the 300ms debounce on PRESENCE_UPDATE.' },
+    { title: 'Error handling', href: '/discord-mcp/architecture/error-handling/', description: 'The error hierarchy (client vs server), formatErrorForUser shape, recovery-hint contract, DRY_RUN_PREVIEW pattern, Cockatiel mappings.' },
+    { title: 'Confirmation', href: '/discord-mcp/architecture/confirmation/', description: 'The __confirm:true + MCP_DRY_RUN=false dual-key contract that gates every destructive tool. Why double-underscore, why safe-by-default.' },
+    { title: 'Sampling', href: '/discord-mcp/architecture/sampling/', description: 'Zero-API-key intelligence: how the 5 intelligence tools call back into the client’s LLM via MCP sampling, with a graceful host_llm_should_process fallback.' },
+    { title: 'Rate limits', href: '/discord-mcp/architecture/rate-limits/', description: 'Discord’s global vs per-route bucket model, why @discordjs/rest’s queue is disabled, how cockatiel owns retry, when to use webhooks to bypass the bot bucket.' },
+  ]}
+/>
 
 ## How to read this section
 

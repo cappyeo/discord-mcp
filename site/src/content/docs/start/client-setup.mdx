@@ -3,78 +3,90 @@ title: Client setup
 description: Wire up discord-mcp with Claude Desktop, Claude Code, Cursor, or any generic MCP client.
 ---
 
-discord-mcp speaks **stdio MCP** — it works with any client that supports MCP servers as
-subprocesses. Below are the per-client config snippets and where they live on disk.
+import { Aside } from '@astrojs/starlight/components';
+import ClientTabs from '../../../components/docs/ClientTabs.astro';
 
-## Supported clients
+discord-mcp speaks **stdio MCP** and works with any client that can spawn an MCP server
+as a subprocess. The `init` command generates the right `mcpServers` snippet for the
+client you select; it prints that snippet by default, so you stay in control of the
+file you merge it into.
 
-| Client          | Config file                                                                | Format              | Auto-generate       |
-| --------------- | -------------------------------------------------------------------------- | ------------------- | ------------------- |
-| Claude Desktop  | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | `mcpServers` JSON   | `--client claude-desktop` |
-| Claude Code     | `~/.claude/settings.json` (or project `.claude/settings.json`)             | `mcpServers` JSON   | `--client claude-code`    |
-| Cursor          | `~/.cursor/mcp.json`                                                       | `mcpServers` JSON   | `--client cursor`         |
-| Generic         | Any MCP host that supports stdio servers                                   | Vendor-specific     | `--client generic` (prints snippet to stdout) |
+<Aside type="caution">
+`init` does not discover or edit your client config automatically. Do not pass a real
+token with `--token` unless you intentionally want it written unredacted into the
+generated snippet. Omitting it keeps the `${env:DISCORD_TOKEN}` placeholder.
+</Aside>
 
-The `init` subcommand reads the relevant config file, merges in a `discord-mcp` entry,
-and writes back atomically. Pass `--print` instead of `--client <name>` to dump the
-JSON snippet to stdout without touching any file.
+## Choose your client
 
-## Claude Desktop
+<ClientTabs>
+  <div slot="claude-desktop">
 
-```bash
-discord-mcp init --client claude-desktop --token "Bot YOUR.TOKEN"
-```
+  ```bash
+  discord-mcp init --client claude-desktop
+  ```
 
-This adds an entry like the following to `claude_desktop_config.json`:
+  Merge the printed `discord-mcp` entry into the `mcpServers` object, then fully quit
+  and reopen Claude Desktop.
 
-```json
-{
-  "mcpServers": {
-    "discord-mcp": {
-      "command": "discord-mcp",
-      "args": ["start"],
-      "env": { "DISCORD_TOKEN": "Bot YOUR.TOKEN" }
-    }
-  }
-}
-```
+  | OS | Config file |
+  | -- | ----------- |
+  | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+  | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+  | Linux | `~/.config/Claude/claude_desktop_config.json` |
 
-Restart Claude Desktop fully (quit + reopen, not just close window) for the new server
-to be detected.
+  </div>
+  <div slot="claude-code">
 
-## Claude Code
+  ```bash
+  discord-mcp init --client claude-code
+  ```
 
-```bash
-discord-mcp init --client claude-code --token "Bot YOUR.TOKEN"
-```
+  Merge the output into `~/.claude.json` for user-level configuration, or into
+  `<project>/.mcp.json` for a project. Claude Code also supports its managed
+  `claude mcp add` workflow; use the generated snippet when you prefer explicit JSON.
 
-Claude Code reads `~/.claude/settings.json` (user-level) or a project-local
-`.claude/settings.json`. The `init` command edits the user-level file by default; pass
-`--scope project` to target the current working directory's project file instead.
+  </div>
+  <div slot="cursor">
 
-## Cursor
+  ```bash
+  discord-mcp init --client cursor
+  ```
 
-```bash
-discord-mcp init --client cursor --token "Bot YOUR.TOKEN"
-```
+  Merge the output into `~/.cursor/mcp.json` for global access or
+  `<project>/.cursor/mcp.json` for one project. Restart Cursor after changing it.
 
-Cursor reads `~/.cursor/mcp.json`. Restart Cursor after editing.
+  </div>
+  <div slot="generic">
 
-## Generic / manual setup
+  ```bash
+  discord-mcp init --client generic
+  ```
 
-If your client is not listed, run:
+  The output is a standard `mcpServers` block. Place it where your MCP client's own
+  documentation expects stdio server configuration.
 
-```bash
-discord-mcp init --client generic --token "Bot YOUR.TOKEN" --print
-```
+  </div>
+</ClientTabs>
 
-The CLI prints a JSON snippet to stdout that you can paste into any MCP host that
-accepts stdio servers. Adapt the `command` / `args` / `env` keys to match your host's
-schema.
+The generated snippet uses the current CLI path, so it works immediately from the
+installation that created it. If you later move or replace that installation, generate
+a fresh snippet instead of editing an absolute path by hand.
 
 ## Verifying the connection
 
-After editing config and restarting your client, run:
+After merging config and restarting your client, set a temporary token for the shell
+where you run diagnostics:
+
+```bash
+export DISCORD_TOKEN="YOUR.TOKEN.HERE"          # macOS / Linux
+```
+
+```powershell
+$env:DISCORD_TOKEN = "YOUR.TOKEN.HERE"          # Windows PowerShell
+```
+
+Then run:
 
 ```bash
 discord-mcp doctor --online
