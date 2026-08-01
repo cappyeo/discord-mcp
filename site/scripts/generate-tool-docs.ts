@@ -852,7 +852,7 @@ export function renderToolsIndex(byCategory: Map<string, ToolMetadata[]>): strin
     .join('\n\n');
 
   return `---
-title: Tool reference
+title: Tools
 description: Find the discord-mcp contract you need by Discord domain, then narrow within its category.
 type: reference
 sidebar:

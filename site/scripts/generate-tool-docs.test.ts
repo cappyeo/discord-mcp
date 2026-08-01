@@ -450,7 +450,7 @@ describe('renderToolsIndex', () => {
       ],
     ]);
     const md = renderToolsIndex(byCat);
-    expect(md).toContain('title: Tool reference');
+    expect(md).toContain('title: Tools');
     expect(md).toContain('discord-mcp exposes 2 tools');
     expect(md).not.toMatch(/^# /m);
     expect(md).toContain('Messages (1)');
@@ -571,7 +571,7 @@ describe('generate (smoke)', () => {
     expect(messageFiles).toContain('index.mdx');
 
     const topIndex = readFileSync(join(outDir, 'index.mdx'), 'utf8');
-    expect(topIndex).toContain('title: Tool reference');
+    expect(topIndex).toContain('title: Tools');
     expect(topIndex).toContain('discord-mcp exposes 3 tools');
     expect(topIndex).not.toMatch(/^# /m);
   });

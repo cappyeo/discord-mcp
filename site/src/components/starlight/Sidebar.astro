@@ -36,7 +36,7 @@ const inferredLabel =
       ? 'Guides'
       : inSection('architecture') || inSection('migrate')
         ? 'Develop'
-        : 'Start';
+        : 'Tutorial';
 const isInitial = (label: string, entries: SidebarEntry[]) =>
   hasCurrentTab ? containsCurrent(entries) : label === inferredLabel;
 const makeId = (label: string) => `sidebar-panel-${label.toLowerCase().replaceAll(/\s+/g, '-')}`;

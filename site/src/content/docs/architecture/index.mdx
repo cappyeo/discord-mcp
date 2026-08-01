@@ -8,6 +8,7 @@ sidebar:
   order: 0
 ---
 
+import { Aside } from '@astrojs/starlight/components';
 import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 Trace a tool call from MCP input to Discord REST. Tools live in a Sapphire-style
@@ -17,9 +18,81 @@ bulkhead, circuit-breaker, retry, and timeout policies. Optional Gateway mode
 emits notifications for five URI keys and falls back to REST-only startup when
 the Gateway connection cannot boot.
 
+## System design
+
+```mermaid
+graph TD
+  Client[MCP client] --> Transport[InMemoryTransport / stdio]
+  Transport --> Server[McpServer]
+  Server --> MW[Middleware chain]
+  MW --> Tool[Tool piece]
+  Tool --> REST[Resilient REST adapter]
+  REST --> Discord[Discord REST API]
+  Tool -. optional .-> Sampling[Client LLM via sampling]
+  Server -. optional .-> Gateway[Gateway client]
+  Gateway --> DiscordWS[Discord Gateway WebSocket]
+```
+
+- **MCP client** sends JSON-RPC `tools/call` over stdio.
+- **Transport** owns JSON-RPC framing; production uses `stdio`, tests use
+  `InMemoryTransport`.
+- **McpServer** bridges MCP to the piece registry and hosts the middleware,
+  tool, precondition, and resource stores.
+- **Middleware chain** applies telemetry, default guild, validation, category
+  gate, preconditions, and audit before execution.
+- **Tool piece** implements one of the 192 tools, using Discord REST or, for
+  intelligence, MCP sampling back to the client.
+- **REST adapter** wraps `@discordjs/rest` in Cockatiel bulkhead,
+  circuit-breaker, retry, and timeout policies.
+- **Gateway client** is optional under `--gateway`; it emits notifications for
+  five URI keys but does not add resource list/read handlers.
+
+## Registry and repository shape
+
+discord-mcp uses Sapphire's explicit "piece + store" model. `Tool` and
+`Precondition` classes are registered by `server.ts`; boot does not scan the
+filesystem. The stores provide lookup by name, while the container supplies the
+configured REST client, logger, and config to tool pieces.
+
+This keeps tool construction consistent, but registration is intentionally
+explicit: adding a tool also requires adding it to `server.ts`.
+
+```
+packages/
+  mcp-core/                # Tools, middleware, resilience policy
+    src/
+      tools/               # 192 tool definitions
+      middleware/          # 6 stages + compose
+      preconditions/       # ConfirmRequired, CategoryEnabled
+      pieces/              # Tool and Precondition base classes
+      stores/              # Tool/precondition lookup + resources
+      rest/                # Cockatiel-wrapped @discordjs/rest
+      gateway/             # Optional discord.js client
+      pipeline/            # mcp_pipeline executor
+      errors/              # Error hierarchy + formatErrorForUser
+      audit/               # Audit sinks + redaction
+      telemetry/           # OTel boot + metrics
+  mcp-server/              # CLI and stdio transport wiring
+```
+
+`mcp-core` has no transport assumptions. `mcp-server` is the thin shell that
+wires it to stdio, OpenTelemetry, and signal handling.
+
+Sources:
+[`server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/server.ts),
+[`Tool.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/pieces/Tool.ts),
+and [`ToolStore.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/stores/ToolStore.ts).
+
+<Aside type="note">
+The middleware boundary centralizes validation, category restriction,
+confirmation, audit, and observability. Tools still need registration and
+tests, but do not reimplement those controls.
+</Aside>
+
+## Explore a subsystem
+
 <DocsCardGrid
   links={[
-    { title: 'Overview', href: '/discord-mcp/architecture/overview/', description: 'The big picture: layered architecture, the Sapphire piece + store model, repo layout, and a call-path mermaid diagram.' },
     { title: 'Middleware chain', href: '/discord-mcp/architecture/middleware-chain/', description: 'The six stages wrapping every tool call, why their order matters, and which controls run before execution.' },
     { title: 'Components V2', href: '/discord-mcp/architecture/components-v2/', description: 'The V2 layout primitives (Container, Section, MediaGallery, ActionRow), the schema validator, the preview renderer, the 5 templates, and the flags=32768 contract.' },
     { title: 'Pipeline', href: '/discord-mcp/architecture/pipeline/', description: 'The mcp_pipeline executor: sequential fail-fast calls, {{stepN.path}} interpolation, recursion guard, and partial-failure semantics.' },
@@ -33,10 +106,9 @@ the Gateway connection cannot boot.
 
 ## Choose a path
 
-If you're a **contributor**, start with [Overview](/discord-mcp/architecture/overview/)
-to get the layout, then jump to whichever subsystem you're touching. The
-deep-dive pages each link to source files via GitHub permalinks so you can
-read implementation in a tab.
+If you're a **contributor**, start with the system design above, then jump to
+the subsystem you're touching. The deep-dive pages each link to source files
+via GitHub permalinks so you can read implementation in a tab.
 
 If you're an **operator** trying to understand a production behavior, the
 fastest path is usually:

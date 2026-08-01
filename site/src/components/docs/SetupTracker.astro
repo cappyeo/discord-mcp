@@ -1,0 +1,257 @@
+---
+type Lesson = {
+  title: string;
+  href: string;
+};
+
+type Unit = {
+  title: string;
+  summary: string;
+  lessons: Lesson[];
+};
+
+const units: Unit[] = [
+  {
+    title: 'Introduction',
+    summary: 'Understand the local MCP server and choose a safe test environment.',
+    lessons: [{ title: 'Introduction', href: '/discord-mcp/start/' }],
+  },
+  {
+    title: 'Discord setup',
+    summary: 'Create a bot, grant only the permissions you need, and collect its IDs.',
+    lessons: [{ title: 'Create a Discord bot', href: '/discord-mcp/start/create-discord-bot/' }],
+  },
+  {
+    title: 'Local setup',
+    summary: 'Install the CLI and connect it to the MCP client you use every day.',
+    lessons: [
+      { title: 'Install discord-mcp', href: '/discord-mcp/start/installation/' },
+      { title: 'Connect your client', href: '/discord-mcp/start/client-setup/' },
+    ],
+  },
+  {
+    title: 'Verify your setup',
+    summary: 'Prove the connection with a safe read, then understand one explicit tool call.',
+    lessons: [
+      { title: 'Quickstart', href: '/discord-mcp/start/quickstart/' },
+      { title: 'How a tool call works', href: '/discord-mcp/start/first-tool-call/' },
+    ],
+  },
+  {
+    title: 'Need help?',
+    summary: 'Resolve installation, token, permissions, and connection problems by symptom.',
+    lessons: [{ title: 'Troubleshooting', href: '/discord-mcp/start/troubleshooting/' }],
+  },
+];
+
+const normalizePath = (path: string) => path.replace(/\/+$/, '') || '/';
+const currentPath = normalizePath(Astro.url.pathname);
+const currentUnitIndex = Math.max(
+  0,
+  units.findIndex((unit) =>
+    unit.lessons.some((lesson) => normalizePath(lesson.href) === currentPath),
+  ),
+);
+const currentUnit = units[currentUnitIndex];
+const lessons = units.flatMap((unit) => unit.lessons);
+const currentLessonIndex = Math.max(
+  0,
+  lessons.findIndex((lesson) => normalizePath(lesson.href) === currentPath),
+);
+const nextLesson = lessons[currentLessonIndex + 1];
+---
+
+<nav class="setup-tracker" aria-label="Setup tracker">
+  <p class="tracker-title">Setup tracker</p>
+  <ol class="unit-tabs">
+    {
+      units.map((unit, index) => (
+        <li>
+          <a href={unit.lessons[0].href} aria-current={index === currentUnitIndex ? 'step' : undefined}>
+            <span class="sr-only">{unit.title}</span>
+            {index}
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+  <section class="unit-panel" aria-label={`Unit ${currentUnitIndex}: ${currentUnit.title}`}>
+    <p class="unit-kicker">Unit {currentUnitIndex} of {units.length - 1}</p>
+    <h2>{currentUnit.title}</h2>
+    <p>{currentUnit.summary}</p>
+    <ol class="lesson-list">
+      {
+        currentUnit.lessons.map((lesson, index) => (
+          <li>
+            <a href={lesson.href} aria-current={normalizePath(lesson.href) === currentPath ? 'page' : undefined}>
+              <span>{index + 1}</span>
+              {lesson.title}
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+    {
+      nextLesson && (
+        <a class="continue" href={nextLesson.href}>
+          Continue: {nextLesson.title} →
+        </a>
+      )
+    }
+  </section>
+</nav>
+
+<style>
+  .setup-tracker {
+    margin-block: 1.5rem 2.25rem;
+  }
+
+  .tracker-title {
+    margin: 0 0 0.55rem;
+    font-size: var(--sl-text-lg);
+    font-weight: 700;
+  }
+
+  .unit-tabs,
+  .lesson-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .unit-tabs {
+    display: flex;
+    gap: 0.35rem;
+    padding-inline: 0.7rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .unit-tabs a {
+    display: grid;
+    width: 2.55rem;
+    min-height: 2.65rem;
+    place-items: center;
+    color: var(--sl-color-gray-3);
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 0.45rem 0.45rem 0 0;
+    text-decoration: none;
+  }
+
+  .unit-tabs a:hover {
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+  }
+
+  .unit-tabs a[aria-current='step'] {
+    position: relative;
+    z-index: 1;
+    color: var(--sl-color-white);
+    font-weight: 700;
+    background: var(--sl-color-gray-6);
+    border-color: var(--sl-color-gray-5);
+  }
+
+  .unit-tabs a[aria-current='step']::after {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    content: '';
+    background: var(--sl-color-gray-6);
+  }
+
+  .unit-panel {
+    padding: 1rem;
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+  }
+
+  .unit-kicker {
+    margin: 0;
+    color: var(--sl-color-accent-high);
+    font-size: var(--sl-text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .unit-panel h2 {
+    margin: 0.25rem 0;
+    font-size: var(--sl-text-lg);
+  }
+
+  .unit-panel > p:not(.unit-kicker) {
+    margin: 0 0 0.85rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .lesson-list {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .lesson-list a {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+  }
+
+  .lesson-list a:hover,
+  .lesson-list a[aria-current='page'] {
+    color: var(--sl-color-white);
+  }
+
+  .lesson-list span {
+    display: grid;
+    flex: 0 0 auto;
+    width: 1.4rem;
+    height: 1.4rem;
+    place-items: center;
+    color: var(--sl-color-gray-3);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    font-size: var(--sl-text-xs);
+  }
+
+  .lesson-list a[aria-current='page'] span {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-accent);
+    background: var(--sl-color-accent-low);
+  }
+
+  .continue {
+    display: inline-flex;
+    margin-top: 0.95rem;
+    color: var(--sl-color-accent-high);
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .continue:hover {
+    text-decoration: underline;
+  }
+
+  :global([data-theme='light']) .unit-tabs a:hover,
+  :global([data-theme='light']) .unit-tabs a[aria-current='step'],
+  :global([data-theme='light']) .lesson-list a:hover,
+  :global([data-theme='light']) .lesson-list a[aria-current='page'],
+  :global([data-theme='light']) .lesson-list a[aria-current='page'] span {
+    color: var(--sl-color-gray-1);
+  }
+
+  @media (max-width: 30rem) {
+    .unit-tabs {
+      justify-content: space-between;
+      padding-inline: 0.25rem;
+    }
+
+    .unit-tabs a {
+      width: 2.25rem;
+    }
+  }
+</style>

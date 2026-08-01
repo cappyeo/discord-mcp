@@ -4,6 +4,9 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   site: 'https://cappyeo.github.io',
   base: '/discord-mcp',
+  redirects: {
+    '/architecture/overview': '/discord-mcp/architecture/',
+  },
   integrations: [
     starlight({
       title: 'discord-mcp',
@@ -20,6 +23,7 @@ export default defineConfig({
       components: {
         Hero: './src/components/DiscordMcpHero.astro',
         Header: './src/components/starlight/Header.astro',
+        PageSidebar: './src/components/starlight/PageSidebar.astro',
         Sidebar: './src/components/starlight/Sidebar.astro',
       },
       editLink: {
@@ -35,21 +39,32 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Start',
+          label: 'Tutorial',
           items: [
-            { label: 'Start here', slug: 'start' },
-            'start/create-discord-bot',
-            'start/quickstart',
-            'start/first-tool-call',
-            'start/installation',
-            'start/client-setup',
-            'start/troubleshooting',
+            { label: 'Introduction', slug: 'start' },
+            {
+              label: '1 — Discord setup',
+              items: ['start/create-discord-bot'],
+            },
+            {
+              label: '2 — Local setup',
+              items: ['start/installation', 'start/client-setup'],
+            },
+            {
+              label: '3 — Verify your setup',
+              items: ['start/quickstart', 'start/first-tool-call'],
+            },
+            {
+              label: 'Need help?',
+              collapsed: true,
+              items: ['start/troubleshooting'],
+            },
           ],
         },
         {
           label: 'Guides',
           items: [
-            { label: 'Guides overview', slug: 'recipes' },
+            { label: 'Workflows', slug: 'recipes' },
             {
               label: 'Build workflows',
               items: [
@@ -65,7 +80,7 @@ export default defineConfig({
               label: 'Run in production',
               collapsed: true,
               items: [
-                { label: 'Operations overview', slug: 'operations' },
+                { label: 'Production guide', slug: 'operations' },
                 'operations/configure',
                 'operations/telemetry',
                 'operations/resilience',
@@ -77,8 +92,7 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            { label: 'Reference overview', slug: 'reference' },
-            { label: 'Tool reference', slug: 'tools' },
+            { label: 'Tools', slug: 'tools' },
             {
               label: 'Messaging',
               collapsed: true,
@@ -155,8 +169,7 @@ export default defineConfig({
         {
           label: 'Develop',
           items: [
-            { label: 'Architecture overview', slug: 'architecture' },
-            { label: 'System overview', slug: 'architecture/overview' },
+            { label: 'Architecture', slug: 'architecture' },
             'architecture/middleware-chain',
             'architecture/error-handling',
             'architecture/confirmation',

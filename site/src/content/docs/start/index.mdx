@@ -1,6 +1,6 @@
 ---
-title: Start here
-description: Go from a Discord bot token to a verified read and write tool call through your MCP client.
+title: Discord MCP tutorial
+description: A guided setup from a Discord bot to a verified local MCP tool call.
 type: tutorial
 prev: false
 next:
@@ -9,7 +9,6 @@ next:
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
-import DocsCardGrid from '../../../components/docs/DocsCardGrid.astro';
 
 discord-mcp is a local stdio MCP server that lets an AI client call Discord through a bot you
 control. Nothing is hosted for you: your client starts the process, passes the bot token in its
@@ -20,14 +19,11 @@ The server inherits the bot's Discord permissions. Some ordinary write tools exe
 first call, so begin in a private test server and use least-privilege bot permissions.
 </Aside>
 
-## Choose your path
+## What you will set up
 
-If you do not yet have a Discord application, begin with
-[Create a Discord bot](/discord-mcp/start/create-discord-bot/). Then follow the
-[Quickstart](/discord-mcp/start/quickstart/) for installation, client connection,
-diagnostics, one read, and one test write.
-
-Use the focused pages when you need to inspect or repeat one step:
+This tutorial leads to one safe, repeatable outcome: a local MCP client can
+start `discord-mcp`, make a read-only Discord request, and send one test message
+inside a private server you control.
 
 <Steps>
 
@@ -38,16 +34,5 @@ Use the focused pages when you need to inspect or repeat one step:
 
 </Steps>
 
-## Choose what you need
-
-<DocsCardGrid
-  links={[
-    { title: 'Quickstart', href: '/discord-mcp/start/quickstart/', description: 'Follow the shortest verified path through install, connection, channel discovery, and one test message.' },
-    { title: 'Create a Discord bot', href: '/discord-mcp/start/create-discord-bot/', description: 'Create a test bot, choose minimal permissions, store the token, and copy Discord IDs.' },
-    { title: 'Client setup', href: '/discord-mcp/start/client-setup/', description: 'Generate and merge config for Claude Desktop, Claude Code, Cursor, or another stdio MCP client.' },
-    { title: 'Troubleshooting', href: '/discord-mcp/start/troubleshooting/', description: 'Resolve Node, token, spawn, permissions, IDs, dry-run, and Gateway problems by symptom.' },
-  ]}
-/>
-
-After the first call, use the [tool reference](/discord-mcp/tools/) for exact contracts or the
-[workflow guides](/discord-mcp/recipes/) for multi-step tasks.
+When you finish, use [Tools](/discord-mcp/tools/) for exact contracts or
+[Workflows](/discord-mcp/recipes/) for multi-step tasks.
