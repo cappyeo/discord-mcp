@@ -116,6 +116,16 @@ describe('resolveCliPath', () => {
     expect(p).not.toContain('commands');
   });
 
+  it('prefers the sibling CLI entrypoint from a bundled init chunk', () => {
+    existsImpl = (path) => path.endsWith(`${nodePath.sep}dist${nodePath.sep}cli.js`);
+
+    const p = resolveCliPath('file:///C:/repo/discord-mcp/dist/init-abc123.js');
+
+    expect(p).toBe(
+      `C:${nodePath.sep}repo${nodePath.sep}discord-mcp${nodePath.sep}dist${nodePath.sep}cli.js`,
+    );
+  });
+
   it('produces a native path the OS accepts verbatim', () => {
     // A URL pathname on Windows is `/C:/...` - absolute-looking but not a
     // real path; `path.resolve` rewrites it, so round-tripping catches it.
@@ -174,6 +184,14 @@ describe('initAction - explicit flags', () => {
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
     expect(parsed.data?.client).toBe('cursor');
     expect(parsed.data?.configFilePath).toContain('.cursor/mcp.json');
+  });
+
+  it('with --client codex emits the safe TOML environment-forwarding fragment', async () => {
+    await initAction({ json: true, client: 'codex' });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(parsed.data?.client).toBe('codex');
+    expect(parsed.data?.configFilePath).toContain('.codex/config.toml');
+    expect(parsed.data?.content).toContain('env_vars = ["DISCORD_TOKEN"]');
   });
 
   it('with --gateway appends --gateway to args in the snippet', async () => {

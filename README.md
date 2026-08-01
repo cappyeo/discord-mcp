@@ -37,8 +37,8 @@ Requires Node.js 22.12 or later.
 # Install the MCP server
 npm install -g @discord-mcp/cli
 
-# Generate a client-specific configuration snippet interactively
-discord-mcp init --client claude-desktop
+# Generate a client-specific configuration fragment for Codex
+discord-mcp init --client codex
 
 # Verify your Discord token and local configuration
 export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
@@ -51,7 +51,7 @@ On PowerShell, set the token with:
 $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 ```
 
-`init` supports Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration document; merge it into an existing client configuration rather than overwriting it. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
+`init` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration fragment; merge it into an existing client configuration rather than overwriting it. The Codex fragment forwards `DISCORD_TOKEN` from its launch environment instead of storing the token in `~/.codex/config.toml`. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
 
 To run without a global install:
 

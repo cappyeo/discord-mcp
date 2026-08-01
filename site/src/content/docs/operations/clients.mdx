@@ -61,6 +61,17 @@ a workflow around them.
   Merge the output into the user or project MCP config supported by your Claude Code release.
 
   </div>
+  <div slot="codex">
+
+  ```bash
+  discord-mcp init --client codex
+  ```
+
+  Merge the TOML fragment into `~/.codex/config.toml`. The default uses
+  `env_vars = ["DISCORD_TOKEN"]`; start Codex from an environment that defines
+  that variable so the token is not persisted in `config.toml`.
+
+  </div>
   <div slot="cursor">
 
   ```bash

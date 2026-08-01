@@ -52,11 +52,11 @@ export function buildProgram(): Command {
   program
     .command('init')
     .description(
-      'Generate an MCP client config snippet (Claude Desktop / Claude Code / Cursor / Generic)',
+      'Generate an MCP client config snippet (Claude Desktop / Claude Code / Codex / Cursor / Generic)',
     )
     .option(
       '--client <id>',
-      'MCP client (claude-desktop|claude-code|cursor|generic). Default: prompt if TTY, else "generic".',
+      'MCP client (claude-desktop|claude-code|codex|cursor|generic). Default: prompt if TTY, else "generic".',
     )
     .option(
       '--token <token>',

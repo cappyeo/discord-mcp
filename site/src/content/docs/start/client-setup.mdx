@@ -1,6 +1,6 @@
 ---
 title: Client setup
-description: Wire up discord-mcp with Claude Desktop, Claude Code, Cursor, or any generic MCP client.
+description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Cursor, or any generic MCP client.
 type: tutorial
 sidebar:
   order: 22
@@ -19,9 +19,9 @@ import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro'
 import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
 discord-mcp speaks **stdio MCP** and works with any client that can spawn an MCP server
-as a subprocess. The `init` command generates the right `mcpServers` snippet for the
-client you select; it prints that snippet by default, so you stay in control of the
-file you merge it into.
+as a subprocess. The `init` command generates a client-specific configuration fragment;
+Codex receives TOML and the other first-class clients receive JSON. It prints the fragment
+by default, so you stay in control of the file you merge it into.
 
 <TutorialPreCheck>
 
@@ -33,10 +33,10 @@ file you merge it into.
 
 <Aside type="caution">
 `init` does not discover or edit your client config. Its token prompt is visible, and the generated
-snippet is printed to the terminal. The safest path is to press Enter at the token prompt, merge the
-snippet, then replace `${env:DISCORD_TOKEN}` only inside the private local config. Keep the placeholder
-only when you have verified that your client expands it. Do not pass the token with `--token`, because
-command arguments can remain in shell history and process inspection.
+fragment is printed to the terminal. The safest path is to press Enter at the token prompt. The Codex
+fragment forwards `DISCORD_TOKEN` from the environment; the JSON fragments use `${env:DISCORD_TOKEN}`
+only when the client supports expansion. Do not pass the token with `--token`, because command arguments
+can remain in shell history and process inspection.
 </Aside>
 
 ## Choose your client
@@ -67,6 +67,32 @@ command arguments can remain in shell history and process inspection.
   Merge the output into `~/.claude.json` for user-level configuration, or into
   `<project>/.mcp.json` for a project. Claude Code also supports its managed
   `claude mcp add` workflow; use the generated snippet when you prefer explicit JSON.
+
+  </div>
+  <div slot="codex">
+
+  ```bash
+  discord-mcp init --client codex
+  ```
+
+  Merge the TOML fragment into `~/.codex/config.toml`. It uses
+  `env_vars = ["DISCORD_TOKEN"]`, so Codex forwards the token from its launch
+  environment instead of storing it in `config.toml`.
+
+  Start Codex from a terminal where the token is set:
+
+  ```bash
+  export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
+  codex
+  ```
+
+  ```powershell
+  $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
+  codex
+  ```
+
+  This is the local stdio setup for the Codex CLI and IDE extension. Start a new
+  Codex session after changing its configuration.
 
   </div>
   <div slot="cursor">

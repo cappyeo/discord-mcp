@@ -1,5 +1,5 @@
 /**
- * Shared types for the four MCP client snippet generators.
+ * Shared types for the MCP client snippet generators.
  *
  * Each generator consumes a {@link SnippetConfig} (the user's choices -
  * server path, token, gateway flag, extra env) and emits a {@link Snippet}
@@ -40,8 +40,8 @@ export interface SnippetConfig {
 /**
  * The rendered output of a generator.
  *
- * `format` distinguishes JSON (current - all 4 clients converged on the
- * Anthropic MCP config schema) from TOML (reserved for future clients).
+ * `format` distinguishes JSON client snippets from Codex's TOML configuration
+ * fragment.
  *
  * `content` is the literal text the user pastes / the file `init`
  * writes. Always ends with a newline so editors don't whine.

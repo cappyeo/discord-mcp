@@ -140,7 +140,7 @@ to stdout or writes to `--output <path>`.
 
 | Flag             | Type    | Default                                              | Description                                                                                                                                                                                                          |
 | ---------------- | ------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `cursor`, `generic`.                                                                                                                                       |
+| `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `codex`, `cursor`, `generic`.                                                                                                                              |
 | `--token <token>`| string  | `${env:DISCORD_TOKEN}` placeholder                   | Discord bot token. **Warning**: writes the value into the snippet unredacted. Omit to leave the env-var interpolation placeholder so users don't accidentally commit a real secret.                                  |
 | `--gateway`      | boolean | `false`                                              | Append `--gateway` to the generated snippet so the server enables Gateway subscriptions on boot.                                                                                                                     |
 | `--output <path>`| string  | (stdout)                                             | Write the snippet to a file instead of stdout.                                                                                                                                                                        |
@@ -155,6 +155,9 @@ discord-mcp init
 
 # Non-interactive: print a Claude Desktop snippet with the token placeholder.
 discord-mcp init --client claude-desktop
+
+# Non-interactive: print a Codex TOML fragment that forwards DISCORD_TOKEN.
+discord-mcp init --client codex
 
 # Bake a real token into the snippet (NOT recommended for committed files).
 discord-mcp init --client cursor --token "Bot.xxx.yyy.zzz"

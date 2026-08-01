@@ -29,6 +29,7 @@
  * entirely. We do NOT echo the token in any other log line.
  */
 import { existsSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ALL_GENERATORS } from '../lib/client-snippets/index.js';
 import { emitResult } from '../lib/output.js';
@@ -66,15 +67,22 @@ const TOKEN_PLACEHOLDER = '${env:DISCORD_TOKEN}';
  * slashes (`/C:/Users/...`). Both forms are unspawnable by the MCP
  * client we are generating the config for.
  *
+ * The bundled init command is a sibling chunk of `dist/cli.js`, whereas
+ * source-mode init lives under `src/commands/`. Prefer a real sibling
+ * `cli.js` first, then retain the source-mode fallback. This keeps emitted
+ * configs executable after packaging instead of pointing at the package root.
+ *
  * `moduleUrl` is a parameter only so tests can exercise this against
- * paths the repo checkout doesn't have; production always uses the
- * default.
+ * paths the repo checkout doesn't have; production always uses the default.
  */
 export function resolveCliPath(moduleUrl: string = import.meta.url): string {
-  // moduleUrl points to the running .js file (or .ts under vitest).
-  // For source mode we want the cli.js sibling to commands/; the user
-  // will manually adjust if they install via npx.
-  // commands/init.js → ../cli.js
+  const modulePath = fileURLToPath(moduleUrl);
+  const bundledCliPath = resolve(dirname(modulePath), 'cli.js');
+  if (existsSync(bundledCliPath)) {
+    return bundledCliPath;
+  }
+
+  // commands/init.js → ../cli.js in source mode.
   return fileURLToPath(new URL('../cli.js', moduleUrl));
 }
 
@@ -169,7 +177,9 @@ export async function initAction(opts: InitOptions): Promise<void> {
   }
 
   const portabilityNote =
-    'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).';
+    generator.id === 'codex'
+      ? 'For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli"] in the TOML fragment.'
+      : 'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).';
 
   emitResult(
     {

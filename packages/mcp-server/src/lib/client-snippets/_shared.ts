@@ -1,11 +1,10 @@
 /**
  * Internal shared rendering for MCP client snippets.
  *
- * All four supported clients (Claude Desktop, Claude Code, Cursor,
- * Generic) converged on the same `mcpServers.<id>.{command,args,env}`
- * JSON schema, so the per-client modules differ only in id /
- * displayName / configFilePath / instructions. The actual JSON shape
- * is generated here once.
+ * The JSON-configured clients (Claude Desktop, Claude Code, Cursor, and
+ * Generic) converge on the same `mcpServers.<id>.{command,args,env}` schema.
+ * Codex has its own TOML renderer because its config supports secure
+ * environment forwarding through `env_vars`.
  */
 import type { SnippetConfig } from './types.js';
 
