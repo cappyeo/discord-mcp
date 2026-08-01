@@ -13,6 +13,14 @@ export default defineConfig({
         dark: './src/assets/discord-mcp-logo-dark.png',
         alt: 'Discord MCP logo',
       },
+      customCss: ['./src/styles/discord-mcp.css'],
+      components: {
+        Hero: './src/components/DiscordMcpHero.astro',
+      },
+      editLink: {
+        baseUrl: 'https://github.com/cappyeo/discord-mcp/edit/main/site/',
+      },
+      lastUpdated: true,
       social: [
         {
           icon: 'github',

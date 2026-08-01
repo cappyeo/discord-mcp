@@ -1,0 +1,148 @@
+---
+import { LinkButton } from '@astrojs/starlight/components';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+---
+
+<div class="discord-hero">
+  <div class="grid" aria-hidden="true"></div>
+  <div class="glow glow-primary" aria-hidden="true"></div>
+  <div class="glow glow-secondary" aria-hidden="true"></div>
+  <div class="content sl-flex">
+    <p class="eyebrow">Discord for AI agents</p>
+    <div class="copy sl-flex">
+      <h1 data-page-title set:html={title} />
+      {tagline && <div class="tagline" set:html={tagline} />}
+    </div>
+    {
+      actions.length > 0 && (
+        <div class="actions sl-flex">
+          {actions.map(
+            ({ attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant }) => (
+              <LinkButton {href} {variant} icon={icon?.name} class:list={[className]} {...attrs}>
+                {text}
+                {icon?.html && <Fragment set:html={icon.html} />}
+              </LinkButton>
+            )
+          )}
+        </div>
+      )
+    }
+  </div>
+</div>
+
+<style>
+  @layer starlight.core {
+    .discord-hero {
+      isolation: isolate;
+      position: relative;
+      overflow: hidden;
+      margin: 0 calc(-1 * var(--sl-content-pad-x));
+      border-block: 1px solid color-mix(in srgb, var(--sl-color-accent) 35%, transparent);
+      background:
+        radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--sl-color-accent) 32%, transparent), transparent 38rem),
+        radial-gradient(circle at 88% 92%, color-mix(in srgb, var(--sl-color-accent) 22%, transparent), transparent 34rem),
+        var(--sl-color-bg-nav);
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      max-width: 72rem;
+      margin-inline: auto;
+      padding: clamp(4rem, 9vw, 7.5rem) var(--sl-content-pad-x);
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      text-align: center;
+    }
+
+    .grid {
+      position: absolute;
+      inset: 0;
+      opacity: 0.32;
+      background-image:
+        linear-gradient(to right, color-mix(in srgb, var(--sl-color-gray-5) 60%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom, color-mix(in srgb, var(--sl-color-gray-5) 60%, transparent) 1px, transparent 1px);
+      background-size: 2rem 2rem;
+      mask-image: linear-gradient(to bottom, black, transparent 85%);
+    }
+
+    .glow {
+      position: absolute;
+      z-index: -1;
+      border-radius: 999px;
+      filter: blur(2rem);
+      opacity: 0.7;
+    }
+
+    .glow-primary {
+      width: 20rem;
+      height: 20rem;
+      top: -12rem;
+      left: -6rem;
+      background: var(--sl-color-accent);
+    }
+
+    .glow-secondary {
+      width: 16rem;
+      height: 16rem;
+      right: -7rem;
+      bottom: -10rem;
+      background: var(--sl-color-accent-high);
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--sl-color-accent-high);
+      font-size: var(--sl-text-sm);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .copy {
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    h1 {
+      max-width: 16ch;
+      margin: 0;
+      color: var(--sl-color-white);
+      font-size: clamp(var(--sl-text-4xl), calc(1rem + 5vw), var(--sl-text-6xl));
+      font-weight: 650;
+      line-height: var(--sl-line-height-headings);
+      text-wrap: balance;
+    }
+
+    .tagline {
+      max-width: 58ch;
+      color: var(--sl-color-gray-2);
+      font-size: clamp(var(--sl-text-base), calc(0.25rem + 1.5vw), var(--sl-text-xl));
+      line-height: 1.6;
+      text-wrap: balance;
+    }
+
+    .actions {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.875rem;
+    }
+
+    @media (min-width: 50rem) {
+      .content {
+        padding-block: clamp(5rem, 10vw, 8rem);
+      }
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+      .grid,
+      .glow {
+        display: none;
+      }
+    }
+  }
+</style>
