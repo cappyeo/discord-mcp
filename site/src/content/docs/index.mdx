@@ -15,9 +15,63 @@ hero:
       variant: secondary
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Badge, Card, CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
 
-## Why discord-mcp
+<p>
+  <Badge text="192 typed tools" variant="success" /> <Badge text="Local stdio transport" variant="note" /> <Badge text="Signed npm provenance" variant="tip" />
+</p>
+
+## Get connected
+
+Install the CLI once, then generate the configuration for the AI client you already use.
+
+<Tabs>
+  <TabItem label="Claude Desktop">
+
+  ```bash
+  npm install -g @discord-mcp/cli
+  discord-mcp init --client claude-desktop
+  ```
+
+  </TabItem>
+  <TabItem label="Claude Code">
+
+  ```bash
+  npm install -g @discord-mcp/cli
+  discord-mcp init --client claude-code
+  ```
+
+  </TabItem>
+  <TabItem label="Cursor">
+
+  ```bash
+  npm install -g @discord-mcp/cli
+  discord-mcp init --client cursor
+  ```
+
+  </TabItem>
+  <TabItem label="Generic MCP">
+
+  ```bash
+  npm install -g @discord-mcp/cli
+  discord-mcp init --client generic
+  ```
+
+  </TabItem>
+</Tabs>
+
+`init` prints a complete configuration snippet without overwriting your files. Merge it into your client configuration, set `DISCORD_TOKEN`, then run `discord-mcp doctor --online` to validate the connection. See the [full installation guide](/discord-mcp/start/installation/) for token and platform-specific details.
+
+## Start from your goal
+
+<CardGrid>
+  <LinkCard title="Make your first tool call" href="/discord-mcp/start/first-tool-call/" description="See the full request-to-response loop before building an agent workflow." />
+  <LinkCard title="Operate safely" href="/discord-mcp/architecture/confirmation/" description="Learn how confirmation gates protect destructive Discord actions." />
+  <LinkCard title="Build Components V2" href="/discord-mcp/recipes/components-v2-announcement/" description="Create structured Discord announcements with containers, sections, and media." />
+  <LinkCard title="Migrate an existing server" href="/discord-mcp/migrate/" description="Generate a tool-by-tool migration report from supported Discord MCP projects." />
+</CardGrid>
+
+## Why teams choose discord-mcp
 
 <CardGrid>
   <Card title="Comprehensive" icon="puzzle">
@@ -33,13 +87,3 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     First-class support for Discord's V2 layouts (containers, sections, media galleries).
   </Card>
 </CardGrid>
-
-## Quickstart in 3 commands
-
-```bash
-npm install -g @discord-mcp/cli
-discord-mcp init --client claude-desktop --token "Bot YOUR.TOKEN"
-discord-mcp doctor --online
-```
-
-[Continue to full quickstart →](/discord-mcp/start/quickstart/)
