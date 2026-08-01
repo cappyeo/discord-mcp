@@ -792,35 +792,68 @@ its safety metadata, exact input and output schemas, implementation source, and 
 
 export function renderToolsIndex(byCategory: Map<string, ToolMetadata[]>): string {
   const total = Array.from(byCategory.values()).reduce((sum, arr) => sum + arr.length, 0);
-  const allTools = Array.from(byCategory.entries())
-    .flatMap(([category, tools]) =>
-      tools.map((tool) => {
-        const slug = tool.name.startsWith(`${category}_`)
-          ? tool.name.slice(category.length + 1)
-          : tool.name;
-        return {
-          name: tool.name,
-          category,
-          summary: stripInlineMarkdown(parseDescription(tool.description).purpose),
-          href: `/discord-mcp/tools/${category}/${slug}/`,
-          destructive: Boolean(tool.annotations.destructiveHint),
-          readOnly: Boolean(tool.annotations.readOnlyHint),
-        };
-      }),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const domains = [
+    {
+      title: 'Messaging and community',
+      description: 'Messages, channels, threads, reactions, polls, and webhooks.',
+      categories: ['messages', 'channels', 'threads', 'reactions', 'polls', 'webhooks'],
+    },
+    {
+      title: 'Moderation and server management',
+      description:
+        'Members, roles, AutoMod, server settings, invites, audit records, and onboarding.',
+      categories: ['members', 'roles', 'automod', 'guild', 'invites', 'audit_log', 'onboarding'],
+    },
+    {
+      title: 'Application building',
+      description:
+        'App configuration, commands, interactions, Components V2, events, and intelligence.',
+      categories: [
+        'application',
+        'commands',
+        'interactions',
+        'components_v2',
+        'events',
+        'intelligence',
+      ],
+    },
+    {
+      title: 'Media and live experiences',
+      description: 'Emoji, stickers, soundboard, voice, and Stage instances.',
+      categories: ['emojis', 'app_emojis', 'stickers', 'soundboard', 'voice', 'stage_instances'],
+    },
+    {
+      title: 'Identity and commerce',
+      description: 'Users, monetization, and protocol helpers.',
+      categories: ['users', 'monetization', 'meta'],
+    },
+  ];
+  const knownCategories = new Set(domains.flatMap((domain) => domain.categories));
+  const ungrouped = [...byCategory.keys()].filter((category) => !knownCategories.has(category));
+  if (ungrouped.length > 0) {
+    throw new Error(`Tool categories need a domain: ${ungrouped.join(', ')}`);
+  }
 
-  const cards = Array.from(byCategory.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([cat, tools]) => {
-      const title = titleCaseCategory(cat);
-      return `  <LinkCard title="${title} (${tools.length})" href="/discord-mcp/tools/${cat}/" />`;
+  const sections = domains
+    .map(({ title, description, categories }) => {
+      const cards = categories
+        .flatMap((category) => {
+          const tools = byCategory.get(category);
+          if (!tools) return [];
+          return [
+            `  <LinkCard title="${titleCaseCategory(category)} (${tools.length})" href="/discord-mcp/tools/${category}/" />`,
+          ];
+        })
+        .join('\n');
+      if (!cards) return '';
+      return `## ${title}\n\n${description}\n\n<CardGrid>\n${cards}\n</CardGrid>`;
     })
-    .join('\n');
+    .filter(Boolean)
+    .join('\n\n');
 
   return `---
-title: Tools
-description: Search 192 discord-mcp tool contracts by task, category, or technical identifier.
+title: Tool reference
+description: Find the discord-mcp contract you need by Discord domain, then narrow within its category.
 type: reference
 sidebar:
   order: 0
@@ -829,11 +862,10 @@ next: false
 ---
 
 import { LinkCard, CardGrid } from '@astrojs/starlight/components';
-import ToolCatalog from '../../../components/docs/ToolCatalog.astro';
 
-discord-mcp exposes ${total} tools across ${byCategory.size} categories. Search by a task such
-as “send message” or narrow the catalog by category. Individual tool pages stay out of the
-global sidebar so reference browsing does not overwhelm the rest of the docs.
+discord-mcp exposes ${total} tools across ${byCategory.size} categories. Start with the Discord
+domain closest to your task, then use its focused category page to find the exact contract. Use
+site search (<kbd>Ctrl</kbd> + <kbd>K</kbd>) when you already know an identifier.
 
 :::caution
 **Writes to Discord are not automatically safe.** Check the badges on each tool. Only tools
@@ -841,15 +873,7 @@ marked **Confirmation required** participate in the \`__confirm\` and dry-run ga
 writes can execute on the first call.
 :::
 
-## Browse by category
-
-<CardGrid>
-${cards}
-</CardGrid>
-
-## Find a tool
-
-<ToolCatalog tools={${JSON.stringify(allTools)}} />
+${sections}
 `;
 }
 

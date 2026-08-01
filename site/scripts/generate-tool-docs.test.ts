@@ -450,16 +450,13 @@ describe('renderToolsIndex', () => {
       ],
     ]);
     const md = renderToolsIndex(byCat);
-    expect(md).toContain('title: Tools');
+    expect(md).toContain('title: Tool reference');
     expect(md).toContain('discord-mcp exposes 2 tools');
     expect(md).not.toMatch(/^# /m);
     expect(md).toContain('Messages (1)');
-    expect(md).toContain('ToolCatalog');
+    expect(md).not.toContain('ToolCatalog');
     expect(md).toContain('Channels (1)');
-    // Categories sorted alphabetically (channels before messages)
-    const idxChannels = md.indexOf('Channels (1)');
-    const idxMessages = md.indexOf('Messages (1)');
-    expect(idxChannels).toBeLessThan(idxMessages);
+    expect(md).toContain('Messaging and community');
   });
 });
 
@@ -574,7 +571,7 @@ describe('generate (smoke)', () => {
     expect(messageFiles).toContain('index.mdx');
 
     const topIndex = readFileSync(join(outDir, 'index.mdx'), 'utf8');
-    expect(topIndex).toContain('title: Tools');
+    expect(topIndex).toContain('title: Tool reference');
     expect(topIndex).toContain('discord-mcp exposes 3 tools');
     expect(topIndex).not.toMatch(/^# /m);
   });

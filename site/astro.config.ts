@@ -72,24 +72,67 @@ export default defineConfig({
                 'operations/audit',
               ],
             },
-            {
-              label: 'Migrate',
-              collapsed: true,
-              items: [
-                { label: 'Migration overview', slug: 'migrate' },
-                'migrate/hubdustry',
-                'migrate/discord-ops',
-                'migrate/pasympa',
-                'migrate/quadslab',
-              ],
-            },
           ],
         },
         {
           label: 'Reference',
           items: [
             { label: 'Reference overview', slug: 'reference' },
-            { label: 'Browse 192 tools', slug: 'tools' },
+            { label: 'Tool reference', slug: 'tools' },
+            {
+              label: 'Messaging and community',
+              collapsed: true,
+              items: [
+                'tools/messages',
+                'tools/channels',
+                'tools/threads',
+                'tools/reactions',
+                'tools/polls',
+                'tools/webhooks',
+              ],
+            },
+            {
+              label: 'Moderation and server management',
+              collapsed: true,
+              items: [
+                'tools/members',
+                'tools/roles',
+                'tools/automod',
+                'tools/guild',
+                'tools/invites',
+                'tools/audit_log',
+                'tools/onboarding',
+              ],
+            },
+            {
+              label: 'Application building',
+              collapsed: true,
+              items: [
+                'tools/application',
+                'tools/commands',
+                'tools/interactions',
+                'tools/components_v2',
+                'tools/events',
+                'tools/intelligence',
+              ],
+            },
+            {
+              label: 'Media and live experiences',
+              collapsed: true,
+              items: [
+                'tools/emojis',
+                'tools/app_emojis',
+                'tools/stickers',
+                'tools/soundboard',
+                'tools/voice',
+                'tools/stage_instances',
+              ],
+            },
+            {
+              label: 'Identity and commerce',
+              collapsed: true,
+              items: ['tools/users', 'tools/monetization', 'tools/meta'],
+            },
             {
               label: 'Environment variables',
               collapsed: true,
@@ -122,7 +165,6 @@ export default defineConfig({
             'architecture/pipeline',
             'architecture/sampling',
             'architecture/gateway',
-            'migrate/authoring',
             {
               label: 'Security audit archive',
               collapsed: true,

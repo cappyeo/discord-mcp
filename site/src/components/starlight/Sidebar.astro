@@ -32,11 +32,9 @@ const inSection = (section: string) => routeId === section || routeId.startsWith
 const inferredLabel =
   inSection('tools') || inSection('reference')
     ? 'Reference'
-    : inSection('recipes') ||
-        inSection('operations') ||
-        (inSection('migrate') && routeId !== 'migrate/authoring')
+    : inSection('recipes') || inSection('operations')
       ? 'Guides'
-      : inSection('architecture') || routeId === 'migrate/authoring'
+      : inSection('architecture') || inSection('migrate')
         ? 'Develop'
         : 'Start';
 const isInitial = (label: string, entries: SidebarEntry[]) =>
@@ -125,9 +123,18 @@ const icons = ['rocket', 'open-book', 'magnifier', 'puzzle'] as const;
     color: var(--sl-color-gray-2);
   }
 
-  :global([data-theme='light']) .sidebar-tab :global(a:hover),
+  :global([data-theme='light']) .sidebar-tab :global(a:hover) {
+    color: var(--sl-color-accent-high);
+    background: var(--sl-color-gray-6);
+  }
+
   :global([data-theme='light']) .sidebar-tab :global(a[aria-selected='true']) {
     color: var(--sl-color-accent-high);
-    background: var(--sl-color-white);
+    border-color: color-mix(
+      in srgb,
+      var(--sl-color-accent) 34%,
+      var(--sl-color-hairline-light)
+    );
+    background: var(--sl-color-accent-low);
   }
 </style>

@@ -12,10 +12,10 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 Choose the outcome closest to your task. Each guide shows the tool sequence,
 request and response shapes, safety boundary, and partial-failure behavior. For
-a single contract, use the [tool catalog](/discord-mcp/tools/).
+a single contract, use the [tool reference](/discord-mcp/tools/).
 
 <CardGrid>
-  <Card title="Moderation — bulk ban a raid" icon="warning">
+  <Card title="Stop a raid" icon="warning">
     Find raid accounts with `members_search`, confirm with the human, ban up to
     200 users in one call. Covers `__confirm:true` and partial failure
     handling.
@@ -23,7 +23,7 @@ a single contract, use the [tool catalog](/discord-mcp/tools/).
     [Read recipe →](/discord-mcp/recipes/moderation-bulk-ban/)
   </Card>
 
-  <Card title="Components V2 — rich announcement" icon="seti:image">
+  <Card title="Build a rich announcement" icon="seti:image">
     Compose a launch announcement from sections, a media gallery, and a
     container; validate before sending; understand the
     `flags = 32768` requirement.
@@ -31,14 +31,14 @@ a single contract, use the [tool catalog](/discord-mcp/tools/).
     [Read recipe →](/discord-mcp/recipes/components-v2-announcement/)
   </Card>
 
-  <Card title="Pipeline — chain three calls sequentially" icon="seti:cjsc">
+  <Card title="Chain three calls" icon="seti:cjsc">
     Use `mcp_pipeline` to announce, schedule an event, and grant a role in one
     request. Covers `{{step.path}}` interpolation and the recursion guard.
 
     [Read recipe →](/discord-mcp/recipes/pipeline-multistep/)
   </Card>
 
-  <Card title="Intelligence — summarize a busy channel" icon="seti:smarty">
+  <Card title="Summarize a busy channel" icon="seti:smarty">
     Use MCP sampling to summarize the last 50 messages without an LLM API key.
     Covers the `host_llm_should_process` fallback for clients without
     sampling.
@@ -46,7 +46,7 @@ a single contract, use the [tool catalog](/discord-mcp/tools/).
     [Read recipe →](/discord-mcp/recipes/intelligence-summarize/)
   </Card>
 
-  <Card title="Webhooks — bypass bot rate limits" icon="rocket">
+  <Card title="Publish as a webhook" icon="rocket">
     Provision a webhook once, then post high-volume notifications without
     consuming the bot's bucket. Covers token security and Components V2 over
     webhooks.
@@ -54,7 +54,7 @@ a single contract, use the [tool catalog](/discord-mcp/tools/).
     [Read recipe →](/discord-mcp/recipes/webhook-execute/)
   </Card>
 
-  <Card title="Gateway — verify live notifications" icon="seti:bsl">
+  <Card title="Verify a Gateway notification" icon="seti:bsl">
     Verify `resources/subscribe` notifications backed by Discord Gateway
     events. Covers the five notification URI keys, debounce, REST-only fallback,
     and the current lack of resource list/read handlers.
