@@ -1,129 +1,97 @@
 # discord-mcp
 
-Production-grade Model Context Protocol server exposing the full Discord REST API to AI agents.
+[![CI](https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40discord-mcp%2Fcli?label=npm)](https://www.npmjs.com/package/@discord-mcp/cli)
+[![Node.js](https://img.shields.io/node/v/%40discord-mcp%2Fcli)](https://www.npmjs.com/package/@discord-mcp/cli)
+[![License](https://img.shields.io/github/license/cappyeo/discord-mcp)](LICENSE)
 
-**Status**: v0.13.0 · 192 tools · OTel-instrumented · Cockatiel-resilient · Audit-logged
+Production-grade [Model Context Protocol](https://modelcontextprotocol.io/) server for Discord. Connect an AI client to Discord through a local stdio process with 192 typed tools for messages, moderation, members, channels, commands, webhooks, and more.
 
-**Stability**: pre-1.0, polish complete. See [v1.0.0 readiness](docs/v1.0.0-readiness.md) for the path to a stable major.
-
-## Documentation
-
-**[discord-mcp docs](https://cappyeo.github.io/discord-mcp/)** — quickstart, tool reference (auto-generated for all 192 tools), recipes, architecture deep-dives, operations guides.
-
-See [design spec](docs/superpowers/specs/2026-04-28-discord-mcp-design.md) for architecture.
-
-## Migrating from another Discord MCP
-
-discord-mcp ships migration adapters for the most-established community Discord MCP servers:
-
-- **PaSympa** (`@pasympa/discord-mcp`) — ~91 tools, TypeScript, Zod-based
-- **quadslab** (`@quadslab.io/discord-mcp`) — ~138 tools, MCP Resources support
-- **discord-ops** (`bookedsolidtech/discord-ops`) — multi-guild routing, dry-run mode
-- **Hubdustry** (reference adapter, non-Discord)
-
-Run `discord-mcp migrate --list` to see all adapters, or `discord-mcp migrate --from <id> --source <path>` to get a tool-by-tool mapping report. Full guides at [cappyeo.github.io/discord-mcp/migrate](https://cappyeo.github.io/discord-mcp/migrate/).
+**Install:** `npm install -g @discord-mcp/cli` · **Docs:** [cappyeo.github.io/discord-mcp](https://cappyeo.github.io/discord-mcp/) · **Package:** [@discord-mcp/cli](https://www.npmjs.com/package/@discord-mcp/cli)
 
 ## Quick start
 
+Requires Node.js 22.12 or later.
+
 ```bash
-# 1. Install
-npm install -g @discord-mcp/cli  # or use npx
+# Install the MCP server
+npm install -g @discord-mcp/cli
 
-# 2. Print a config snippet for your MCP client, then merge it into that
-#    client's config file yourself (init writes nothing without --output)
-discord-mcp init --client claude-desktop --token "YOUR.BOT.TOKEN"
+# Generate a client-specific configuration snippet interactively
+discord-mcp init --client claude-desktop
 
-# 3. Verify configuration (doctor reads process.env, not the client config)
-export DISCORD_TOKEN="YOUR.BOT.TOKEN"
+# Verify your Discord token and local configuration
+export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
 discord-mcp doctor --online
-
-# 4. Run (or let your MCP client launch it)
-discord-mcp serve
 ```
 
-## Subcommands
+On PowerShell, set the token with:
 
-### `discord-mcp serve` (default)
+```powershell
+$env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
+```
 
-Start the stdio MCP server. This is the default action when no subcommand is given.
+`init` supports Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration document; merge it into an existing client configuration rather than overwriting it. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
 
-**Flags**:
-- `--gateway` — Enable Discord Gateway resource subscriptions (lazy-imports discord.js)
+To run without a global install:
 
-### `discord-mcp doctor`
+```bash
+npx -y @discord-mcp/cli init --client cursor
+```
 
-Diagnose configuration and connectivity. Exits 0 (healthy), 1 (warnings), or 2 (errors).
+## What you get
 
-**Flags**:
-- `--online` — Run network checks (Discord token verify, OTel reachability)
-- `--json` — Output as JSON for CI consumption
+| Area | Examples |
+| --- | --- |
+| Messages and channels | Send, edit, pin, search, manage threads, forums, and permissions |
+| Moderation and safety | Bans, role changes, AutoMod rules, bulk actions, and audit-aware operations |
+| Community operations | Members, roles, invites, onboarding, events, polls, soundboard, and voice |
+| Application APIs | Slash commands, interactions, application emojis, webhooks, and entitlements |
+| Agent workflows | Tool output schemas, predictable errors, migration adapters, and client config generation |
 
-**Offline checks**: node-version, token-format, env-vars, audit-sink, client-caps
-**Online checks** (with `--online`): token-online, otel-reachable
+Explore the complete, generated [tool reference](https://cappyeo.github.io/discord-mcp/tools/) and practical [recipes](https://cappyeo.github.io/discord-mcp/recipes/).
 
-### `discord-mcp init`
+## Built for production use
 
-Bootstrap configuration + generate MCP client config snippet.
+- **Safety controls** — destructive operations require explicit confirmation and can be governed by category-level controls.
+- **Reliable Discord access** — retries, timeouts, rate-limit handling, and circuit breaking protect agent workflows from transient API failures.
+- **Observability** — OpenTelemetry traces and metrics, structured logs, and audit events make operations inspectable.
+- **Typed contracts** — every tool is schema-defined; public core exports, CLI flags, configuration variables, and tool metadata are regression-tested.
+- **Supply-chain evidence** — npm releases are published from GitHub Actions with signed SLSA provenance.
 
-**Flags**:
-- `--token <token>` — Discord bot token (or `${env:DISCORD_TOKEN}` placeholder)
-- `--client <id>` — Client: `claude-desktop`, `claude-code`, `cursor`, or `generic`
-- `--output <path>` — Write snippet to file (default: stdout). The snippet is a **complete** top-level JSON document and truncates the target, so never point this at an existing `claude_desktop_config.json` — it would drop your other MCP servers. Merge by hand.
-- `--force` — Overwrite existing output file
-- `--gateway` — Enable Discord Gateway in generated config
-- `--json` — JSON output for CI
+Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [operations guides](https://cappyeo.github.io/discord-mcp/operations/), and [v1.0 readiness plan](docs/v1.0.0-readiness.md) for implementation details and current stability commitments.
 
-When stdin is a TTY and flags are missing, init runs an interactive wizard.
+## Commands
 
-### `discord-mcp migrate`
+| Command | Purpose |
+| --- | --- |
+| `discord-mcp serve` | Start the stdio MCP server. This is the default command. |
+| `discord-mcp init` | Generate an MCP client configuration snippet. |
+| `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, and optional network connectivity. |
+| `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 
-Migrate from another Discord/MCP setup. Exits 0 (all mapped), 1 (some unmapped), 2 (errors).
+Run `discord-mcp --help` or see the full [CLI reference](https://cappyeo.github.io/discord-mcp/reference/cli/) for flags and examples.
 
-**Flags**:
-- `--list` — List every registered adapter. Informational — always exits 0, so it is the form to use in CI.
-- `--from <adapter>` — Source adapter id
-- `--source <path>` — Path to source repo (default: cwd)
-- `--json` — JSON output
+## Packages
 
-A bare `discord-mcp migrate` also prints the adapter list, but it is the legacy "missing `--from`" error path and exits 2. Use `--list` for discovery.
+| Package | Use it when |
+| --- | --- |
+| [@discord-mcp/cli](https://www.npmjs.com/package/@discord-mcp/cli) | You want to run Discord MCP from an AI client or terminal. |
+| [@discord-mcp/core](https://www.npmjs.com/package/@discord-mcp/core) | You are building an integration on the typed Discord MCP tool and server primitives. |
 
-**Available adapters**: `hubdustry-go-mcp` (reference), `pasympa`, `quadslab`, `discord-ops`. Run `discord-mcp migrate --list` for the live registry.
+The CLI runs on macOS, Linux, and Windows. Its executable is always `discord-mcp`.
 
-## Tool surface
+## Migrate an existing setup
 
-192 tools across:
-- messages (12)
-- channels (14)
-- threads (6)
-- members (14)
-- roles (5)
-- guild (16)
-- audit_log (1)
-- webhooks (13)
-- events (6)
-- commands (15)
-- users (6)
-- components-v2 (8)
-- intelligence (5)
-- meta (1)
-- reactions (5)
-- emojis (5)
-- app_emojis (5)
-- stickers (7)
-- invites (4)
-- automod (5)
-- interactions (8)
-- application (5)
-- stage_instances (4)
-- soundboard (7)
-- polls (2)
-- voice (3)
-- onboarding (2)
-- monetization (8)
+`discord-mcp` includes migration adapters for established community projects, including PaSympa, quadslab, and discord-ops. Start with:
 
-## Local development
+```bash
+discord-mcp migrate --list
+```
 
-Prerequisites: Node ≥20.11, pnpm ≥9.15.
+Then use `discord-mcp migrate --from <adapter> --source <path>` to generate a tool-by-tool mapping report. The [migration guides](https://cappyeo.github.io/discord-mcp/migrate/) explain each adapter and its limits.
+
+## Develop locally
 
 ```bash
 pnpm install
@@ -131,40 +99,12 @@ pnpm build
 pnpm test
 ```
 
-## Smoke test (real Discord)
+The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_TOKEN` and run `node packages/mcp-server/dist/cli.js`; the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is useful for verifying `tools/list` interactively.
 
-Set `DISCORD_TOKEN` to a real bot token from <https://discord.com/developers/applications>:
+## Project status
 
-```bash
-export DISCORD_TOKEN="Bot YOUR_TOKEN_HERE"
-node packages/mcp-server/dist/cli.js
-```
-
-Then use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) in another terminal:
-
-```bash
-npx -y @modelcontextprotocol/inspector node packages/mcp-server/dist/cli.js
-```
-
-Open the Inspector UI at <http://localhost:5173>, click `tools/list`, and you should see all 192 tools.
-
-## More documentation
-
-Full docs published at <https://cappyeo.github.io/discord-mcp/>:
-
-- [Quickstart](https://cappyeo.github.io/discord-mcp/start/) — install, configure, first tool call
-- [Tool reference](https://cappyeo.github.io/discord-mcp/tools/) — auto-generated for all 192 tools
-- [Recipes](https://cappyeo.github.io/discord-mcp/recipes/) — common agent flows
-- [Architecture](https://cappyeo.github.io/discord-mcp/architecture/) — pipeline, gateway, error handling, components-v2
-- [Operations](https://cappyeo.github.io/discord-mcp/operations/) — telemetry, resilience, audit, client capability matrix
-- [Reference](https://cappyeo.github.io/discord-mcp/reference/) — CLI, env vars, public API, changelog
-
-In-repo legacy docs (preserved for compat):
-
-- [Operations: telemetry](docs/operations/telemetry.md) — OTel setup
-- [Operations: resilience](docs/operations/resilience.md) — Tuning retry/timeout/circuit
-- [Operations: audit](docs/operations/audit.md) — Audit sinks + compliance
+`discord-mcp` is pre-1.0. The current public release is **v0.13.1**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
