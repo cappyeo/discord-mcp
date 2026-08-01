@@ -9,6 +9,18 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.13.3 - Codex client setup
+
+Released **2026-08-02**.
+
+- Added `discord-mcp init --client codex`, which emits a Codex TOML fragment
+  that forwards `DISCORD_TOKEN` from the launch environment by default instead
+  of persisting the token in `~/.codex/config.toml`.
+- Added Codex setup guidance to the tutorial, client compatibility guide,
+  landing page, README, and CLI reference.
+- Corrected generated client snippets from the packaged CLI to reference the
+  actual `dist/cli.js` entrypoint.
+
 ## v0.13.2 - Documentation architecture and runtime contract hardening
 
 Released **2026-08-01**.

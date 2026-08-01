@@ -1,6 +1,6 @@
 {
   "name": "@discord-mcp/cli",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",
@@ -29,6 +29,7 @@
     "discord",
     "ai",
     "claude",
+    "codex",
     "cursor"
   ],
   "license": "MIT",
