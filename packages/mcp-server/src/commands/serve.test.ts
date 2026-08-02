@@ -1,4 +1,8 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { saveProfile } from '../lib/profiles.js';
 
 // Mock startStdio BEFORE importing serveAction so the import sees the mock.
 vi.mock('../transports/stdio.js', () => ({
@@ -17,6 +21,10 @@ const { startHttp } = await import('../transports/http.js');
 const { startStdio } = await import('../transports/stdio.js');
 
 const originalGateway = process.env.GATEWAY;
+const originalToken = process.env.DISCORD_TOKEN;
+const originalExpectedBotId = process.env.DISCORD_EXPECTED_BOT_ID;
+const originalAllowedGuilds = process.env.ALLOWED_GUILDS;
+const originalToolSurface = process.env.MCP_TOOL_SURFACE;
 
 beforeEach(() => {
   delete process.env.GATEWAY;
@@ -25,11 +33,15 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (originalGateway !== undefined) {
-    process.env.GATEWAY = originalGateway;
-  } else {
-    delete process.env.GATEWAY;
-  }
+  const restore = (name: string, value: string | undefined): void => {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  };
+  restore('GATEWAY', originalGateway);
+  restore('DISCORD_TOKEN', originalToken);
+  restore('DISCORD_EXPECTED_BOT_ID', originalExpectedBotId);
+  restore('ALLOWED_GUILDS', originalAllowedGuilds);
+  restore('MCP_TOOL_SURFACE', originalToolSurface);
 });
 
 describe('serveAction', () => {
@@ -55,6 +67,36 @@ describe('serveAction', () => {
     await serveAction({ http: true, host: '0.0.0.0', port: 8080 });
     expect(startStdio).not.toHaveBeenCalled();
     expect(startHttp).toHaveBeenCalledWith({ host: '0.0.0.0', port: 8080 });
+  });
+
+  it('activates a caller-owned bot profile before starting stdio', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-serve-profile-'));
+    try {
+      process.env.DISCORD_TOKEN = `Bot ${'x'.repeat(60)}`;
+      saveProfile(
+        {
+          version: 1,
+          name: 'devbot',
+          bot: { id: '987654321098765432', username: 'DevBot' },
+          credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+          allowedGuilds: ['111122223333444455'],
+          client: 'codex',
+          toolSurface: 'progressive',
+          gateway: false,
+        },
+        { directory },
+      );
+
+      await serveAction({ profile: 'devbot', profileDirectory: directory });
+
+      expect(startStdio).toHaveBeenCalledTimes(1);
+      expect(process.env.DISCORD_EXPECTED_BOT_ID).toBe('987654321098765432');
+      expect(process.env.ALLOWED_GUILDS).toBe('111122223333444455');
+      expect(process.env.MCP_TOOL_SURFACE).toBe('progressive');
+      expect(process.env.DISCORD_TOKEN).toBe(`Bot ${'x'.repeat(60)}`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('rejects Gateway mode with HTTP transport', async () => {

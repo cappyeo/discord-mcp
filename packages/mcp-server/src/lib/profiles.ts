@@ -1,0 +1,279 @@
+import { randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, isAbsolute, join, resolve } from 'node:path';
+
+const PROFILE_VERSION = 1;
+const PROFILE_NAME = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
+const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/;
+const SNOWFLAKE = /^\d{17,20}$/;
+const CLIENT_IDS = ['claude-desktop', 'claude-code', 'codex', 'cursor', 'generic'] as const;
+const TOOL_SURFACES = ['full', 'progressive'] as const;
+
+export type ProfileClientId = (typeof CLIENT_IDS)[number];
+export type ProfileToolSurface = (typeof TOOL_SURFACES)[number];
+
+export interface DiscordMcpProfile {
+  readonly version: 1;
+  readonly name: string;
+  readonly bot: {
+    readonly id: string;
+    readonly username: string;
+  };
+  readonly credential: {
+    readonly provider: 'env';
+    readonly variable: 'DISCORD_TOKEN';
+  };
+  readonly allowedGuilds: readonly string[];
+  readonly client: ProfileClientId;
+  readonly toolSurface: ProfileToolSurface;
+  readonly gateway: boolean;
+}
+
+export interface ProfileLocationOptions {
+  readonly directory?: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly homeDirectory?: string;
+  readonly platform?: NodeJS.Platform;
+}
+
+export interface SaveProfileOptions extends ProfileLocationOptions {
+  readonly overwrite?: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function assertExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  if (
+    actual.length !== sortedExpected.length ||
+    actual.some((key, index) => key !== sortedExpected[index])
+  ) {
+    throw new Error(`${label} has unknown or missing fields`);
+  }
+}
+
+export function normalizeProfileName(value: string): string {
+  const name = value.trim();
+  if (!PROFILE_NAME.test(name) || WINDOWS_DEVICE_NAME.test(name)) {
+    throw new Error(
+      'Profile name must start and end with a lowercase letter or digit, contain only lowercase letters, digits, dots, underscores, or hyphens, avoid Windows device names, and use at most 64 characters',
+    );
+  }
+  return name;
+}
+
+function parseProfileValue(value: unknown, expectedName?: string): DiscordMcpProfile {
+  if (!isRecord(value)) throw new Error('Profile must be a JSON object');
+  assertExactKeys(
+    value,
+    ['version', 'name', 'bot', 'credential', 'allowedGuilds', 'client', 'toolSurface', 'gateway'],
+    'Profile',
+  );
+
+  if (value.version !== PROFILE_VERSION) {
+    throw new Error(`Unsupported profile version: ${String(value.version)}`);
+  }
+  if (typeof value.name !== 'string') throw new Error('Profile name must be a string');
+  const name = normalizeProfileName(value.name);
+  if (expectedName !== undefined && name !== normalizeProfileName(expectedName)) {
+    throw new Error(`Profile name mismatch: expected ${expectedName}, received ${name}`);
+  }
+
+  if (!isRecord(value.bot)) throw new Error('Profile bot must be an object');
+  assertExactKeys(value.bot, ['id', 'username'], 'Profile bot');
+  if (typeof value.bot.id !== 'string' || !SNOWFLAKE.test(value.bot.id)) {
+    throw new Error('Profile bot id must be a 17-20 digit Discord snowflake');
+  }
+  if (
+    typeof value.bot.username !== 'string' ||
+    value.bot.username.length === 0 ||
+    value.bot.username.length > 100
+  ) {
+    throw new Error('Profile bot username must contain 1-100 characters');
+  }
+
+  if (!isRecord(value.credential)) throw new Error('Profile credential must be an object');
+  assertExactKeys(value.credential, ['provider', 'variable'], 'Profile credential');
+  if (value.credential.provider !== 'env' || value.credential.variable !== 'DISCORD_TOKEN') {
+    throw new Error('Profile credential must use env:DISCORD_TOKEN');
+  }
+
+  if (
+    !Array.isArray(value.allowedGuilds) ||
+    value.allowedGuilds.length === 0 ||
+    value.allowedGuilds.some((id) => typeof id !== 'string' || !SNOWFLAKE.test(id))
+  ) {
+    throw new Error('Profile allowedGuilds must contain Discord snowflake IDs');
+  }
+  const allowedGuilds = value.allowedGuilds as string[];
+  if (new Set(allowedGuilds).size !== allowedGuilds.length) {
+    throw new Error('Profile allowedGuilds must not contain duplicates');
+  }
+
+  if (typeof value.client !== 'string' || !CLIENT_IDS.includes(value.client as ProfileClientId)) {
+    throw new Error(`Profile client must be one of: ${CLIENT_IDS.join(', ')}`);
+  }
+  if (
+    typeof value.toolSurface !== 'string' ||
+    !TOOL_SURFACES.includes(value.toolSurface as ProfileToolSurface)
+  ) {
+    throw new Error(`Profile toolSurface must be one of: ${TOOL_SURFACES.join(', ')}`);
+  }
+  if (typeof value.gateway !== 'boolean') throw new Error('Profile gateway must be a boolean');
+
+  return {
+    version: PROFILE_VERSION,
+    name,
+    bot: { id: value.bot.id, username: value.bot.username },
+    credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+    allowedGuilds: [...allowedGuilds],
+    client: value.client as ProfileClientId,
+    toolSurface: value.toolSurface as ProfileToolSurface,
+    gateway: value.gateway,
+  };
+}
+
+export function resolveProfileDirectory(options: ProfileLocationOptions = {}): string {
+  if (options.directory !== undefined) return resolve(options.directory);
+
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
+  const homeDirectory = options.homeDirectory ?? homedir();
+  let configRoot: string;
+  if (platform === 'win32') {
+    configRoot = env.APPDATA?.trim() || join(homeDirectory, 'AppData', 'Roaming');
+  } else if (platform === 'darwin') {
+    configRoot = join(homeDirectory, 'Library', 'Application Support');
+  } else {
+    const xdg = env.XDG_CONFIG_HOME?.trim();
+    configRoot = xdg !== undefined && isAbsolute(xdg) ? xdg : join(homeDirectory, '.config');
+  }
+  return resolve(configRoot, 'discord-mcp', 'profiles');
+}
+
+export function profilePath(name: string, options: ProfileLocationOptions = {}): string {
+  return join(resolveProfileDirectory(options), `${normalizeProfileName(name)}.json`);
+}
+
+export function profileExists(name: string, options: ProfileLocationOptions = {}): boolean {
+  return existsSync(profilePath(name, options));
+}
+
+export function loadProfile(name: string, options: ProfileLocationOptions = {}): DiscordMcpProfile {
+  const normalizedName = normalizeProfileName(name);
+  const path = profilePath(normalizedName, options);
+  if (!existsSync(path)) throw new Error(`Profile not found: ${normalizedName}`);
+
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `Cannot read profile ${normalizedName}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return parseProfileValue(value, normalizedName);
+}
+
+export function listProfiles(options: ProfileLocationOptions = {}): DiscordMcpProfile[] {
+  const directory = resolveProfileDirectory(options);
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => loadProfile(basename(entry.name, '.json'), options))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function saveProfile(profile: DiscordMcpProfile, options: SaveProfileOptions = {}): string {
+  const validated = parseProfileValue(profile);
+  const target = profilePath(validated.name, options);
+  const targetExisted = existsSync(target);
+  if (targetExisted) {
+    const current = loadProfile(validated.name, options);
+    if (options.overwrite !== true) {
+      throw new Error(`Profile ${validated.name} already exists; use --force to update it`);
+    }
+    if (current.bot.id !== validated.bot.id) {
+      throw new Error(
+        `Profile ${validated.name} is locked to bot ${current.bot.id}; remove it before assigning a different bot`,
+      );
+    }
+  }
+
+  const directory = resolveProfileDirectory(options);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const temporary = join(directory, `.${validated.name}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, `${JSON.stringify(validated, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    if (targetExisted) {
+      renameSync(temporary, target);
+    } else {
+      try {
+        linkSync(temporary, target);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+          throw new Error(
+            `Profile ${validated.name} was created by another process; inspect it before updating`,
+          );
+        }
+        throw error;
+      }
+    }
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+  return target;
+}
+
+export function removeProfile(name: string, options: ProfileLocationOptions = {}): string {
+  const normalizedName = normalizeProfileName(name);
+  const target = profilePath(normalizedName, options);
+  if (!existsSync(target)) throw new Error(`Profile not found: ${normalizedName}`);
+  unlinkSync(target);
+  return target;
+}
+
+export function activateProfile(
+  name: string,
+  options: ProfileLocationOptions & { readonly targetEnv?: NodeJS.ProcessEnv } = {},
+): DiscordMcpProfile {
+  const profile = loadProfile(name, options);
+  const targetEnv = options.targetEnv ?? process.env;
+  const token = targetEnv[profile.credential.variable];
+  if (token === undefined || token === '') {
+    throw new Error(
+      `Profile ${profile.name} requires ${profile.credential.variable} in the launch environment`,
+    );
+  }
+
+  targetEnv.DISCORD_EXPECTED_BOT_ID = profile.bot.id;
+  targetEnv.ALLOWED_GUILDS = profile.allowedGuilds.join(',');
+  targetEnv.MCP_TOOL_SURFACE = profile.toolSurface;
+  if (profile.gateway) {
+    targetEnv.GATEWAY = '1';
+  } else {
+    delete targetEnv.GATEWAY;
+  }
+  return profile;
+}

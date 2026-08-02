@@ -8,11 +8,10 @@
  *   exposes a bearer-protected Streamable HTTP endpoint for remote clients.
  * - `--gateway` lives on `serve`. Bare `discord-mcp --gateway` is
  *   forwarded to `serve` through commander's default-subcommand passthrough.
- * - `doctor`, `init`, `migrate` are real sub-commands as of Plan 9
- *   Phases B (doctor), D (init), and E (migrate). Each emits a
- *   structured CommandResult via emitResult().
- * - Doctor / init / migrate handlers are lazy-imported (`await import(...)`)
- *   so cold-start for `serve` (the hot path) is unaffected by their deps.
+ * - Lifecycle and diagnostic sub-commands emit a structured CommandResult
+ *   via emitResult().
+ * - Non-serve handlers are lazy-imported (`await import(...)`) so cold-start
+ *   for `serve` (the hot path) is unaffected by their deps.
  *
  * `program` is exported so tests can drive `parseAsync` without spawning
  * a child process. Auto-parse is suppressed under VITEST so tests can
@@ -39,8 +38,15 @@ export function buildProgram(): Command {
     .option('--http', 'Serve Streamable HTTP MCP at /mcp (requires DISCORD_MCP_ACCESS_TOKEN)')
     .option('--host <host>', 'HTTP listen host (default: 127.0.0.1)')
     .option('--port <port>', 'HTTP listen port (default: 3000)', Number)
+    .option('--profile <name>', 'Load a caller-owned bot profile before startup')
     .action(
-      async (options: { gateway?: boolean; http?: boolean; host?: string; port?: number }) => {
+      async (options: {
+        gateway?: boolean;
+        http?: boolean;
+        host?: string;
+        port?: number;
+        profile?: string;
+      }) => {
         await serveAction(options);
       },
     );
@@ -50,7 +56,8 @@ export function buildProgram(): Command {
     .description('Diagnose configuration, token, and connectivity issues')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
     .option('--online', 'Run online checks against Discord (requires DISCORD_TOKEN)')
-    .action(async (options: { json?: boolean; online?: boolean }) => {
+    .option('--profile <name>', 'Load a caller-owned bot profile before checks')
+    .action(async (options: { json?: boolean; online?: boolean; profile?: string }) => {
       const { doctorAction } = await import('./commands/doctor.js');
       await doctorAction(options);
     });
@@ -61,9 +68,80 @@ export function buildProgram(): Command {
     .option('--confirm-write', 'Run one self-cleaning create/send/edit/delete lifecycle')
     .option('--guild-id <id>', 'Target guild for write smoke; required when the bot sees multiple')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
-    .action(async (options: { confirmWrite?: boolean; guildId?: string; json?: boolean }) => {
-      const { smokeAction } = await import('./commands/smoke.js');
-      await smokeAction(options);
+    .option('--profile <name>', 'Load a caller-owned bot profile before verification')
+    .action(
+      async (options: {
+        confirmWrite?: boolean;
+        guildId?: string;
+        json?: boolean;
+        profile?: string;
+      }) => {
+        const { smokeAction } = await import('./commands/smoke.js');
+        await smokeAction(options);
+      },
+    );
+
+  program
+    .command('setup')
+    .description('Guided setup for one caller-owned Discord bot profile')
+    .option('--profile <name>', 'Stable local profile name (required when not interactive)')
+    .option(
+      '--client <id>',
+      'MCP client (claude-desktop|claude-code|codex|cursor|generic). Default: prompt if TTY, else "generic".',
+    )
+    .option('--gateway', 'Enable Discord Gateway resource subscriptions for this profile')
+    .option(
+      '--tool-surface <mode>',
+      'Advertised tool surface (full|progressive). Default: progressive',
+      'progressive',
+    )
+    .option('--allowed-guilds <ids>', 'Comma-separated guild IDs to verify and allow')
+    .option('--output <path>', 'Write the generated client snippet to this path')
+    .option('--force', 'Update the same bot profile and overwrite --output if needed')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(
+      async (options: {
+        profile?: string;
+        client?: string;
+        gateway?: boolean;
+        toolSurface?: string;
+        allowedGuilds?: string;
+        output?: string;
+        force?: boolean;
+        json?: boolean;
+      }) => {
+        const { setupAction } = await import('./commands/setup.js');
+        await setupAction(options);
+      },
+    );
+
+  const profile = program
+    .command('profile')
+    .description('List, inspect, or remove non-secret caller-owned bot profiles');
+  profile
+    .command('list')
+    .description('List configured profiles')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(async (options: { json?: boolean }) => {
+      const { profileListAction } = await import('./commands/profile.js');
+      profileListAction(options);
+    });
+  profile
+    .command('show <name>')
+    .description('Show one profile without resolving or printing its token')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(async (name: string, options: { json?: boolean }) => {
+      const { profileShowAction } = await import('./commands/profile.js');
+      profileShowAction(name, options);
+    });
+  profile
+    .command('remove <name>')
+    .description('Remove one local profile without revoking its Discord token')
+    .option('--yes', 'Confirm removal without an interactive prompt')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(async (name: string, options: { yes?: boolean; json?: boolean }) => {
+      const { profileRemoveAction } = await import('./commands/profile.js');
+      await profileRemoveAction(name, options);
     });
 
   program

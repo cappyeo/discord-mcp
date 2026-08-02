@@ -22,17 +22,19 @@
  * they just wire whatever the caller provides.
  *
  * `discordToken` is the literal value placed in `env.DISCORD_TOKEN`.
- * Callers that don't want to leak a real secret should pass a
- * placeholder like `${env:DISCORD_TOKEN}` so the user can resolve it
- * via their shell environment.
+ * When omitted, JSON clients inherit `DISCORD_TOKEN` from their launch
+ * environment and Codex forwards it with `env_vars`. Profile-based setup uses
+ * omission so generated files contain neither a secret nor a client-specific
+ * interpolation placeholder. Stateless `init` retains its legacy placeholder.
  *
  * `gateway` adds `--gateway` to the args when true. `envVars` is merged
- * into the `env` object alongside `DISCORD_TOKEN` (e.g. OTEL_*, MCP_AUDIT_*).
+ * into the `env` object alongside `DISCORD_TOKEN` when the token is supplied
+ * (e.g. OTEL_*, MCP_AUDIT_*).
  */
 export interface SnippetConfig {
   readonly serverPath: string;
   readonly serverArgs?: readonly string[];
-  readonly discordToken: string;
+  readonly discordToken?: string;
   readonly gateway?: boolean;
   readonly envVars?: Readonly<Record<string, string>>;
 }

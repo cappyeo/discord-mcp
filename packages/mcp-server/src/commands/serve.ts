@@ -13,6 +13,7 @@
  * ONE command that calls process.exit - every other command uses
  * process.exitCode + return so Node drains stdout/stderr first.
  */
+import { activateProfile } from '../lib/profiles.js';
 import { startHttp } from '../transports/http.js';
 import { startStdio } from '../transports/stdio.js';
 
@@ -21,11 +22,21 @@ export interface ServeOptions {
   http?: boolean;
   host?: string;
   port?: number;
+  profile?: string;
+  profileDirectory?: string;
 }
 
 export async function serveAction(options: ServeOptions): Promise<void> {
   try {
-    if (options.http === true && options.gateway === true) {
+    const profile =
+      options.profile === undefined
+        ? undefined
+        : activateProfile(options.profile, {
+            ...(options.profileDirectory === undefined
+              ? {}
+              : { directory: options.profileDirectory }),
+          });
+    if (options.http === true && (options.gateway === true || profile?.gateway === true)) {
       throw new Error('Gateway subscriptions are available only with the stdio transport.');
     }
     if (options.http === true) {
@@ -34,7 +45,7 @@ export async function serveAction(options: ServeOptions): Promise<void> {
         ...(options.port === undefined ? {} : { port: options.port }),
       });
     } else {
-      if (options.gateway === true) {
+      if (options.gateway === true || profile?.gateway === true) {
         process.env.GATEWAY = '1';
       }
       await startStdio();

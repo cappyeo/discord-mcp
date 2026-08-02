@@ -33,7 +33,9 @@ npx --yes @discord-mcp/cli@latest doctor --online
 
 ## `DISCORD_TOKEN` is missing or invalid
 
-- If your generated config still contains the literal `${env:DISCORD_TOKEN}`, replace that
+- A profile-based `setup` snippet intentionally omits the token from JSON clients; make
+  `DISCORD_TOKEN` available to the client process before it launches the MCP child.
+- If a stateless `init` config still contains the literal `${env:DISCORD_TOKEN}`, replace that
   placeholder with the real token in the **local** client config unless you have verified
   that your client expands environment placeholders.
 - `doctor` reads the environment of the terminal where it runs; it does not read the token
@@ -43,6 +45,9 @@ npx --yes @discord-mcp/cli@latest doctor --online
 - If startup reports a bot identity mismatch, restore the token for
   `DISCORD_EXPECTED_BOT_ID`; do not replace the expected ID merely to make the
   server start. Follow the [credential lifecycle guide](/discord-mcp/operations/credentials/).
+- For a saved profile, run `discord-mcp profile show <name>` and
+  `discord-mcp doctor --profile <name> --online` to inspect the non-secret
+  boundary and verify its current environment token together.
 
 <Aside type="danger">
 Treat the generated client configuration as a secret once it contains a token. Never commit,

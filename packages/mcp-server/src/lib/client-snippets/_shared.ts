@@ -11,13 +11,13 @@ import type { SnippetConfig } from './types.js';
 /**
  * Build the `{ command, args, env }` payload for a single MCP server
  * entry. Args are merged: caller-provided `serverArgs` first, then
- * `--gateway` appended when `cfg.gateway === true`. Env merges
- * `DISCORD_TOKEN` (always present) with any extra `cfg.envVars`.
+ * `--gateway` appended when `cfg.gateway === true`. Env includes
+ * `DISCORD_TOKEN` when supplied and merges any extra `cfg.envVars`.
  */
 function renderServerEntry(cfg: SnippetConfig): {
   command: string;
   args: string[];
-  env: Record<string, string>;
+  env?: Record<string, string>;
 } {
   const args = [...(cfg.serverArgs ?? [])];
   if (cfg.gateway === true) {
@@ -25,14 +25,14 @@ function renderServerEntry(cfg: SnippetConfig): {
   }
 
   const env: Record<string, string> = {
-    DISCORD_TOKEN: cfg.discordToken,
+    ...(cfg.discordToken === undefined ? {} : { DISCORD_TOKEN: cfg.discordToken }),
     ...(cfg.envVars ?? {}),
   };
 
   return {
     command: cfg.serverPath,
     args,
-    env,
+    ...(Object.keys(env).length === 0 ? {} : { env }),
   };
 }
 

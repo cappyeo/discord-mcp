@@ -1,13 +1,13 @@
 ---
 title: CLI
-description: discord-mcp CLI sub-command reference. Flags, exit codes, and example invocations for serve, doctor, smoke, init, and migrate.
+description: discord-mcp CLI sub-command reference. Flags, exit codes, and examples for serve, setup, profile, doctor, smoke, init, and migrate.
 sidebar:
   order: 1
 ---
 
 import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-The `discord-mcp` binary is the single entry point with five
+The `discord-mcp` binary is the single entry point with seven
 sub-commands routed by [commander](https://www.npmjs.com/package/commander):
 
 ```bash
@@ -17,7 +17,8 @@ discord-mcp <command> [options]
 `serve` is the default sub-command - running `discord-mcp` with no command
 boots the local stdio MCP server, equivalent to `discord-mcp serve`. Pass
 `--http` to serve a bearer-protected Streamable HTTP endpoint instead. The
-other four (`doctor`, `smoke`, `init`, `migrate`) are operator tools.
+other six (`setup`, `profile`, `doctor`, `smoke`, `init`, `migrate`) are
+operator tools.
 
 Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
 
@@ -36,6 +37,7 @@ etc. Each sub-command has its own option list described below.
 ```bash
 discord-mcp serve [--gateway]
 discord-mcp serve --http [--host <host>] [--port <port>]
+discord-mcp serve --profile <name>
 discord-mcp [--gateway]            # default sub-command, stdio
 ```
 
@@ -52,6 +54,7 @@ audit sink.
 | `--http`     | boolean | `false` | Serve Streamable HTTP MCP at `/mcp`. Requires `DISCORD_MCP_ACCESS_TOKEN`; cannot be combined with `--gateway`. |
 | `--host <host>` | string | `127.0.0.1` | HTTP listen host. Applies with `--http`; leave on loopback behind a TLS reverse proxy. |
 | `--port <port>` | number | `3000` | HTTP listen port. Applies with `--http`. |
+| `--profile <name>` | string | unset | Load non-secret bot/guild/tool settings from a caller-owned profile before startup. `DISCORD_TOKEN` must still exist in the launch environment. |
 
 ### Examples
 
@@ -64,6 +67,9 @@ discord-mcp serve
 
 # With Gateway subscriptions enabled.
 discord-mcp serve --gateway
+
+# Start the bot and safety boundary saved by guided setup.
+discord-mcp serve --profile devbot
 
 # Bare form with the same flag (forwarded to serve through commander's
 # default-subcommand passthrough).
@@ -97,7 +103,7 @@ Every other sub-command sets
 ## `doctor`
 
 ```bash
-discord-mcp doctor [--json] [--online]
+discord-mcp doctor [--profile <name>] [--json] [--online]
 ```
 
 Diagnose configuration, token, and connectivity issues. Runs a registry of
@@ -108,6 +114,7 @@ aggregates results into a single structured report.
 | ----------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--json`    | boolean | `false` | Emit machine-readable JSON instead of pretty TTY output. Use this in CI.                                                                       |
 | `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). Without this flag only offline checks run, so doctor stays cheap.      |
+| `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. |
 
 ### Examples
 
@@ -123,6 +130,9 @@ DISCORD_TOKEN=Bot.xxx discord-mcp doctor --online
 
 # Full online + JSON report - typical pre-deploy gate.
 discord-mcp doctor --online --json | jq .
+
+# Verify a saved caller-owned bot profile and its identity lock.
+discord-mcp doctor --profile devbot --online
 ```
 
 ### Exit codes
@@ -133,7 +143,7 @@ discord-mcp doctor --online --json | jq .
 | `1`  | At least one check returned `warn`, no fails.                          |
 | `2`  | At least one check returned `fail` (e.g. invalid token, missing env).  |
 
-The exit-code policy is uniform across `doctor`, `smoke`, `init`, and `migrate`:
+The exit-code policy is uniform across `setup`, `profile`, `doctor`, `smoke`, `init`, and `migrate`:
 `0` = success, `1` = success-with-work-left, `2` = couldn't run.
 
 ### See also
@@ -144,8 +154,8 @@ The exit-code policy is uniform across `doctor`, `smoke`, `init`, and `migrate`:
 ## `smoke`
 
 ```bash
-discord-mcp smoke [--json]
-discord-mcp smoke --confirm-write [--guild-id <id>] [--json]
+discord-mcp smoke [--profile <name>] [--json]
+discord-mcp smoke --confirm-write [--profile <name>] [--guild-id <id>] [--json]
 ```
 
 Verify the real MCP-to-Discord path without loading all 192 tool schemas into an
@@ -164,6 +174,7 @@ or configuration used by the long-running server.
 | `--confirm-write`    | boolean | `false`     | Execute the self-cleaning create/send/edit/delete lifecycle. Without it, the command is read-only.               |
 | `--guild-id <id>`    | string  | sole guild  | Select the write target. Required when the bot can see multiple guilds; the ID must already be visible to it.    |
 | `--json`             | boolean | `false`     | Emit the shared machine-readable result envelope, including step and cleanup state.                              |
+| `--profile <name>`   | string  | unset       | Activate a saved profile before opening the in-memory MCP session.                                               |
 
 The write smoke needs View Channels, Manage Channels, and Send Messages in the
 test guild. It also needs the `users`, `channels`, and `messages` categories when
@@ -175,6 +186,9 @@ is attempted before the command exits; a cleanup failure is reported explicitly.
 ```bash
 # Cheap, read-only end-to-end check.
 discord-mcp smoke
+
+# Read-only verification through a saved bot/guild boundary.
+discord-mcp smoke --profile devbot
 
 # The bot is installed in exactly one private test guild.
 discord-mcp smoke --confirm-write
@@ -198,6 +212,66 @@ discord-mcp smoke --confirm-write --guild-id 111122223333444455 --json
 - [Verify setup](/discord-mcp/start/verify-setup/) - where the smoke check fits in the tutorial.
 - [Safety configuration](/discord-mcp/reference/config/safety/) - persistent dry-run and confirmation behavior.
 
+## `setup`
+
+```bash
+discord-mcp setup --profile <name> [--client <id>]
+                  [--tool-surface <full|progressive>]
+                  [--allowed-guilds <id,id,...>] [--gateway]
+                  [--output <path>] [--force] [--json]
+```
+
+Recommended onboarding for one caller-owned bot. `setup` has no token flag: it
+resolves `DISCORD_TOKEN` from the caller's environment, verifies the bot through
+Discord, selects or validates its guild allowlist, saves non-secret profile
+metadata, and generates a client snippet that starts `serve --profile <name>`.
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--profile <name>` | string | prompt if TTY; required otherwise | Stable lowercase profile name. Allows letters, digits, dots, underscores, and hyphens. |
+| `--client <id>` | string | prompt if TTY, else `generic` | One of `claude-desktop`, `claude-code`, `codex`, `cursor`, `generic`. |
+| `--tool-surface <mode>` | string | `progressive` | Store `full` or `progressive` as the runtime presentation layer. |
+| `--allowed-guilds <ids>` | string | sole guild or interactive choice | Verify and store an explicit comma-separated guild allowlist. Ambiguous non-interactive selection fails closed. |
+| `--gateway` | boolean | `false` | Store Gateway subscriptions for stdio startup. |
+| `--output <path>` | string | stdout | Write the generated client snippet. Existing files are protected. |
+| `--force` | boolean | `false` | Update metadata for the same verified bot and overwrite `--output`. It cannot reassign the profile to another bot ID. |
+| `--json` | boolean | `false` | Emit the shared structured result, including profile name/path and snippet content. |
+
+```bash
+export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
+discord-mcp setup --profile devbot --client codex
+discord-mcp doctor --profile devbot --online
+discord-mcp smoke --profile devbot
+```
+
+Profiles store only versioned metadata and the provider reference
+`env:DISCORD_TOKEN`; neither `setup` output nor the profile contains the token
+value. Selected guilds with `Administrator` still produce exit code `1` and a
+least-privilege warning.
+
+## `profile`
+
+```bash
+discord-mcp profile list [--json]
+discord-mcp profile show <name> [--json]
+discord-mcp profile remove <name> [--yes] [--json]
+```
+
+Manage local non-secret profile metadata. Profiles live under
+`%APPDATA%\discord-mcp\profiles` on Windows,
+`~/Library/Application Support/discord-mcp/profiles` on macOS, and
+`${XDG_CONFIG_HOME:-~/.config}/discord-mcp/profiles` on Linux.
+
+- `list` reports the bot identity, guild count, client, and tool surface.
+- `show` prints the complete versioned metadata and provider reference, never
+  the resolved token.
+- `remove` deletes exactly one local profile. Non-interactive use requires
+  `--yes`; deleting metadata does not revoke or reset the Discord token.
+
+Rerun `setup --profile <name> --force` to update a profile for the same bot.
+To assign the name to a genuinely different bot, first remove the old profile
+and then run setup again with that bot's caller-owned token.
+
 ## `init`
 
 ```bash
@@ -208,8 +282,9 @@ discord-mcp init [--client <id>] [--token <token>] [--gateway]
                  [--output <path>] [--force] [--json]
 ```
 
-Generate an MCP client config snippet for a supported client. Either prints
-to stdout or writes to `--output <path>`.
+Generate a stateless MCP client config snippet for a supported client. Either
+prints to stdout or writes to `--output <path>`. Prefer `setup` when you want a
+reusable bot profile and safer credential lifecycle.
 
 | Flag             | Type    | Default                                              | Description                                                                                                                                                                                                          |
 | ---------------- | ------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -336,7 +411,7 @@ discord-mcp migrate --from discord-ops --json > migrate-report.json
 
 ## Output formats
 
-`doctor`, `smoke`, `init`, and `migrate` all share the same `emitResult(...)` envelope.
+`setup`, `profile`, `doctor`, `smoke`, `init`, and `migrate` share the same `emitResult(...)` envelope.
 In pretty mode you see a TTY-friendly summary. In `--json` mode you get a
 single line of structured JSON with this shape:
 
@@ -353,6 +428,7 @@ single line of structured JSON with this shape:
 ```
 
 This is the contract pipelines should consume. `data` is per-command
-(doctor's `data.checks` array, smoke's `data.steps`, init's `data.content`,
-migrate's `data.result`)
+(setup's `data.profile`, profile's metadata collection, doctor's
+`data.checks`, smoke's `data.steps`, init's `data.content`, migrate's
+`data.result`)
 and stable across versions within a major.

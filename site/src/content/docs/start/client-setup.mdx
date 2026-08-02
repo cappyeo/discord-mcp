@@ -19,7 +19,8 @@ import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro'
 import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
 This lesson covers the default **local stdio MCP** setup for clients that can spawn an MCP
-server as a subprocess. The `init` command generates a client-specific configuration fragment;
+server as a subprocess. The recommended `setup` command verifies one caller-owned bot,
+saves a non-secret local profile, and generates a client-specific configuration fragment.
 Codex receives TOML and the other first-class clients receive JSON. It prints the fragment
 by default, so you stay in control of the file you merge it into.
 
@@ -32,13 +33,26 @@ by default, so you stay in control of the file you merge it into.
 </TutorialPreCheck>
 
 <Aside type="caution">
-`init` does not edit your client config and never prompts for a real token. Omission always generates
-an environment reference. With `--discover-guilds`, the current `DISCORD_TOKEN` is sent only to Discord
-to verify the bot and its guild membership; it is not copied into the generated fragment. The Codex
-fragment forwards `DISCORD_TOKEN` from the environment; the JSON fragments use `${env:DISCORD_TOKEN}`
-only when the client supports expansion. Do not pass the token with `--token`, because command arguments
-can remain in shell history and process inspection.
+`setup` does not edit your client config and has no token flag. The current `DISCORD_TOKEN` is sent only
+to Discord to verify the bot and its guild membership; it is not copied into the generated fragment or
+profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment; the JSON fragments use
+the environment inherited by the client process and omit a token field entirely. The older
+`init --token` path is for explicit legacy automation and can expose a secret through shell history
+or process inspection.
 </Aside>
+
+Load the token into the terminal that will run setup. Launch command-line clients
+from an environment that still contains the variable; desktop clients may need
+the equivalent user/session environment configured before restart.
+
+```bash
+read -rsp 'Discord bot token: ' DISCORD_TOKEN && printf '\n'
+export DISCORD_TOKEN
+```
+
+```powershell
+$env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
+```
 
 ## Choose your client
 
@@ -46,7 +60,7 @@ can remain in shell history and process inspection.
   <div slot="claude-desktop">
 
   ```bash
-  discord-mcp init --client claude-desktop
+  discord-mcp setup --profile devbot --client claude-desktop
   ```
 
   Merge the printed `discord-mcp` entry into the `mcpServers` object, then fully quit
@@ -62,7 +76,7 @@ can remain in shell history and process inspection.
   <div slot="claude-code">
 
   ```bash
-  discord-mcp init --client claude-code
+  discord-mcp setup --profile devbot --client claude-code
   ```
 
   Merge the output into `~/.claude.json` for user-level configuration, or into
@@ -73,24 +87,20 @@ can remain in shell history and process inspection.
   <div slot="codex">
 
   ```bash
-  read -rsp 'Discord bot token: ' DISCORD_TOKEN && printf '\n'
-  export DISCORD_TOKEN
-  discord-mcp init --client codex --tool-surface progressive --discover-guilds
+  discord-mcp setup --profile devbot --client codex
   ```
 
   ```powershell
-  $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
-  discord-mcp init --client codex --tool-surface progressive --discover-guilds
+  discord-mcp setup --profile devbot --client codex
   ```
 
   Merge the TOML fragment into `~/.codex/config.toml`. It uses
   `env_vars = ["DISCORD_TOKEN"]`, so Codex forwards the token from its launch
-  environment instead of storing it in `config.toml`. Guild discovery verifies
-  the caller-owned bot, locks the config to its ID with
-  `DISCORD_EXPECTED_BOT_ID`, and adds an `ALLOWED_GUILDS` server-side boundary,
-  not merely a client-side filter. If the bot can see multiple guilds in a
-  non-interactive run, rerun with `--allowed-guilds <id>` to make the target
-  explicit.
+  environment instead of storing it in `config.toml`. The fragment starts
+  `serve --profile devbot`; that versioned profile supplies the verified
+  `DISCORD_EXPECTED_BOT_ID`, `ALLOWED_GUILDS`, and progressive tool surface at
+  runtime. If the bot can see multiple guilds in a non-interactive run, rerun
+  with `--allowed-guilds <id>` to make the target explicit.
 
   Start Codex from a terminal where the token is set:
 
@@ -111,7 +121,7 @@ can remain in shell history and process inspection.
   <div slot="cursor">
 
   ```bash
-  discord-mcp init --client cursor
+  discord-mcp setup --profile devbot --client cursor
   ```
 
   Merge the output into `~/.cursor/mcp.json` for global access or
@@ -121,7 +131,7 @@ can remain in shell history and process inspection.
   <div slot="generic">
 
   ```bash
-  discord-mcp init --client generic
+  discord-mcp setup --profile devbot --client generic
   ```
 
   The output is a standard `mcpServers` block. Place it where your MCP client's own
@@ -130,9 +140,10 @@ can remain in shell history and process inspection.
   </div>
 </ClientTabs>
 
-The generated snippet uses the current CLI path, so it works immediately from the
-installation that created it. If you later move or replace that installation, generate
-a fresh snippet instead of editing an absolute path by hand.
+The generated snippet uses the current CLI path and the local profile directory, so it
+works immediately from the installation and operating-system account that created it.
+If you later move machines or replace that installation, rerun `setup` instead of copying
+the profile blindly or editing an absolute path by hand.
 
 Once the snippet contains a real token, treat the whole client config as a secret: do not
 commit, share, or screenshot it.
@@ -148,7 +159,8 @@ you do not need to expose the token to a second process yet.
 <TutorialChecklist>
 
 - [ ] I merged the generated `discord-mcp` entry without removing my other MCP servers.
-- [ ] The local config contains a real token or a placeholder my client is known to expand.
+- [ ] `discord-mcp profile show devbot` reports the intended bot ID and guild allowlist.
+- [ ] The client launch environment supplies `DISCORD_TOKEN`; neither profile nor client config stores it.
 - [ ] I fully restarted the MCP client after changing its configuration.
 - [ ] The client can list discord-mcp tools without a server startup error.
 

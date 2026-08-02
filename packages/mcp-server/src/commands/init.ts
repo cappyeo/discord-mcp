@@ -38,6 +38,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ALL_GENERATORS } from '../lib/client-snippets/index.js';
 import { emitResult } from '../lib/output.js';
+import {
+  type DiscordMcpProfile,
+  normalizeProfileName,
+  profileExists,
+  saveProfile,
+} from '../lib/profiles.js';
 import { askChoice, askYesNo, isInteractive } from '../lib/prompt.js';
 
 export interface InitOptions {
@@ -50,6 +56,10 @@ export interface InitOptions {
   allowedGuilds?: string;
   discoverGuilds?: boolean;
   json?: boolean;
+  profile?: {
+    name: string;
+    directory?: string;
+  };
 }
 
 // Literal placeholder string used when the user opts out of supplying a
@@ -220,6 +230,77 @@ export function resolveCliPath(moduleUrl: string = import.meta.url): string {
 
 export async function initAction(opts: InitOptions): Promise<void> {
   const asJson = opts.json === true;
+  const profileLocation =
+    opts.profile?.directory === undefined ? {} : { directory: opts.profile.directory };
+  let profileName: string | undefined;
+  if (opts.profile !== undefined) {
+    try {
+      profileName = normalizeProfileName(opts.profile.name);
+    } catch (error) {
+      emitResult(
+        {
+          ok: false,
+          exitCode: 2,
+          summary: 'invalid profile name',
+          errors: [error instanceof Error ? error.message : String(error)],
+        },
+        asJson,
+      );
+      return;
+    }
+    if (opts.discoverGuilds !== true) {
+      emitResult(
+        {
+          ok: false,
+          exitCode: 2,
+          summary: 'profile setup requires live Discord discovery',
+          errors: [
+            'Use the guided setup command so the bot identity and guild scope are verified.',
+          ],
+        },
+        asJson,
+      );
+      return;
+    }
+    if (opts.token !== undefined) {
+      emitResult(
+        {
+          ok: false,
+          exitCode: 2,
+          summary: 'profile setup does not accept token arguments',
+          errors: ['Set DISCORD_TOKEN in the launch environment instead of passing --token.'],
+        },
+        asJson,
+      );
+      return;
+    }
+    if (opts.force !== true && profileExists(profileName, profileLocation)) {
+      emitResult(
+        {
+          ok: false,
+          exitCode: 2,
+          summary: `profile ${profileName} already exists`,
+          errors: [
+            'Rerun setup with --force to update the same bot, or choose another profile name.',
+          ],
+        },
+        asJson,
+      );
+      return;
+    }
+  }
+
+  if (opts.output !== undefined && existsSync(opts.output) && opts.force !== true) {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: `${opts.output} exists; use --force to overwrite`,
+      },
+      asJson,
+    );
+    return;
+  }
 
   // 1. Resolve client.
   let clientId = opts.client;
@@ -423,43 +504,70 @@ export async function initAction(opts: InitOptions): Promise<void> {
   //    the cost of being installation-specific.
   const serverPath = process.execPath;
   const serverArgs: string[] = [resolveCliPath()];
+  if (profileName !== undefined) serverArgs.push('serve', '--profile', profileName);
 
   // 7. Generate snippet.
   const envVars: Record<string, string> = {};
-  if (toolSurface === 'progressive') envVars.MCP_TOOL_SURFACE = 'progressive';
-  if (allowedGuilds !== undefined) envVars.ALLOWED_GUILDS = allowedGuilds.join(',');
-  if (discord !== undefined) envVars.DISCORD_EXPECTED_BOT_ID = discord.bot.id;
+  if (profileName === undefined) {
+    if (toolSurface === 'progressive') envVars.MCP_TOOL_SURFACE = 'progressive';
+    if (allowedGuilds !== undefined) envVars.ALLOWED_GUILDS = allowedGuilds.join(',');
+    if (discord !== undefined) envVars.DISCORD_EXPECTED_BOT_ID = discord.bot.id;
+  }
 
   const snippet = generator.generate({
     serverPath,
     serverArgs,
-    discordToken: token,
-    gateway,
+    ...(profileName === undefined ? { discordToken: token } : {}),
+    gateway: profileName === undefined ? gateway : false,
     ...(Object.keys(envVars).length > 0 ? { envVars } : {}),
   });
 
-  // 8. Write or print.
-  let writtenTo: string | undefined;
-  if (opts.output !== undefined) {
-    if (existsSync(opts.output) && opts.force !== true) {
+  let savedProfilePath: string | undefined;
+  if (profileName !== undefined && discord !== undefined && allowedGuilds !== undefined) {
+    const profile: DiscordMcpProfile = {
+      version: 1,
+      name: profileName,
+      bot: discord.bot,
+      credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+      allowedGuilds,
+      client: generator.id as DiscordMcpProfile['client'],
+      toolSurface: toolSurface as DiscordMcpProfile['toolSurface'],
+      gateway,
+    };
+    try {
+      savedProfilePath = saveProfile(profile, {
+        ...profileLocation,
+        overwrite: opts.force === true,
+      });
+    } catch (error) {
       emitResult(
         {
           ok: false,
           exitCode: 2,
-          summary: `${opts.output} exists; use --force to overwrite`,
+          summary: `could not save profile ${profileName}`,
+          errors: [error instanceof Error ? error.message : String(error)],
         },
         asJson,
       );
       return;
     }
+  }
+
+  // 8. Write or print.
+  let writtenTo: string | undefined;
+  if (opts.output !== undefined) {
     writeFileSync(opts.output, snippet.content, 'utf8');
     writtenTo = opts.output;
   }
 
   const portabilityNote =
     generator.id === 'codex'
-      ? 'For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli"] in the TOML fragment.'
-      : 'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).';
+      ? profileName === undefined
+        ? 'For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli"] in the TOML fragment.'
+        : `For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli", "serve", "--profile", "${profileName}"] in the TOML fragment.`
+      : profileName === undefined
+        ? 'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).'
+        : `For a portable configuration, set command="npx" and args=["-y", "@discord-mcp/cli", "serve", "--profile", "${profileName}"].`;
 
   const exitCode = warnings.length > 0 ? 1 : 0;
   const discordDetails =
@@ -488,6 +596,15 @@ export async function initAction(opts: InitOptions): Promise<void> {
         toolSurface,
         allowedGuilds: allowedGuilds ?? [],
         ...(discord === undefined ? {} : { discord }),
+        ...(savedProfilePath === undefined
+          ? {}
+          : {
+              profile: {
+                name: profileName,
+                path: savedProfilePath,
+                credentialProvider: 'env:DISCORD_TOKEN',
+              },
+            }),
       },
       ...(warnings.length > 0 ? { warnings } : {}),
       details:
@@ -500,6 +617,16 @@ export async function initAction(opts: InitOptions): Promise<void> {
               snippet.configFilePath,
               '',
               portabilityNote,
+              ...(savedProfilePath === undefined
+                ? []
+                : [
+                    '',
+                    `Profile: ${profileName}`,
+                    savedProfilePath,
+                    'Credential: inherited env:DISCORD_TOKEN (not stored)',
+                    `Verify: discord-mcp doctor --profile ${profileName} --online`,
+                    `Smoke: discord-mcp smoke --profile ${profileName}`,
+                  ]),
             ]
           : [
               ...discordDetails,
@@ -509,6 +636,16 @@ export async function initAction(opts: InitOptions): Promise<void> {
               snippet.configFilePath,
               '',
               portabilityNote,
+              ...(savedProfilePath === undefined
+                ? []
+                : [
+                    '',
+                    `Profile: ${profileName}`,
+                    savedProfilePath,
+                    'Credential: inherited env:DISCORD_TOKEN (not stored)',
+                    `Verify: discord-mcp doctor --profile ${profileName} --online`,
+                    `Smoke: discord-mcp smoke --profile ${profileName}`,
+                  ]),
               '',
               'Snippet:',
               snippet.content.trimEnd(),

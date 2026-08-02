@@ -35,12 +35,14 @@ function renderCodexToml(cfg: SnippetConfig): string {
     `args = ${renderTomlStringArray(args)}`,
   ];
 
-  if (cfg.discordToken === TOKEN_PLACEHOLDER) {
+  if (cfg.discordToken === undefined || cfg.discordToken === TOKEN_PLACEHOLDER) {
     lines.push('env_vars = ["DISCORD_TOKEN"]');
   }
 
   const env = {
-    ...(cfg.discordToken === TOKEN_PLACEHOLDER ? {} : { DISCORD_TOKEN: cfg.discordToken }),
+    ...(cfg.discordToken === undefined || cfg.discordToken === TOKEN_PLACEHOLDER
+      ? {}
+      : { DISCORD_TOKEN: cfg.discordToken }),
     ...(cfg.envVars ?? {}),
   };
 

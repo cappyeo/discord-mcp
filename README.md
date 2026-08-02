@@ -40,23 +40,24 @@ npm install -g @discord-mcp/cli
 # Keep the caller-owned bot token in this terminal
 export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
 
-# Verify the bot, choose its real Discord server, and generate a safe Codex fragment
-discord-mcp init --client codex --tool-surface progressive --discover-guilds
+# Verify the bot, choose its real Discord server, save a non-secret profile,
+# and generate a safe Codex fragment
+discord-mcp setup --profile devbot --client codex
 
 # Verify the rest of the local configuration
-discord-mcp doctor --online
+discord-mcp doctor --profile devbot --online
 
 # Verify the real MCP path without changing Discord
-discord-mcp smoke
+discord-mcp smoke --profile devbot
 ```
 
-On PowerShell, set the token before running the same `init` and verification commands:
+On PowerShell, set the token before running the same `setup` and verification commands:
 
 ```powershell
 $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 ```
 
-`init` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration fragment; merge it into an existing client configuration rather than overwriting it. `--discover-guilds` sends the current token only to Discord, verifies the bot identity, and injects both a `DISCORD_EXPECTED_BOT_ID` identity lock and a server-side `ALLOWED_GUILDS` boundary. A sole guild is selected automatically; an ambiguous non-interactive run fails closed until you pass the intended guild ID. The Codex fragment forwards `DISCORD_TOKEN` from its launch environment instead of storing the token in `~/.codex/config.toml`. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
+`setup` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It sends the current token only to Discord, verifies the bot identity, chooses a guild boundary, and saves a versioned local profile containing only non-secret metadata. The generated client fragment runs `serve --profile devbot` and forwards `DISCORD_TOKEN` from the caller's launch environment; neither the profile nor the default Codex fragment stores the token. A profile is locked to its first verified bot ID, so `--force` cannot silently reassign it to another bot. Use `profile list`, `profile show`, and `profile remove` for lifecycle management. The older `init` command remains available as a stateless snippet generator. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
 
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only
@@ -129,7 +130,9 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | Command | Purpose |
 | --- | --- |
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
-| `discord-mcp init` | Generate an MCP client configuration snippet. |
+| `discord-mcp setup` | Verify one caller-owned bot, save a non-secret profile, and generate its client configuration. |
+| `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
+| `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
 | `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, and optional network connectivity. |
 | `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |

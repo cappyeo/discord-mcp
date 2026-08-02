@@ -1,9 +1,9 @@
 /**
  * Tiny readline prompt helper - Plan 9 Phase D.
  *
- * `init` is the only sub-command (so far) that needs interactive input.
- * Rather than pull `inquirer`/`prompts`/`enquirer` for a single command
- * we wrap `node:readline/promises` with three thin helpers. Zero new
+ * Guided setup and destructive profile actions need interactive input.
+ * Rather than pull `inquirer`/`prompts`/`enquirer`, we wrap
+ * `node:readline/promises` with three thin helpers. Zero new
  * runtime deps, zero ANSI terminal handling - Node's readline already
  * does line editing and ^C handling for us.
  *

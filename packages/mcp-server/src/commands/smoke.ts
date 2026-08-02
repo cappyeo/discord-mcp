@@ -18,11 +18,14 @@ import { REST } from '@discordjs/rest';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { emitResult } from '../lib/output.js';
+import { activateProfile } from '../lib/profiles.js';
 
 export interface SmokeOptions {
   json?: boolean;
   confirmWrite?: boolean;
   guildId?: string;
+  profile?: string;
+  profileDirectory?: string;
 }
 
 export interface SmokeToolCall {
@@ -189,6 +192,25 @@ export async function smokeAction(
   opts: SmokeOptions,
   deps: SmokeDeps = DEFAULT_DEPS,
 ): Promise<void> {
+  if (opts.profile !== undefined) {
+    try {
+      activateProfile(opts.profile, {
+        ...(opts.profileDirectory === undefined ? {} : { directory: opts.profileDirectory }),
+      });
+    } catch (error) {
+      emitResult(
+        {
+          ok: false,
+          exitCode: 2,
+          summary: `could not activate profile ${opts.profile}`,
+          errors: [error instanceof Error ? error.message : String(error)],
+        },
+        opts.json === true,
+      );
+      return;
+    }
+  }
+
   const mode = opts.confirmWrite === true ? 'write' : 'read-only';
   const state: SmokeState = {
     identityRead: false,

@@ -7,6 +7,8 @@
  * here only for the audit-sink scenarios - everything else uses real
  * env-var manipulation against the real check implementations.
  */
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock node:fs at module-eval time so audit-sink (file branch) can be
@@ -90,6 +92,22 @@ function setTTY(value: boolean): void {
 function stdoutOutput(): string {
   return stdoutWrites.join('');
 }
+
+describe('doctor profile activation', () => {
+  it('reports a missing profile without running the check suite', async () => {
+    await doctorAction({
+      json: true,
+      profile: 'missing',
+      profileDirectory: join(tmpdir(), `discord-mcp-missing-doctor-${process.pid}`),
+    });
+
+    const parsed = JSON.parse(stdoutOutput());
+    expect(process.exitCode).toBe(2);
+    expect(parsed.summary).toContain('could not activate profile');
+    expect(parsed.errors[0]).toContain('Profile not found');
+    expect(parsed.data).toBeUndefined();
+  });
+});
 
 /**
  * Drain helper (Plan 12 Phase C.2). Mirrors the pattern in

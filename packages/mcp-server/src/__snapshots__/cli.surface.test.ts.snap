@@ -9,6 +9,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "options": [
         "--json",
         "--online",
+        "--profile <name>",
       ],
     },
     {
@@ -37,6 +38,11 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       ],
     },
     {
+      "isDefault": false,
+      "name": "profile",
+      "options": [],
+    },
+    {
       "isDefault": true,
       "name": "serve",
       "options": [
@@ -44,6 +50,21 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--host <host>",
         "--http",
         "--port <port>",
+        "--profile <name>",
+      ],
+    },
+    {
+      "isDefault": false,
+      "name": "setup",
+      "options": [
+        "--allowed-guilds <ids>",
+        "--client <id>",
+        "--force",
+        "--gateway",
+        "--json",
+        "--output <path>",
+        "--profile <name>",
+        "--tool-surface <mode>",
       ],
     },
     {
@@ -53,6 +74,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--confirm-write",
         "--guild-id <id>",
         "--json",
+        "--profile <name>",
       ],
     },
   ],

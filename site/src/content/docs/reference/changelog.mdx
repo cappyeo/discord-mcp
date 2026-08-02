@@ -11,6 +11,15 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Added `discord-mcp setup`, a guided caller-owned bot flow that verifies the
+  live bot and guild boundary, saves only versioned non-secret profile
+  metadata, and generates client config that starts `serve --profile <name>`.
+  Profiles use the explicit provider reference `env:DISCORD_TOKEN`; token
+  values are never written to profile files.
+- Added `profile list`, `profile show`, and confirmation-gated `profile remove`
+  lifecycle commands, plus `--profile` activation for `serve`, `doctor`, and
+  `smoke`. A profile remains locked to its first verified bot ID even during a
+  `setup --force` update, preventing accidental cross-bot reassignment.
 - Added `DISCORD_EXPECTED_BOT_ID`, an optional non-secret runtime lock that
   verifies the caller-owned token still belongs to the configured bot before
   serving MCP. `init --discover-guilds` emits the lock automatically, and

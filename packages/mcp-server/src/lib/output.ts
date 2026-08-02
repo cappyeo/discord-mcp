@@ -1,8 +1,8 @@
 /**
  * CLI output formatter - pretty TTY mode and JSON mode.
  *
- * Plan 9 Phase A. The output module is shared by `doctor`, `init`,
- * `migrate` and any future sub-command that emits a structured result.
+ * Plan 9 Phase A. The output module is shared by every lifecycle or
+ * diagnostic sub-command that emits a structured result.
  *
  * Rules (per plan §3.3 / §A.1):
  * - JSON mode is non-negotiable: when `asJson === true` we MUST NOT

@@ -25,13 +25,35 @@
 import { type Config, loadConfig } from '@discord-mcp/core';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
 import { emitResult } from '../lib/output.js';
+import { activateProfile } from '../lib/profiles.js';
 
 export interface DoctorOptions {
   json?: boolean;
   online?: boolean;
+  profile?: string;
+  profileDirectory?: string;
 }
 
 export async function doctorAction(opts: DoctorOptions): Promise<void> {
+  if (opts.profile !== undefined) {
+    try {
+      activateProfile(opts.profile, {
+        ...(opts.profileDirectory === undefined ? {} : { directory: opts.profileDirectory }),
+      });
+    } catch (error) {
+      emitResult(
+        {
+          ok: false,
+          exitCode: 2,
+          summary: `could not activate profile ${opts.profile}`,
+          errors: [error instanceof Error ? error.message : String(error)],
+        },
+        opts.json === true,
+      );
+      return;
+    }
+  }
+
   // Filter: when --online is omitted/false, run only offline checks.
   // When --online is true, run everything (offline + online).
   const checks = ALL_CHECKS.filter((c) => opts.online === true || c.online === false);

@@ -72,11 +72,11 @@ async function runCli(args: string[]): Promise<void> {
       stdoutWrites.push(str);
     },
   });
-  // Sub-commands keep their own exit/output config - propagate to all of
-  // them so `discord-mcp init --help` doesn't call process.exit() directly.
-  for (const sub of program.commands) {
-    sub.exitOverride();
-    sub.configureOutput({
+  // Commands keep their own exit/output config - propagate recursively so
+  // nested commands such as `profile show` remain isolated in tests.
+  const configureCommand = (command: Command): void => {
+    command.exitOverride();
+    command.configureOutput({
       writeOut: (str) => {
         stdoutWrites.push(str);
       },
@@ -84,6 +84,10 @@ async function runCli(args: string[]): Promise<void> {
         stdoutWrites.push(str);
       },
     });
+    for (const child of command.commands) configureCommand(child);
+  };
+  for (const sub of program.commands) {
+    configureCommand(sub);
   }
   try {
     await program.parseAsync(['node', 'cli.js', ...args]);
@@ -116,6 +120,8 @@ describe('cli - version + help', () => {
     expect(out).toContain('smoke');
     expect(out).toContain('init');
     expect(out).toContain('migrate');
+    expect(out).toContain('setup');
+    expect(out).toContain('profile');
   });
 });
 
@@ -126,6 +132,27 @@ describe('cli - smoke sub-command', () => {
     expect(out).toContain('--confirm-write');
     expect(out).toContain('--guild-id');
     expect(out).toContain('--json');
+    expect(out).toContain('--profile');
+  });
+});
+
+describe('cli - caller-owned profiles', () => {
+  it('setup --help documents guided non-secret profile creation', async () => {
+    await runCli(['setup', '--help']);
+    const out = stdoutOutput();
+    expect(out).toContain('--profile');
+    expect(out).toContain('--client');
+    expect(out).toContain('--allowed-guilds');
+    expect(out).toContain('--tool-surface');
+    expect(out).not.toContain('--token <token>');
+  });
+
+  it('profile --help exposes list, show, and remove lifecycle commands', async () => {
+    await runCli(['profile', '--help']);
+    const out = stdoutOutput();
+    expect(out).toContain('list');
+    expect(out).toContain('show');
+    expect(out).toContain('remove');
   });
 });
 

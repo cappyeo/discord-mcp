@@ -3,7 +3,7 @@
  *
  * Spawns the built `dist/cli.js` as a real subprocess and asserts:
  * 1. `--version` prints the package version.
- * 2. `--help` lists all five sub-commands.
+ * 2. `--help` lists all seven sub-commands.
  * 3. `doctor --json` (without DISCORD_TOKEN) exits non-zero with parseable
  *    JSON that flags the missing token.
  *
@@ -62,7 +62,7 @@ describe('cli binary smoke (post-build)', () => {
     expect(status).toBe(0);
   });
 
-  it('--help lists all five subcommands', () => {
+  it('--help lists all seven subcommands', () => {
     const { stdout, stderr, status } = runCli(['--help']);
     const combined = stdout + stderr;
     expect(combined).toContain('serve');
@@ -70,6 +70,8 @@ describe('cli binary smoke (post-build)', () => {
     expect(combined).toContain('smoke');
     expect(combined).toContain('init');
     expect(combined).toContain('migrate');
+    expect(combined).toMatch(/\n  setup \[options\]\s/);
+    expect(combined).toMatch(/\n  profile\s/);
     expect(status).toBe(0);
   });
 

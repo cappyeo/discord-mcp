@@ -38,13 +38,13 @@ first prove the connection with a read-only request, then send one message to a 
    ```bash
    read -rsp 'Discord bot token: ' DISCORD_TOKEN && printf '\n'
    export DISCORD_TOKEN
-   discord-mcp doctor --online
+   discord-mcp doctor --profile devbot --online
    unset DISCORD_TOKEN
    ```
 
    ```powershell
    $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
-   discord-mcp doctor --online
+   discord-mcp doctor --profile devbot --online
    Remove-Item Env:DISCORD_TOKEN
    ```
 

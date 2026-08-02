@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type SmokeDeps, type SmokeToolCall, type SmokeToolResult, smokeAction } from './smoke.js';
 
@@ -87,6 +89,25 @@ function output(): {
 }
 
 describe('smokeAction', () => {
+  it('does not open an MCP session when profile activation fails', async () => {
+    const { deps, calls, close } = makeDeps();
+
+    await smokeAction(
+      {
+        json: true,
+        profile: 'missing',
+        profileDirectory: join(tmpdir(), `discord-mcp-missing-smoke-${process.pid}`),
+      },
+      deps,
+    );
+
+    const parsed = JSON.parse(stdoutWrites.join(''));
+    expect(process.exitCode).toBe(2);
+    expect(parsed.summary).toContain('could not activate profile');
+    expect(calls).toEqual([]);
+    expect(close).not.toHaveBeenCalled();
+  });
+
   it('is read-only by default', async () => {
     const { deps, calls, close } = makeDeps();
 
