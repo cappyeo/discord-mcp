@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-banner.jpg" alt="Discord MCP - connect Discord to the Model Context Protocol" width="1200" />
 </p>
 
-<h1 align="center">discord-mcp</h1>
+<h1 align="center">Discord MCP</h1>
 
 <p align="center">
   <a href="https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml"><img src="https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
