@@ -155,7 +155,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.14.0**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.14.1**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
 
 ## License
 
