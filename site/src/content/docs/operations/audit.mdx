@@ -19,7 +19,7 @@ on-disk JSONL schema.
 
 | Sink | Selector | Use when |
 | ---- | -------- | -------- |
-| `stderr` (default) | `MCP_AUDIT_SINK=stderr` | stdio MCP transports (the default), or any container that ships stderr to a log aggregator (Loki, CloudWatch, Datadog Logs). |
+| `stderr` (default) | `MCP_AUDIT_SINK=stderr` | Local stdio (the default) or HTTP deployments whose stderr is shipped to a log aggregator (Loki, CloudWatch, Datadog Logs). |
 | `file` | `MCP_AUDIT_SINK=file` + optional `MCP_AUDIT_FILE=/path/to/audit.jsonl` | Long-running daemon deployments where stderr is owned by another process. |
 | `otlp` (stub) | `MCP_AUDIT_SINK=otlp` | Reserved for the OTel Logs pipeline. **Currently a stub** - falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]` prefix so misconfiguration is visible. Will become real once `@opentelemetry/api-logs` LoggerProvider lands in `mcp-server/otel.ts`. |
 | `none` | `MCP_AUDIT_SINK=none` or `MCP_AUDIT_ENABLED=false` | When the deployment is in a regulated context that explicitly bans logging the body of mutating ops, or for unit-test isolation. |
@@ -193,7 +193,7 @@ Every event written to the sink is a single JSON object on one line. Fields:
 | `args_redacted` | object | yes | Redacted arg payload - see redaction section above. |
 | `status` | `success` / `tool_error` / `thrown` | yes | Outcome: handler succeeded, returned `isError: true`, or threw. |
 | `duration_ms` | number | yes | Wall-clock duration of the tool call. |
-| `transport` | `stdio` / (future) | yes | MCP transport that received the call. |
+| `transport` | `stdio` / `http` | yes | MCP transport that received the call. |
 | `result_code` | string | optional | Machine-readable code from `structuredContent.code` on `tool_error`, or `error.name` on `thrown`. |
 | `trace_id` | hex32 | optional | OTel trace ID if a span was active. Absent (NOT empty string) when telemetry is off. |
 | `span_id` | hex16 | optional | OTel span ID if a span was active. Same absence rule. |

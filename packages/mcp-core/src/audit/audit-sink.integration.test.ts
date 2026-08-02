@@ -1,6 +1,6 @@
 import { REST } from '@discordjs/rest';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -83,6 +83,32 @@ describe('audit sink integration (Plan 8 F.3)', () => {
     expect(typeof ev.duration_ms).toBe('number');
     expect(ev.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     expect(ev.result_code).toBeUndefined();
+  });
+
+  it('marks events from an HTTP server instance as http', async () => {
+    const httpCaptured = new CapturingSink();
+    const rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const built = await buildServer({ rest, logger, config, transport: 'http' });
+    built.auditSink.emit = (event) => httpCaptured.emit(event);
+    const httpClient = new Client(
+      { name: 'audit-http-it', version: '0.0.0' },
+      { capabilities: {} },
+    );
+    await Promise.all([built.server.connect(serverTransport), httpClient.connect(clientTransport)]);
+
+    try {
+      const result = await httpClient.callTool({
+        name: 'messages_send',
+        arguments: { channel_id: '112233445566778899', content: 'hi-from-http-audit-it' },
+      });
+      expect(result.isError).toBe(false);
+      expect(httpCaptured.events).toHaveLength(1);
+      expect(httpCaptured.events[0]?.transport).toBe('http');
+    } finally {
+      await httpClient.close();
+      await built.server.close();
+    }
   });
 
   it('does NOT emit AuditEvents for idempotent tools (messages_get is read-only)', async () => {

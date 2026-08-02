@@ -15,8 +15,9 @@ discord-mcp <command> [options]
 ```
 
 `serve` is the default sub-command - running `discord-mcp` with no command
-boots the stdio MCP server, equivalent to `discord-mcp serve`. The other
-three (`doctor`, `init`, `migrate`) are operator tools.
+boots the local stdio MCP server, equivalent to `discord-mcp serve`. Pass
+`--http` to serve a bearer-protected Streamable HTTP endpoint instead. The
+other three (`doctor`, `init`, `migrate`) are operator tools.
 
 Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
 
@@ -34,16 +35,23 @@ etc. Each sub-command has its own option list described below.
 
 ```bash
 discord-mcp serve [--gateway]
-discord-mcp [--gateway]            # default sub-command
+discord-mcp serve --http [--host <host>] [--port <port>]
+discord-mcp [--gateway]            # default sub-command, stdio
 ```
 
-Start the stdio MCP transport. Reads configuration from `process.env`
-(see [Reference → Environment variables](/discord-mcp/reference/config/)),
-wires the audit sink, and blocks until the parent agent disconnects.
+Start the local stdio MCP transport by default. With `--http`, start a
+stateless Streamable HTTP endpoint at `/mcp`; it requires
+`DISCORD_MCP_ACCESS_TOKEN` and is designed to sit behind an HTTPS reverse
+proxy. The endpoint negotiates MCP `2026-07-28` and retains stateless 2025-era
+compatibility. Both forms read configuration from `process.env` and wire the
+audit sink.
 
 | Flag         | Type    | Default | Description                                                                                                              |
 | ------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `--gateway`  | boolean | `false` | Enable Discord Gateway resource subscriptions. Lazy-imports `discord.js` so cold-start without this flag stays minimal.  |
+| `--gateway`  | boolean | `false` | Enable Discord Gateway resource subscriptions for stdio only. Lazy-imports `discord.js` so cold-start without this flag stays minimal.  |
+| `--http`     | boolean | `false` | Serve Streamable HTTP MCP at `/mcp`. Requires `DISCORD_MCP_ACCESS_TOKEN`; cannot be combined with `--gateway`. |
+| `--host <host>` | string | `127.0.0.1` | HTTP listen host. Applies with `--http`; leave on loopback behind a TLS reverse proxy. |
+| `--port <port>` | number | `3000` | HTTP listen port. Applies with `--http`. |
 
 ### Examples
 
@@ -60,25 +68,30 @@ discord-mcp serve --gateway
 # Bare form with the same flag (forwarded to serve through commander's
 # default-subcommand passthrough).
 discord-mcp --gateway
+
+# Remote MCP endpoint. Publish /mcp through an HTTPS reverse proxy.
+DISCORD_MCP_ACCESS_TOKEN="replace-with-a-long-random-secret" \
+  discord-mcp serve --http --host 127.0.0.1 --port 3000
 ```
 
 ### Exit codes
 
 | Code | Meaning                                                                                                          |
 | ---- | ---------------------------------------------------------------------------------------------------------------- |
-| `0`  | Process never returns under normal stdio operation. The transport runs until the parent agent disconnects.       |
+| `0`  | Process never returns under normal stdio or HTTP operation. The transport runs until it is stopped.              |
 | `1`  | Boot failure - typically invalid config (missing `DISCORD_TOKEN`, unparseable env). Error message goes to stderr. |
 
 <Aside type="note">
 `serve` is the one sub-command that calls `process.exit(1)` directly on
-failure. stdio cannot drain naturally on a boot error (the transport never
-connected, so there is nothing to flush). Every other sub-command sets
+failure. The long-running transports cannot drain naturally on a boot error.
+Every other sub-command sets
 `process.exitCode` and returns so Node drains stdout/stderr first.
 </Aside>
 
 ### See also
 
 - [Get started → Quickstart](/discord-mcp/start/quickstart/) - install and run.
+- [OpenAI remote MCP](/discord-mcp/operations/openai/) - HTTPS deployment, Responses API, and Codex setup.
 - [Architecture](/discord-mcp/architecture/) - what `serve` actually wires up.
 
 ## `doctor`

@@ -13,6 +13,7 @@
       "sharp"
     ],
     "overrides": {
+      "@hono/node-server": "2.0.12",
       "ws": ">=8.21.0",
       "undici": "^6.27.0",
       "express-rate-limit": "^8.6.0"

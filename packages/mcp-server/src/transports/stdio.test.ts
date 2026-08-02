@@ -13,8 +13,8 @@
  * bypass a process.stderr spy) and `createGatewayClient` (which would
  * otherwise open a real Discord websocket).
  */
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 const { makeLoggerStub } = vi.hoisted(() => ({

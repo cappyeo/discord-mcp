@@ -1,5 +1,5 @@
 import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { BrokenCircuitError, BulkheadRejectedError } from 'cockatiel';
 import {
   BulkheadFullError,

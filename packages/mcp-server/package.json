@@ -1,10 +1,10 @@
 {
   "name": "@discord-mcp/cli",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",
-  "description": "Discord MCP server - stdio transport CLI",
+  "description": "Discord MCP server - stdio and Streamable HTTP transport CLI",
   "bin": {
     "discord-mcp": "./dist/cli.js",
     "discord-mcp-server": "./dist/cli.js"
@@ -54,7 +54,8 @@
   "dependencies": {
     "@discord-mcp/core": "workspace:*",
     "@discordjs/rest": "^2.4.0",
-    "@modelcontextprotocol/sdk": "^1.20.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@sapphire/pieces": "^4.4.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
@@ -66,10 +67,12 @@
     "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "commander": "^12.1.0",
+    "hono": "^4.11.4",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@discord-mcp/server-mocks": "workspace:*",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^22.0.0",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.0",

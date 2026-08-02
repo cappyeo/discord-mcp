@@ -38,6 +38,9 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "name": "serve",
       "options": [
         "--gateway",
+        "--host <host>",
+        "--http",
+        "--port <port>",
       ],
     },
   ],

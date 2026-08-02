@@ -1,6 +1,6 @@
 {
   "name": "@discord-mcp/core",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "private": false,
   "type": "module",
   "description": "Production-grade Discord MCP server core - 192 tools, OTel-instrumented, cockatiel-resilient.",
@@ -59,7 +59,7 @@
   },
   "peerDependencies": {
     "@discordjs/rest": "^2.4.0",
-    "@modelcontextprotocol/sdk": "^1.20.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@sapphire/pieces": "^4.4.1",
     "discord.js": "^14.16.3",
     "zod": "^4.0.0"
@@ -72,7 +72,8 @@
   "devDependencies": {
     "@discord-mcp/server-mocks": "workspace:*",
     "@discordjs/rest": "^2.4.0",
-    "@modelcontextprotocol/sdk": "^1.20.0",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@mswjs/interceptors": "^0.41.3",
     "@opentelemetry/context-async-hooks": "^2.0.0",
     "@opentelemetry/sdk-metrics": "^2.10.0",

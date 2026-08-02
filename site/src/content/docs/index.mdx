@@ -1,6 +1,6 @@
 ---
 title: Discord tools for AI clients
-description: Connect an MCP-compatible AI client to Discord through a local, typed, and observable bot server.
+description: Connect an MCP-compatible AI client to Discord through a typed, observable bot server running locally or over Streamable HTTP.
 type: landing
 template: splash
 hero:
@@ -22,16 +22,18 @@ import DocsCardGrid from '../../components/docs/DocsCardGrid.astro';
 
 <p class="product-facts">
   <Badge text="192 tools · 28 categories" variant="success" />
-  <Badge text="Local stdio transport" variant="note" />
+  <Badge text="stdio + Streamable HTTP" variant="note" />
   <Badge text="Structured results" variant="tip" />
   <Badge text="Pre-1.0" variant="caution" />
 </p>
 
 ## From a prompt to Discord
 
-discord-mcp runs as a child process of your MCP client. The client discovers typed tools,
-sends structured arguments over local stdio, and receives machine-readable results after the
-server calls Discord's API. There is no hosted relay and no separate account to create.
+discord-mcp runs locally as a child process by default. It can also expose a
+bearer-protected Streamable HTTP endpoint for a remote MCP client. In either
+case, the client discovers typed tools, sends structured arguments, and receives
+machine-readable results after the server calls Discord's API. There is no hosted
+relay and no separate account to create.
 
 <CardGrid>
   <Card title="1. Your client chooses a tool" icon="seti:json">
@@ -108,6 +110,7 @@ Requires Node.js 22.12 or newer. You also need a Discord bot installed in a test
     { title: 'Find the right tool', href: '/discord-mcp/tools/', description: 'Search 192 tool contracts by task, category, or technical identifier without expanding a giant sidebar.' },
     { title: 'Build a workflow', href: '/discord-mcp/recipes/', description: 'Combine tools for moderation, rich messages, webhooks, intelligence, pipelines, and live events.' },
     { title: 'Run it in production', href: '/discord-mcp/operations/', description: 'Configure least privilege, telemetry, retries, timeouts, and the documented audit boundaries.' },
+    { title: 'Connect OpenAI remotely', href: '/discord-mcp/operations/openai/', description: 'Publish a bearer-protected HTTPS MCP endpoint for the Responses API or Codex, with its shared-bot boundary explicit.' },
   ]}
 />
 

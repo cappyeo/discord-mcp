@@ -9,6 +9,29 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.14.0 - MCP 2026 and remote HTTP
+
+Released **2026-08-02**.
+
+- Migrated the core and CLI from the monolithic MCP SDK v1 package to the
+  stable TypeScript SDK v2 package split. The HTTP endpoint negotiates MCP
+  `2026-07-28` while retaining a stateless 2025-era path for current clients.
+- Added `discord-mcp serve --http --host <host> --port <port>`, exposing all
+  192 tools at `/mcp` behind a required `DISCORD_MCP_ACCESS_TOKEN`. Local stdio
+  remains the default and existing client configuration continues to work.
+- Added caller-runtime isolation with `AsyncLocalStorage`, process-scoped audit
+  lifecycle management, loopback Host/Origin validation, and protocol tests
+  covering authentication, both protocol eras, tool discovery, and tool calls.
+- Added remote OpenAI Responses API and Codex documentation. One deployment
+  still uses one caller-owned Discord bot; OAuth, per-user Discord credentials,
+  and multi-tenant token storage are intentionally not part of this release.
+
+### Embedding migration
+
+`@discord-mcp/core` consumers must replace the MCP v1 peer with
+`@modelcontextprotocol/server@^2.0.0`. Import the stdio transport from
+`@modelcontextprotocol/server/stdio`.
+
 ## v0.13.4 - Codex client setup
 
 Released **2026-08-02**.

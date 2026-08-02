@@ -15,6 +15,8 @@ const ConfigSchema = z.object({
     .string()
     .regex(/^\d{17,20}$/, 'DISCORD_DEFAULT_GUILD_ID must be a 17-20 digit Discord snowflake')
     .optional(),
+  // Required by `serve --http`, but optional for the default local stdio transport.
+  DISCORD_MCP_ACCESS_TOKEN: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   GATEWAY: boolish(false),
 

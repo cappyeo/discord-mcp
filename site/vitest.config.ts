@@ -6,7 +6,8 @@ export default defineConfig({
     // The docs drift guards load the real tool registry, which means
     // dynamically importing all 192 tool modules (~4s on its own). Under
     // `turbo run test` the other packages' suites are competing for the same
-    // cores, so the 5000ms default is exceeded by scheduling pressure alone.
-    testTimeout: 20_000,
+    // cores. The SDK v2 suite can push a cold registry import just past 20s on
+    // Windows, while the same test completes in ~4s without that contention.
+    testTimeout: 40_000,
   },
 });

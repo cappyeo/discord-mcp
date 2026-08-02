@@ -22,8 +22,8 @@ the Gateway connection cannot boot.
 
 ```mermaid
 graph TD
-  Client[MCP client] --> Transport[InMemoryTransport / stdio]
-  Transport --> Server[McpServer]
+  Client[MCP client] --> Transport[InMemoryTransport / stdio / Streamable HTTP]
+  Transport --> Server[MCP SDK v2 Server]
   Server --> MW[Middleware chain]
   MW --> Tool[Tool piece]
   Tool --> REST[Resilient REST adapter]
@@ -33,10 +33,12 @@ graph TD
   Gateway --> DiscordWS[Discord Gateway WebSocket]
 ```
 
-- **MCP client** sends JSON-RPC `tools/call` over stdio.
-- **Transport** owns JSON-RPC framing; production uses `stdio`, tests use
-  `InMemoryTransport`.
-- **McpServer** bridges MCP to the piece registry and hosts the middleware,
+- **MCP client** sends JSON-RPC `tools/call` over stdio or Streamable HTTP.
+- **Transport** owns JSON-RPC framing; the CLI defaults to `stdio`, `serve
+  --http` provides stateless Streamable HTTP, and tests use `InMemoryTransport`.
+  The HTTP entry negotiates MCP `2026-07-28` and retains a stateless 2025-era
+  compatibility path.
+- **MCP SDK v2 Server** bridges MCP to the piece registry and hosts the middleware,
   tool, precondition, and resource stores.
 - **Middleware chain** applies telemetry, default guild, validation, category
   gate, preconditions, and audit before execution.
@@ -72,11 +74,15 @@ packages/
       errors/              # Error hierarchy + formatErrorForUser
       audit/               # Audit sinks + redaction
       telemetry/           # OTel boot + metrics
-  mcp-server/              # CLI and stdio transport wiring
+  mcp-server/              # CLI, stdio, and Streamable HTTP transport wiring
 ```
 
 `mcp-core` has no transport assumptions. `mcp-server` is the thin shell that
-wires it to stdio, OpenTelemetry, and signal handling.
+wires it to stdio or Streamable HTTP, OpenTelemetry, and signal handling. The
+remote HTTP shell uses the SDK v2 per-request handler factory to create a fresh
+core runtime per request, so it does not share MCP session state. Its
+bearer-token deployment model is documented in
+[OpenAI remote MCP](/discord-mcp/operations/openai/).
 
 Sources:
 [`server.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/server.ts),

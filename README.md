@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <strong>Connect your AI client to Discord through a local, typed, production-ready MCP server.</strong><br />
+  <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
   192 tools for messages, moderation, members, channels, commands, webhooks, and more.
 </p>
 
@@ -59,6 +59,25 @@ To run without a global install:
 npx -y @discord-mcp/cli init --client cursor
 ```
 
+## Remote OpenAI / Codex MCP
+
+For the OpenAI Responses API or Codex, run a bearer-protected Streamable HTTP
+endpoint and place it behind an HTTPS reverse proxy:
+
+```bash
+export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
+export DISCORD_MCP_ACCESS_TOKEN="replace-with-a-long-random-secret"
+discord-mcp serve --http --host 127.0.0.1 --port 3000
+```
+
+The endpoint is `/mcp`; send `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>`.
+It negotiates stable MCP `2026-07-28` while retaining stateless compatibility
+for 2025-era Streamable HTTP clients. Every authenticated client shares the
+deployment's caller-owned Discord bot identity, so use least-privilege Discord
+roles and a narrow `MCP_CATEGORIES` allowlist. The
+[OpenAI remote MCP guide](https://cappyeo.github.io/discord-mcp/operations/openai/)
+covers HTTPS, Responses API, Codex configuration, and the current OAuth boundary.
+
 ## What you get
 
 | Area | Examples |
@@ -85,7 +104,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 
 | Command | Purpose |
 | --- | --- |
-| `discord-mcp serve` | Start the stdio MCP server. This is the default command. |
+| `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
 | `discord-mcp init` | Generate an MCP client configuration snippet. |
 | `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, and optional network connectivity. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |

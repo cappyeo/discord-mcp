@@ -4,7 +4,8 @@
  *
  * Plan 9 Phase A: commander sub-command router.
  * - `serve` is the default sub-command (`isDefault: true`) so a bare
- *   `discord-mcp` invocation still boots the stdio MCP server.
+ *   `discord-mcp` invocation still boots the stdio MCP server. `serve --http`
+ *   exposes a bearer-protected Streamable HTTP endpoint for remote clients.
  * - `--gateway` lives on `serve`. Bare `discord-mcp --gateway` is
  *   forwarded to `serve` through commander's default-subcommand passthrough.
  * - `doctor`, `init`, `migrate` are real sub-commands as of Plan 9
@@ -28,16 +29,21 @@ import { serveAction } from './commands/serve.js';
 
 export function buildProgram(): Command {
   const program = new Command('discord-mcp')
-    .description('Discord MCP server - stdio transport for AI agents')
+    .description('Discord MCP server - stdio and Streamable HTTP transport for AI agents')
     .version(packageJson.version);
 
   program
     .command('serve', { isDefault: true })
-    .description('Start the stdio MCP server (default)')
+    .description('Start the MCP server over stdio (default) or Streamable HTTP')
     .option('--gateway', 'Enable Discord Gateway resource subscriptions (lazy-imports discord.js)')
-    .action(async (options: { gateway?: boolean }) => {
-      await serveAction(options);
-    });
+    .option('--http', 'Serve Streamable HTTP MCP at /mcp (requires DISCORD_MCP_ACCESS_TOKEN)')
+    .option('--host <host>', 'HTTP listen host (default: 127.0.0.1)')
+    .option('--port <port>', 'HTTP listen port (default: 3000)', Number)
+    .action(
+      async (options: { gateway?: boolean; http?: boolean; host?: string; port?: number }) => {
+        await serveAction(options);
+      },
+    );
 
   program
     .command('doctor')

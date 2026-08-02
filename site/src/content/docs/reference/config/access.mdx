@@ -1,6 +1,6 @@
 ---
 title: Access and scope
-description: Configure the Discord bot credential, a default guild, and the tool-category allowlist.
+description: Configure the Discord bot credential, remote HTTP bearer credential, a default guild, and the tool-category allowlist.
 ---
 
 Use these settings to give the server the credential and the smallest tool surface
@@ -14,6 +14,22 @@ your agent needs.
 - **Default:** required
 - **Use:** Discord bot token for REST authentication. Bare tokens and `Bot <token>` are accepted; the token is redacted from audit events.
 - **Example:** `DISCORD_TOKEN=your-discord-bot-token`
+
+## Remote HTTP credential
+
+### `DISCORD_MCP_ACCESS_TOKEN`
+
+- **Type:** non-empty string
+- **Default:** required only for `discord-mcp serve --http`
+- **Use:** Shared bearer credential for requests to the remote `/mcp` endpoint. It is independent of the Discord bot token.
+- **Example:** `DISCORD_MCP_ACCESS_TOKEN=replace-with-a-long-random-secret`
+
+Send it as `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>`. Use a high-entropy
+secret stored in a secret manager. This credential authorizes every client with
+the same Discord bot identity; it is not per-user OAuth.
+
+For TLS, reverse-proxy, Responses API, and Codex setup, see
+[OpenAI remote MCP](/discord-mcp/operations/openai/).
 
 ## Guild default
 

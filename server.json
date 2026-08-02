@@ -2,24 +2,24 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.cappyeo/discord-mcp",
   "title": "Discord MCP",
-  "description": "Connect MCP-compatible AI clients to Discord through a typed local server with 192 tools.",
+  "description": "Connect MCP-compatible AI clients to a caller-owned Discord bot through 192 typed tools, locally or over authenticated HTTP.",
   "repository": {
     "url": "https://github.com/cappyeo/discord-mcp",
     "source": "github",
     "id": "1223078565",
     "subfolder": "packages/mcp-server"
   },
-  "version": "0.13.4",
+  "version": "0.14.0",
   "websiteUrl": "https://cappyeo.github.io/discord-mcp/",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.13.4/site/src/assets/discord-mcp-logo-light.png",
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.14.0/site/src/assets/discord-mcp-logo-light.png",
       "mimeType": "image/png",
       "sizes": ["1024x1024"],
       "theme": "light"
     },
     {
-      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.13.4/site/src/assets/discord-mcp-logo-dark.png",
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.14.0/site/src/assets/discord-mcp-logo-dark.png",
       "mimeType": "image/png",
       "sizes": ["1024x1024"],
       "theme": "dark"
@@ -29,7 +29,7 @@
     {
       "registryType": "npm",
       "identifier": "@discord-mcp/cli",
-      "version": "0.13.4",
+      "version": "0.14.0",
       "transport": {
         "type": "stdio"
       },

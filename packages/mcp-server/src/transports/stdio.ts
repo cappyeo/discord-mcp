@@ -8,8 +8,8 @@ import {
   wrapRestWithResilience,
 } from '@discord-mcp/core';
 import { REST } from '@discordjs/rest';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { Transport } from '@modelcontextprotocol/server';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { type OtelHandle, startOtel } from '../otel.js';
 
 /**

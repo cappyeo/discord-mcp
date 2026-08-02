@@ -1,0 +1,116 @@
+---
+title: OpenAI remote MCP
+description: Expose discord-mcp through a bearer-protected Streamable HTTP endpoint for the OpenAI Responses API and Codex.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`discord-mcp serve --http` exposes a **stateless Streamable HTTP** MCP endpoint
+at `/mcp`. It is intended for an HTTPS reverse proxy and remote clients such as
+the [OpenAI Responses API](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
+and Codex. The endpoint uses MCP SDK v2, negotiates stable MCP `2026-07-28`,
+and keeps a stateless 2025-era path for current OpenAI and existing MCP clients.
+Local stdio remains the default transport.
+
+## Security model
+
+This first remote deployment model deliberately keeps the Discord bot under
+the caller's control. One deployment uses one Discord bot token and one shared
+bearer token:
+
+- `DISCORD_TOKEN` authorizes calls to Discord.
+- `DISCORD_MCP_ACCESS_TOKEN` authenticates a remote MCP client to this server.
+- Every authenticated caller acts with the same Discord bot permissions. Use
+  Discord roles, channel overrides, `MCP_CATEGORIES`, and confirmation controls
+  to keep that bot's scope small.
+
+It is not a per-user Discord identity system and does not expose OAuth metadata
+or a ChatGPT connector flow. Do not distribute a shared bearer token to people
+who should have different Discord access.
+
+<Aside type="caution">
+Put this endpoint behind HTTPS before making it reachable outside the host.
+Terminate TLS at a reverse proxy, preserve the `Authorization` header, and make
+sure request logs redact it. The CLI defaults to `127.0.0.1` specifically so it
+is not public by accident.
+</Aside>
+
+## Run the endpoint
+
+Generate a high-entropy bearer secret and keep it separate from the Discord bot
+token. Then start the server on the loopback interface for your reverse proxy:
+
+```bash
+export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
+export DISCORD_MCP_ACCESS_TOKEN="replace-with-a-long-random-secret"
+discord-mcp serve --http --host 127.0.0.1 --port 3000
+```
+
+Your proxy should publish `https://discord-mcp.example.com/mcp` and forward it
+to `http://127.0.0.1:3000/mcp`. Requests without a matching
+`Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>` header receive `401`.
+
+The transport is stateless: each MCP request builds an isolated server runtime,
+with no `Mcp-Session-Id`. Modern clients use MCP `2026-07-28`; 2025-era clients
+use the SDK's stateless compatibility path. That makes independent Responses
+API calls safe from MCP session-state crossover and permits load balancing.
+Discord Gateway subscriptions are intentionally not available with
+`serve --http`; use the local stdio transport for those.
+
+## OpenAI Responses API
+
+Pass the public HTTPS endpoint as an MCP tool. Keep approval enabled for this
+write-capable third-party server, then restrict the tool list as your workflow
+matures.
+
+```ts
+const response = await openai.responses.create({
+  model: 'gpt-5',
+  input: 'Summarize the latest messages in the engineering channel.',
+  tools: [
+    {
+      type: 'mcp',
+      server_label: 'discord',
+      server_url: 'https://discord-mcp.example.com/mcp',
+      authorization: `Bearer ${process.env.DISCORD_MCP_ACCESS_TOKEN}`,
+      require_approval: 'always',
+    },
+  ],
+});
+```
+
+The Responses API guide documents remote MCP over Streamable HTTP or HTTP/SSE,
+the optional `authorization` header, and approval controls. Review each tool's
+risk before lowering approval or adding it to an allowlist.
+
+## Codex and ChatGPT desktop
+
+Codex supports remote Streamable HTTP MCP servers. Add this to the Codex
+configuration on the client machine, where `DISCORD_MCP_ACCESS_TOKEN` is set:
+
+```toml
+[mcp_servers.discord]
+url = "https://discord-mcp.example.com/mcp"
+bearer_token_env_var = "DISCORD_MCP_ACCESS_TOKEN"
+```
+
+In the ChatGPT desktop app, Codex MCP servers are managed from **Settings → MCP
+servers**. Add the same HTTPS endpoint through that surface when your account
+or workspace makes custom MCP servers available. The bearer-token v1 here is
+usable from Codex configuration and the Responses API; a plug-and-play
+per-user ChatGPT OAuth/connector experience requires a separate OAuth design.
+
+See the [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+for remote MCP credentials and headers.
+
+## Operating checklist
+
+1. Use HTTPS and redact `Authorization` at the proxy.
+2. Store both tokens in a secret manager, not a checked-in `.env` file.
+3. Start with a narrow `MCP_CATEGORIES` allowlist and Discord test guild.
+4. Keep OpenAI tool approval on until the workflow has been reviewed.
+5. Configure an audit sink and monitor its `transport: "http"` events.
+
+For the exact environment-variable contract, see
+[Access and scope](/discord-mcp/reference/config/access/). For command flags,
+see the [CLI reference](/discord-mcp/reference/cli/).

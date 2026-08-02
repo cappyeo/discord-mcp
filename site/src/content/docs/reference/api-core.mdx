@@ -11,7 +11,7 @@ import { Aside } from '@astrojs/starlight/components';
 only from the package root; internal file paths are not exported.
 
 ```bash
-pnpm add @discord-mcp/core @discordjs/rest @modelcontextprotocol/sdk @sapphire/pieces pino zod
+pnpm add @discord-mcp/core @discordjs/rest @modelcontextprotocol/server @sapphire/pieces pino zod
 ```
 
 <Aside type="caution">
@@ -102,7 +102,7 @@ import {
   wrapRestWithResilience,
 } from '@discord-mcp/core';
 import { REST } from '@discordjs/rest';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 
 const config = loadConfig();
 const logger = createLogger(config);

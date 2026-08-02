@@ -1,4 +1,4 @@
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { describe, expect, it, vi } from 'vitest';
 import { executePipeline, type PipelineExecutorCtx } from './executor.js';
 

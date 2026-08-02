@@ -12,7 +12,7 @@ The dependable compatibility contract is capability-based, not a hard-coded clie
 matrix. Client releases change independently, so verify the features you need in the current
 client rather than relying on an old “yes/no” table.
 
-## Minimum contract
+## Local stdio contract
 
 A client can use discord-mcp's core surface when it can:
 
@@ -23,6 +23,16 @@ A client can use discord-mcp's core surface when it can:
 
 That contract is enough for the 192 Discord tools. Resources, subscriptions, and sampling are
 optional extensions with narrower use cases.
+
+## Remote HTTP contract
+
+A remote client instead needs Streamable HTTP MCP support, a publicly reachable
+HTTPS `/mcp` endpoint, and a way to send the configured bearer credential.
+This covers the OpenAI Responses API and Codex. Remote HTTP negotiates MCP
+`2026-07-28` and preserves stateless 2025-era compatibility; neither path uses
+MCP session state. It does not support Discord Gateway subscriptions. See
+[OpenAI remote MCP](/discord-mcp/operations/openai/) for the shared-bot
+security model and setup.
 
 ## Feature requirements
 
@@ -113,6 +123,7 @@ For every client and release:
 - `MCP_DRY_RUN` affects only tools that declare the confirmation precondition.
 - `OTEL_ENABLED` changes server-side observability, not the client capability contract.
 
-Continue with [Client setup](/discord-mcp/start/client-setup/), the
+Continue with [Client setup](/discord-mcp/start/client-setup/) for local stdio,
+[OpenAI remote MCP](/discord-mcp/operations/openai/) for a remote endpoint, the
 [sampling architecture](/discord-mcp/architecture/sampling/), or
 [Gateway architecture](/discord-mcp/architecture/gateway/).

@@ -1,6 +1,6 @@
 ---
 title: Environment variable reference
-description: Exact defaults, accepted values, and runtime behavior for all 28 discord-mcp environment variables.
+description: Exact defaults, accepted values, and runtime behavior for all 29 discord-mcp environment variables.
 type: reference
 ---
 
@@ -8,8 +8,8 @@ import { Aside } from '@astrojs/starlight/components';
 import DocsCardGrid from '../../../../components/docs/DocsCardGrid.astro';
 
 This is the complete runtime contract for discord-mcp. Every setting is read when
-the server starts; invalid schema-backed values make `serve` exit with a precise
-error and are reported by `discord-mcp doctor`.
+the relevant transport starts; invalid schema-backed values make `serve` exit
+with a precise error and are reported by `discord-mcp doctor`.
 
 For deployment decisions and a safe starting point, see
 [Configure discord-mcp](/discord-mcp/operations/configure/).
@@ -23,7 +23,7 @@ different semantics: only the literal string `false` turns them off.
 
 <DocsCardGrid
   links={[
-    { title: 'Access and scope', href: '/discord-mcp/reference/config/access/', description: 'Bot token, default guild, and the tool-category allowlist.' },
+    { title: 'Access and scope', href: '/discord-mcp/reference/config/access/', description: 'Bot token, remote HTTP bearer credential, default guild, and the tool-category allowlist.' },
     { title: 'Safety', href: '/discord-mcp/reference/config/safety/', description: 'The dry-run gate that protects confirmation-gated tools.' },
     { title: 'Runtime', href: '/discord-mcp/reference/config/runtime/', description: 'Gateway subscriptions and server logging.' },
     { title: 'Observability', href: '/discord-mcp/reference/config/observability/', description: 'OpenTelemetry service, exporter, and sampling controls.' },

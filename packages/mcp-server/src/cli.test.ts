@@ -7,9 +7,15 @@ vi.mock('./transports/stdio.js', () => ({
     // No-op: real startStdio would block on the MCP transport.
   }),
 }));
+vi.mock('./transports/http.js', () => ({
+  startHttp: vi.fn(async () => {
+    // No-op: real startHttp would keep the HTTP server listening.
+  }),
+}));
 
 // Now import cli - its top-level auto-parse is gated behind VITEST=true.
 const { buildProgram } = await import('./cli.js');
+const { startHttp } = await import('./transports/http.js');
 const { startStdio } = await import('./transports/stdio.js');
 
 import packageJson from '../package.json' with { type: 'json' };
@@ -33,6 +39,7 @@ beforeEach(() => {
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   delete process.env.GATEWAY;
   process.exitCode = 0;
+  vi.mocked(startHttp).mockClear();
   vi.mocked(startStdio).mockClear();
 });
 
@@ -127,6 +134,12 @@ describe('cli - serve (default sub-command)', () => {
     await runCli(['serve', '--gateway']);
     expect(process.env.GATEWAY).toBe('1');
     expect(startStdio).toHaveBeenCalledTimes(1);
+  });
+
+  it('serve --http starts the Streamable HTTP endpoint', async () => {
+    await runCli(['serve', '--http', '--host', '0.0.0.0', '--port', '8080']);
+    expect(startStdio).not.toHaveBeenCalled();
+    expect(startHttp).toHaveBeenCalledWith({ host: '0.0.0.0', port: 8080 });
   });
 });
 

@@ -10,7 +10,7 @@ export default defineConfig({
   clean: true,
   deps: {
     neverBundle: [
-      '@modelcontextprotocol/sdk',
+      '@modelcontextprotocol/server',
       '@discordjs/rest',
       '@sapphire/pieces',
       'pino',

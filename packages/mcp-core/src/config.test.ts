@@ -13,8 +13,21 @@ describe('loadConfig', () => {
   it('returns defaults when only DISCORD_TOKEN provided', () => {
     const c = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
     expect(c.DISCORD_DEFAULT_GUILD_ID).toBeUndefined();
+    expect(c.DISCORD_MCP_ACCESS_TOKEN).toBeUndefined();
     expect(c.LOG_LEVEL).toBe('info');
     expect(c.GATEWAY).toBe(false);
+  });
+
+  it('accepts a non-empty remote MCP bearer token and rejects an empty one', () => {
+    expect(
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        DISCORD_MCP_ACCESS_TOKEN: 'remote-access-token',
+      } as NodeJS.ProcessEnv).DISCORD_MCP_ACCESS_TOKEN,
+    ).toBe('remote-access-token');
+    expect(() =>
+      loadConfig({ DISCORD_TOKEN: VALID_TOKEN, DISCORD_MCP_ACCESS_TOKEN: '' } as NodeJS.ProcessEnv),
+    ).toThrow(/DISCORD_MCP_ACCESS_TOKEN/);
   });
 
   it('accepts a valid default guild ID and rejects malformed values', () => {

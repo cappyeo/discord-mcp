@@ -1,23 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { REST } from '@discordjs/rest';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import {
-  CallToolRequestSchema,
-  type CallToolResult,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  type Tool as McpTool,
-  ReadResourceRequestSchema,
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import { container } from '@sapphire/pieces';
+import { type CallToolResult, type Tool as McpTool, Server } from '@modelcontextprotocol/server';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
 import { runWithCtx } from './als/context.js';
 import { type AuditSink, createAuditSink } from './audit/sink.js';
 import type { Config } from './config.js';
+import { type DiscordRuntime, runWithDiscordRuntime } from './container.js';
 import { formatErrorForUser } from './errors/format.js';
 import { SubscriptionRegistry } from './gateway/subscription_registry.js';
 import { auditMiddleware } from './middleware/audit.js';
@@ -236,6 +226,10 @@ export interface BuildServerDeps {
   rest: REST;
   logger: Logger;
   config: Config;
+  /** MCP transport used by this server instance. Defaults to the local stdio CLI. */
+  transport?: 'stdio' | 'http';
+  /** Optional process-scoped sink reused by stateless HTTP request servers. */
+  auditSink?: AuditSink;
 }
 
 export interface BuildServerResult {
@@ -270,9 +264,17 @@ const ERROR_ENVELOPE_JSON_SCHEMA = {
 } as const;
 
 export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
-  container.rest = deps.rest;
-  container.logger = deps.logger;
-  container.config = deps.config;
+  const transport = deps.transport ?? 'stdio';
+  // Do not write these dependencies into a process-wide singleton. Every MCP
+  // tool still accesses Sapphire's `container`, but its fields are now backed
+  // by AsyncLocalStorage and selected per tool request below. This prevents
+  // runtime context from bleeding between concurrent server instances; one
+  // deployment still intentionally uses the caller-owned bot configured on it.
+  const runtime: DiscordRuntime = {
+    rest: deps.rest,
+    logger: deps.logger,
+    config: deps.config,
+  };
 
   // --- Stores ---
   const toolStore = new ToolStore();
@@ -1068,7 +1070,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   // Constructed before middleware so it's the same instance both wired
   // into auditMiddleware AND surfaced on BuildServerResult for graceful
   // shutdown by the transport.
-  const auditSink = createAuditSink(deps.config);
+  const auditSink = deps.auditSink ?? createAuditSink(deps.config);
 
   // --- Middleware chain (outer → inner) ---
   // Order matters:
@@ -1113,7 +1115,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
+  server.setRequestHandler('tools/list', async () => {
     const tools: McpTool[] = [];
     for (const tool of toolStore.values()) {
       // Hide what the caller cannot invoke. Both layers are required: hiding
@@ -1243,7 +1245,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     if (tool === undefined) {
       return formatErrorForUser(new Error(`Tool '${toolName}' not found.`), {
         toolName,
-        transport: 'stdio',
+        transport,
       });
     }
     const middlewareCtx: MiddlewareContext<unknown> = {
@@ -1290,29 +1292,31 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         },
         'tool error',
       );
-      return formatErrorForUser(e, { toolName: tool.name, transport: 'stdio' });
+      return formatErrorForUser(e, { toolName: tool.name, transport });
     }
   };
 
-  server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
+  server.setRequestHandler('tools/call', async (req, ctx) => {
     const requestId = randomUUID();
     const requestCtx = {
       requestId,
       toolName: req.params.name,
-      transport: 'stdio' as const,
-      signal: extra.signal,
+      transport,
+      signal: ctx.mcpReq.signal,
     };
     return runWithCtx(requestCtx, async () =>
-      invokeTool(req.params.name, req.params.arguments, extra.signal),
+      runWithDiscordRuntime(runtime, async () =>
+        invokeTool(req.params.name, req.params.arguments, ctx.mcpReq.signal),
+      ),
     );
   });
 
-  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  server.setRequestHandler('resources/list', async () => {
     const resources = await resourceStore.list();
     return { resources: resources.map((r) => ({ ...r })) };
   });
 
-  server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+  server.setRequestHandler('resources/read', async (req) => {
     const content = await resourceStore.read(req.params.uri);
     if (content === null) {
       throw new Error(`Resource not found: ${req.params.uri}`);
@@ -1324,12 +1328,12 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
 
   const subscriptions = new SubscriptionRegistry();
 
-  server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+  server.setRequestHandler('resources/subscribe', async (req) => {
     subscriptions.subscribe(req.params.uri);
     return {};
   });
 
-  server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
+  server.setRequestHandler('resources/unsubscribe', async (req) => {
     subscriptions.unsubscribe(req.params.uri);
     return {};
   });

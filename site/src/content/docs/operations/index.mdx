@@ -15,6 +15,7 @@ mutable session state and document where a control does - and does not - apply.
 <DocsCardGrid
   links={[
     { title: 'Configure discord-mcp', href: '/discord-mcp/operations/configure/', description: 'Start with a safe production baseline, then add only the runtime controls your deployment needs.' },
+    { title: 'OpenAI remote MCP', href: '/discord-mcp/operations/openai/', description: 'Run a bearer-protected Streamable HTTP endpoint for the Responses API and Codex, with deployment boundaries made explicit.' },
     { title: 'Telemetry', href: '/discord-mcp/operations/telemetry/', description: 'Export OpenTelemetry traces and metrics over OTLP HTTP/protobuf, with stdio-safe operating guidance.' },
     { title: 'Resilience', href: '/discord-mcp/operations/resilience/', description: 'The shared bulkhead, circuit breaker, retry, and timeout policy around Discord REST calls.' },
     { title: 'Audit logging', href: '/discord-mcp/operations/audit/', description: 'Configure four sinks, inspect the JSONL schema, and understand the current idempotency-based coverage and redaction limits.' },
@@ -29,7 +30,7 @@ it's the one set of knobs that affects every Discord call the server makes.
 Telemetry is opt-in (`OTEL_ENABLED=false` by default, zero overhead) and
 audit is on by default but can be tuned per-sink.
 
-For the exact environment-variable contract (token, category allowlist, dry-run
+For the exact environment-variable contract (tokens, category allowlist, dry-run
 mode), see [Environment variables](/discord-mcp/reference/config/).
 Note that there is **no guild allowlist** - `ALLOWED_GUILDS` is not read by
 any code path and per-guild restriction is deferred post-1.0.
