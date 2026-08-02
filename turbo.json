@@ -40,8 +40,8 @@
     },
     "site#test": {
       "outputs": [],
-      // The docs drift guards read far more than this package: every doc page
-      // under both doc roots, and the mcp-core sources they compare them
+      // The docs drift guards read every site doc page and the mcp-core sources
+      // they compare them
       // against (the tool registry is loaded from source, not from dist).
       // With only `scripts/**` in the inputs, editing a doc page or adding a
       // tool left a cached PASS and the guard never ran - which is exactly
@@ -51,7 +51,6 @@
         "vitest.config.ts",
         "package.json",
         "src/content/docs/**",
-        "$TURBO_ROOT$/docs/**",
         "$TURBO_ROOT$/packages/mcp-core/src/tools/**",
         "$TURBO_ROOT$/packages/mcp-core/src/gateway/handlers/**",
         "$TURBO_ROOT$/packages/mcp-core/src/telemetry/conventions.ts"

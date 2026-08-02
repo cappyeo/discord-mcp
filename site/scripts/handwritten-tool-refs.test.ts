@@ -24,15 +24,12 @@ import { loadAllTools } from './generate-tool-docs.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '../..');
-const DOC_ROOTS = [join(ROOT, 'site/src/content/docs'), join(ROOT, 'docs')];
+const DOC_ROOTS = [join(ROOT, 'site/src/content/docs')];
 const GATEWAY_HANDLERS_DIR = join(ROOT, 'packages/mcp-core/src/gateway/handlers');
 
 const EXCLUDED_DIRS = [
   // Auto-generated from the registry - cannot drift.
   join(ROOT, 'site/src/content/docs/tools'),
-  // Internal plans and specs. Gitignored, never published, and they name tools
-  // that were *proposed* - being unbuilt is the point, not a defect.
-  join(ROOT, 'docs/superpowers'),
   // Migration guides describe OTHER projects' tool surfaces (`messages_lite`,
   // `discord_send_message`, …). Foreign names there are correct by definition.
   join(ROOT, 'site/src/content/docs/migrate'),

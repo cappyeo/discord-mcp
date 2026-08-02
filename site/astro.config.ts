@@ -156,6 +156,7 @@ export default defineConfig({
             { label: 'Client capabilities', slug: 'operations/clients' },
             'reference/api-core',
             'reference/changelog',
+            'reference/v1-readiness',
           ],
         },
         {

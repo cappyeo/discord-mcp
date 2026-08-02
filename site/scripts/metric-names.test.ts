@@ -20,8 +20,8 @@ import * as Conventions from '../../packages/mcp-core/src/telemetry/conventions.
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '../..');
-const DOC_ROOTS = [join(ROOT, 'site/src/content/docs'), join(ROOT, 'docs')];
-const EXCLUDED_DIRS = [join(ROOT, 'site/src/content/docs/tools'), join(ROOT, 'docs/superpowers')];
+const DOC_ROOTS = [join(ROOT, 'site/src/content/docs')];
+const EXCLUDED_DIRS = [join(ROOT, 'site/src/content/docs/tools')];
 
 /**
  * Names that are real but are not (and should not be) conventions exports.
@@ -100,10 +100,7 @@ describe('telemetry names in docs match the conventions module', () => {
     expect(Conventions.ATTR_CIRCUIT_TO_STATE).toBe('to_state');
     expect(Conventions.ATTR_ERROR_TYPE).toBe('error.type');
 
-    for (const file of [
-      join(ROOT, 'site/src/content/docs/operations/telemetry.mdx'),
-      join(ROOT, 'docs/operations/telemetry.md'),
-    ]) {
+    for (const file of [join(ROOT, 'site/src/content/docs/operations/telemetry.mdx')]) {
       const src = readFileSync(file, 'utf8');
       const rel = relative(ROOT, file).replace(/\\/g, '/');
       expect(src.includes('`to_state`'), `${rel} must document the to_state label`).toBe(true);

@@ -26,7 +26,7 @@
 ## How it works
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-workflow.svg" alt="AI client connects to discord-mcp over stdio, then discord-mcp connects to Discord with confirmation gates, reliability controls, and observability." width="1200" />
+  <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-workflow.jpg" alt="AI clients connect to Discord through Discord MCP, with typed tools, safety controls, and observability." width="1200" />
 </p>
 
 ## Quick start
@@ -123,7 +123,7 @@ Explore the complete, generated [tool reference](https://cappyeo.github.io/disco
 - **Typed contracts** - every tool is schema-defined; public core exports, CLI flags, configuration variables, and tool metadata are regression-tested.
 - **Supply-chain evidence** - npm releases are published from GitHub Actions with signed SLSA provenance.
 
-Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [operations guides](https://cappyeo.github.io/discord-mcp/operations/), and [v1.0 readiness plan](docs/v1.0.0-readiness.md) for implementation details and current stability commitments.
+Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [operations guides](https://cappyeo.github.io/discord-mcp/operations/), and [v1.0 readiness plan](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) for implementation details and current stability commitments.
 
 ## Commands
 
@@ -170,7 +170,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.14.3**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.14.3**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 ## License
 

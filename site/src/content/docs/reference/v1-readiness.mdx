@@ -1,4 +1,9 @@
-# v1.0.0 Readiness Checklist
+---
+title: v1.0.0 readiness
+description: Release gate and stability commitments for the first stable discord-mcp release.
+sidebar:
+  order: 5
+---
 
 discord-mcp v0.13.0 is the correctness-audit release. v1.0.0 commits to API stability for
 6+ months. Tagging v1.0.0 from `main` happens **only** when every box below is
@@ -18,19 +23,17 @@ work that remains.
 - 4 perf bench files (`messages_send`, `mcp_pipeline`, gateway debounce, REST
   policy chain) producing baseline numbers under `pnpm bench`.
 - Security audit pass - see
-  `site/src/content/docs/operations/security-audit-2026-05-01.mdx`
-  (published at
-  <https://cappyeo.github.io/discord-mcp/operations/security-audit-2026-05-01/>).
+  [the 2026-05-01 audit](/discord-mcp/operations/security-audit-2026-05-01/).
   P1 fixed in-commit, P2 deferred. That page is a point-in-time record and has
   since been superseded - the current audit is
-  `site/src/content/docs/operations/security-audit-2026-07-27.mdx`.
+  [the 2026-07-27 audit](/discord-mcp/operations/security-audit-2026-07-27/).
 - npm publish dry-run verified for `@discord-mcp/core` and `@discord-mcp/cli`.
 
 ## Pre-conditions for v1.0.0 tag
 
 ### Code & test
 
-- [x] v0.12.0 polish phase complete (Plan 12)
+- [x] v0.12.0 polish phase complete
 - [x] `@discord-mcp/server-mocks` workspace package - eliminates 165
       relative-path imports
 - [x] `ResourceStore` extracted from `server.ts` (matches `ToolStore` /
@@ -57,7 +60,7 @@ work that remains.
 
 ### Distribution
 
-- [x] npm publish dry-run verified (Plan 12 Phase F)
+- [x] npm publish dry-run verified
 - [x] `prepack` copies root `README.md` + `LICENSE` into both publishable
       tarballs
 - [x] Release workflow with `id-token: write` exists, so

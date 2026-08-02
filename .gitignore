@@ -21,15 +21,6 @@ coverage/
 .vscode/
 .idea/
 
-# Contens - internal plans/research stay private (docs/superpowers/, etc.).
-# Operator docs (docs/operations/, docs/v1.0.0-readiness.md) ship to the public
-# repo via the negations below. NB: gitignore "cannot re-include a file if a
-# parent directory is excluded", so we ignore docs/* (files inside docs/, not
-# docs/ itself).
-docs/*
-!docs/operations/
-!docs/v1.0.0-readiness.md
-
 # Agents
 .claude/
 .agents/
