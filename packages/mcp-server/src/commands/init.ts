@@ -18,12 +18,11 @@
  *   5. Validate and normalize the optional server-side guild allowlist. With
  *      `--discover-guilds`, verify the current bot identity, enumerate its
  *      real guilds, and select or validate the allowlist before generation.
- *   6. Pick a serverPath/serverArgs strategy. We use the current Node
- *      binary + the resolved CLI script - works for any installation
- *      (workspace, global npm, npx) at the cost of an absolute path
- *      that may need editing if the user later moves the project.
- *      The output explicitly tells the user how to switch to
- *      `npx @discord-mcp/cli` for portable distribution.
+ *   6. Pick a serverPath/serverArgs strategy. Stateless `init` uses the
+ *      current Node binary + the resolved CLI script, which works for any
+ *      installation at the cost of an absolute path. Guided profile setup
+ *      instead emits a pinned `npx` package launcher so its client fragment
+ *      does not depend on an installation or cache path.
  *   7. Generate the snippet via the chosen ClientGenerator.
  *   8. Either write to `--output <path>` (with `--force` for overwrite
  *      protection) or print to stdout / structured payload.
@@ -36,6 +35,7 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import packageJson from '../../package.json' with { type: 'json' };
 import { ALL_GENERATORS } from '../lib/client-snippets/index.js';
 import { emitResult } from '../lib/output.js';
 import {
@@ -499,12 +499,15 @@ export async function initAction(opts: InitOptions): Promise<void> {
     }
   }
 
-  // 6. Resolve server path. We default to `node <abs cli.js>` because
-  //    this works for every install (workspace, global, npx-cached) at
-  //    the cost of being installation-specific.
-  const serverPath = process.execPath;
-  const serverArgs: string[] = [resolveCliPath()];
-  if (profileName !== undefined) serverArgs.push('serve', '--profile', profileName);
+  // 6. Resolve the launcher. Guided profile setup must not persist the
+  //    installation-specific path of an npx cache or local checkout. Pin the
+  //    npm package version so the profile runs against the version that
+  //    created it; stateless init intentionally keeps its legacy local path.
+  const serverPath = profileName === undefined ? process.execPath : 'npx';
+  const serverArgs: string[] =
+    profileName === undefined
+      ? [resolveCliPath()]
+      : ['--yes', `@discord-mcp/cli@${packageJson.version}`, 'serve', '--profile', profileName];
 
   // 7. Generate snippet.
   const envVars: Record<string, string> = {};
@@ -561,13 +564,11 @@ export async function initAction(opts: InitOptions): Promise<void> {
   }
 
   const portabilityNote =
-    generator.id === 'codex'
-      ? profileName === undefined
+    profileName === undefined
+      ? generator.id === 'codex'
         ? 'For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli"] in the TOML fragment.'
-        : `For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli", "serve", "--profile", "${profileName}"] in the TOML fragment.`
-      : profileName === undefined
-        ? 'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).'
-        : `For a portable configuration, set command="npx" and args=["-y", "@discord-mcp/cli", "serve", "--profile", "${profileName}"].`;
+        : 'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).'
+      : `This profile uses a pinned npx launcher (@discord-mcp/cli@${packageJson.version}) instead of this installation's absolute CLI path. The non-secret profile itself remains local to this operating-system user.`;
 
   const exitCode = warnings.length > 0 ? 1 : 0;
   const discordDetails =

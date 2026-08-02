@@ -140,10 +140,11 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
   </div>
 </ClientTabs>
 
-The generated snippet uses the current CLI path and the local profile directory, so it
-works immediately from the installation and operating-system account that created it.
-If you later move machines or replace that installation, rerun `setup` instead of copying
-the profile blindly or editing an absolute path by hand.
+The generated snippet runs a pinned `@discord-mcp/cli` package through `npx`, rather than
+an absolute CLI or npm-cache path, so restarting the client or replacing the installation
+does not require editing the fragment. The non-secret profile is still local to the
+operating-system user that created it. If you move machines, rerun `setup` there instead
+of copying the profile blindly.
 
 Once the snippet contains a real token, treat the whole client config as a secret: do not
 commit, share, or screenshot it.

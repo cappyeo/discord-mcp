@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import packageJson from '../../package.json' with { type: 'json' };
 import { loadProfile } from '../lib/profiles.js';
 import { setupAction } from './setup.js';
 
@@ -85,9 +86,13 @@ describe('guided caller-owned bot setup', () => {
 
     const parsed = result();
     expect(parsed.ok).toBe(true);
+    expect(parsed.data?.content).toContain('command = "npx"');
+    expect(parsed.data?.content).toContain(`"@discord-mcp/cli@${packageJson.version}"`);
     expect(parsed.data?.content).toContain('"serve", "--profile", "devbot"');
     expect(parsed.data?.content).toContain('env_vars = ["DISCORD_TOKEN"]');
     expect(parsed.data?.content).not.toContain(TOKEN);
+    expect(parsed.data?.content).not.toMatch(/[\\/]_npx[\\/]/);
+    expect(parsed.data?.content).not.toContain('node_modules');
     expect(parsed.data?.content).not.toContain('DISCORD_EXPECTED_BOT_ID');
 
     const saved = loadProfile('devbot', { directory });
@@ -109,6 +114,14 @@ describe('guided caller-owned bot setup', () => {
     });
 
     const content = JSON.parse(result().data?.content ?? '{}');
+    expect(content.mcpServers['discord-mcp'].command).toBe('npx');
+    expect(content.mcpServers['discord-mcp'].args).toEqual([
+      '--yes',
+      `@discord-mcp/cli@${packageJson.version}`,
+      'serve',
+      '--profile',
+      'devbot',
+    ]);
     expect(content.mcpServers['discord-mcp'].args).toContain('devbot');
     expect(content.mcpServers['discord-mcp'].env).toBeUndefined();
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal legacy placeholder must be absent
