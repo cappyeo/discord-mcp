@@ -10,6 +10,7 @@ import type { Config } from './config.js';
 import { type DiscordRuntime, runWithDiscordRuntime } from './container.js';
 import { formatErrorForUser } from './errors/format.js';
 import { SubscriptionRegistry } from './gateway/subscription_registry.js';
+import { verifyExpectedBotIdentity } from './identity-lock.js';
 import { auditMiddleware } from './middleware/audit.js';
 import {
   ALWAYS_ALLOWED_CATEGORIES,
@@ -377,6 +378,7 @@ function listAdvertisedTools(
 
 export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
   const transport = deps.transport ?? 'stdio';
+  await verifyExpectedBotIdentity(deps.rest, deps.config.DISCORD_EXPECTED_BOT_ID);
   // Do not write these dependencies into a process-wide singleton. Every MCP
   // tool still accesses Sapphire's `container`, but its fields are now backed
   // by AsyncLocalStorage and selected per tool request below. This prevents

@@ -29,6 +29,7 @@ beforeEach(() => {
   process.env.DISCORD_MCP_ACCESS_TOKEN = ACCESS_TOKEN;
   process.env.LOG_LEVEL = 'fatal';
   process.env.MCP_AUDIT_ENABLED = 'false';
+  delete process.env.DISCORD_EXPECTED_BOT_ID;
 });
 
 afterEach(async () => {

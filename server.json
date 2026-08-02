@@ -42,6 +42,13 @@
           "name": "DISCORD_TOKEN"
         },
         {
+          "description": "Expected Discord bot ID. Startup fails if the token belongs to another bot.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "DISCORD_EXPECTED_BOT_ID"
+        },
+        {
           "description": "Comma-separated Discord guild IDs this deployment may operate against.",
           "isRequired": false,
           "format": "string",

@@ -47,6 +47,10 @@ export {
   type GatewayClientDeps,
 } from './gateway/client.js';
 export { SubscriptionRegistry } from './gateway/subscription_registry.js';
+export {
+  type DiscordBotIdentity,
+  verifyExpectedBotIdentity,
+} from './identity-lock.js';
 export { createLogger } from './logger.js';
 export { auditMiddleware } from './middleware/audit.js';
 // Middleware

@@ -40,6 +40,9 @@ npx --yes @discord-mcp/cli@latest doctor --online
   back from your MCP client config.
 - A `Bot ` prefix is accepted but not required.
 - If Discord returns `401`, reset the token in the Developer Portal and replace the old value.
+- If startup reports a bot identity mismatch, restore the token for
+  `DISCORD_EXPECTED_BOT_ID`; do not replace the expected ID merely to make the
+  server start. Follow the [credential lifecycle guide](/discord-mcp/operations/credentials/).
 
 <Aside type="danger">
 Treat the generated client configuration as a secret once it contains a token. Never commit,

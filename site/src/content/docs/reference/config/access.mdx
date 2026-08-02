@@ -15,6 +15,19 @@ your agent needs.
 - **Use:** Discord bot token for REST authentication. Bare tokens and `Bot <token>` are accepted; the token is redacted from audit events.
 - **Example:** `DISCORD_TOKEN=your-discord-bot-token`
 
+### `DISCORD_EXPECTED_BOT_ID`
+
+- **Type:** Discord snowflake with 17–20 digits
+- **Default:** unset for backward compatibility
+- **Use:** Fails startup when `DISCORD_TOKEN` belongs to a different bot.
+- **Example:** `DISCORD_EXPECTED_BOT_ID=987654321098765432`
+
+`discord-mcp init --discover-guilds` derives this non-secret lock from
+Discord. When set, the server verifies `/users/@me` before serving MCP and
+caches the successful result for the process. Keep the value stable during a
+normal token rotation; a mismatch usually means the wrong application's token
+was supplied. See [Credential lifecycle](/discord-mcp/operations/credentials/).
+
 ## Remote HTTP credential
 
 ### `DISCORD_MCP_ACCESS_TOKEN`

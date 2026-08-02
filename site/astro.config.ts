@@ -72,6 +72,7 @@ export default defineConfig({
               items: [
                 { label: 'Production guide', slug: 'operations' },
                 'operations/configure',
+                'operations/credentials',
                 'operations/openai',
                 'operations/telemetry',
                 'operations/resilience',

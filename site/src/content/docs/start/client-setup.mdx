@@ -86,8 +86,9 @@ can remain in shell history and process inspection.
   Merge the TOML fragment into `~/.codex/config.toml`. It uses
   `env_vars = ["DISCORD_TOKEN"]`, so Codex forwards the token from its launch
   environment instead of storing it in `config.toml`. Guild discovery verifies
-  the caller-owned bot and adds an `ALLOWED_GUILDS` server-side boundary, not
-  merely a client-side filter. If the bot can see multiple guilds in a
+  the caller-owned bot, locks the config to its ID with
+  `DISCORD_EXPECTED_BOT_ID`, and adds an `ALLOWED_GUILDS` server-side boundary,
+  not merely a client-side filter. If the bot can see multiple guilds in a
   non-interactive run, rerun with `--allowed-guilds <id>` to make the target
   explicit.
 

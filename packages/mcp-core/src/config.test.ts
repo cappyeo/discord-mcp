@@ -12,10 +12,25 @@ describe('loadConfig', () => {
 
   it('returns defaults when only DISCORD_TOKEN provided', () => {
     const c = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
+    expect(c.DISCORD_EXPECTED_BOT_ID).toBeUndefined();
     expect(c.DISCORD_DEFAULT_GUILD_ID).toBeUndefined();
     expect(c.DISCORD_MCP_ACCESS_TOKEN).toBeUndefined();
     expect(c.LOG_LEVEL).toBe('info');
     expect(c.GATEWAY).toBe(false);
+  });
+
+  it('accepts a bot identity lock and rejects malformed IDs', () => {
+    const configured = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      DISCORD_EXPECTED_BOT_ID: '987654321098765432',
+    } as NodeJS.ProcessEnv);
+    expect(configured.DISCORD_EXPECTED_BOT_ID).toBe('987654321098765432');
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        DISCORD_EXPECTED_BOT_ID: 'not-a-snowflake',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/DISCORD_EXPECTED_BOT_ID/);
   });
 
   it('accepts a non-empty remote MCP bearer token and rejects an empty one', () => {

@@ -4,6 +4,7 @@ exports[`config surface > declares the frozen set of schema keys, optional ones 
 [
   "ALLOWED_GUILDS",
   "DISCORD_DEFAULT_GUILD_ID",
+  "DISCORD_EXPECTED_BOT_ID",
   "DISCORD_MCP_ACCESS_TOKEN",
   "DISCORD_TOKEN",
   "GATEWAY",

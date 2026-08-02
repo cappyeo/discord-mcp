@@ -315,6 +315,7 @@ describe('initAction - live guild discovery', () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.data?.allowedGuilds).toEqual([guildId]);
     expect(parsed.data?.content).toContain(`ALLOWED_GUILDS = "${guildId}"`);
+    expect(parsed.data?.content).toContain(`DISCORD_EXPECTED_BOT_ID = "${BOT.id}"`);
     expect(parsed.data?.content).toContain('env_vars = ["DISCORD_TOKEN"]');
     expect(parsed.data?.content).not.toContain('x'.repeat(60));
     expect(parsed.data?.discord?.bot).toEqual({ id: BOT.id, username: BOT.username });

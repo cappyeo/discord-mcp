@@ -10,10 +10,10 @@ import type { Config } from '@discord-mcp/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenOnlineCheck } from './token-online.js';
 
-function makeConfig(token: string): Config {
+function makeConfig(token: string, expectedBotId?: string): Config {
   // tokenOnlineCheck only reads DISCORD_TOKEN - structural cast keeps the
   // test focused without constructing every Config field.
-  return { DISCORD_TOKEN: token } as unknown as Config;
+  return { DISCORD_TOKEN: token, DISCORD_EXPECTED_BOT_ID: expectedBotId } as unknown as Config;
 }
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
@@ -73,6 +73,45 @@ describe('tokenOnlineCheck', () => {
     const auth = headers.Authorization ?? '';
     expect(auth).toBe(`Bot ${'x'.repeat(60)}`);
     expect(auth.startsWith('Bot Bot ')).toBe(false);
+  });
+
+  it('accepts a token that matches the configured bot identity lock', async () => {
+    const botId = '987654321098765432';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: botId, username: 'expected-bot', bot: true }), {
+          status: 200,
+        }),
+      ),
+    );
+
+    const r = await tokenOnlineCheck.run(makeConfig(VALID_TOKEN, botId));
+
+    expect(r.status).toBe('ok');
+    expect(r.details?.id).toBe(botId);
+  });
+
+  it('fails when a valid token belongs to a different bot', async () => {
+    const expectedBotId = '987654321098765432';
+    const actualBotId = '111122223333444455';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: actualBotId, username: 'wrong-bot', bot: true }), {
+          status: 200,
+        }),
+      ),
+    );
+
+    const r = await tokenOnlineCheck.run(makeConfig(VALID_TOKEN, expectedBotId));
+
+    expect(r.status).toBe('fail');
+    expect(r.message).toContain('identity mismatch');
+    expect(r.details).toEqual({
+      expected_bot_id: expectedBotId,
+      actual_bot_id: actualBotId,
+    });
   });
 
   it('returns fail on 401', async () => {

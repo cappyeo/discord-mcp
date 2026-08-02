@@ -11,6 +11,14 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Added `DISCORD_EXPECTED_BOT_ID`, an optional non-secret runtime lock that
+  verifies the caller-owned token still belongs to the configured bot before
+  serving MCP. `init --discover-guilds` emits the lock automatically, and
+  `doctor --online` reports identity mismatches.
+- Added a credential-lifecycle playbook for Developer Portal token reset,
+  caller-controlled secret replacement, read-only verification, restart, and
+  retirement. Discord OAuth token revocation is not presented as bot-token
+  revocation.
 - Added `discord-mcp init --discover-guilds`, a caller-owned setup flow that
   verifies `DISCORD_TOKEN` against Discord, paginates the bot's visible guilds,
   selects or validates an explicit allowlist, and injects `ALLOWED_GUILDS`

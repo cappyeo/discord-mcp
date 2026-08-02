@@ -80,6 +80,7 @@ beforeEach(() => {
   process.env.DISCORD_TOKEN = VALID_TOKEN;
   process.env.MCP_CIRCUIT_HALF_OPEN_AFTER_MS = String(HALF_OPEN_MS);
   process.env.MCP_AUDIT_ENABLED = 'false';
+  delete process.env.DISCORD_EXPECTED_BOT_ID;
   delete process.env.GATEWAY;
 });
 

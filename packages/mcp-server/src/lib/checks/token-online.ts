@@ -77,6 +77,27 @@ export const tokenOnlineCheck: DoctorCheck = {
         } catch {
           // Empty / non-JSON 200 is acceptable; surface what we can.
         }
+        if (config.DISCORD_EXPECTED_BOT_ID !== undefined) {
+          if (data.id === undefined || data.bot !== true) {
+            return {
+              id: 'token-online',
+              status: 'fail',
+              message: 'cannot verify the configured Discord bot identity lock',
+              details: { expected_bot_id: config.DISCORD_EXPECTED_BOT_ID },
+            };
+          }
+          if (data.id !== config.DISCORD_EXPECTED_BOT_ID) {
+            return {
+              id: 'token-online',
+              status: 'fail',
+              message: `bot identity mismatch: expected ${config.DISCORD_EXPECTED_BOT_ID}, received ${data.id}`,
+              details: {
+                expected_bot_id: config.DISCORD_EXPECTED_BOT_ID,
+                actual_bot_id: data.id,
+              },
+            };
+          }
+        }
         return {
           id: 'token-online',
           status: 'ok',

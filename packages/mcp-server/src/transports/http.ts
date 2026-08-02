@@ -6,6 +6,7 @@ import {
   createAuditSink,
   createLogger,
   loadConfig,
+  verifyExpectedBotIdentity,
   wrapRestWithResilience,
 } from '@discord-mcp/core';
 import { REST } from '@discordjs/rest';
@@ -48,10 +49,6 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     throw new Error('DISCORD_MCP_ACCESS_TOKEN is required for the HTTP transport.');
   }
   const logger = createLogger(config);
-  const otel = startOtel(config);
-  if (otel !== null) {
-    logger.info({ otel: 'enabled' }, 'OpenTelemetry SDK started');
-  }
 
   const baseRest = new REST({ version: '10', retries: 0 }).setToken(
     config.DISCORD_TOKEN.startsWith('Bot ') ? config.DISCORD_TOKEN.slice(4) : config.DISCORD_TOKEN,
@@ -59,6 +56,11 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   const rest = wrapRestWithResilience(baseRest, buildPolicy(config, logger), {
     circuitHalfOpenAfterMs: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
   });
+  await verifyExpectedBotIdentity(rest, config.DISCORD_EXPECTED_BOT_ID);
+  const otel = startOtel(config);
+  if (otel !== null) {
+    logger.info({ otel: 'enabled' }, 'OpenTelemetry SDK started');
+  }
 
   // The v2 handler builds a fresh MCP server for every request. Audit output,
   // however, is process-scoped so file/OTLP sinks are opened and flushed once.

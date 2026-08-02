@@ -428,6 +428,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
   const envVars: Record<string, string> = {};
   if (toolSurface === 'progressive') envVars.MCP_TOOL_SURFACE = 'progressive';
   if (allowedGuilds !== undefined) envVars.ALLOWED_GUILDS = allowedGuilds.join(',');
+  if (discord !== undefined) envVars.DISCORD_EXPECTED_BOT_ID = discord.bot.id;
 
   const snippet = generator.generate({
     serverPath,
