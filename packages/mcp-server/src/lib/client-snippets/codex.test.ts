@@ -29,6 +29,18 @@ describe('codexGenerator', () => {
     expect(snippet.content).toContain('args = ["/opt/discord-mcp/cli.js", "--gateway"]');
   });
 
+  it('adds progressive discovery without persisting the forwarded token', () => {
+    const snippet = codexGenerator.generate({
+      ...baseConfig,
+      envVars: { MCP_TOOL_SURFACE: 'progressive' },
+    });
+
+    expect(snippet.content).toContain('env_vars = ["DISCORD_TOKEN"]');
+    expect(snippet.content).toContain('[mcp_servers.discord-mcp.env]');
+    expect(snippet.content).toContain('MCP_TOOL_SURFACE = "progressive"');
+    expect(snippet.content).not.toContain('DISCORD_TOKEN =');
+  });
+
   it('writes an explicit token only when the user provided one', () => {
     const snippet = codexGenerator.generate({ ...baseConfig, discordToken: 'Bot abc123' });
 

@@ -59,13 +59,18 @@ Discord Gateway subscriptions are intentionally not available with
 
 ## OpenAI Responses API
 
-Pass the public HTTPS endpoint as an MCP tool. Keep approval enabled for this
-write-capable third-party server, then restrict the tool list as your workflow
-matures.
+Pass the public HTTPS endpoint as a deferred MCP tool and add OpenAI's hosted
+tool search. The model initially sees the server identity instead of all 192
+schemas, then loads only the tools it needs. Keep the server itself on the
+default `MCP_TOOL_SURFACE=full` for this path: combining caller-native tool
+search with the server fallback would add an unnecessary second discovery step.
+
+Keep approval enabled for this write-capable third-party server, then restrict
+the tool list as your workflow matures.
 
 ```ts
 const response = await openai.responses.create({
-  model: 'gpt-5',
+  model: 'gpt-5.6',
   input: 'Summarize the latest messages in the engineering channel.',
   tools: [
     {
@@ -74,14 +79,17 @@ const response = await openai.responses.create({
       server_url: 'https://discord-mcp.example.com/mcp',
       authorization: `Bearer ${process.env.DISCORD_MCP_ACCESS_TOKEN}`,
       require_approval: 'always',
+      defer_loading: true,
     },
+    { type: 'tool_search' },
   ],
 });
 ```
 
-The Responses API guide documents remote MCP over Streamable HTTP or HTTP/SSE,
-the optional `authorization` header, and approval controls. Review each tool's
-risk before lowering approval or adding it to an allowlist.
+OpenAI documents `tool_search` for GPT-5.4 and later. It preserves the model's
+cache by injecting discovered tools at the end of context and can defer a whole
+MCP server rather than placing every tool definition in the initial prompt.
+Review each tool's risk before lowering approval or adding it to an allowlist.
 
 ## Codex and ChatGPT desktop
 
@@ -94,6 +102,21 @@ url = "https://discord-mcp.example.com/mcp"
 bearer_token_env_var = "DISCORD_MCP_ACCESS_TOKEN"
 ```
 
+Codex's current MCP configuration documents tool allow/deny lists and client
+caching, but not a caller-side `defer_loading` switch. For local stdio Codex or
+another MCP host without native tool search, set this in the server environment:
+
+```toml
+[mcp_servers.discord.env]
+MCP_TOOL_SURFACE = "progressive"
+```
+
+The model will see `mcp_tools_search` plus `mcp_tools_read`, `mcp_tools_write`,
+and `mcp_tools_destructive`. Each search match names the exact dispatcher whose
+host-visible annotations match that tool's risk. The dispatcher rejects a tool
+sent through the wrong risk route, then applies the same authorization and
+safety middleware as a direct call.
+
 In the ChatGPT desktop app, Codex MCP servers are managed from **Settings → MCP
 servers**. Add the same HTTPS endpoint through that surface when your account
 or workspace makes custom MCP servers available. The bearer-token v1 here is
@@ -101,7 +124,9 @@ usable from Codex configuration and the Responses API; a plug-and-play
 per-user ChatGPT OAuth/connector experience requires a separate OAuth design.
 
 See the [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
-for remote MCP credentials and headers.
+for remote MCP credentials and headers, and the
+[OpenAI tool search guide](https://developers.openai.com/api/docs/guides/tools-tool-search)
+for caller-native deferred loading.
 
 ## Operating checklist
 

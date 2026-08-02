@@ -86,6 +86,7 @@ interface InitJsonResult {
     content?: string;
     instructions?: string;
     gateway?: boolean;
+    toolSurface?: string;
   };
 }
 
@@ -211,6 +212,22 @@ describe('initAction - explicit flags', () => {
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
     const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
     expect(snippet.mcpServers['discord-mcp'].args).not.toContain('--gateway');
+  });
+
+  it('with progressive tool surface adds the server environment setting', async () => {
+    await initAction({ json: true, client: 'generic', toolSurface: 'progressive' });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    expect(snippet.mcpServers['discord-mcp'].env.MCP_TOOL_SURFACE).toBe('progressive');
+    expect(parsed.data?.toolSurface).toBe('progressive');
+  });
+
+  it('rejects an unknown tool surface', async () => {
+    await initAction({ json: true, client: 'generic', toolSurface: 'compact' });
+    expect(process.exitCode).toBe(2);
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult & { errors?: string[] };
+    expect(parsed.summary).toContain('compact');
+    expect(parsed.errors?.[0]).toContain('progressive');
   });
 
   it('with empty --token "" collapses to the env-var placeholder', async () => {

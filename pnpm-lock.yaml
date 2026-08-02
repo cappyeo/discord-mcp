@@ -108,6 +108,9 @@ importers:
       '@discordjs/rest':
         specifier: ^2.4.0
         version: 2.6.1
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@modelcontextprotocol/node':
         specifier: ^2.0.0
         version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.32)
@@ -157,9 +160,6 @@ importers:
       '@discord-mcp/server-mocks':
         specifier: workspace:*
         version: link:../mcp-server-mocks
-      '@modelcontextprotocol/client':
-        specifier: ^2.0.0
-        version: 2.0.0
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17

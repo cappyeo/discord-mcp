@@ -19,6 +19,11 @@ import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro'
 This unit proves the full path from your MCP client to Discord. You will authenticate the
 bot, make a read-only request, discover a channel ID, and send one deliberate test message.
 
+Before involving a model, `discord-mcp smoke` can verify the same local MCP boot,
+authentication, middleware, and Discord REST path deterministically. It is read-only by
+default. In an empty private test server, `discord-mcp smoke --confirm-write` runs a bounded
+create/send/edit/delete lifecycle and removes its temporary channel and message.
+
 ## Where are you going?
 
 The quickstart begins with diagnostics and `users_get_current`, so you can verify the client

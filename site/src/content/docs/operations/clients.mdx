@@ -119,7 +119,10 @@ For every client and release:
 
 ## Server-side controls
 
-- `MCP_CATEGORIES` limits which tool categories are registered.
+- `MCP_CATEGORIES` limits which tool categories are advertised and callable.
+- `MCP_TOOL_SURFACE=progressive` advertises search plus risk-specific read,
+  write, and destructive dispatchers instead of the full catalog; it does not
+  expand `MCP_CATEGORIES` authorization.
 - `MCP_DRY_RUN` affects only tools that declare the confirmation precondition.
 - `OTEL_ENABLED` changes server-side observability, not the client capability contract.
 

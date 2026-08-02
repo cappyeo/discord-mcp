@@ -13,14 +13,16 @@
  *      bake a real secret into a committed file).
  *   3. Resolve the gateway flag (`--gateway` OR interactive yes/no OR
  *      false by default).
- *   4. Pick a serverPath/serverArgs strategy. We use the current Node
+ *   4. Validate the advertised tool surface (`full` by default, or the
+ *      opt-in `progressive` search + risk-specific dispatcher surface).
+ *   5. Pick a serverPath/serverArgs strategy. We use the current Node
  *      binary + the resolved CLI script - works for any installation
  *      (workspace, global npm, npx) at the cost of an absolute path
  *      that may need editing if the user later moves the project.
  *      The output explicitly tells the user how to switch to
  *      `npx @discord-mcp/cli` for portable distribution.
- *   5. Generate the snippet via the chosen ClientGenerator.
- *   6. Either write to `--output <path>` (with `--force` for overwrite
+ *   6. Generate the snippet via the chosen ClientGenerator.
+ *   7. Either write to `--output <path>` (with `--force` for overwrite
  *      protection) or print to stdout / structured payload.
  *
  * Token redaction: in pretty mode the snippet text contains whatever
@@ -41,6 +43,7 @@ export interface InitOptions {
   output?: string;
   force?: boolean;
   gateway?: boolean;
+  toolSurface?: string;
   json?: boolean;
 }
 
@@ -144,21 +147,37 @@ export async function initAction(opts: InitOptions): Promise<void> {
     }
   }
 
-  // 4. Resolve server path. We default to `node <abs cli.js>` because
+  // 4. Resolve advertised tool surface.
+  const toolSurface = opts.toolSurface ?? 'full';
+  if (toolSurface !== 'full' && toolSurface !== 'progressive') {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: `unknown tool surface: ${toolSurface}`,
+        errors: ['Available tool surfaces: full, progressive'],
+      },
+      asJson,
+    );
+    return;
+  }
+
+  // 5. Resolve server path. We default to `node <abs cli.js>` because
   //    this works for every install (workspace, global, npx-cached) at
   //    the cost of being installation-specific.
   const serverPath = process.execPath;
   const serverArgs: string[] = [resolveCliPath()];
 
-  // 5. Generate snippet.
+  // 6. Generate snippet.
   const snippet = generator.generate({
     serverPath,
     serverArgs,
     discordToken: token,
     gateway,
+    ...(toolSurface === 'progressive' ? { envVars: { MCP_TOOL_SURFACE: 'progressive' } } : {}),
   });
 
-  // 6. Write or print.
+  // 7. Write or print.
   let writtenTo: string | undefined;
   if (opts.output !== undefined) {
     if (existsSync(opts.output) && opts.force !== true) {
@@ -195,6 +214,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
         content: snippet.content,
         instructions: snippet.instructions,
         gateway,
+        toolSurface,
       },
       details:
         writtenTo !== undefined

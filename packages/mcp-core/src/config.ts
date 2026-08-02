@@ -28,6 +28,11 @@ const ConfigSchema = z.object({
   // The `meta` category is always reachable.
   MCP_CATEGORIES: z.string().optional(),
 
+  // Controls only how much of the authorized tool catalog is advertised to
+  // the model. `progressive` exposes search + risk-specific dispatchers while
+  // calls still pass through MCP_CATEGORIES and the complete middleware chain.
+  MCP_TOOL_SURFACE: z.enum(['full', 'progressive']).default('full'),
+
   // --- OpenTelemetry (Plan 8 Phase A) ---
   // Master switch. When false, mcp-server skips SDK boot entirely (default behavior).
   OTEL_ENABLED: boolish(false),

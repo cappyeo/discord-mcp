@@ -1,13 +1,13 @@
 ---
 title: CLI
-description: discord-mcp CLI sub-command reference. Flags, exit codes, and example invocations for serve, doctor, init, and migrate.
+description: discord-mcp CLI sub-command reference. Flags, exit codes, and example invocations for serve, doctor, smoke, init, and migrate.
 sidebar:
   order: 1
 ---
 
 import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-The `discord-mcp` binary is the single entry point with four
+The `discord-mcp` binary is the single entry point with five
 sub-commands routed by [commander](https://www.npmjs.com/package/commander):
 
 ```bash
@@ -17,7 +17,7 @@ discord-mcp <command> [options]
 `serve` is the default sub-command - running `discord-mcp` with no command
 boots the local stdio MCP server, equivalent to `discord-mcp serve`. Pass
 `--http` to serve a bearer-protected Streamable HTTP endpoint instead. The
-other three (`doctor`, `init`, `migrate`) are operator tools.
+other four (`doctor`, `smoke`, `init`, `migrate`) are operator tools.
 
 Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
 
@@ -133,7 +133,7 @@ discord-mcp doctor --online --json | jq .
 | `1`  | At least one check returned `warn`, no fails.                          |
 | `2`  | At least one check returned `fail` (e.g. invalid token, missing env).  |
 
-The exit-code policy is uniform across `doctor`, `init`, and `migrate`:
+The exit-code policy is uniform across `doctor`, `smoke`, `init`, and `migrate`:
 `0` = success, `1` = success-with-work-left, `2` = couldn't run.
 
 ### See also
@@ -141,10 +141,68 @@ The exit-code policy is uniform across `doctor`, `init`, and `migrate`:
 - [Operations → Audit](/discord-mcp/operations/audit/) - what audit-sink check covers.
 - [Operations → Telemetry](/discord-mcp/operations/telemetry/) - what otel-config check covers.
 
+## `smoke`
+
+```bash
+discord-mcp smoke [--json]
+discord-mcp smoke --confirm-write [--guild-id <id>] [--json]
+```
+
+Verify the real MCP-to-Discord path without loading all 192 tool schemas into an
+AI model. The default run is read-only: it starts an in-memory MCP client/server
+pair, validates the bot identity, and lists the guilds visible to the bot.
+
+`--confirm-write` opts into one bounded lifecycle through the same MCP schemas,
+middleware, audit, and Discord REST path: create a uniquely named temporary text
+channel, send and edit one marker message, then delete the message and channel.
+The command enables destructive execution only inside its own process and still
+passes `__confirm:true` to both delete calls. It does not change the environment
+or configuration used by the long-running server.
+
+| Flag                 | Type    | Default     | Description                                                                                                      |
+| -------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--confirm-write`    | boolean | `false`     | Execute the self-cleaning create/send/edit/delete lifecycle. Without it, the command is read-only.               |
+| `--guild-id <id>`    | string  | sole guild  | Select the write target. Required when the bot can see multiple guilds; the ID must already be visible to it.    |
+| `--json`             | boolean | `false`     | Emit the shared machine-readable result envelope, including step and cleanup state.                              |
+
+The write smoke needs View Channels, Manage Channels, and Send Messages in the
+test guild. It also needs the `users`, `channels`, and `messages` categories when
+`MCP_CATEGORIES` is restricted. If a step fails after channel creation, cleanup
+is attempted before the command exits; a cleanup failure is reported explicitly.
+
+### Examples
+
+```bash
+# Cheap, read-only end-to-end check.
+discord-mcp smoke
+
+# The bot is installed in exactly one private test guild.
+discord-mcp smoke --confirm-write
+
+# The bot can see multiple guilds - make the target explicit.
+discord-mcp smoke --confirm-write --guild-id 111122223333444455
+
+# CI or agent-readable evidence.
+discord-mcp smoke --confirm-write --guild-id 111122223333444455 --json
+```
+
+### Exit codes
+
+| Code | Meaning                                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | The read-only check passed, or every write step passed and all temporary artifacts were removed.                          |
+| `2`  | Startup, targeting, a tool call, or cleanup failed. No write begins when the target is ambiguous.                          |
+
+### See also
+
+- [Verify setup](/discord-mcp/start/verify-setup/) - where the smoke check fits in the tutorial.
+- [Safety configuration](/discord-mcp/reference/config/safety/) - persistent dry-run and confirmation behavior.
+
 ## `init`
 
 ```bash
 discord-mcp init [--client <id>] [--token <token>] [--gateway]
+                 [--tool-surface <full|progressive>]
                  [--output <path>] [--force] [--json]
 ```
 
@@ -156,6 +214,7 @@ to stdout or writes to `--output <path>`.
 | `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `codex`, `cursor`, `generic`.                                                                                                                              |
 | `--token <token>`| string  | `${env:DISCORD_TOKEN}` placeholder                   | Discord bot token. **Warning**: writes the value into the snippet unredacted. Omit to leave the env-var interpolation placeholder so users don't accidentally commit a real secret.                                  |
 | `--gateway`      | boolean | `false`                                              | Append `--gateway` to the generated snippet so the server enables Gateway subscriptions on boot.                                                                                                                     |
+| `--tool-surface <mode>` | string | `full`                                        | Set `progressive` to add `MCP_TOOL_SURFACE=progressive` to the generated client snippet; useful for hosts without native deferred MCP loading.                                                                        |
 | `--output <path>`| string  | (stdout)                                             | Write the snippet to a file instead of stdout.                                                                                                                                                                        |
 | `--force`        | boolean | `false`                                              | Overwrite the `--output` path if it already exists. Required to overwrite.                                                                                                                                            |
 | `--json`         | boolean | `false`                                              | Emit machine-readable JSON instead of pretty output. The snippet body is delivered under `data.content`.                                                                                                              |
@@ -263,7 +322,7 @@ discord-mcp migrate --from discord-ops --json > migrate-report.json
 
 ## Output formats
 
-`doctor`, `init`, and `migrate` all share the same `emitResult(...)` envelope.
+`doctor`, `smoke`, `init`, and `migrate` all share the same `emitResult(...)` envelope.
 In pretty mode you see a TTY-friendly summary. In `--json` mode you get a
 single line of structured JSON with this shape:
 
@@ -280,5 +339,6 @@ single line of structured JSON with this shape:
 ```
 
 This is the contract pipelines should consume. `data` is per-command
-(doctor's `data.checks` array, init's `data.content`, migrate's `data.result`)
+(doctor's `data.checks` array, smoke's `data.steps`, init's `data.content`,
+migrate's `data.result`)
 and stable across versions within a major.

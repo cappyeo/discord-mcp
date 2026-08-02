@@ -113,8 +113,19 @@ describe('cli - version + help', () => {
     const out = stdoutOutput();
     expect(out).toContain('serve');
     expect(out).toContain('doctor');
+    expect(out).toContain('smoke');
     expect(out).toContain('init');
     expect(out).toContain('migrate');
+  });
+});
+
+describe('cli - smoke sub-command', () => {
+  it('smoke --help documents the write confirmation and target flags', async () => {
+    await runCli(['smoke', '--help']);
+    const out = stdoutOutput();
+    expect(out).toContain('--confirm-write');
+    expect(out).toContain('--guild-id');
+    expect(out).toContain('--json');
   });
 });
 
@@ -230,6 +241,7 @@ describe('cli - init sub-command (Plan 9 Phase D)', () => {
     expect(out).toContain('--client');
     expect(out).toContain('--token');
     expect(out).toContain('--gateway');
+    expect(out).toContain('--tool-surface');
     expect(out).toContain('--output');
     expect(out).toContain('--force');
     expect(out).toContain('--json');

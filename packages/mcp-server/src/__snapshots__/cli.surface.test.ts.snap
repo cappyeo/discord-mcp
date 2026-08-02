@@ -21,6 +21,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--json",
         "--output <path>",
         "--token <token>",
+        "--tool-surface <mode>",
       ],
     },
     {
@@ -41,6 +42,15 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--host <host>",
         "--http",
         "--port <port>",
+      ],
+    },
+    {
+      "isDefault": false,
+      "name": "smoke",
+      "options": [
+        "--confirm-write",
+        "--guild-id <id>",
+        "--json",
       ],
     },
   ],

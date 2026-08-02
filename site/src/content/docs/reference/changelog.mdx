@@ -9,6 +9,27 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## Unreleased
+
+- Added `discord-mcp smoke`, a deterministic read-only MCP-to-Discord check.
+  Passing `--confirm-write` runs one explicitly authorized, self-cleaning
+  channel/message create-edit-delete lifecycle through the real MCP middleware
+  and audit path. Multi-guild bots must pass `--guild-id`, preventing an
+  ambiguous write target.
+- Cached the immutable 192-tool JSON Schema catalog once per process instead
+  of regenerating it for every `tools/list` request. MCP 2026 clients also
+  receive a one-hour private cache hint, while 2025-era clients keep their
+  existing response shape and behavior.
+- Added opt-in `MCP_TOOL_SURFACE=progressive` for clients without native
+  deferred MCP loading. It advertises `mcp_tools_search` plus separate read,
+  write, and destructive dispatchers whose host-visible annotations match the
+  selected tool's risk. Dispatch rejects route mismatches, discovery is
+  restricted by `MCP_CATEGORIES`, and selected tools still run through the
+  complete middleware chain. `discord-mcp init --tool-surface progressive`
+  writes the setting into generated client config.
+  The OpenAI guide now uses caller-native `tool_search` plus `defer_loading`
+  for Responses API.
+
 ## v0.14.0 - MCP 2026 and remote HTTP
 
 Released **2026-08-02**.

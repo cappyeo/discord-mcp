@@ -43,6 +43,9 @@ discord-mcp init --client codex
 # Verify your Discord token and local configuration
 export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
 discord-mcp doctor --online
+
+# Verify the real MCP path without changing Discord
+discord-mcp smoke
 ```
 
 On PowerShell, set the token with:
@@ -52,6 +55,14 @@ $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 ```
 
 `init` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration fragment; merge it into an existing client configuration rather than overwriting it. The Codex fragment forwards `DISCORD_TOKEN` from its launch environment instead of storing the token in `~/.codex/config.toml`. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
+
+For MCP clients that do not natively defer large tool catalogs, set
+`MCP_TOOL_SURFACE=progressive`. The model initially receives only
+`mcp_tools_search` plus read, write, and destructive dispatchers, then loads
+exact Discord tool schemas on demand. The search result chooses the dispatcher
+whose annotations match the selected tool's risk. `MCP_CATEGORIES` remains the
+authorization boundary; progressive mode does not bypass confirmation,
+dry-run, audit, or other middleware.
 
 To run without a global install:
 
@@ -76,7 +87,8 @@ for 2025-era Streamable HTTP clients. Every authenticated client shares the
 deployment's caller-owned Discord bot identity, so use least-privilege Discord
 roles and a narrow `MCP_CATEGORIES` allowlist. The
 [OpenAI remote MCP guide](https://cappyeo.github.io/discord-mcp/operations/openai/)
-covers HTTPS, Responses API, Codex configuration, and the current OAuth boundary.
+covers HTTPS, Responses API `tool_search`/`defer_loading`, Codex progressive
+discovery, and the current OAuth boundary.
 
 ## What you get
 
@@ -107,6 +119,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
 | `discord-mcp init` | Generate an MCP client configuration snippet. |
 | `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, and optional network connectivity. |
+| `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 
 Run `discord-mcp --help` or see the full [CLI reference](https://cappyeo.github.io/discord-mcp/reference/cli/) for flags and examples.
@@ -142,7 +155,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.13.2**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.14.0**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
 
 ## License
 

@@ -28,6 +28,14 @@ import { PreconditionStore } from './stores/PreconditionStore.js';
 import { ResourceStore } from './stores/ResourceStore.js';
 import { ToolStore } from './stores/ToolStore.js';
 import { redactCredentialUrl } from './telemetry/redact.js';
+import {
+  dispatchProgressiveTool,
+  PROGRESSIVE_DISPATCH_TOOLS,
+  PROGRESSIVE_SEARCH_TOOL,
+  PROGRESSIVE_SEARCH_TOOL_NAME,
+  type ProgressiveDispatcherName,
+  searchProgressiveTools,
+} from './tool-discovery.js';
 import { OutputSchemaViolation } from './tools/_lib/defineTool.js';
 import AppEmojisCreate from './tools/app_emojis/create.js';
 import AppEmojisDelete from './tools/app_emojis/delete.js';
@@ -262,6 +270,101 @@ const ERROR_ENVELOPE_JSON_SCHEMA = {
   },
   required: ['code', 'retriable', 'category', 'recovery_hint'],
 } as const;
+
+interface ToolListCatalog {
+  categories: ReadonlyMap<string, string>;
+  requiredGuild: McpTool[];
+  defaultGuild: McpTool[];
+}
+
+let cachedToolListCatalog: ToolListCatalog | undefined;
+
+/**
+ * Tool definitions are compiled into JSON Schema once per process. HTTP stays
+ * stateless and still creates a fresh MCP Server per request, but avoids
+ * repeating the expensive Zod conversion for the same 192 immutable tools.
+ */
+function getToolListCatalog(toolStore: ToolStore): ToolListCatalog {
+  if (cachedToolListCatalog !== undefined) return cachedToolListCatalog;
+
+  const categories = new Map<string, string>();
+  const requiredGuild: McpTool[] = [];
+  const defaultGuild: McpTool[] = [];
+
+  for (const tool of toolStore.values()) {
+    categories.set(tool.name, tool.category);
+    const inputSchema = z.toJSONSchema(z.object(tool.inputSchema), {
+      target: 'draft-2020-12',
+      io: 'input',
+    }) as McpTool['inputSchema'];
+
+    if (tool.preconditions.includes('confirm_required')) {
+      inputSchema.properties ??= {};
+      (inputSchema.properties as Record<string, unknown>).__confirm = {
+        type: 'boolean',
+        description:
+          'Set true to authorize this destructive operation. Also requires the server ' +
+          'to run with MCP_DRY_RUN=false; otherwise a DRY_RUN_PREVIEW is returned.',
+      };
+    }
+
+    const entry: McpTool = {
+      name: tool.name,
+      description: tool.description,
+      inputSchema,
+      annotations: tool.annotations,
+    };
+    if (tool.outputSchema !== undefined) {
+      // Clients validate structuredContent even for isError results, so the
+      // published contract must accept both the success and error envelopes.
+      entry.outputSchema = {
+        type: 'object',
+        anyOf: [
+          z.toJSONSchema(z.looseObject(tool.outputSchema), { target: 'draft-2020-12' }),
+          ERROR_ENVELOPE_JSON_SCHEMA,
+        ],
+      } as McpTool['outputSchema'];
+    }
+    requiredGuild.push(entry);
+
+    if (Object.hasOwn(tool.inputSchema, 'guild_id') && Array.isArray(inputSchema.required)) {
+      defaultGuild.push({
+        ...entry,
+        inputSchema: {
+          ...inputSchema,
+          required: inputSchema.required.filter((field) => field !== 'guild_id'),
+        },
+      });
+    } else {
+      defaultGuild.push(entry);
+    }
+  }
+
+  cachedToolListCatalog = { categories, requiredGuild, defaultGuild };
+  return cachedToolListCatalog;
+}
+
+function listVisibleTools(
+  toolStore: ToolStore,
+  categoryAllowlist: ReadonlySet<string> | null,
+  hasDefaultGuild: boolean,
+): McpTool[] {
+  const catalog = getToolListCatalog(toolStore);
+  const tools = hasDefaultGuild ? catalog.defaultGuild : catalog.requiredGuild;
+  if (categoryAllowlist === null) return tools;
+  return tools.filter((tool) => {
+    const category = catalog.categories.get(tool.name)!;
+    return categoryAllowlist.has(category) || ALWAYS_ALLOWED_CATEGORIES.has(category);
+  });
+}
+
+function listAdvertisedTools(
+  visibleTools: McpTool[],
+  surface: Config['MCP_TOOL_SURFACE'],
+): McpTool[] {
+  if (surface === 'full') return visibleTools;
+  return [PROGRESSIVE_SEARCH_TOOL, ...PROGRESSIVE_DISPATCH_TOOLS];
+}
 
 export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
   const transport = deps.transport ?? 'stdio';
@@ -1092,18 +1195,39 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     auditMiddleware(auditSink),
   ];
 
+  const toolSurface = deps.config.MCP_TOOL_SURFACE;
+  const visibleTools = () =>
+    listVisibleTools(
+      toolStore,
+      categoryAllowlist,
+      deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined,
+    );
+  const surfaceInstructions =
+    toolSurface === 'progressive'
+      ? [
+          'Progressive tool surface: call mcp_tools_search with the desired outcome,',
+          'then call the exact returned read/write/destructive dispatcher with that tool',
+          'name and input schema. Never substitute one dispatcher for another.',
+          'Do not guess hidden tool arguments. Search only returns tools authorized by',
+          'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
+        ]
+      : [
+          'Discord MCP server: 192 tools over the Discord REST API (messages, channels,',
+          'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
+          'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
+          'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls.',
+        ];
+
   // --- MCP server ---
   const server = new Server(
     { name: 'discord-mcp', version: packageJson.version },
     {
       capabilities: { tools: {}, resources: { subscribe: true } },
+      cacheHints: { 'tools/list': { ttlMs: 3_600_000, cacheScope: 'private' } },
       // Injected into the agent's system context on every initialize. Keep it
       // short and true - it is read by the model before any tools/list.
       instructions: [
-        'Discord MCP server: 192 tools over the Discord REST API (messages, channels,',
-        'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
-        'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
-        'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls.',
+        ...surfaceInstructions,
         'Destructive tools return DRY_RUN_PREVIEW unless the server runs with',
         'MCP_DRY_RUN=false AND the call passes __confirm:true.',
         'Errors return a structured CallToolResult with code/retriable/recovery_hint.',
@@ -1116,73 +1240,12 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   );
 
   server.setRequestHandler('tools/list', async () => {
-    const tools: McpTool[] = [];
-    for (const tool of toolStore.values()) {
-      // Hide what the caller cannot invoke. Both layers are required: hiding
-      // alone is not a control (a client can call an unlisted tool by name),
-      // and gating alone leaves the agent's context full of tools that only
-      // ever return SCOPE_REJECTED.
-      if (
-        categoryAllowlist !== null &&
-        !categoryAllowlist.has(tool.category) &&
-        !ALWAYS_ALLOWED_CATEGORIES.has(tool.category)
-      ) {
-        continue;
-      }
-      const inputSchema = z.object(tool.inputSchema);
-      const jsonSchema = z.toJSONSchema(inputSchema, {
-        target: 'draft-2020-12',
-        io: 'input',
-      }) as McpTool['inputSchema'];
-      // The default is injected before validation, so only advertise guild_id
-      // as optional when this server instance actually has one configured.
-      // Explicit caller input still wins at invocation time.
-      if (
-        deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined &&
-        Object.hasOwn(tool.inputSchema, 'guild_id') &&
-        Array.isArray(jsonSchema.required)
-      ) {
-        jsonSchema.required = jsonSchema.required.filter((field) => field !== 'guild_id');
-      }
-      // `__confirm` is deliberately absent from every tool's zod inputSchema
-      // (it is an authorization flag, not a handler parameter - handlers must
-      // never see it). But z.toJSONSchema emits `additionalProperties: false`,
-      // so a spec-conforming client cannot legally send it, and an agent
-      // reading tools/list has no way to discover it. Advertise it here, on
-      // the gated tools only, without it ever entering the zod parse path.
-      if (tool.preconditions.includes('confirm_required')) {
-        jsonSchema.properties ??= {};
-        (jsonSchema.properties as Record<string, unknown>).__confirm = {
-          type: 'boolean',
-          description:
-            'Set true to authorize this destructive operation. Also requires the server ' +
-            'to run with MCP_DRY_RUN=false; otherwise a DRY_RUN_PREVIEW is returned.',
-        };
-      }
-      const entry: McpTool = {
-        name: tool.name,
-        description: tool.description,
-        inputSchema: jsonSchema,
-        annotations: tool.annotations,
-      };
-      // 191 of 192 tools declare an outputSchema that was never published, so
-      // clients could not use it and nothing validated against it. Publish it
-      // as a union with the error envelope: SDK >=1.20 clients validate
-      // `structuredContent` even when `isError` is true, and our error results
-      // carry the envelope shape rather than the success shape - emitting the
-      // success schema alone turns every error into a client-side throw.
-      if (tool.outputSchema !== undefined) {
-        entry.outputSchema = {
-          type: 'object',
-          anyOf: [
-            z.toJSONSchema(z.looseObject(tool.outputSchema), { target: 'draft-2020-12' }),
-            ERROR_ENVELOPE_JSON_SCHEMA,
-          ],
-        } as McpTool['outputSchema'];
-      }
-      tools.push(entry);
-    }
-    return { tools };
+    // Hide what the caller cannot invoke. Both layers are required: hiding
+    // alone is not a control (a client can call an unlisted tool by name), and
+    // gating alone leaves the agent's context full of tools that only fail.
+    return {
+      tools: listAdvertisedTools(visibleTools(), toolSurface),
+    };
   });
 
   // Lazy snapshot of client capabilities (populated after MCP initialize completes).
@@ -1241,6 +1304,21 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     args: unknown,
     signal: AbortSignal,
   ): Promise<CallToolResult> => {
+    if (toolName === PROGRESSIVE_SEARCH_TOOL_NAME && toolSurface === 'progressive') {
+      return searchProgressiveTools(args, visibleTools(), getToolListCatalog(toolStore).categories);
+    }
+    if (
+      toolSurface === 'progressive' &&
+      PROGRESSIVE_DISPATCH_TOOLS.some((tool) => tool.name === toolName)
+    ) {
+      return dispatchProgressiveTool(
+        toolName as ProgressiveDispatcherName,
+        args,
+        visibleTools(),
+        invokeTool,
+        signal,
+      );
+    }
     const tool = toolStore.get(toolName);
     if (tool === undefined) {
       return formatErrorForUser(new Error(`Tool '${toolName}' not found.`), {

@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startHttp } from './http.js';
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
@@ -57,9 +57,12 @@ describe('startHttp', () => {
     try {
       expect(client.getProtocolEra()).toBe('legacy');
       expect(transport.sessionId).toBeUndefined();
-      const { tools } = await client.listTools();
+      const legacyList = await client.listTools();
+      const { tools } = legacyList;
       expect(tools).toHaveLength(192);
       expect(tools.map((tool) => tool.name)).toContain('messages_send');
+      expect(legacyList.ttlMs).toBeUndefined();
+      expect(legacyList.cacheScope).toBeUndefined();
     } finally {
       await client.close();
     }
@@ -67,6 +70,7 @@ describe('startHttp', () => {
 
   it('negotiates MCP 2026 and serves the same tools without session state', async () => {
     server = await startHttp({ port: 0, registerSignalHandlers: false });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const transport = new StreamableHTTPClientTransport(endpoint(), {
       requestInit: { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } },
     });
@@ -80,13 +84,22 @@ describe('startHttp', () => {
       expect(client.getProtocolEra()).toBe('modern');
       expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28');
       expect(transport.sessionId).toBeUndefined();
-      const { tools } = await client.listTools();
+      fetchSpy.mockClear();
+      const firstList = await client.listTools();
+      const { tools, ttlMs, cacheScope } = firstList;
       expect(tools).toHaveLength(192);
       expect(tools.map((tool) => tool.name)).toContain('messages_send');
+      expect(ttlMs).toBe(3_600_000);
+      expect(cacheScope).toBe('private');
+      const requestsAfterFirstList = fetchSpy.mock.calls.length;
+      expect(requestsAfterFirstList).toBeGreaterThan(0);
+      expect(await client.listTools()).toEqual(firstList);
+      expect(fetchSpy).toHaveBeenCalledTimes(requestsAfterFirstList);
       const invalidCall = await client.callTool({ name: 'messages_send', arguments: {} });
       expect(invalidCall.isError).toBe(true);
     } finally {
       await client.close();
+      fetchSpy.mockRestore();
     }
   });
 });

@@ -104,5 +104,6 @@ describe('config surface', () => {
     // policy than the operator configured.
     expect(() => loadConfig({ ...MINIMAL_ENV, LOG_LEVEL: 'chatty' })).toThrow();
     expect(() => loadConfig({ ...MINIMAL_ENV, MCP_RETRY_MAX_ATTEMPTS: '999' })).toThrow();
+    expect(() => loadConfig({ ...MINIMAL_ENV, MCP_TOOL_SURFACE: 'compact' })).toThrow();
   });
 });

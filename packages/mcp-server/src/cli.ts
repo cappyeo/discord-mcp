@@ -56,6 +56,17 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('smoke')
+    .description('Verify the real MCP-to-Discord path (read-only by default)')
+    .option('--confirm-write', 'Run one self-cleaning create/send/edit/delete lifecycle')
+    .option('--guild-id <id>', 'Target guild for write smoke; required when the bot sees multiple')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(async (options: { confirmWrite?: boolean; guildId?: string; json?: boolean }) => {
+      const { smokeAction } = await import('./commands/smoke.js');
+      await smokeAction(options);
+    });
+
+  program
     .command('init')
     .description(
       'Generate an MCP client config snippet (Claude Desktop / Claude Code / Codex / Cursor / Generic)',
@@ -73,6 +84,11 @@ export function buildProgram(): Command {
       '--gateway',
       'Append --gateway to the snippet so the server enables Discord Gateway resource subscriptions',
     )
+    .option(
+      '--tool-surface <mode>',
+      'Advertised tool surface (full|progressive). Default: full',
+      'full',
+    )
     .option('--output <path>', 'Write the snippet to this path instead of stdout')
     .option('--force', 'Overwrite the --output path if it already exists')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
@@ -81,6 +97,7 @@ export function buildProgram(): Command {
         client?: string;
         token?: string;
         gateway?: boolean;
+        toolSurface?: string;
         output?: string;
         force?: boolean;
         json?: boolean;

@@ -1,6 +1,6 @@
 ---
 title: Access and scope
-description: Configure the Discord bot credential, remote HTTP bearer credential, a default guild, and the tool-category allowlist.
+description: Configure credentials, a default guild, the tool-category allowlist, and progressive tool discovery.
 ---
 
 Use these settings to give the server the credential and the smallest tool surface
@@ -55,3 +55,23 @@ does not affect tools without a top-level `guild_id` input.
 Entries are trimmed and empty values are ignored. Unknown categories fail at
 startup with the valid list instead of silently disabling a tool surface. The
 `meta` category is always available so `mcp_pipeline` remains reachable.
+
+### `MCP_TOOL_SURFACE`
+
+- **Type:** `full` or `progressive`
+- **Default:** `full`
+- **Use:** Controls how much of the already-authorized catalog is advertised to the model.
+- **Example:** `MCP_TOOL_SURFACE=progressive`
+
+`full` advertises the existing 192-tool catalog for maximum client
+compatibility. `progressive` advertises only `mcp_tools_search` plus
+`mcp_tools_read`, `mcp_tools_write`, and `mcp_tools_destructive`: the model
+searches for an exact contract, then uses the dispatcher named by that result.
+The dispatchers expose accurate host approval annotations and reject a tool
+sent through the wrong risk route. This substantially reduces the initial
+`tools/list` payload for clients without native deferred MCP loading.
+
+This setting is not an authorization control. Search only returns tools allowed
+by `MCP_CATEGORIES`, and every dispatched call still passes validation,
+category, confirmation, dry-run, audit, and resilience middleware. Keep
+`MCP_CATEGORIES` narrow even when progressive discovery is enabled.

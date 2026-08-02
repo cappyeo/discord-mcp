@@ -68,12 +68,13 @@ There is no `version` subcommand. `serve` is registered as commander's
 that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
 :::
 
-`discord-mcp --help` lists four subcommands:
+`discord-mcp --help` lists five subcommands:
 
 | Subcommand | What it does |
 | ---------- | ------------ |
 | `serve` | Start the local stdio MCP server. **Default** - a bare `discord-mcp` runs this. Use `serve --http` for a bearer-protected remote endpoint. |
 | `doctor` | Diagnose config, token shape, and (with `--online`) connectivity. |
+| `smoke` | Verify the real MCP-to-Discord path; writes require the explicit `--confirm-write` flag. |
 | `init` | Print an MCP client config snippet for Claude Desktop / Claude Code / Codex / Cursor / generic. |
 | `migrate` | Map another Discord MCP server's tools onto discord-mcp's. |
 
@@ -114,7 +115,7 @@ integration model.
 
 - [ ] `node --version` reports Node.js 22.12 or newer.
 - [ ] `discord-mcp --version` prints the installed package version and exits.
-- [ ] `discord-mcp --help` lists `serve`, `doctor`, `init`, and `migrate`.
+- [ ] `discord-mcp --help` lists `serve`, `doctor`, `smoke`, `init`, and `migrate`.
 
 </TutorialChecklist>
 
