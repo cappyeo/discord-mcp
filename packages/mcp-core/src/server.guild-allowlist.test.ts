@@ -12,7 +12,7 @@ const DENIED = '999000999000999000';
 const ALLOWED_CHANNEL = '222233334444555566';
 const DENIED_CHANNEL = '333344445555666677';
 const BASE_ENV = {
-  DISCORD_TOKEN: 'Bot test-token-for-guild-allowlist-suite',
+  DISCORD_TOKEN: 'test-token-for-guild-allowlist-suite-0000000000000000',
   LOG_LEVEL: 'fatal',
   MCP_AUDIT_SINK: 'none',
 } as NodeJS.ProcessEnv;
