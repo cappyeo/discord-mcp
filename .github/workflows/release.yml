@@ -11,6 +11,11 @@ on:
         description: 'Git tag to publish (e.g. v0.12.0)'
         required: true
         type: string
+      registry_only:
+        description: 'Skip npm and retry MCP Registry metadata from the selected branch'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -21,6 +26,7 @@ env:
 
 jobs:
   publish:
+    if: ${{ !inputs.registry_only }}
     runs-on: ubuntu-24.04
     environment: npm-publish
     steps:
@@ -49,6 +55,7 @@ jobs:
 
   registry:
     needs: publish
+    if: ${{ always() && (inputs.registry_only || needs.publish.result == 'success') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -56,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.registry_only && github.sha || inputs.tag }}
       - name: Install MCP Registry publisher
         run: |
           curl -fsSLo mcp-publisher.tar.gz \
