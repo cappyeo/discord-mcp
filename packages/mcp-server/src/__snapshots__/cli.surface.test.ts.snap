@@ -17,6 +17,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "options": [
         "--allowed-guilds <ids>",
         "--client <id>",
+        "--discover-guilds",
         "--force",
         "--gateway",
         "--json",

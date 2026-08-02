@@ -37,25 +37,26 @@ Requires Node.js 22.12 or later.
 # Install the MCP server
 npm install -g @discord-mcp/cli
 
-# Generate a Codex fragment restricted to your Discord server
-discord-mcp init --client codex --tool-surface progressive \
-  --allowed-guilds 111122223333444455
-
-# Verify your Discord token and local configuration
+# Keep the caller-owned bot token in this terminal
 export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
+
+# Verify the bot, choose its real Discord server, and generate a safe Codex fragment
+discord-mcp init --client codex --tool-surface progressive --discover-guilds
+
+# Verify the rest of the local configuration
 discord-mcp doctor --online
 
 # Verify the real MCP path without changing Discord
 discord-mcp smoke
 ```
 
-On PowerShell, set the token with:
+On PowerShell, set the token before running the same `init` and verification commands:
 
 ```powershell
 $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 ```
 
-`init` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration fragment; merge it into an existing client configuration rather than overwriting it. The Codex fragment forwards `DISCORD_TOKEN` from its launch environment instead of storing the token in `~/.codex/config.toml`. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
+`init` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It prints a complete configuration fragment; merge it into an existing client configuration rather than overwriting it. `--discover-guilds` sends the current token only to Discord, verifies the bot identity, and injects a server-side `ALLOWED_GUILDS` boundary. A sole guild is selected automatically; an ambiguous non-interactive run fails closed until you pass the intended guild ID. The Codex fragment forwards `DISCORD_TOKEN` from its launch environment instead of storing the token in `~/.codex/config.toml`. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
 
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only

@@ -204,6 +204,7 @@ discord-mcp smoke --confirm-write --guild-id 111122223333444455 --json
 discord-mcp init [--client <id>] [--token <token>] [--gateway]
                  [--tool-surface <full|progressive>]
                  [--allowed-guilds <id,id,...>]
+                 [--discover-guilds]
                  [--output <path>] [--force] [--json]
 ```
 
@@ -217,6 +218,7 @@ to stdout or writes to `--output <path>`.
 | `--gateway`      | boolean | `false`                                              | Append `--gateway` to the generated snippet so the server enables Gateway subscriptions on boot.                                                                                                                     |
 | `--tool-surface <mode>` | string | `full`                                        | Set `progressive` to add `MCP_TOOL_SURFACE=progressive` to the generated client snippet; useful for hosts without native deferred MCP loading.                                                                        |
 | `--allowed-guilds <ids>` | string | unset                                       | Add a normalized `ALLOWED_GUILDS` server-side guild allowlist to the generated client snippet. Values must be comma-separated Discord snowflake IDs.                                                                  |
+| `--discover-guilds` | boolean | `false`                                         | Use the current `DISCORD_TOKEN` to verify the bot and enumerate its real guilds. A sole guild is selected automatically; TTY runs require an explicit choice and default to cancel; ambiguous non-interactive runs must pass `--allowed-guilds`. Selected guilds with `Administrator` produce a warning. |
 | `--output <path>`| string  | (stdout)                                             | Write the snippet to a file instead of stdout.                                                                                                                                                                        |
 | `--force`        | boolean | `false`                                              | Overwrite the `--output` path if it already exists. Required to overwrite.                                                                                                                                            |
 | `--json`         | boolean | `false`                                              | Emit machine-readable JSON instead of pretty output. The snippet body is delivered under `data.content`.                                                                                                              |
@@ -224,7 +226,8 @@ to stdout or writes to `--output <path>`.
 ### Examples
 
 ```bash
-# Interactive - prompts for client + token + gateway when stdin is a TTY.
+# Interactive - prompts for client + gateway when stdin is a TTY.
+# Omitted tokens always remain an environment reference.
 discord-mcp init
 
 # Non-interactive: print a Claude Desktop snippet with the token placeholder.
@@ -233,8 +236,12 @@ discord-mcp init --client claude-desktop
 # Non-interactive: print a Codex TOML fragment that forwards DISCORD_TOKEN.
 discord-mcp init --client codex
 
-# Recommended: progressive Codex surface restricted to one Discord server.
-discord-mcp init --client codex --tool-surface progressive \
+# Recommended: verify the bot and derive a progressive, guild-scoped Codex fragment.
+export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
+discord-mcp init --client codex --tool-surface progressive --discover-guilds
+
+# Non-interactive bot with multiple guilds: make the choice explicit and verify it.
+discord-mcp init --client codex --tool-surface progressive --discover-guilds \
   --allowed-guilds 111122223333444455
 
 # Bake a real token into the snippet (NOT recommended for committed files).
@@ -254,7 +261,8 @@ discord-mcp init --client generic --json | jq .data.content
 | Code | Meaning                                                                              |
 | ---- | ------------------------------------------------------------------------------------ |
 | `0`  | Snippet generated (and written, if `--output` was used).                             |
-| `2`  | Couldn't run - unknown `--client`, `--output` path exists without `--force`.         |
+| `1`  | Snippet generated, but a selected guild grants the bot `Administrator`.              |
+| `2`  | Couldn't run - invalid options, failed Discord verification, ambiguous guild selection, or protected output path. |
 
 ### See also
 

@@ -32,8 +32,9 @@ by default, so you stay in control of the file you merge it into.
 </TutorialPreCheck>
 
 <Aside type="caution">
-`init` does not discover or edit your client config. Its token prompt is visible, and the generated
-fragment is printed to the terminal. The safest path is to press Enter at the token prompt. The Codex
+`init` does not edit your client config and never prompts for a real token. Omission always generates
+an environment reference. With `--discover-guilds`, the current `DISCORD_TOKEN` is sent only to Discord
+to verify the bot and its guild membership; it is not copied into the generated fragment. The Codex
 fragment forwards `DISCORD_TOKEN` from the environment; the JSON fragments use `${env:DISCORD_TOKEN}`
 only when the client supports expansion. Do not pass the token with `--token`, because command arguments
 can remain in shell history and process inspection.
@@ -72,15 +73,23 @@ can remain in shell history and process inspection.
   <div slot="codex">
 
   ```bash
-  discord-mcp init --client codex --tool-surface progressive \
-    --allowed-guilds 111122223333444455
+  read -rsp 'Discord bot token: ' DISCORD_TOKEN && printf '\n'
+  export DISCORD_TOKEN
+  discord-mcp init --client codex --tool-surface progressive --discover-guilds
+  ```
+
+  ```powershell
+  $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
+  discord-mcp init --client codex --tool-surface progressive --discover-guilds
   ```
 
   Merge the TOML fragment into `~/.codex/config.toml`. It uses
   `env_vars = ["DISCORD_TOKEN"]`, so Codex forwards the token from its launch
-  environment instead of storing it in `config.toml`. Replace the example
-  guild ID with your test server; the generated `ALLOWED_GUILDS` setting is a
-  server-side boundary, not merely a client-side filter.
+  environment instead of storing it in `config.toml`. Guild discovery verifies
+  the caller-owned bot and adds an `ALLOWED_GUILDS` server-side boundary, not
+  merely a client-side filter. If the bot can see multiple guilds in a
+  non-interactive run, rerun with `--allowed-guilds <id>` to make the target
+  explicit.
 
   Start Codex from a terminal where the token is set:
 

@@ -32,6 +32,7 @@ const { initAction, resolveCliPath } = await import('./init.js');
 const originalStdinTTY = process.stdin.isTTY;
 const originalStdoutTTY = process.stdout.isTTY;
 const originalExitCode = process.exitCode;
+const originalDiscordToken = process.env.DISCORD_TOKEN;
 
 let stdoutWrites: string[] = [];
 
@@ -59,6 +60,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  if (originalDiscordToken === undefined) {
+    delete process.env.DISCORD_TOKEN;
+  } else {
+    process.env.DISCORD_TOKEN = originalDiscordToken;
+  }
   Object.defineProperty(process.stdin, 'isTTY', {
     value: originalStdinTTY,
     configurable: true,
@@ -88,7 +95,13 @@ interface InitJsonResult {
     gateway?: boolean;
     toolSurface?: string;
     allowedGuilds?: string[];
+    discord?: {
+      bot: { id: string; username: string };
+      guilds: Array<{ id: string; name: string; administrator: boolean }>;
+    };
   };
+  warnings?: string[];
+  errors?: string[];
 }
 
 interface ParsedSnippet {
@@ -258,6 +271,116 @@ describe('initAction - explicit flags', () => {
     const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal placeholder
     expect(snippet.mcpServers['discord-mcp'].env.DISCORD_TOKEN).toBe('${env:DISCORD_TOKEN}');
+  });
+});
+
+describe('initAction - live guild discovery', () => {
+  const VALID_TOKEN = `Bot ${'x'.repeat(60)}`;
+  const BOT = { id: '987654321098765432', username: 'setup-bot', bot: true };
+
+  function stubDiscord(guilds: Array<{ id: string; name: string; permissions: string }>) {
+    const fetchMock = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/users/@me')) {
+        return new Response(JSON.stringify(BOT), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/users/@me/guilds')) {
+        return new Response(JSON.stringify(guilds), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected Discord URL: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('uses DISCORD_TOKEN to verify a sole guild without persisting the secret', async () => {
+    process.env.DISCORD_TOKEN = VALID_TOKEN;
+    const guildId = '111122223333444455';
+    const fetchMock = stubDiscord([{ id: guildId, name: 'Test Guild', permissions: '0' }]);
+
+    await initAction({
+      json: true,
+      client: 'codex',
+      discoverGuilds: true,
+      toolSurface: 'progressive',
+    });
+
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data?.allowedGuilds).toEqual([guildId]);
+    expect(parsed.data?.content).toContain(`ALLOWED_GUILDS = "${guildId}"`);
+    expect(parsed.data?.content).toContain('env_vars = ["DISCORD_TOKEN"]');
+    expect(parsed.data?.content).not.toContain('x'.repeat(60));
+    expect(parsed.data?.discord?.bot).toEqual({ id: BOT.id, username: BOT.username });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: expect.objectContaining({ Authorization: VALID_TOKEN }),
+    });
+  });
+
+  it('fails closed when a non-interactive bot can see multiple guilds', async () => {
+    process.env.DISCORD_TOKEN = VALID_TOKEN;
+    stubDiscord([
+      { id: '111122223333444455', name: 'Guild One', permissions: '0' },
+      { id: '999000999000999000', name: 'Guild Two', permissions: '0' },
+    ]);
+
+    await initAction({ json: true, client: 'codex', discoverGuilds: true });
+
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(process.exitCode).toBe(2);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.summary).toContain('multiple guilds');
+    expect(parsed.errors?.[0]).toContain('--allowed-guilds');
+  });
+
+  it('rejects an explicit guild that is not visible to the bot', async () => {
+    process.env.DISCORD_TOKEN = VALID_TOKEN;
+    stubDiscord([{ id: '111122223333444455', name: 'Visible', permissions: '0' }]);
+
+    await initAction({
+      json: true,
+      client: 'codex',
+      discoverGuilds: true,
+      allowedGuilds: '999000999000999000',
+    });
+
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(process.exitCode).toBe(2);
+    expect(parsed.errors?.[0]).toContain('not visible');
+  });
+
+  it('generates the allowlist but warns when the bot has Administrator', async () => {
+    process.env.DISCORD_TOKEN = VALID_TOKEN;
+    const guildId = '111122223333444455';
+    stubDiscord([{ id: guildId, name: 'Admin Guild', permissions: '8' }]);
+
+    await initAction({ json: true, client: 'codex', discoverGuilds: true });
+
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(process.exitCode).toBe(1);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.data?.allowedGuilds).toEqual([guildId]);
+    expect(parsed.warnings?.[0]).toContain('Administrator');
+  });
+
+  it('requires an environment token before making live requests', async () => {
+    delete process.env.DISCORD_TOKEN;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await initAction({ json: true, client: 'codex', discoverGuilds: true });
+
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(process.exitCode).toBe(2);
+    expect(parsed.errors?.[0]).toContain('DISCORD_TOKEN');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

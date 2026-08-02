@@ -11,6 +11,14 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Added `discord-mcp init --discover-guilds`, a caller-owned setup flow that
+  verifies `DISCORD_TOKEN` against Discord, paginates the bot's visible guilds,
+  selects or validates an explicit allowlist, and injects `ALLOWED_GUILDS`
+  without persisting the token by default. Ambiguous non-interactive selection
+  fails closed, and selected guilds that grant `Administrator` emit a warning.
+- Removed the visible interactive token prompt from `init`; a token enters a
+  generated snippet only through the explicit, discouraged `--token` flag.
+
 ## v0.14.2 - Guild-scoped safety boundary
 
 Released **2026-08-03**.
