@@ -14,6 +14,7 @@ import {
   DiscordServerError,
   DryRunPreview,
   GuildNotAllowedError,
+  GuildScopeUnresolvedError,
   ScopeRejectedError,
   ValidationError,
 } from './index.js';
@@ -361,6 +362,19 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
         `**Guild Restricted**: \`${e.guildId}\` not in allowlist.\n\n` +
         `**Recovery**: ${e.recoveryHint}`,
       structured: { guild_id: e.guildId },
+    });
+  }
+
+  if (e instanceof GuildScopeUnresolvedError) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'use a resource in an allowed guild',
+      text:
+        `**Guild Scope Unresolved**: could not prove that \`${e.resource}\` belongs to an allowed guild.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: { resource: e.resource },
     });
   }
 

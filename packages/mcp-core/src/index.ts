@@ -35,6 +35,7 @@ export {
   DiscordServerErrorImpl,
   DryRunPreview,
   GuildNotAllowedError,
+  GuildScopeUnresolvedError,
   InternalError,
   ScopeRejectedError,
   ValidationError,

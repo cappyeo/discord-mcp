@@ -15,6 +15,14 @@ const ConfigSchema = z.object({
     .string()
     .regex(/^\d{17,20}$/, 'DISCORD_DEFAULT_GUILD_ID must be a 17-20 digit Discord snowflake')
     .optional(),
+  ALLOWED_GUILDS: z
+    .string()
+    .trim()
+    .regex(
+      /^\d{17,20}(?:\s*,\s*\d{17,20})*$/,
+      'ALLOWED_GUILDS must be a comma-separated list of 17-20 digit Discord snowflakes',
+    )
+    .optional(),
   // Required by `serve --http`, but optional for the default local stdio transport.
   DISCORD_MCP_ACCESS_TOKEN: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -112,6 +120,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
       .join('\n');
     throw new Error(`Invalid configuration:\n${issues}`);
+  }
+  if (
+    parsed.data.ALLOWED_GUILDS !== undefined &&
+    parsed.data.DISCORD_DEFAULT_GUILD_ID !== undefined &&
+    !parsed.data.ALLOWED_GUILDS.split(',')
+      .map((guildId) => guildId.trim())
+      .includes(parsed.data.DISCORD_DEFAULT_GUILD_ID)
+  ) {
+    throw new Error(
+      'Invalid configuration:\n  - DISCORD_DEFAULT_GUILD_ID: must be included in ALLOWED_GUILDS',
+    );
   }
   return parsed.data;
 }

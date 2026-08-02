@@ -8,6 +8,7 @@ export {
   DiscordRateLimitError,
   DryRunPreview,
   GuildNotAllowedError,
+  GuildScopeUnresolvedError,
   ScopeRejectedError,
   ValidationError,
   type ValidationIssue,

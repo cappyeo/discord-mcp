@@ -32,8 +32,8 @@ audit is on by default but can be tuned per-sink.
 
 For the exact environment-variable contract (tokens, category allowlist, dry-run
 mode), see [Environment variables](/discord-mcp/reference/config/).
-Note that there is **no guild allowlist** - `ALLOWED_GUILDS` is not read by
-any code path and per-guild restriction is deferred post-1.0.
+For a bot installed in more than one Discord server, set `ALLOWED_GUILDS` so
+discord-mcp verifies the target server before executing guild-scoped calls.
 
 ## Looking for something else?
 

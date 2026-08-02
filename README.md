@@ -37,8 +37,9 @@ Requires Node.js 22.12 or later.
 # Install the MCP server
 npm install -g @discord-mcp/cli
 
-# Generate a client-specific configuration fragment for Codex
-discord-mcp init --client codex
+# Generate a Codex fragment restricted to your Discord server
+discord-mcp init --client codex --tool-surface progressive \
+  --allowed-guilds 111122223333444455
 
 # Verify your Discord token and local configuration
 export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
@@ -64,6 +65,16 @@ whose annotations match the selected tool's risk. `MCP_CATEGORIES` remains the
 authorization boundary; progressive mode does not bypass confirmation,
 dry-run, audit, or other middleware.
 
+Set `ALLOWED_GUILDS` to a comma-separated list of server IDs to enforce the
+bot's guild boundary inside discord-mcp. Direct guild calls use a constant-time
+check; channel, thread, webhook, invite, and guild-sticker routes are resolved
+before execution and cached. Global writes and opaque interaction-token routes
+that cannot prove a guild are unavailable while the allowlist is active. The
+resolution caches are bounded to prevent untrusted ID churn from growing memory
+without limit.
+`users_list_current_user_guilds` remains a read-only discovery tool; seeing a
+guild in that result does not authorize operations against it.
+
 To run without a global install:
 
 ```bash
@@ -85,7 +96,7 @@ The endpoint is `/mcp`; send `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>`.
 It negotiates stable MCP `2026-07-28` while retaining stateless compatibility
 for 2025-era Streamable HTTP clients. Every authenticated client shares the
 deployment's caller-owned Discord bot identity, so use least-privilege Discord
-roles and a narrow `MCP_CATEGORIES` allowlist. The
+roles plus narrow `ALLOWED_GUILDS` and `MCP_CATEGORIES` allowlists. The
 [OpenAI remote MCP guide](https://cappyeo.github.io/discord-mcp/operations/openai/)
 covers HTTPS, Responses API `tool_search`/`defer_loading`, Codex progressive
 discovery, and the current OAuth boundary.
@@ -104,7 +115,7 @@ Explore the complete, generated [tool reference](https://cappyeo.github.io/disco
 
 ## Built for production use
 
-- **Safety controls** - destructive operations require explicit confirmation and can be governed by category-level controls.
+- **Safety controls** - destructive operations require explicit confirmation; guild and category allowlists constrain the bot's blast radius server-side.
 - **Reliable Discord access** - retries, timeouts, rate-limit handling, and circuit breaking protect agent workflows from transient API failures.
 - **Observability** - OpenTelemetry traces and metrics, structured logs, and audit events make operations inspectable.
 - **Typed contracts** - every tool is schema-defined; public core exports, CLI flags, configuration variables, and tool metadata are regression-tested.
@@ -155,7 +166,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.14.1**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.14.2**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](docs/v1.0.0-readiness.md) before depending on an unstable surface.
 
 ## License
 

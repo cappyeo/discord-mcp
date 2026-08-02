@@ -1,6 +1,6 @@
 ---
 title: Access and scope
-description: Configure credentials, a default guild, the tool-category allowlist, and progressive tool discovery.
+description: Configure credentials, the guild boundary, category authorization, and progressive tool discovery.
 ---
 
 Use these settings to give the server the credential and the smallest tool surface
@@ -43,6 +43,38 @@ For TLS, reverse-proxy, Responses API, and Codex setup, see
 This does not infer a guild from a channel, user, webhook, or message ID, and it
 does not affect tools without a top-level `guild_id` input.
 
+When `ALLOWED_GUILDS` is also set, the default guild must appear in that
+allowlist or startup fails.
+
+## Guild boundary
+
+### `ALLOWED_GUILDS`
+
+- **Type:** comma-separated Discord snowflakes with 17–20 digits
+- **Default:** unset, preserving access to every guild visible to the bot
+- **Use:** Enforces which Discord servers this deployment may operate against.
+- **Example:** `ALLOWED_GUILDS=111122223333444455,999000999000999000`
+
+The boundary is enforced server-side after input validation. A direct
+`guild_id` is checked without a Discord request. Channel, thread, webhook, and
+invite IDs are resolved to a guild before the actual operation; successful
+resolutions are kept in bounded caches because those resources cannot move
+between guilds.
+Guild stickers are checked after lookup, while standard global stickers remain
+readable.
+
+When the boundary is active, global writes and interaction-token routes whose
+guild cannot be proven before execution are omitted from `tools/list` and
+rejected on direct calls with `GUILD_SCOPE_UNRESOLVED`. A known but disallowed
+guild returns `GUILD_NOT_ALLOWED`. Pipeline steps and progressive dispatchers
+re-enter the same policy. Gateway subscriptions for guild, voice, and channel
+URIs are checked before registration.
+
+Global read-only discovery remains available, including
+`users_list_current_user_guilds`; its results do not extend the allowlist. If
+you need one of the intentionally blocked global writes, use a separate
+deployment whose scope is explicit instead of weakening a shared bot runtime.
+
 ## Tool scope
 
 ### `MCP_CATEGORIES`
@@ -72,6 +104,7 @@ sent through the wrong risk route. This substantially reduces the initial
 `tools/list` payload for clients without native deferred MCP loading.
 
 This setting is not an authorization control. Search only returns tools allowed
-by `MCP_CATEGORIES`, and every dispatched call still passes validation,
-category, confirmation, dry-run, audit, and resilience middleware. Keep
-`MCP_CATEGORIES` narrow even when progressive discovery is enabled.
+by `ALLOWED_GUILDS` and `MCP_CATEGORIES`, and every dispatched call still passes
+validation, guild scope, category, confirmation, dry-run, audit, and resilience
+middleware. Keep both allowlists narrow even when progressive discovery is
+enabled.

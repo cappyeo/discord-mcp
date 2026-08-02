@@ -140,7 +140,7 @@ function loadConfig(env: NodeJS.ProcessEnv = process.env): Config
 
 The parser validates `DISCORD_TOKEN`, coerces supported booleans and numbers,
 and fills declared defaults. Fields whose schema is optional remain optional;
-for example `DISCORD_DEFAULT_GUILD_ID`, `MCP_CATEGORIES`,
+for example `DISCORD_DEFAULT_GUILD_ID`, `ALLOWED_GUILDS`, `MCP_CATEGORIES`,
 `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, and
 `MCP_AUDIT_FILE` can be absent.
 
@@ -153,7 +153,7 @@ All custom errors extend `DiscordError`. Current stable codes include:
 
 | Family | Codes |
 | --- | --- |
-| Client | `DISCORD_PERMISSION_DENIED`, `DISCORD_RATE_LIMITED`, `DISCORD_NOT_FOUND`, `VALIDATION_FAILED`, `DISCORD_AUTH_INVALID`, `DISCORD_CLOUDFLARE_BLOCKED`, `SCOPE_REJECTED`, `GUILD_NOT_ALLOWED`, `DRY_RUN_PREVIEW`, `CANCELLED` |
+| Client | `DISCORD_PERMISSION_DENIED`, `DISCORD_RATE_LIMITED`, `DISCORD_NOT_FOUND`, `VALIDATION_FAILED`, `DISCORD_AUTH_INVALID`, `DISCORD_CLOUDFLARE_BLOCKED`, `SCOPE_REJECTED`, `GUILD_NOT_ALLOWED`, `GUILD_SCOPE_UNRESOLVED`, `DRY_RUN_PREVIEW`, `CANCELLED` |
 | Server | `DISCORD_SERVER_ERROR`, `CIRCUIT_OPEN`, `BULKHEAD_FULL`, `INTERNAL_ERROR` |
 
 `formatErrorForUser` guarantees `code`, `retriable`, and `category` in

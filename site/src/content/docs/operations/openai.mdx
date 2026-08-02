@@ -109,6 +109,7 @@ another MCP host without native tool search, set this in the server environment:
 ```toml
 [mcp_servers.discord.env]
 MCP_TOOL_SURFACE = "progressive"
+ALLOWED_GUILDS = "111122223333444455"
 ```
 
 The model will see `mcp_tools_search` plus `mcp_tools_read`, `mcp_tools_write`,
@@ -132,7 +133,7 @@ for caller-native deferred loading.
 
 1. Use HTTPS and redact `Authorization` at the proxy.
 2. Store both tokens in a secret manager, not a checked-in `.env` file.
-3. Start with a narrow `MCP_CATEGORIES` allowlist and Discord test guild.
+3. Start with narrow `ALLOWED_GUILDS` and `MCP_CATEGORIES` allowlists plus a Discord test guild.
 4. Keep OpenAI tool approval on until the workflow has been reviewed.
 5. Configure an audit sink and monitor its `transport: "http"` events.
 

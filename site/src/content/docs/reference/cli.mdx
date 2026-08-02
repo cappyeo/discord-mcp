@@ -203,6 +203,7 @@ discord-mcp smoke --confirm-write --guild-id 111122223333444455 --json
 ```bash
 discord-mcp init [--client <id>] [--token <token>] [--gateway]
                  [--tool-surface <full|progressive>]
+                 [--allowed-guilds <id,id,...>]
                  [--output <path>] [--force] [--json]
 ```
 
@@ -215,6 +216,7 @@ to stdout or writes to `--output <path>`.
 | `--token <token>`| string  | `${env:DISCORD_TOKEN}` placeholder                   | Discord bot token. **Warning**: writes the value into the snippet unredacted. Omit to leave the env-var interpolation placeholder so users don't accidentally commit a real secret.                                  |
 | `--gateway`      | boolean | `false`                                              | Append `--gateway` to the generated snippet so the server enables Gateway subscriptions on boot.                                                                                                                     |
 | `--tool-surface <mode>` | string | `full`                                        | Set `progressive` to add `MCP_TOOL_SURFACE=progressive` to the generated client snippet; useful for hosts without native deferred MCP loading.                                                                        |
+| `--allowed-guilds <ids>` | string | unset                                       | Add a normalized `ALLOWED_GUILDS` server-side guild allowlist to the generated client snippet. Values must be comma-separated Discord snowflake IDs.                                                                  |
 | `--output <path>`| string  | (stdout)                                             | Write the snippet to a file instead of stdout.                                                                                                                                                                        |
 | `--force`        | boolean | `false`                                              | Overwrite the `--output` path if it already exists. Required to overwrite.                                                                                                                                            |
 | `--json`         | boolean | `false`                                              | Emit machine-readable JSON instead of pretty output. The snippet body is delivered under `data.content`.                                                                                                              |
@@ -230,6 +232,10 @@ discord-mcp init --client claude-desktop
 
 # Non-interactive: print a Codex TOML fragment that forwards DISCORD_TOKEN.
 discord-mcp init --client codex
+
+# Recommended: progressive Codex surface restricted to one Discord server.
+discord-mcp init --client codex --tool-surface progressive \
+  --allowed-guilds 111122223333444455
 
 # Bake a real token into the snippet (NOT recommended for committed files).
 discord-mcp init --client cursor --token "Bot.xxx.yyy.zzz"

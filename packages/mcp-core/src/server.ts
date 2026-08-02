@@ -18,6 +18,13 @@ import {
 } from './middleware/category.js';
 import { compose, type MiddlewareContext, type ToolMiddleware } from './middleware/compose.js';
 import { defaultGuildMiddleware } from './middleware/default-guild.js';
+import {
+  GuildScopePolicy,
+  guildAllowlistMiddleware,
+  hasVerifiableGuildScope,
+  isToolVisibleWithGuildAllowlist,
+  parseGuildAllowlist,
+} from './middleware/guild-allowlist.js';
 import { preconditionMiddleware } from './middleware/precondition.js';
 import { telemetryMiddleware } from './middleware/telemetry.js';
 import { validateMiddleware } from './middleware/validate.js';
@@ -348,11 +355,13 @@ function listVisibleTools(
   toolStore: ToolStore,
   categoryAllowlist: ReadonlySet<string> | null,
   hasDefaultGuild: boolean,
+  guildAllowlistEnabled: boolean,
 ): McpTool[] {
   const catalog = getToolListCatalog(toolStore);
   const tools = hasDefaultGuild ? catalog.defaultGuild : catalog.requiredGuild;
-  if (categoryAllowlist === null) return tools;
   return tools.filter((tool) => {
+    if (!isToolVisibleWithGuildAllowlist(tool.name, guildAllowlistEnabled)) return false;
+    if (categoryAllowlist === null) return true;
     const category = catalog.categories.get(tool.name)!;
     return categoryAllowlist.has(category) || ALWAYS_ALLOWED_CATEGORIES.has(category);
   });
@@ -1168,6 +1177,25 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       );
     }
   }
+  const guildScopePolicy = new GuildScopePolicy(
+    parseGuildAllowlist(deps.config.ALLOWED_GUILDS),
+    deps.rest,
+  );
+  if (guildScopePolicy.enabled) {
+    const uncoveredWrites = [...toolStore.values()]
+      .filter(
+        (tool) =>
+          tool.annotations.readOnlyHint !== true &&
+          !hasVerifiableGuildScope(tool.name, tool.inputSchema),
+      )
+      .map((tool) => tool.name)
+      .sort();
+    if (uncoveredWrites.length > 0) {
+      throw new Error(
+        `ALLOWED_GUILDS cannot safely scope write tools: ${uncoveredWrites.join(', ')}`,
+      );
+    }
+  }
 
   // --- Audit sink (Plan 8 Phase E) ---
   // Constructed before middleware so it's the same instance both wired
@@ -1180,7 +1208,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   //   - telemetry: OUTERMOST so spans cover the entire call (including
   //     validation/precondition errors and middleware overhead).
   //   - default guild: fills an omitted top-level guild_id before validation.
-  //   - validate / precondition: argument and policy gates.
+  //   - validate / guild allowlist / precondition: argument and policy gates.
   //   - audit: INNERMOST per plan §10 critical rule 2 - only fires for
   //     actually-attempted operations. Blocked operations are visible
   //     in telemetry already; audit shouldn't generate noise for them.
@@ -1190,6 +1218,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     telemetryMiddleware(),
     defaultGuildMiddleware(deps.config.DISCORD_DEFAULT_GUILD_ID),
     validateMiddleware(),
+    guildAllowlistMiddleware(guildScopePolicy),
     categoryMiddleware(categoryAllowlist),
     preconditionMiddleware(preconditionStore),
     auditMiddleware(auditSink),
@@ -1201,6 +1230,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       toolStore,
       categoryAllowlist,
       deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined,
+      guildScopePolicy.enabled,
     );
   const surfaceInstructions =
     toolSurface === 'progressive'
@@ -1228,6 +1258,13 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       // short and true - it is read by the model before any tools/list.
       instructions: [
         ...surfaceInstructions,
+        ...(guildScopePolicy.enabled
+          ? [
+              'ALLOWED_GUILDS is active. Guild-scoped calls are verified server-side;',
+              'global writes and opaque interaction-token calls are unavailable when their',
+              'guild cannot be proven before execution.',
+            ]
+          : []),
         'Destructive tools return DRY_RUN_PREVIEW unless the server runs with',
         'MCP_DRY_RUN=false AND the call passes __confirm:true.',
         'Errors return a structured CallToolResult with code/retriable/recovery_hint.',
@@ -1407,8 +1444,19 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   const subscriptions = new SubscriptionRegistry();
 
   server.setRequestHandler('resources/subscribe', async (req) => {
-    subscriptions.subscribe(req.params.uri);
-    return {};
+    try {
+      await guildScopePolicy.authorizeSubscription(req.params.uri);
+      subscriptions.subscribe(req.params.uri);
+      return {};
+    } catch (error) {
+      throw new Error(
+        (
+          formatErrorForUser(error, { toolName: 'resources/subscribe', transport }).content[0] as {
+            text?: string;
+          }
+        )?.text ?? 'Resource subscription rejected',
+      );
+    }
   });
 
   server.setRequestHandler('resources/unsubscribe', async (req) => {

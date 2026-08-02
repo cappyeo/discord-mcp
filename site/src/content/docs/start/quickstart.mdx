@@ -84,8 +84,8 @@ first prove the connection with a read-only request, then send one message to a 
 
 <Aside type="caution">
 `messages_send` is a write, but it is not destructive and is not confirmation-gated. It can
-execute on the first call. Keep onboarding inside a test server and grant the bot only the
-Discord permissions it needs.
+execute on the first call. Keep onboarding inside a test server, set `ALLOWED_GUILDS` to that
+server ID, and grant the bot only the Discord permissions it needs.
 </Aside>
 
 <TutorialBox>

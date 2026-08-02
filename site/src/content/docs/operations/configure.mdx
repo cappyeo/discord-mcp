@@ -14,15 +14,18 @@ then add controls for the behavior you need.
 
 ## Start with a safe baseline
 
-Set the bot token and leave the remaining controls at their defaults:
+Set the bot token and restrict the deployment to the Discord server IDs it is
+supposed to control:
 
 ```bash
 DISCORD_TOKEN=your-discord-bot-token
+ALLOWED_GUILDS=111122223333444455
 ```
 
 This starts the server with REST-only transport, `info` logging, retry, circuit
 breaking, and audit logging enabled. Destructive tools stay in dry-run mode until
-you explicitly opt in.
+you explicitly opt in. `ALLOWED_GUILDS` is optional for backward compatibility,
+but strongly recommended whenever the bot can see more than one server.
 
 <Aside type="caution">
 Setting `MCP_DRY_RUN=false` enables execution only for the 29 confirmation-gated
@@ -34,7 +37,7 @@ safety check.
 
 <DocsCardGrid
   links={[
-    { title: 'Limit access', href: '/discord-mcp/reference/config/access/', description: 'Set a default guild or allow only the tool categories your agent needs.' },
+    { title: 'Limit access', href: '/discord-mcp/reference/config/access/', description: 'Allow only the guilds and tool categories your agent needs.' },
     { title: 'Control writes', href: '/discord-mcp/reference/config/safety/', description: 'Understand dry-run mode and make deliberate production changes.' },
     { title: 'Observe traffic', href: '/discord-mcp/reference/config/observability/', description: 'Export traces to an OTLP collector or inspect spans locally.' },
     { title: 'Tune reliability', href: '/discord-mcp/reference/config/resilience/', description: 'Adjust retry, timeout, circuit breaker, and concurrency limits.' },

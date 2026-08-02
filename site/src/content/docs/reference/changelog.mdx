@@ -11,6 +11,19 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+## v0.14.2 - Guild-scoped safety boundary
+
+Released **2026-08-03**.
+
+- Added `ALLOWED_GUILDS`, a server-side guild boundary that checks direct guild
+  IDs without network overhead and resolves channel, thread, webhook, invite,
+  and guild-sticker targets before execution. Resolutions are cached.
+- Calls with a known disallowed guild return `GUILD_NOT_ALLOWED`. Global writes,
+  interaction-token routes, and subscriptions whose guild cannot be proven fail
+  closed with `GUILD_SCOPE_UNRESOLVED`; unavailable tools are also hidden from
+  full and progressive discovery. Pipeline steps remain independently gated.
+- Added `discord-mcp init --allowed-guilds <ids>` for safe client snippets.
+
 ## v0.14.1 - Progressive loading and smoke verification
 
 Released **2026-08-03**.

@@ -242,6 +242,7 @@ describe('cli - init sub-command (Plan 9 Phase D)', () => {
     expect(out).toContain('--token');
     expect(out).toContain('--gateway');
     expect(out).toContain('--tool-surface');
+    expect(out).toContain('--allowed-guilds');
     expect(out).toContain('--output');
     expect(out).toContain('--force');
     expect(out).toContain('--json');

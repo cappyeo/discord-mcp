@@ -72,12 +72,15 @@ can remain in shell history and process inspection.
   <div slot="codex">
 
   ```bash
-  discord-mcp init --client codex
+  discord-mcp init --client codex --tool-surface progressive \
+    --allowed-guilds 111122223333444455
   ```
 
   Merge the TOML fragment into `~/.codex/config.toml`. It uses
   `env_vars = ["DISCORD_TOKEN"]`, so Codex forwards the token from its launch
-  environment instead of storing it in `config.toml`.
+  environment instead of storing it in `config.toml`. Replace the example
+  guild ID with your test server; the generated `ALLOWED_GUILDS` setting is a
+  server-side boundary, not merely a client-side filter.
 
   Start Codex from a terminal where the token is set:
 

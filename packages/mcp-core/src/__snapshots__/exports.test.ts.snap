@@ -26,6 +26,7 @@ exports[`public export surface > matches the frozen snapshot 1`] = `
   "FileAuditSink",
   "GuildId",
   "GuildNotAllowedError",
+  "GuildScopeUnresolvedError",
   "InternalError",
   "MessageId",
   "NoopAuditSink",

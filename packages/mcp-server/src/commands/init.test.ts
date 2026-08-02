@@ -87,6 +87,7 @@ interface InitJsonResult {
     instructions?: string;
     gateway?: boolean;
     toolSurface?: string;
+    allowedGuilds?: string[];
   };
 }
 
@@ -220,6 +221,27 @@ describe('initAction - explicit flags', () => {
     const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
     expect(snippet.mcpServers['discord-mcp'].env.MCP_TOOL_SURFACE).toBe('progressive');
     expect(parsed.data?.toolSurface).toBe('progressive');
+  });
+
+  it('adds a normalized server-side guild allowlist to the generated snippet', async () => {
+    await initAction({
+      json: true,
+      client: 'generic',
+      allowedGuilds: '111122223333444455, 999000999000999000',
+    });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    expect(snippet.mcpServers['discord-mcp'].env.ALLOWED_GUILDS).toBe(
+      '111122223333444455,999000999000999000',
+    );
+    expect(parsed.data?.allowedGuilds).toEqual(['111122223333444455', '999000999000999000']);
+  });
+
+  it('rejects malformed allowed guild IDs', async () => {
+    await initAction({ json: true, client: 'generic', allowedGuilds: '111122223333444455,bad' });
+    expect(process.exitCode).toBe(2);
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult & { errors?: string[] };
+    expect(parsed.errors?.[0]).toContain('--allowed-guilds');
   });
 
   it('rejects an unknown tool surface', async () => {

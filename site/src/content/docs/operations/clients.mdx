@@ -119,6 +119,8 @@ For every client and release:
 
 ## Server-side controls
 
+- `ALLOWED_GUILDS` verifies direct and indirectly resolved Discord guild targets,
+  and hides global writes whose guild cannot be proven before execution.
 - `MCP_CATEGORIES` limits which tool categories are advertised and callable.
 - `MCP_TOOL_SURFACE=progressive` advertises search plus risk-specific read,
   write, and destructive dispatchers instead of the full catalog; it does not

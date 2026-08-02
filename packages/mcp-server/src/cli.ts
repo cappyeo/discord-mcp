@@ -89,6 +89,10 @@ export function buildProgram(): Command {
       'Advertised tool surface (full|progressive). Default: full',
       'full',
     )
+    .option(
+      '--allowed-guilds <ids>',
+      'Comma-separated guild IDs enforced by the server (recommended for bot safety)',
+    )
     .option('--output <path>', 'Write the snippet to this path instead of stdout')
     .option('--force', 'Overwrite the --output path if it already exists')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
@@ -98,6 +102,7 @@ export function buildProgram(): Command {
         token?: string;
         gateway?: boolean;
         toolSurface?: string;
+        allowedGuilds?: string;
         output?: string;
         force?: boolean;
         json?: boolean;

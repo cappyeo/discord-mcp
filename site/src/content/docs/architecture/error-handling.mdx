@@ -57,7 +57,8 @@ DiscordError
 | `DISCORD_AUTH_INVALID` | client | no | Discord rejected the credential used by the route. |
 | `DISCORD_CLOUDFLARE_BLOCKED` | client | yes | Discord temporarily blocked the caller IP. |
 | `SCOPE_REJECTED` | client | no | The tool's category is not enabled. |
-| `GUILD_NOT_ALLOWED` | client | no | Reserved; no runtime allowlist currently constructs it. |
+| `GUILD_NOT_ALLOWED` | client | no | The resolved guild is not in `ALLOWED_GUILDS`. |
+| `GUILD_SCOPE_UNRESOLVED` | client | no | An active guild allowlist cannot prove the target guild before execution. |
 | `DRY_RUN_PREVIEW` | client | no | A confirm-gated tool was previewed, not executed. |
 | `CANCELLED` | client | no | The MCP client cancelled the call. |
 | `DISCORD_SERVER_ERROR` | server | yes | Discord returned an upstream server failure. |

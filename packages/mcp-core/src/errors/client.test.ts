@@ -8,6 +8,7 @@ import {
   DiscordRateLimitError,
   DryRunPreview,
   GuildNotAllowedError,
+  GuildScopeUnresolvedError,
   ScopeRejectedError,
   ValidationError,
 } from './client.js';
@@ -127,6 +128,16 @@ describe('GuildNotAllowedError', () => {
     expect(e.code).toBe('GUILD_NOT_ALLOWED');
     expect(e.retriable).toBe(false);
     expect(e.guildId).toBe('1234');
+    expect(e.recoveryHint).toContain('ALLOWED_GUILDS');
+  });
+});
+
+describe('GuildScopeUnresolvedError', () => {
+  it('fails closed when a resource cannot be tied to an allowed guild', () => {
+    const e = new GuildScopeUnresolvedError('tool interactions_create_response');
+    expect(e.code).toBe('GUILD_SCOPE_UNRESOLVED');
+    expect(e.retriable).toBe(false);
+    expect(e.resource).toBe('tool interactions_create_response');
     expect(e.recoveryHint).toContain('ALLOWED_GUILDS');
   });
 });

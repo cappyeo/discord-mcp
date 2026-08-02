@@ -11,6 +11,7 @@ import {
   DiscordRateLimitError,
   DryRunPreview,
   GuildNotAllowedError,
+  GuildScopeUnresolvedError,
   ScopeRejectedError,
   ValidationError,
 } from './index.js';
@@ -123,6 +124,17 @@ describe('formatErrorForUser', () => {
   it('formats GuildNotAllowedError', () => {
     const r = formatErrorForUser(new GuildNotAllowedError('1234'), stdio);
     expect(r.structuredContent).toMatchObject({ code: 'GUILD_NOT_ALLOWED', guild_id: '1234' });
+  });
+
+  it('formats GuildScopeUnresolvedError', () => {
+    const r = formatErrorForUser(
+      new GuildScopeUnresolvedError('tool interactions_create_response'),
+      stdio,
+    );
+    expect(r.structuredContent).toMatchObject({
+      code: 'GUILD_SCOPE_UNRESOLVED',
+      resource: 'tool interactions_create_response',
+    });
   });
 
   it('formats DryRunPreview with embedded JSON preview', () => {

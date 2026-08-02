@@ -15,14 +15,15 @@
  *      false by default).
  *   4. Validate the advertised tool surface (`full` by default, or the
  *      opt-in `progressive` search + risk-specific dispatcher surface).
- *   5. Pick a serverPath/serverArgs strategy. We use the current Node
+ *   5. Validate and normalize the optional server-side guild allowlist.
+ *   6. Pick a serverPath/serverArgs strategy. We use the current Node
  *      binary + the resolved CLI script - works for any installation
  *      (workspace, global npm, npx) at the cost of an absolute path
  *      that may need editing if the user later moves the project.
  *      The output explicitly tells the user how to switch to
  *      `npx @discord-mcp/cli` for portable distribution.
- *   6. Generate the snippet via the chosen ClientGenerator.
- *   7. Either write to `--output <path>` (with `--force` for overwrite
+ *   7. Generate the snippet via the chosen ClientGenerator.
+ *   8. Either write to `--output <path>` (with `--force` for overwrite
  *      protection) or print to stdout / structured payload.
  *
  * Token redaction: in pretty mode the snippet text contains whatever
@@ -44,6 +45,7 @@ export interface InitOptions {
   force?: boolean;
   gateway?: boolean;
   toolSurface?: string;
+  allowedGuilds?: string;
   json?: boolean;
 }
 
@@ -162,22 +164,43 @@ export async function initAction(opts: InitOptions): Promise<void> {
     return;
   }
 
-  // 5. Resolve server path. We default to `node <abs cli.js>` because
+  const allowedGuilds = opts.allowedGuilds?.split(',').map((guildId) => guildId.trim());
+  if (
+    allowedGuilds !== undefined &&
+    (allowedGuilds.length === 0 || allowedGuilds.some((guildId) => !/^\d{17,20}$/.test(guildId)))
+  ) {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: 'invalid allowed guild list',
+        errors: ['--allowed-guilds must be a comma-separated list of Discord snowflake IDs'],
+      },
+      asJson,
+    );
+    return;
+  }
+
+  // 6. Resolve server path. We default to `node <abs cli.js>` because
   //    this works for every install (workspace, global, npx-cached) at
   //    the cost of being installation-specific.
   const serverPath = process.execPath;
   const serverArgs: string[] = [resolveCliPath()];
 
-  // 6. Generate snippet.
+  // 7. Generate snippet.
+  const envVars: Record<string, string> = {};
+  if (toolSurface === 'progressive') envVars.MCP_TOOL_SURFACE = 'progressive';
+  if (allowedGuilds !== undefined) envVars.ALLOWED_GUILDS = allowedGuilds.join(',');
+
   const snippet = generator.generate({
     serverPath,
     serverArgs,
     discordToken: token,
     gateway,
-    ...(toolSurface === 'progressive' ? { envVars: { MCP_TOOL_SURFACE: 'progressive' } } : {}),
+    ...(Object.keys(envVars).length > 0 ? { envVars } : {}),
   });
 
-  // 7. Write or print.
+  // 8. Write or print.
   let writtenTo: string | undefined;
   if (opts.output !== undefined) {
     if (existsSync(opts.output) && opts.force !== true) {
@@ -215,6 +238,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
         instructions: snippet.instructions,
         gateway,
         toolSurface,
+        allowedGuilds: allowedGuilds ?? [],
       },
       details:
         writtenTo !== undefined

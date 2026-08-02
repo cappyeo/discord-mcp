@@ -44,6 +44,29 @@ describe('loadConfig', () => {
     ).toThrow(/DISCORD_DEFAULT_GUILD_ID/);
   });
 
+  it('validates ALLOWED_GUILDS and requires the default guild to be allowed', () => {
+    const configured = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      ALLOWED_GUILDS: '111122223333444455, 999000999000999000',
+      DISCORD_DEFAULT_GUILD_ID: '999000999000999000',
+    } as NodeJS.ProcessEnv);
+    expect(configured.ALLOWED_GUILDS).toBe('111122223333444455, 999000999000999000');
+
+    for (const value of ['', 'not-a-snowflake', '111122223333444455, bad']) {
+      expect(() =>
+        loadConfig({ DISCORD_TOKEN: VALID_TOKEN, ALLOWED_GUILDS: value } as NodeJS.ProcessEnv),
+      ).toThrow(/ALLOWED_GUILDS/);
+    }
+
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        ALLOWED_GUILDS: '111122223333444455',
+        DISCORD_DEFAULT_GUILD_ID: '999000999000999000',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/DISCORD_DEFAULT_GUILD_ID/);
+  });
+
   describe('OpenTelemetry fields (Plan 8 Phase A)', () => {
     it('OTEL_ENABLED defaults to false', () => {
       const c = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);

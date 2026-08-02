@@ -99,6 +99,16 @@ export class GuildNotAllowedError extends DiscordClientError {
   }
 }
 
+export class GuildScopeUnresolvedError extends DiscordClientError {
+  public readonly code = 'GUILD_SCOPE_UNRESOLVED';
+  public readonly retriable = false;
+  public constructor(public readonly resource: string) {
+    super(`Cannot prove that ${resource} belongs to an allowed guild`);
+    this.recoveryHint =
+      'Use a guild-scoped tool or resource whose guild can be verified, or unset ALLOWED_GUILDS';
+  }
+}
+
 export class DryRunPreview extends DiscordClientError {
   public readonly code = 'DRY_RUN_PREVIEW';
   public readonly retriable = false;
