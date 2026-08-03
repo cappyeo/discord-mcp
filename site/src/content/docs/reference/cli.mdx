@@ -164,9 +164,10 @@ or ambiguous launchers are marked caller-managed and left alone.
 ```bash
 discord-mcp smoke [--profile <name>] [--json]
 discord-mcp smoke --confirm-write [--profile <name>] [--guild-id <id>] [--json]
+discord-mcp smoke --confirm-write --confirm-template-lifecycle [--profile <name>] [--guild-id <id>] [--json]
 ```
 
-Verify the real MCP-to-Discord path without loading all 193 tool schemas into an
+Verify the real MCP-to-Discord path without loading all 201 tool schemas into an
 AI model. The default run is read-only: it starts an in-memory MCP client/server
 pair, validates the bot identity, and lists the guilds visible to the bot.
 
@@ -177,9 +178,16 @@ The command enables destructive execution only inside its own process and still
 passes `__confirm:true` to both delete calls. It does not change the environment
 or configuration used by the long-running server.
 
+`--confirm-template-lifecycle` extends the write smoke with a temporary native
+Guild Template: create, inspect, introduce one temporary channel drift, detect
+that drift, sync the template, prove the drift is clean, then delete the
+template. It is deliberately rejected without `--confirm-write`; it needs
+`MANAGE_GUILD` in addition to the normal write-smoke permissions.
+
 | Flag                 | Type    | Default     | Description                                                                                                      |
 | -------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | `--confirm-write`    | boolean | `false`     | Execute the self-cleaning create/send/edit/delete lifecycle. Without it, the command is read-only.               |
+| `--confirm-template-lifecycle` | boolean | `false` | Extend a confirmed write smoke with a self-cleaning Guild Template create/inspect/diff/sync/delete lifecycle. Requires `--confirm-write`. |
 | `--guild-id <id>`    | string  | sole guild  | Select the write target. Required when the bot can see multiple guilds; the ID must already be visible to it.    |
 | `--json`             | boolean | `false`     | Emit the shared machine-readable result envelope, including step and cleanup state.                              |
 | `--profile <name>`   | string  | unset       | Activate a saved profile before opening the in-memory MCP session.                                               |
@@ -203,6 +211,9 @@ discord-mcp smoke --confirm-write
 
 # The bot can see multiple guilds - make the target explicit.
 discord-mcp smoke --confirm-write --guild-id 111122223333444455
+
+# Prove the native Guild Template lifecycle on a disposable test guild.
+discord-mcp smoke --confirm-write --confirm-template-lifecycle --guild-id 111122223333444455
 
 # CI or agent-readable evidence.
 discord-mcp smoke --confirm-write --guild-id 111122223333444455 --json
@@ -323,7 +334,7 @@ discord-mcp update --profile devbot
 discord-mcp update --profile devbot --apply
 
 # First use from a launcher pinned before v0.14.7.
-npx --yes @discord-mcp/cli@0.15.0 update --profile devbot --apply
+npx --yes @discord-mcp/cli@0.16.0 update --profile devbot --apply
 ```
 
 `update` never uses `@latest` in the generated launcher and never installs a

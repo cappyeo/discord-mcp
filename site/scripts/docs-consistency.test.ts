@@ -4,7 +4,7 @@
  *
  * This page documents the product's load-bearing safety primitive. It drifted
  * for twelve releases claiming "roughly 70 tools" gated by `idempotent: false`
- * while the real mechanism is an explicit per-tool opt-in covering 29. An
+ * while the real mechanism is an explicit per-tool opt-in covering 30. An
  * operator reading the stale copy would ship believing nothing could mutate
  * Discord without confirmation.
  */

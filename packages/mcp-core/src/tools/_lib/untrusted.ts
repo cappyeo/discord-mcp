@@ -6,6 +6,7 @@ export type UntrustedKind =
   | 'webhook'
   | 'username'
   | 'channel_topic'
+  | 'template'
   | 'audit_reason';
 
 function nonce(): string {

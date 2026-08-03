@@ -33,6 +33,7 @@ export interface ActivityContext extends ProfileLocationOptions {
   readonly command: ActivityCommand;
   readonly online?: boolean;
   readonly confirmWrite?: boolean;
+  readonly confirmTemplateLifecycle?: boolean;
 }
 
 interface ActivitySession {
@@ -160,17 +161,25 @@ function doctorSignals(result: CommandResult, online: boolean): string[] {
   return [online ? 'online' : 'offline', ...statuses];
 }
 
-function smokeSignals(result: CommandResult, confirmWrite: boolean): string[] {
+function smokeSignals(
+  result: CommandResult,
+  confirmWrite: boolean,
+  confirmTemplateLifecycle: boolean,
+): string[] {
   const data = result.data ?? {};
   const steps =
     data.steps !== null && typeof data.steps === 'object' && !Array.isArray(data.steps)
       ? (data.steps as Record<string, unknown>)
       : {};
   const signals = [confirmWrite ? 'write-confirmed' : 'read-only'];
+  if (confirmTemplateLifecycle) signals.push('template-lifecycle-confirmed');
   if (steps.identityRead === true) signals.push('identity-read');
   if (steps.guildsRead === true) signals.push('guilds-read');
   if (steps.channelCreated === true) signals.push('channel-created');
   if (steps.messageSent === true) signals.push('message-sent');
+  if (steps.templateCreated === true) signals.push('template-created');
+  if (steps.templateDriftObserved === true) signals.push('template-drift-observed');
+  if (steps.templateSynced === true) signals.push('template-synced');
   if (data.cleanupComplete === true) signals.push('cleanup-complete');
   return signals;
 }
@@ -178,7 +187,11 @@ function smokeSignals(result: CommandResult, confirmWrite: boolean): string[] {
 function signalsFor(context: ActivityContext, result: CommandResult): string[] {
   if (context.command === 'setup') return setupSignals(result);
   if (context.command === 'doctor') return doctorSignals(result, context.online === true);
-  return smokeSignals(result, context.confirmWrite === true);
+  return smokeSignals(
+    result,
+    context.confirmWrite === true,
+    context.confirmTemplateLifecycle === true,
+  );
 }
 
 /**

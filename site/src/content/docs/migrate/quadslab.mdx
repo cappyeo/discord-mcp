@@ -1,6 +1,6 @@
 ---
 title: From quadslab
-description: Migrate from @quadslab.io/discord-mcp's ~138-tool surface onto discord-mcp's 193-tool catalog.
+description: Migrate from @quadslab.io/discord-mcp's ~138-tool surface onto discord-mcp's 201-tool catalog.
 sidebar:
   order: 2
 ---
@@ -33,7 +33,7 @@ discord-mcp equivalents.
 - **Components V2 first-class** - dedicated `components_v2_send` and
   `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Explicit confirmation on selected high-risk tools** - the 29 tools
+- **Explicit confirmation on selected high-risk tools** - the 30 tools
   registered with `confirm_required` require `__confirm: true` and
   `MCP_DRY_RUN=false`. Other writes can execute immediately, so inspect each
   tool's confirmation badge rather than inferring safety from “destructive.”
@@ -149,6 +149,10 @@ maintained mapping table.
 | `list_automod_rules`      | `automod_list_rules`               | high       | -                                                                    |
 | `end_poll`                | `polls_end`                        | high       | -                                                                    |
 | `get_onboarding`          | `onboarding_get`                   | high       | -                                                                    |
+| `list_templates`          | `templates_list`                   | high       | -                                                                    |
+| `create_template`         | `templates_create`                 | high       | -                                                                    |
+| `delete_template`         | `templates_delete`                 | high       | Requires `__confirm:true` and `MCP_DRY_RUN=false`.                  |
+| `sync_template`           | `templates_sync`                   | high       | -                                                                    |
 
 Notable low-confidence entries (always re-read the per-entry `notes`):
 
@@ -164,16 +168,12 @@ Notable low-confidence entries (always re-read the per-entry `notes`):
 
 ## Gap analysis
 
-About 14 quadslab tools have no discord-mcp equivalent and surface in the
+About 10 quadslab tools have no discord-mcp equivalent and surface in the
 report's `unmapped` list. Reasons grouped by category:
 
 - **Presence (2)** - `set_bot_status`, `get_bot_info`. discord-mcp currently
   exposes neither presence tools nor a serve flag/environment setting for bot
   presence. Keep the old integration for this capability or omit it.
-- **Templates (4)** - `list_templates`, `create_template`, `delete_template`,
-  `sync_template`. Discord guild templates have no discord-mcp tool wrapper
-  today. Workaround: continue calling the REST endpoint directly, or omit the
-  feature.
 - **Helper composites (3)** - `clone_channel`, `copy_channel_permissions`,
   `check_permissions`. Compose from primitives:
   `channels_get` + `channels_create_guild_channel` + `channels_modify_permissions`.
@@ -185,7 +185,7 @@ report's `unmapped` list. Reasons grouped by category:
 ## See also
 
 - [Adapter authoring guide](/discord-mcp/migrate/authoring/)
-- [discord-mcp tools (193)](/discord-mcp/tools/)
+- [discord-mcp tools (201)](/discord-mcp/tools/)
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate)
 - [Architecture: gateway](/discord-mcp/architecture/gateway/) - for the
   resource subscription overlap.

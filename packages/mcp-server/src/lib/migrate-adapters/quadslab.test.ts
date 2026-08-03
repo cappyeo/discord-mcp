@@ -10,11 +10,10 @@
  *   messages.ts:  send_message, edit_message, get_messages          (3 mapped)
  *   channels.ts:  list_channels, create_text_channel                (2 mapped)
  *   presence.ts:  set_bot_status, get_bot_info                      (2 unmapped)
- *   templates.ts: list_templates                                    (1 unmapped)
+ *   templates.ts: list_templates                                    (1 mapped)
  *
- * Five of those have a discord-mcp equivalent in NAME_MAP; the other
- * three are intentional unmapped cases (presence is gateway-only;
- * templates has no discord-mcp tool at cutoff).
+ * Six of those have a discord-mcp equivalent in NAME_MAP; the other
+ * two are intentional unmapped cases (presence is gateway-only).
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -128,21 +127,22 @@ describe('quadslabAdapter - detect()', () => {
 });
 
 describe('quadslabAdapter - migrate()', () => {
-  it('reports 5 mapped tools and 3 unmapped tools against the fixture', async () => {
+  it('reports 6 mapped tools and 2 unmapped tools against the fixture', async () => {
     const result = await quadslabAdapter.migrate(FIXTURE_ROOT);
     expect(result.source).toBe('quadslab');
     expect(result.sourcePath).toBe(FIXTURE_ROOT);
     expect(result.manualReview.length).toBe(0);
-    // 8 fixture tools total: 5 in NAME_MAP, 3 intentional unmapped
-    // (presence + templates).
-    expect(result.mappedTools.length).toBe(5);
-    expect(result.unmappedTools.length).toBe(3);
+    // 8 fixture tools total: 6 in NAME_MAP, 2 intentional unmapped (presence).
+    expect(result.mappedTools.length).toBe(6);
+    expect(result.unmappedTools.length).toBe(2);
     expect(result.unmappedTools).toContain('set_bot_status');
     expect(result.unmappedTools).toContain('get_bot_info');
-    expect(result.unmappedTools).toContain('list_templates');
+    expect(result.mappedTools).toContainEqual(
+      expect.objectContaining({ original: 'list_templates', mapped: 'templates_list' }),
+    );
   });
 
-  it('maps the five known tools to their discord-mcp equivalents', async () => {
+  it('maps the six known tools to their discord-mcp equivalents', async () => {
     const result = await quadslabAdapter.migrate(FIXTURE_ROOT);
     const byOriginal = new Map(result.mappedTools.map((t) => [t.original, t]));
     expect(byOriginal.get('send_message')?.mapped).toBe('messages_send');
@@ -150,6 +150,7 @@ describe('quadslabAdapter - migrate()', () => {
     expect(byOriginal.get('get_messages')?.mapped).toBe('messages_read');
     expect(byOriginal.get('list_channels')?.mapped).toBe('channels_list');
     expect(byOriginal.get('create_text_channel')?.mapped).toBe('channels_create_guild_channel');
+    expect(byOriginal.get('list_templates')?.mapped).toBe('templates_list');
     // Every mapped tool must carry one of the three confidence levels.
     for (const tool of result.mappedTools) {
       expect(['high', 'medium', 'low']).toContain(tool.confidence);

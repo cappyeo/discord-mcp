@@ -5,7 +5,7 @@
  * lifecycle in a verified guild: create a temporary channel, send and edit one
  * marker message, then delete both artifacts. The command uses an in-memory MCP
  * client/server pair so it exercises the same schemas, middleware, audit, and
- * Discord REST path as an AI host without paying to load 193 tools into a model.
+ * Discord REST path as an AI host without paying to load 201 tools into a model.
  */
 import {
   buildPolicy,
@@ -23,6 +23,7 @@ import { activateProfile } from '../lib/profiles.js';
 export interface SmokeOptions {
   json?: boolean;
   confirmWrite?: boolean;
+  confirmTemplateLifecycle?: boolean;
   guildId?: string;
   profile?: string;
   profileDirectory?: string;
@@ -57,9 +58,15 @@ interface SmokeState {
   messageEdited: boolean;
   messageDeleted: boolean;
   channelDeleted: boolean;
+  templateCreated: boolean;
+  templateInspected: boolean;
+  templateDriftObserved: boolean;
+  templateSynced: boolean;
+  templateDeleted: boolean;
 }
 
 const SNOWFLAKE = /^\d{17,20}$/;
+const TEMPLATE_CODE = /^[a-zA-Z0-9_-]{1,100}$/;
 
 function toolError(name: string, result: SmokeToolResult): Error {
   const text = result.content?.find((item) => item.type === 'text')?.text;
@@ -86,6 +93,50 @@ function requireId(value: unknown, label: string): string {
     throw new Error(`${label} did not return a valid Discord snowflake`);
   }
   return value;
+}
+
+function requireTemplateCode(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !TEMPLATE_CODE.test(value)) {
+    throw new Error(`${label} did not return a valid Discord Guild Template code`);
+  }
+  return value;
+}
+
+function templateDriftRecord(
+  data: Record<string, unknown>,
+  label: string,
+): Record<string, unknown> {
+  if (data.source_guild_matches !== true) {
+    throw new Error(`${label} did not compare the requested template source guild`);
+  }
+  const drift = data.drift;
+  if (drift === null || typeof drift !== 'object' || Array.isArray(drift)) {
+    throw new Error(`${label} returned no comparable template drift result`);
+  }
+  if (typeof (drift as Record<string, unknown>).sync_recommended !== 'boolean') {
+    throw new Error(`${label} returned an invalid template drift result`);
+  }
+  return drift as Record<string, unknown>;
+}
+
+function requiresTemplateSync(drift: Record<string, unknown>): boolean {
+  return drift.sync_recommended === true;
+}
+
+function safeTemplateDriftSummary(drift: Record<string, unknown>): Record<string, unknown> {
+  const fields = [
+    'channels_missing_from_guild_count',
+    'channels_added_since_snapshot_count',
+    'roles_missing_from_guild_count',
+    'roles_added_since_snapshot_count',
+    'role_permission_difference_count',
+    'channel_setting_difference_count',
+    'permission_overwrite_difference_count',
+    'unmapped_permission_overwrite_count',
+    'template_marked_dirty',
+    'sync_recommended',
+  ] as const;
+  return Object.fromEntries(fields.map((field) => [field, drift[field] ?? null]));
 }
 
 function guildIds(data: Record<string, unknown>): string[] {
@@ -152,6 +203,11 @@ function stateDetails(state: SmokeState): string[] {
     `marker message edit: ${state.messageEdited ? 'ok' : 'not completed'}`,
     `marker message delete: ${state.messageDeleted ? 'ok' : 'not completed'}`,
     `temporary channel delete: ${state.channelDeleted ? 'ok' : 'not completed'}`,
+    `Guild Template create: ${state.templateCreated ? 'ok' : 'not requested'}`,
+    `Guild Template inspect: ${state.templateInspected ? 'ok' : 'not requested'}`,
+    `Guild Template drift detection: ${state.templateDriftObserved ? 'ok' : 'not requested'}`,
+    `Guild Template sync: ${state.templateSynced ? 'ok' : 'not requested'}`,
+    `Guild Template delete: ${state.templateDeleted ? 'ok' : 'not requested'}`,
   ];
 }
 
@@ -192,6 +248,21 @@ export async function smokeAction(
   opts: SmokeOptions,
   deps: SmokeDeps = DEFAULT_DEPS,
 ): Promise<void> {
+  if (opts.confirmTemplateLifecycle === true && opts.confirmWrite !== true) {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: 'Guild Template lifecycle smoke requires --confirm-write',
+        errors: [
+          'Pass --confirm-write because this check creates, syncs, and deletes a temporary template.',
+        ],
+      },
+      opts.json === true,
+    );
+    return;
+  }
+
   if (opts.profile !== undefined) {
     try {
       activateProfile(opts.profile, {
@@ -220,12 +291,21 @@ export async function smokeAction(
     messageEdited: false,
     messageDeleted: false,
     channelDeleted: false,
+    templateCreated: false,
+    templateInspected: false,
+    templateDriftObserved: false,
+    templateSynced: false,
+    templateDeleted: false,
   };
   const originalDryRun = process.env.MCP_DRY_RUN;
   let session: SmokeSession | undefined;
   let visibleGuildCount = 0;
+  let selectedGuildId: string | undefined;
   let channelId: string | undefined;
   let messageId: string | undefined;
+  let templateCode: string | undefined;
+  let templateDriftBeforeSync: Record<string, unknown> | undefined;
+  let templateDriftAfterSync: Record<string, unknown> | undefined;
   let failure: Error | undefined;
   const cleanupErrors: string[] = [];
 
@@ -242,7 +322,28 @@ export async function smokeAction(
 
     if (opts.confirmWrite === true) {
       const guildId = selectGuild(visibleGuilds, opts.guildId);
+      selectedGuildId = guildId;
       const suffix = deps.now().toString(36);
+      if (opts.confirmTemplateLifecycle === true) {
+        const createdTemplate = await callData(session, 'templates_create', {
+          guild_id: guildId,
+          name: `MCP smoke ${suffix}`,
+          description: 'Temporary discord-mcp template lifecycle smoke test',
+          audit_reason: 'discord-mcp template smoke test',
+        });
+        const template = createdTemplate.template;
+        if (template === null || typeof template !== 'object' || Array.isArray(template)) {
+          throw new Error('templates_create returned no template summary');
+        }
+        templateCode = requireTemplateCode(
+          (template as Record<string, unknown>).code,
+          'templates_create.template.code',
+        );
+        state.templateCreated = true;
+
+        await callData(session, 'templates_inspect', { template_code: templateCode });
+        state.templateInspected = true;
+      }
       const channelName = `mcp-smoke-${suffix}`;
       const channel = await callData(session, 'channels_create_guild_channel', {
         guild_id: guildId,
@@ -273,6 +374,53 @@ export async function smokeAction(
       });
       state.messageDeleted = true;
 
+      if (templateCode !== undefined) {
+        const beforeSync = await callData(session, 'templates_diff', {
+          guild_id: guildId,
+          template_code: templateCode,
+        });
+        templateDriftBeforeSync = templateDriftRecord(
+          beforeSync,
+          'templates_diff before templates_sync',
+        );
+        if (!requiresTemplateSync(templateDriftBeforeSync)) {
+          throw new Error('templates_diff did not detect the temporary channel drift');
+        }
+        state.templateDriftObserved = true;
+
+        await callData(session, 'templates_sync', {
+          guild_id: guildId,
+          template_code: templateCode,
+          audit_reason: 'discord-mcp template smoke test sync',
+        });
+        state.templateSynced = true;
+
+        const afterSync = await callData(session, 'templates_diff', {
+          guild_id: guildId,
+          template_code: templateCode,
+        });
+        templateDriftAfterSync = templateDriftRecord(
+          afterSync,
+          'templates_diff after templates_sync',
+        );
+        if (requiresTemplateSync(templateDriftAfterSync)) {
+          throw new Error(
+            `templates_diff still recommends sync after templates_sync: ${JSON.stringify(
+              safeTemplateDriftSummary(templateDriftAfterSync),
+            )}`,
+          );
+        }
+
+        await callData(session, 'templates_delete', {
+          guild_id: guildId,
+          template_code: templateCode,
+          audit_reason: 'discord-mcp template smoke test cleanup',
+          __confirm: true,
+        });
+        state.templateDeleted = true;
+        templateCode = undefined;
+      }
+
       await callData(session, 'channels_delete', {
         channel_id: channelId,
         audit_reason: 'discord-mcp native smoke test cleanup',
@@ -284,6 +432,19 @@ export async function smokeAction(
     failure = error instanceof Error ? error : new Error(String(error));
   } finally {
     if (session !== undefined && opts.confirmWrite === true) {
+      if (templateCode !== undefined && !state.templateDeleted) {
+        try {
+          await callData(session, 'templates_delete', {
+            guild_id: selectedGuildId,
+            template_code: templateCode,
+            audit_reason: 'discord-mcp template smoke test failure cleanup',
+            __confirm: true,
+          });
+          state.templateDeleted = true;
+        } catch (error) {
+          cleanupErrors.push(error instanceof Error ? error.message : String(error));
+        }
+      }
       if (channelId !== undefined && messageId !== undefined && !state.messageDeleted) {
         try {
           await callData(session, 'messages_delete', {
@@ -326,12 +487,28 @@ export async function smokeAction(
     }
   }
 
-  const cleanupComplete = channelId === undefined || state.channelDeleted;
+  const cleanupComplete =
+    (channelId === undefined || state.channelDeleted) &&
+    (!state.templateCreated || state.templateDeleted);
   const data = {
     mode,
     visibleGuildCount,
     cleanupComplete,
     steps: state,
+    ...(opts.confirmTemplateLifecycle === true
+      ? {
+          templateLifecycle: {
+            driftBeforeSync:
+              templateDriftBeforeSync === undefined
+                ? null
+                : safeTemplateDriftSummary(templateDriftBeforeSync),
+            driftAfterSync:
+              templateDriftAfterSync === undefined
+                ? null
+                : safeTemplateDriftSummary(templateDriftAfterSync),
+          },
+        }
+      : {}),
   };
 
   if (failure !== undefined) {

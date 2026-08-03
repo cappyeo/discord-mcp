@@ -78,6 +78,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "isDefault": false,
       "name": "smoke",
       "options": [
+        "--confirm-template-lifecycle",
         "--confirm-write",
         "--guild-id <id>",
         "--json",

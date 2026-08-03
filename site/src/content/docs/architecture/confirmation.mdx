@@ -1,6 +1,6 @@
 ---
 title: Confirmation
-description: The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 29 explicitly registered high-risk tools, including its limits and client responsibilities.
+description: The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 30 explicitly registered high-risk tools, including its limits and client responsibilities.
 sidebar:
   order: 7
 ---
@@ -9,7 +9,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 discord-mcp's confirmation contract is a **mechanical two-key guard** for
 selected high-risk operations. A tool that declares the `confirm_required`
-precondition - **29 of the 193 tools**, listed
+precondition - **30 of the 201 tools**, listed
 [below](#which-tools-require-it) - does not fire unless **both** of these
 hold at the same time:
 
@@ -95,7 +95,7 @@ ecosystem for transport-level metadata.
 spec-conforming client could not legally send an undeclared key, and an
 agent reading `tools/list` would have no way to discover the flag at all.
 So `server.ts` injects `__confirm` into the **published JSON Schema of the
-29 gated tools only**, after the zod → JSON Schema conversion:
+30 gated tools only**, after the zod → JSON Schema conversion:
 
 ```ts
 // From server.ts - ListTools handler
@@ -164,7 +164,7 @@ There is **no automatic rule**. `confirm_required` is attached explicitly,
 per tool, in each tool's own `defineTool({ preconditions: ['confirm_required'] })`
 call. A tool is gated if and only if it names the precondition itself.
 
-As of v0.12.0 that is exactly **29 tools** out of 192 - every irreversible
+The current source registry has exactly **30 tools** out of 201 - every irreversible
 delete, plus ban / kick / prune / leave-guild and the two command
 bulk-overwrites (which replace a guild's entire command set in one call):
 
@@ -187,6 +187,7 @@ bulk-overwrites (which replace a guild's entire command set in one call):
 | `soundboard` | `soundboard_delete_guild_sound` |
 | `stage_instances` | `stage_instances_delete` |
 | `stickers` | `stickers_delete_guild_sticker` |
+| `templates` | `templates_delete` |
 | `users` | `users_leave_guild` |
 | `webhooks` | `webhooks_delete`, `webhooks_delete_message`, `webhooks_delete_with_token` |
 

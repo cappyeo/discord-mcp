@@ -210,6 +210,14 @@ import StickersGetGuildSticker from './tools/stickers/get_guild_sticker.js';
 import StickersListGuild from './tools/stickers/list_guild.js';
 import StickersListPacks from './tools/stickers/list_packs.js';
 import StickersModifyGuildSticker from './tools/stickers/modify_guild_sticker.js';
+import TemplatesCreate from './tools/templates/create.js';
+import TemplatesDelete from './tools/templates/delete.js';
+import TemplatesDiff from './tools/templates/diff.js';
+import TemplatesGet from './tools/templates/get.js';
+import TemplatesInspect from './tools/templates/inspect.js';
+import TemplatesList from './tools/templates/list.js';
+import TemplatesModify from './tools/templates/modify.js';
+import TemplatesSync from './tools/templates/sync.js';
 import ThreadsAddMember from './tools/threads/add_member.js';
 import ThreadsGetMember from './tools/threads/get_member.js';
 import ThreadsJoin from './tools/threads/join.js';
@@ -291,7 +299,7 @@ let cachedToolListCatalog: ToolListCatalog | undefined;
 /**
  * Tool definitions are compiled into JSON Schema once per process. HTTP stays
  * stateless and still creates a fresh MCP Server per request, but avoids
- * repeating the expensive Zod conversion for the same 193 immutable tools.
+ * repeating the expensive Zod conversion for the same 201 immutable tools.
  */
 function getToolListCatalog(toolStore: ToolStore): ToolListCatalog {
   if (cachedToolListCatalog !== undefined) return cachedToolListCatalog;
@@ -699,6 +707,38 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   await toolStore.loadPiece({
     name: 'roles_delete',
     piece: RolesDelete as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_get',
+    piece: TemplatesGet as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_inspect',
+    piece: TemplatesInspect as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_diff',
+    piece: TemplatesDiff as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_list',
+    piece: TemplatesList as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_create',
+    piece: TemplatesCreate as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_sync',
+    piece: TemplatesSync as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_modify',
+    piece: TemplatesModify as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'templates_delete',
+    piece: TemplatesDelete as unknown as ConcreteTool,
   });
   await toolStore.loadPiece({ name: 'guild_get', piece: GuildGet as unknown as ConcreteTool });
   await toolStore.loadPiece({
@@ -1249,7 +1289,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
           'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
         ]
       : [
-          'Discord MCP server: 193 tools for Discord operations plus explicit external inspiration discovery (messages, channels,',
+          'Discord MCP server: 201 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
           'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
           'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
           'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls.',

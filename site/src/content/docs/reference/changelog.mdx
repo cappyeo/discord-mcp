@@ -9,6 +9,22 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.0 - Native Guild Templates
+
+Released **2026-08-03**.
+
+- Added the caller-owned `templates` category with native Discord Guild Template
+  lifecycle tools: inspect public templates, list/create/modify/sync a source
+  guild snapshot, and confirmation-gated delete. The server never stores a
+  user's token or operates a central template catalog.
+- Added `templates_inspect` and `templates_diff` so an AI can review a
+  template's structure, risky permissions, source-guild boundary, comparable
+  role/channel/overwrite changes, and sync recommendation before sharing or
+  updating it. Template text and raw names remain fenced as untrusted data.
+- Added `smoke --confirm-template-lifecycle` for an explicit, self-cleaning
+  live verification of create, inspect, drift detection, sync, clean diff,
+  and delete. It refuses to write unless `--confirm-write` is also supplied.
+
 ## v0.15.0 - External inspiration discovery
 
 Released **2026-08-03**.

@@ -87,7 +87,7 @@
  *      discord-ops ships profiles like `monitoring` (7 tools), `readonly`
  *      (7), `moderation` (7), `messaging` (5), `channels` (7), `webhooks`
  *      (6), and `full` (49). They reduce schema overhead by hiding tools
- *      from the client. discord-mcp ships the full surface (193 tools at
+ *      from the client. discord-mcp ships the full surface (201 tools at
  *      Phase D) and filters the advertised registry server-side with
  *      `MCP_CATEGORIES`. This isn't a translation
  *      problem - there's no source code for "the lite profile" that
@@ -99,7 +99,7 @@
  *   3. **Dry-run mode** -
  *      discord-ops uses `DISCORD_OPS_DRY_RUN=1` to short-circuit destructive
  *      calls before they hit the Discord REST API. `MCP_DRY_RUN=true` only
- *      gates discord-mcp's 29 `confirm_required` tools; other writes can
+ *      gates discord-mcp's 30 `confirm_required` tools; other writes can
  *      still execute. Users must audit every mapped write rather than carry
  *      over the variable as an equivalent safety boundary.
  *
@@ -544,7 +544,7 @@ export const discordOpsAdapter: MigrationSource = {
         'tool profiles (lite/full/monitoring/...) are not migrated directly - translate them to the server-side MCP_CATEGORIES allowlist and verify tools/list',
       );
       warnings.push(
-        'dry-run is not equivalent: MCP_DRY_RUN=true gates only the 29 confirm_required tools; inventory ordinary writes and use restricted permissions or a test guild for the rest',
+        'dry-run is not equivalent: MCP_DRY_RUN=true gates only the 30 confirm_required tools; inventory ordinary writes and use restricted permissions or a test guild for the rest',
       );
     }
 

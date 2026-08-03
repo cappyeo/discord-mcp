@@ -113,11 +113,11 @@
  *     - quadslab's `send_poll` has no discord-mcp tool equivalent -
  *       discord-mcp creates polls inline via `messages_send` payload
  *       (`poll: {...}`). Map → `messages_send`, confidence: low.
- *     - quadslab's templates module (`list_template`, etc.) maps to
- *       discord-mcp's `application/templates`-style tools - but
- *       discord-mcp does NOT currently expose guild-template REST
- *       wrappers (they're absent from the tool catalog as of cutoff).
- *       All four left unmapped.
+ *     - quadslab's templates module maps directly to Discord Guild
+ *       Template tools: list/create/delete/sync map to
+ *       `templates_list` / `templates_create` / `templates_delete` /
+ *       `templates_sync`. Confidence: high. Delete additionally requires
+ *       discord-mcp's confirmation gate.
  *     - quadslab's `get_role_permissions` / `list_member_permissions`
  *       are introspection helpers (no PATCH); discord-mcp returns this
  *       data via `roles_list` + `members_get`. Confidence: medium.
@@ -130,8 +130,6 @@
  *
  *   Tools deliberately left out of NAME_MAP (intentional unmapped):
  *     - presence: set_bot_status, get_bot_info (no current equivalent)
- *     - templates: list_template, create_template, delete_template,
- *       sync_template (discord-mcp has no template tools yet)
  *     - higher-level helpers: clone_channel, copy_channel_permissions,
  *       check_permissions (compose from primitives)
  *     - voice helpers: move_to_voice, disconnect_from_voice,
@@ -160,7 +158,7 @@ import type { MappedTool, MigrationResult, MigrationSource } from './types.js';
  *   medium - name maps cleanly but the caller may need to massage args.
  *   low    - best-guess mapping; user MUST verify.
  *
- * Entries WITHOUT a discord-mcp equivalent (presence/templates/voice
+ * Entries WITHOUT a discord-mcp equivalent (presence/voice
  * helpers) are intentionally absent - `migrate()` reports them under
  * `unmappedTools`.
  */
@@ -171,6 +169,16 @@ const NAME_MAP: Record<
   // guild
   list_guilds: { mapped: 'users_list_current_user_guilds', confidence: 'high' },
   get_guild_info: { mapped: 'guild_get', confidence: 'high' },
+
+  // templates
+  list_templates: { mapped: 'templates_list', confidence: 'high' },
+  create_template: { mapped: 'templates_create', confidence: 'high' },
+  delete_template: {
+    mapped: 'templates_delete',
+    confidence: 'high',
+    notes: 'Requires __confirm:true and MCP_DRY_RUN=false.',
+  },
+  sync_template: { mapped: 'templates_sync', confidence: 'high' },
 
   // roles
   list_roles: { mapped: 'roles_list', confidence: 'high' },

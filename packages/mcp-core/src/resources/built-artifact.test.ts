@@ -25,7 +25,7 @@ const DIST = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 
 async function importDist(): Promise<Record<string, unknown>> {
   return (await import(
-    /* @vite-ignore */ new URL('file://' + DIST.replace(/\\/g, '/')).href
+    /* @vite-ignore */ new URL(`file://${DIST.replace(/\\/g, '/')}`).href
   )) as unknown as Record<string, unknown>;
 }
 

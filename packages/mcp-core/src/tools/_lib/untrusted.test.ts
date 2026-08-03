@@ -45,9 +45,11 @@ describe('wrapUntrusted', () => {
     const e = wrapUntrusted('x', 'embed');
     const w = wrapUntrusted('x', 'webhook');
     const u = wrapUntrusted('x', 'username');
+    const t = wrapUntrusted('x', 'template');
     expect(e).toContain('<untrusted_discord_embed');
     expect(w).toContain('<untrusted_discord_webhook');
     expect(u).toContain('<untrusted_discord_username');
+    expect(t).toContain('<untrusted_discord_template');
   });
 });
 

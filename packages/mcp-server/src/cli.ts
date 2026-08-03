@@ -80,19 +80,28 @@ export function buildProgram(): Command {
     .command('smoke')
     .description('Verify the real MCP-to-Discord path (read-only by default)')
     .option('--confirm-write', 'Run one self-cleaning create/send/edit/delete lifecycle')
+    .option(
+      '--confirm-template-lifecycle',
+      'Also create, inspect, diff, sync, and delete a temporary Guild Template (requires --confirm-write)',
+    )
     .option('--guild-id <id>', 'Target guild for write smoke; required when the bot sees multiple')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
     .option('--profile <name>', 'Load a caller-owned bot profile before verification')
     .action(
       async (options: {
         confirmWrite?: boolean;
+        confirmTemplateLifecycle?: boolean;
         guildId?: string;
         json?: boolean;
         profile?: string;
       }) => {
         const { smokeAction } = await import('./commands/smoke.js');
         await captureCliActivity(
-          { command: 'smoke', confirmWrite: options.confirmWrite === true },
+          {
+            command: 'smoke',
+            confirmWrite: options.confirmWrite === true,
+            confirmTemplateLifecycle: options.confirmTemplateLifecycle === true,
+          },
           async () => smokeAction(options),
         );
       },

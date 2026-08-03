@@ -1,10 +1,9 @@
 // FIXTURE: synthetic quadslab-style code for adapter testing - not real code.
-// `templates` tools have no discord-mcp equivalent at cutoff -
-// intentionally LEFT OUT of NAME_MAP; should appear in unmappedTools.
+// `templates` tools map to discord-mcp's native Guild Template surface.
 export const templateTools = [
   {
     name: 'list_templates',
-    description: 'List server templates (no discord-mcp equivalent yet)',
+    description: 'List server templates',
     inputSchema: { type: 'object', properties: {} },
   },
 ];

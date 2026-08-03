@@ -13,12 +13,12 @@
 
 <p align="center">
   <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
-  193 tools for Discord operations plus explicit Emoji.gg inspiration discovery.
+  201 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
 </p>
 
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/quickstart/"><strong>Quickstart</strong></a>
-  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 193 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 201 tools</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
 </p>
@@ -136,7 +136,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
 | `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
 | `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, optional network connectivity, and a saved Codex launcher's update status. |
-| `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test. |
+| `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test, or `--confirm-template-lifecycle` to prove Guild Template inspect/diff/sync/delete and cleanup. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 
 Run `discord-mcp --help` or see the full [CLI reference](https://cappyeo.github.io/discord-mcp/reference/cli/) for flags and examples.
@@ -172,7 +172,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.15.0**; its core exports, CLI surface, environment schema, and 193-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.16.0**; this source tree's core exports, CLI surface, environment schema, and 201-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 ## License
 

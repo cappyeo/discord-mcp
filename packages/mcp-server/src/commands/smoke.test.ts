@@ -122,6 +122,20 @@ describe('smokeAction', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it('refuses the template lifecycle unless writes are explicitly confirmed', async () => {
+    const { deps, calls, close } = makeDeps();
+
+    await smokeAction({ confirmTemplateLifecycle: true, json: true }, deps);
+
+    expect(calls).toEqual([]);
+    expect(close).not.toHaveBeenCalled();
+    expect(output()).toMatchObject({
+      ok: false,
+      exitCode: 2,
+      summary: 'Guild Template lifecycle smoke requires --confirm-write',
+    });
+  });
+
   it('runs create, send, edit, and self-cleaning deletes only with --confirm-write', async () => {
     process.env.MCP_DRY_RUN = 'true';
     const { deps, calls, close } = makeDeps();
@@ -150,6 +164,76 @@ describe('smokeAction', () => {
       ok: true,
       exitCode: 0,
       data: { mode: 'write', cleanupComplete: true },
+    });
+    expect(process.env.MCP_DRY_RUN).toBe('true');
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('proves and self-cleans the native Guild Template lifecycle only with both confirmations', async () => {
+    process.env.MCP_DRY_RUN = 'true';
+    const { deps, calls, close } = makeDeps(undefined, {
+      templates_create: ok({ template: { code: 'template-smoke-1' } }),
+      templates_inspect: ok({ template: { code: 'template-smoke-1' }, blueprint: {} }),
+      templates_sync: ok({ template: { code: 'template-smoke-1' } }),
+      templates_delete: ok({ deleted: true }),
+    });
+    const originalOpenSession = deps.openSession;
+    let diffCount = 0;
+    deps.openSession = async () => {
+      const session = await originalOpenSession();
+      const originalCallTool = session.callTool;
+      session.callTool = async (call) => {
+        if (call.name !== 'templates_diff') return originalCallTool(call);
+        calls.push(call);
+        diffCount += 1;
+        return ok({
+          source_guild_matches: true,
+          drift: { sync_recommended: diffCount === 1 },
+        });
+      };
+      return session;
+    };
+
+    await smokeAction({ confirmWrite: true, confirmTemplateLifecycle: true, json: true }, deps);
+
+    expect(calls.map((call) => call.name)).toEqual([
+      'users_get_current',
+      'users_list_current_user_guilds',
+      'templates_create',
+      'templates_inspect',
+      'channels_create_guild_channel',
+      'messages_send',
+      'messages_edit',
+      'messages_delete',
+      'templates_diff',
+      'templates_sync',
+      'templates_diff',
+      'templates_delete',
+      'channels_delete',
+    ]);
+    expect(calls.find((call) => call.name === 'templates_create')?.arguments).toMatchObject({
+      guild_id: '999000999000999000',
+      name: 'MCP smoke lzbx3ooo',
+    });
+    expect(calls.find((call) => call.name === 'templates_delete')?.arguments).toMatchObject({
+      guild_id: '999000999000999000',
+      template_code: 'template-smoke-1',
+      __confirm: true,
+    });
+    expect(output()).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      data: {
+        mode: 'write',
+        cleanupComplete: true,
+        steps: {
+          templateCreated: true,
+          templateInspected: true,
+          templateDriftObserved: true,
+          templateSynced: true,
+          templateDeleted: true,
+        },
+      },
     });
     expect(process.env.MCP_DRY_RUN).toBe('true');
     expect(close).toHaveBeenCalledOnce();

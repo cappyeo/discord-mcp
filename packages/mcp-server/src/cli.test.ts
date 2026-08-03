@@ -132,6 +132,7 @@ describe('cli - smoke sub-command', () => {
     await runCli(['smoke', '--help']);
     const out = stdoutOutput();
     expect(out).toContain('--confirm-write');
+    expect(out).toContain('--confirm-template-lifecycle');
     expect(out).toContain('--guild-id');
     expect(out).toContain('--json');
     expect(out).toContain('--profile');

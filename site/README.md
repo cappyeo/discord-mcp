@@ -34,7 +34,7 @@ pnpm --filter site generate-tools
 ```
 
 Reads `__toolMetadata` static from `@discord-mcp/core` exports and emits
-one MDX per tool plus 28 category index pages plus a top-level index
+one MDX per tool plus 30 category index pages plus a top-level index
 into `site/src/content/docs/tools/`. Runs automatically before `dev` and
 `build`.
 
@@ -43,7 +43,7 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
 - `astro.config.ts` - Starlight config (sidebar, base path)
 - `src/content/docs/` - all MDX content
   - `start/` - quickstart pages (5)
-  - `tools/` - auto-generated tool reference (193 tools + 29 categories + 1 index)
+  - `tools/` - auto-generated tool reference (201 tools + 30 categories + 1 index)
   - `recipes/` - cookbook recipes (6)
   - `operations/` - operator guides (4)
   - `architecture/` - deep-dives (9)

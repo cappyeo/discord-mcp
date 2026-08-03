@@ -89,6 +89,59 @@ describe('activity evidence', () => {
     expect(raw).not.toContain('123456789012345678');
   });
 
+  it('records template lifecycle evidence without a guild ID or template code', async () => {
+    const options = location();
+    const originalWrite = process.stdout.write;
+    process.stdout.write = (() => true) as typeof process.stdout.write;
+    try {
+      await captureActivity(
+        { command: 'smoke', confirmWrite: true, confirmTemplateLifecycle: true, ...options },
+        async () => {
+          emitResult(
+            {
+              ok: true,
+              exitCode: 0,
+              summary: 'MCP write smoke passed; temporary artifacts were removed',
+              data: {
+                cleanupComplete: true,
+                steps: {
+                  identityRead: true,
+                  guildsRead: true,
+                  templateCreated: true,
+                  templateDriftObserved: true,
+                  templateSynced: true,
+                },
+                guildId: '123456789012345678',
+                templateCode: 'must-not-be-recorded',
+              },
+            },
+            true,
+          );
+        },
+      );
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+
+    expect(readActivity(options)[0]).toMatchObject({
+      command: 'smoke',
+      outcome: 'success',
+      signals: [
+        'write-confirmed',
+        'template-lifecycle-confirmed',
+        'identity-read',
+        'guilds-read',
+        'template-created',
+        'template-drift-observed',
+        'template-synced',
+        'cleanup-complete',
+      ],
+    });
+    const raw = readFileSync(resolveActivityPath(options), 'utf8');
+    expect(raw).not.toContain('123456789012345678');
+    expect(raw).not.toContain('must-not-be-recorded');
+  });
+
   it('keeps the journal bounded to the latest records', () => {
     const options = location();
     for (let index = 0; index <= ACTIVITY_RETENTION; index += 1) {

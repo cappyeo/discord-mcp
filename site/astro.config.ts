@@ -105,6 +105,7 @@ export default defineConfig({
                 'tools/roles',
                 'tools/automod',
                 'tools/guild',
+                'tools/templates',
                 'tools/invites',
                 'tools/audit_log',
                 'tools/onboarding',
