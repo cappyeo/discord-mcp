@@ -78,6 +78,18 @@ describe('activity evidence', () => {
     expect(events[0]?.at).toBe(new Date(1_700_000_000_001).toISOString());
   });
 
+  it('uses XDG_CONFIG_HOME for the Linux journal location', () => {
+    const configRoot = mkdtempSync(join(tmpdir(), 'discord-mcp-activity-xdg-'));
+    directory = configRoot;
+    expect(
+      resolveActivityPath({
+        platform: 'linux',
+        env: { XDG_CONFIG_HOME: configRoot },
+        homeDirectory: configRoot,
+      }),
+    ).toBe(join(configRoot, 'discord-mcp', 'activity.jsonl'));
+  });
+
   it('honors the caller opt-out without changing the command action', async () => {
     const options = location();
     const previous = process.env.DISCORD_MCP_ACTIVITY;

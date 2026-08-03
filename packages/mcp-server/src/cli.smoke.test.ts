@@ -88,7 +88,7 @@ describe('cli binary smoke (post-build)', () => {
 
   it('records a filtered local result that the built activity command can read', () => {
     const appData = mkdtempSync(join(tmpdir(), 'discord-mcp-cli-activity-'));
-    const env = { APPDATA: appData, DISCORD_MCP_ACTIVITY: '' };
+    const env = { APPDATA: appData, XDG_CONFIG_HOME: appData, DISCORD_MCP_ACTIVITY: '' };
     try {
       const doctor = runCli(['doctor', '--json'], env);
       expect(doctor.status).toBe(2);

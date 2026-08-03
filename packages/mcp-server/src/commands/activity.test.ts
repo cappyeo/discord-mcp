@@ -7,12 +7,14 @@ import { activityAction } from './activity.js';
 
 const originalExitCode = process.exitCode;
 const originalAppData = process.env.APPDATA;
+const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
 let root: string;
 let stdoutWrites: string[];
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'discord-mcp-activity-command-'));
   process.env.APPDATA = root;
+  process.env.XDG_CONFIG_HOME = root;
   process.exitCode = 0;
   stdoutWrites = [];
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown): boolean => {
@@ -26,6 +28,8 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
   if (originalAppData === undefined) delete process.env.APPDATA;
   else process.env.APPDATA = originalAppData;
+  if (originalXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+  else process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
   process.exitCode = originalExitCode;
 });
 
