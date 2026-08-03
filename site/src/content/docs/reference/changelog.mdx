@@ -9,6 +9,17 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.1 - Template comparison fidelity
+
+Released **2026-08-03**.
+
+- `templates_diff` now recognizes Discord News and Stage channels that the
+  official Guild Template serializer omits. They are reported separately as
+  non-representable rather than producing permanent false drift or a no-op
+  sync recommendation.
+- Forum tags and a forum's default reaction are compared by semantic meaning,
+  not Discord-generated IDs, avoiding false differences after template sync.
+
 ## v0.16.0 - Native Guild Templates
 
 Released **2026-08-03**.

@@ -72,6 +72,7 @@ export const TemplateDriftSchema = z.object({
   source_guild_channel_count: z.number().int().nonnegative(),
   channels_missing_from_guild_count: z.number().int().nonnegative(),
   channels_added_since_snapshot_count: z.number().int().nonnegative(),
+  channels_not_representable_in_template_count: z.number().int().nonnegative(),
   template_role_count: z.number().int().nonnegative(),
   source_guild_role_count: z.number().int().nonnegative(),
   roles_missing_from_guild_count: z.number().int().nonnegative(),
@@ -280,6 +281,11 @@ const CHANNEL_SETTING_FIELDS = [
   'flags',
 ] as const;
 
+// Empirically, Discord's Guild Template serializer omits News and Stage
+// channels even after a successful template sync. They are part of the
+// source guild but cannot be corrected through templates_sync.
+const GUILD_TEMPLATE_UNREPRESENTABLE_CHANNEL_TYPES = new Set([5, 13]);
+
 function stableJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
@@ -290,6 +296,44 @@ function stableJson(value: unknown): string {
     .join(',')}}`;
 }
 
+function canonicalEmoji(value: unknown): string {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return stableJson(value);
+  }
+  const emoji = value as TemplateSourceRecord;
+  const emojiId = emoji.emoji_id;
+  return stableJson({
+    emoji_id: emojiId === 0 || emojiId === '0' ? null : (emojiId ?? null),
+    emoji_name: emoji.emoji_name ?? null,
+  });
+}
+
+function canonicalAvailableTags(value: unknown): string {
+  if (!Array.isArray(value)) return stableJson(value);
+  return stableJson(
+    value
+      .filter((tag): tag is TemplateSourceRecord => typeof tag === 'object' && tag !== null)
+      .map((tag) => ({
+        name: tag.name ?? null,
+        moderated: tag.moderated ?? false,
+        emoji: canonicalEmoji({
+          emoji_id: tag.emoji_id,
+          emoji_name: tag.emoji_name,
+        }),
+      }))
+      .sort((left, right) => stableJson(left).localeCompare(stableJson(right))),
+  );
+}
+
+function canonicalChannelSetting(
+  field: (typeof CHANNEL_SETTING_FIELDS)[number],
+  value: unknown,
+): string {
+  if (field === 'default_reaction_emoji') return canonicalEmoji(value);
+  if (field === 'available_tags') return canonicalAvailableTags(value);
+  return stableJson(value);
+}
+
 function changedChannelSettings(
   expected: TemplateSourceRecord,
   actual: TemplateSourceRecord,
@@ -298,14 +342,18 @@ function changedChannelSettings(
     // A missing optional field can be Discord's serialization default. Only
     // call out a drift when both snapshots explicitly carry the setting.
     if (expected[field] === undefined || actual[field] === undefined) return false;
-    return stableJson(expected[field]) !== stableJson(actual[field]);
+    return (
+      canonicalChannelSetting(field, expected[field]) !==
+      canonicalChannelSetting(field, actual[field])
+    );
   });
 }
 
 function channelPairSimilarity(expected: NamedTemplateItem, actual: NamedTemplateItem): number {
   return CHANNEL_SETTING_FIELDS.reduce((score, field) => {
     if (expected.record[field] === undefined || actual.record[field] === undefined) return score;
-    return stableJson(expected.record[field]) === stableJson(actual.record[field])
+    return canonicalChannelSetting(field, expected.record[field]) ===
+      canonicalChannelSetting(field, actual.record[field])
       ? score + 1
       : score;
   }, 0);
@@ -374,9 +422,15 @@ export function templateDrift(
   // Guild Templates do not serialize bot/integration roles. Counting those
   // managed roles as additions would permanently recommend a no-op sync.
   const comparableCurrentRoles = currentRoles.filter((role) => role.managed !== true);
+  const nonRepresentableCurrentChannels = currentChannels.filter((channel) =>
+    GUILD_TEMPLATE_UNREPRESENTABLE_CHANNEL_TYPES.has(itemType(channel) ?? -1),
+  );
+  const comparableCurrentChannels = currentChannels.filter(
+    (channel) => !GUILD_TEMPLATE_UNREPRESENTABLE_CHANNEL_TYPES.has(itemType(channel) ?? -1),
+  );
   const channelDifference = difference(
     namedItems(templateChannels),
-    namedItems(currentChannels),
+    namedItems(comparableCurrentChannels),
     true,
   );
   const roleDifference = difference(
@@ -395,7 +449,7 @@ export function templateDrift(
   // and topic are evaluated against its actual counterpart.
   const channelPairs = matchingPairs(
     namedItems(templateChannels),
-    namedItems(currentChannels),
+    namedItems(comparableCurrentChannels),
     true,
     channelPairSimilarity,
   );
@@ -437,6 +491,7 @@ export function templateDrift(
       source_guild_channel_count: currentChannels.length,
       channels_missing_from_guild_count: channelDifference.missing.length,
       channels_added_since_snapshot_count: channelDifference.added.length,
+      channels_not_representable_in_template_count: nonRepresentableCurrentChannels.length,
       template_role_count: templateRoles.length,
       source_guild_role_count: comparableCurrentRoles.length,
       roles_missing_from_guild_count: roleDifference.missing.length,
@@ -460,6 +515,9 @@ export function templateDrift(
     details: {
       channels_missing_from_guild: channelDifference.missing.slice(0, 25),
       channels_added_since_snapshot: channelDifference.added.slice(0, 25),
+      channels_not_representable_in_template: namedItems(nonRepresentableCurrentChannels)
+        .map((channel) => channel.name)
+        .slice(0, 25),
       roles_missing_from_guild: roleDifference.missing.slice(0, 25),
       roles_added_since_snapshot: roleDifference.added.slice(0, 25),
       roles_with_permission_changes: rolePermissionChanges

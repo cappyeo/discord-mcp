@@ -272,6 +272,66 @@ describe('Guild Template tools', () => {
     });
   });
 
+  it('separates nonrepresentable News and Stage channels and normalizes forum tag IDs', async () => {
+    useRest();
+    const forumTemplate = {
+      ...template,
+      serialized_source_guild: {
+        channels: [
+          {
+            id: 1,
+            name: 'project-lab',
+            type: 15,
+            default_reaction_emoji: { emoji_id: 0, emoji_name: '🚀' },
+            available_tags: [
+              { id: 1, name: 'Idea', moderated: false, emoji_id: null, emoji_name: '💡' },
+            ],
+          },
+        ],
+        roles: [{ id: 0, name: '@everyone', permissions: '0' }],
+      },
+    };
+    server.use(
+      http.get(`${DISCORD_API}/guilds/templates/:code`, () => HttpResponse.json(forumTemplate)),
+      http.get(`${DISCORD_API}/guilds/:guildId/channels`, () =>
+        HttpResponse.json([
+          {
+            id: 'forum-channel',
+            name: 'project-lab',
+            type: 15,
+            default_reaction_emoji: { emoji_id: null, emoji_name: '🚀' },
+            available_tags: [
+              {
+                id: '1533826538477453472',
+                name: 'Idea',
+                moderated: false,
+                emoji_id: null,
+                emoji_name: '💡',
+              },
+            ],
+          },
+          { id: 'news-channel', name: 'announcements', type: 5 },
+          { id: 'stage-channel', name: 'town-hall', type: 13 },
+        ]),
+      ),
+      http.get(`${DISCORD_API}/guilds/:guildId/roles`, () =>
+        HttpResponse.json([{ id: guildId, name: '@everyone', permissions: '0' }]),
+      ),
+    );
+
+    const result = await run(diff, 'templates_diff', { guild_id: guildId, template_code: code });
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent.drift).toMatchObject({
+      source_guild_channel_count: 3,
+      channels_added_since_snapshot_count: 0,
+      channels_not_representable_in_template_count: 2,
+      channel_setting_difference_count: 0,
+      sync_recommended: false,
+    });
+    expect(result.structuredContent.untrusted_text).toContain('announcements');
+    expect(result.structuredContent.untrusted_text).toContain('town-hall');
+  });
+
   it('does not read an unrelated guild when the template source does not match', async () => {
     useRest();
     server.use(

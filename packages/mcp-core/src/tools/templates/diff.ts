@@ -22,7 +22,7 @@ export default defineTool({
   description: [
     '**Purpose**: Detect channel and role drift between a Guild Template snapshot and its source guild before `templates_sync`.',
     '',
-    '**Safety**: The source guild ID must match `guild_id`; otherwise the tool refuses to read that guild. Raw names are returned only in fenced `untrusted_text`. It also compares matched-role permission bitfields, matched-channel settings present in both payloads, and mappable permission overwrites. Discord-managed bot/integration roles are excluded because Guild Templates do not serialize them. Missing optional fields or unmapped overwrite subjects require manual review rather than a false claim of equality.',
+    '**Safety**: The source guild ID must match `guild_id`; otherwise the tool refuses to read that guild. Raw names are returned only in fenced `untrusted_text`. It also compares matched-role permission bitfields, matched-channel settings present in both payloads, and mappable permission overwrites. Discord-managed bot/integration roles are excluded because Guild Templates do not serialize them. Discord News and Stage channels are reported separately when the official snapshot cannot represent them. Missing optional fields or unmapped overwrite subjects require manual review rather than a false claim of equality.',
     '',
     '**Returns**: `{template, source_guild_matches, drift, untrusted_text}`. This tool is read-only and never syncs the template.',
   ].join('\n'),
@@ -75,8 +75,12 @@ export default defineTool({
       drift.role_permission_difference_count +
       drift.channel_setting_difference_count +
       drift.permission_overwrite_difference_count;
+    const nonRepresentableChannelNote =
+      drift.channels_not_representable_in_template_count === 0
+        ? ''
+        : ` ${drift.channels_not_representable_in_template_count} source channel(s) cannot be represented by Discord Guild Templates and are reported separately.`;
     return dualResult({
-      text: `Compared Guild Template \`${template.code}\` with \`${args.guild_id}\`: ${structuralDifferenceCount} structural difference(s), ${semanticDifferenceCount} permission/setting difference(s), and ${drift.unmapped_permission_overwrite_count} overwrite(s) requiring manual review. ${drift.sync_recommended ? 'Review and consider templates_sync.' : 'No comparable drift detected.'}`,
+      text: `Compared Guild Template \`${template.code}\` with \`${args.guild_id}\`: ${structuralDifferenceCount} structural difference(s), ${semanticDifferenceCount} permission/setting difference(s), and ${drift.unmapped_permission_overwrite_count} overwrite(s) requiring manual review.${nonRepresentableChannelNote} ${drift.sync_recommended ? 'Review and consider templates_sync.' : 'No comparable drift detected.'}`,
       data: {
         template,
         source_guild_matches: true,
