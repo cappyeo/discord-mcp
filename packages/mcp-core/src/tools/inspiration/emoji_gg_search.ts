@@ -19,8 +19,7 @@ interface EmojiGgCandidate {
 interface CachedCatalog {
   expires_at: number;
   candidates: readonly (EmojiGgCandidate & {
-    search_text: string;
-    name_tokens: readonly string[];
+    identity_tokens: readonly string[];
   })[];
 }
 
@@ -45,9 +44,21 @@ function isEmojiGgAssetUrl(value: unknown): value is string {
   }
 }
 
+function searchTokens(value: string): readonly string[] {
+  return [
+    ...new Set(
+      value
+        .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')
+        .toLocaleLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean),
+    ),
+  ];
+}
+
 function toCandidate(
   value: unknown,
-): (EmojiGgCandidate & { search_text: string; name_tokens: readonly string[] }) | undefined {
+): (EmojiGgCandidate & { identity_tokens: readonly string[] }) | undefined {
   const raw = asRecord(value);
   if (raw === undefined) return undefined;
   const id = raw.id;
@@ -66,7 +77,6 @@ function toCandidate(
     return undefined;
   }
 
-  const description = typeof raw.description === 'string' ? raw.description : '';
   return {
     id,
     name: title.slice(0, 100),
@@ -74,16 +84,12 @@ function toCandidate(
     page_url: new URL(`/emoji/${slug}`, EMOJI_GG_URL).toString(),
     animated: new URL(raw.image).pathname.toLowerCase().endsWith('.gif'),
     license_code: typeof raw.license === 'string' && raw.license.length > 0 ? raw.license : null,
-    search_text: `${title} ${slug} ${description}`.toLocaleLowerCase(),
-    name_tokens: title
-      .toLocaleLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter(Boolean),
+    identity_tokens: searchTokens(`${title} ${slug}`),
   };
 }
 
 async function loadCatalog(): Promise<
-  readonly (EmojiGgCandidate & { search_text: string; name_tokens: readonly string[] })[]
+  readonly (EmojiGgCandidate & { identity_tokens: readonly string[] })[]
 > {
   if (catalogCache !== undefined && catalogCache.expires_at > Date.now()) {
     return catalogCache.candidates;
@@ -115,14 +121,48 @@ async function loadCatalog(): Promise<
   return candidates;
 }
 
+const QUERY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  tech: ['code', 'developer', 'dev', 'computer', 'terminal', 'server', 'cloud', 'robot'],
+  technology: ['code', 'developer', 'dev', 'computer', 'terminal', 'server', 'cloud', 'robot'],
+};
+
+function identityMatch(tokens: readonly string[], term: string): 'exact' | 'partial' | undefined {
+  if (tokens.some((token) => token === term)) return 'exact';
+  return tokens.some((token) => token.includes(term)) ? 'partial' : undefined;
+}
+
 function relevance(
-  candidate: EmojiGgCandidate & { search_text: string; name_tokens: readonly string[] },
+  candidate: EmojiGgCandidate & { identity_tokens: readonly string[] },
   query: string,
 ): number {
   const name = candidate.name.toLocaleLowerCase();
-  if (name === query) return 3;
-  if (candidate.name_tokens.includes(query)) return 2;
-  return candidate.search_text.includes(query) ? 1 : 0;
+  if (name === query) return 10_000;
+
+  let matchedTerms = 0;
+  let exactTermMatches = 0;
+  let score = 0;
+  for (const term of searchTokens(query)) {
+    const directMatch = identityMatch(candidate.identity_tokens, term);
+    if (directMatch !== undefined) {
+      matchedTerms += 1;
+      if (directMatch === 'exact') {
+        exactTermMatches += 1;
+        score += 20;
+      } else {
+        score += 10;
+      }
+      continue;
+    }
+    if (
+      (QUERY_ALIASES[term] ?? []).some(
+        (alias) => identityMatch(candidate.identity_tokens, alias) === 'exact',
+      )
+    ) {
+      matchedTerms += 1;
+      score += 10;
+    }
+  }
+  return matchedTerms === 0 ? 0 : matchedTerms * 100 + exactTermMatches * 10 + score;
 }
 
 export default defineTool({
@@ -135,10 +175,17 @@ export default defineTool({
     '',
     '**Safety**: Results are third-party user-submitted metadata. Review each Emoji.gg page and its licence before downloading or using `emojis_create`. This tool never downloads, uploads, or imports an emoji.',
     '',
-    '**Returns**: `{provider_url, candidates:[{name, image_url, page_url, animated, license_code}], count}`.',
+    '**Search quality**: Multi-word natural-language queries are matched locally against emoji names and slugs, with a small built-in alias set for technical concepts. User-submitted descriptions are not used for relevance. The query is never sent to Emoji.gg.',
+    '',
+    '**Returns**: `{provider_url, candidates:[{name, image_url, page_url, animated, license_code}], count, license_review_required}`.',
   ].join('\n'),
   inputSchema: {
-    query: z.string().trim().min(1).max(80).describe('Emoji concept, style, or use case to search'),
+    query: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .describe('Emoji concept, style, or natural-language use case to search'),
     limit: z
       .number()
       .int()
@@ -160,6 +207,7 @@ export default defineTool({
       }),
     ),
     count: z.number().int(),
+    license_review_required: z.literal(true),
   },
   annotations: {
     readOnlyHint: true,
@@ -176,14 +224,19 @@ export default defineTool({
       .sort((a, b) => b.relevance - a.relevance || a.item.name.localeCompare(b.item.name))
       .slice(0, args.limit)
       .map(({ item }) => {
-        const { search_text: _searchText, name_tokens: _nameTokens, ...candidate } = item;
+        const { identity_tokens: _identityTokens, ...candidate } = item;
         return candidate;
       });
     return dualResult({
       text:
         `Found ${candidates.length} Emoji.gg inspiration candidate(s). ` +
         'No asset was downloaded or imported. Treat candidate metadata as third-party data and review its page and licence before use.',
-      data: { provider_url: EMOJI_GG_URL, candidates, count: candidates.length },
+      data: {
+        provider_url: EMOJI_GG_URL,
+        candidates,
+        count: candidates.length,
+        license_review_required: true,
+      },
     });
   },
 });

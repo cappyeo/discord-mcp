@@ -466,6 +466,7 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
         targetVersion: inspection.targetVersion,
         updateAvailable: true,
         applied: true,
+        restart_required: true,
       },
     },
     options.json === true,

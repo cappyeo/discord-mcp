@@ -9,6 +9,21 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.2 - Dogfood hardening
+
+Released **2026-08-03**.
+
+- Emoji.gg inspiration search now ranks multi-word natural-language queries
+  term-by-term without sending the query to the provider, and gives automation
+  an explicit `license_review_required` signal.
+- `onboarding_get` now returns a compact configuration summary and explicitly
+  distinguishes API readback from a fresh member's client experience.
+- A successful JSON `update --apply` result now carries
+  `data.restart_required: true`, so automation cannot mistake a pinned launcher
+  for an already-restarted MCP process.
+- Template sync guidance now tells callers to verify comparable drift and the
+  official snapshot's channel-type limitations with `templates_diff`.
+
 ## v0.16.1 - Template comparison fidelity
 
 Released **2026-08-03**.

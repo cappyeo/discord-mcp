@@ -115,7 +115,13 @@ describe('updateAction', () => {
     expect(output()).toMatchObject({
       ok: true,
       summary: `updated Codex launcher: ${CURRENT} -> ${NEXT}`,
-      data: { profile: 'devbot', currentVersion: CURRENT, targetVersion: NEXT, applied: true },
+      data: {
+        profile: 'devbot',
+        currentVersion: CURRENT,
+        targetVersion: NEXT,
+        applied: true,
+        restart_required: true,
+      },
     });
     const config = readFileSync(configPath, 'utf8');
     expect(config).toContain(`@discord-mcp/cli@${NEXT}", "serve", "--profile", "devbot`);

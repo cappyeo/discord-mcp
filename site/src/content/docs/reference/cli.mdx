@@ -338,8 +338,10 @@ npx --yes @discord-mcp/cli@0.16.1 update --profile devbot --apply
 ```
 
 `update` never uses `@latest` in the generated launcher and never installs a
-version silently. The explicit apply step preserves caller control over bot
-behavior and Discord permissions.
+version silently. A successful JSON `--apply` result includes
+`data.restart_required: true`: the launcher is pinned, but the running Codex
+stdio process cannot load that version until Codex restarts. The explicit apply
+step preserves caller control over bot behavior and Discord permissions.
 
 ## `profile`
 

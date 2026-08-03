@@ -20,6 +20,8 @@ export default defineTool({
     '',
     '**Requires**: Discord `MANAGE_GUILD` permission. This updates what future users receive from the template but does not change any existing guild.',
     '',
+    '**Snapshot fidelity**: After sync, use `templates_diff` to verify comparable drift. Discord may omit some source channel types from its official template serialization; the diff reports those separately rather than treating sync as a complete source-guild clone.',
+    '',
     '**Returns**: `{template, untrusted_text}`.',
   ].join('\n'),
   inputSchema: {

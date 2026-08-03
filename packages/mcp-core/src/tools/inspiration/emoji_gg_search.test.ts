@@ -35,6 +35,26 @@ const catalog = [
     slug: 'unsafe',
     image: 'https://example.com/unsafe.png',
   },
+  {
+    id: 6,
+    title: 'community_hub',
+    slug: 'community_hub',
+    image: 'https://cdn3.emoji.gg/emojis/community_hub.png',
+    description: 'A tech community home',
+  },
+  {
+    id: 7,
+    title: 'FortniteChinese',
+    slug: 'fortnite_chinese',
+    image: 'https://cdn3.emoji.gg/emojis/fortnite_chinese.png',
+    description: 'An unrelated third-party description that mentions tech community',
+  },
+  {
+    id: 8,
+    title: 'DannyDevito',
+    slug: 'danny_devito',
+    image: 'https://cdn3.emoji.gg/emojis/danny_devito.png',
+  },
 ];
 
 async function runSearch(query: string, limit = 8) {
@@ -64,6 +84,7 @@ describe('inspiration_emoji_gg_search', () => {
       };
     };
     expect(result.isError).toBe(false);
+    expect(result.structuredContent.license_review_required).toBe(true);
     expect(result.structuredContent.candidates).toEqual([
       {
         id: 1,
@@ -105,5 +126,25 @@ describe('inspiration_emoji_gg_search', () => {
       'visual_studio_code',
       'qrcode_think',
     ]);
+  });
+
+  it('handles natural-language multi-word queries without trusting third-party descriptions', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(catalog), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = (await runSearch('tech community', 3)) as {
+      structuredContent: { candidates: Array<{ name: string }> };
+    };
+
+    expect(result.structuredContent.candidates[0]?.name).toBe('community_hub');
+    expect(result.structuredContent.candidates.map((candidate) => candidate.name)).not.toContain(
+      'FortniteChinese',
+    );
+    expect(result.structuredContent.candidates.map((candidate) => candidate.name)).not.toContain(
+      'DannyDevito',
+    );
+    expect(fetchMock).toHaveBeenCalledWith('https://emoji.gg/api', expect.anything());
   });
 });

@@ -42,10 +42,18 @@ describe('onboarding_get', () => {
       { signal: new AbortController().signal },
     )) as {
       isError: boolean;
-      structuredContent: { enabled: boolean; untrusted_text: string };
+      structuredContent: {
+        enabled: boolean;
+        summary: { prompt_count: number; fresh_member_client_check_recommended: boolean };
+        untrusted_text: string;
+      };
     };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.enabled).toBe(true);
+    expect(r.structuredContent.summary).toMatchObject({
+      prompt_count: 1,
+      fresh_member_client_check_recommended: true,
+    });
     expect(r.structuredContent.untrusted_text).toContain('untrusted_discord_channel_topic');
     expect(r.structuredContent.untrusted_text).toContain('Welcome!');
     expect(r.structuredContent.untrusted_text).toContain('Option A');
