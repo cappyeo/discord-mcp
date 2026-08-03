@@ -41,9 +41,18 @@ describe('CLI surface', () => {
     expect(describeProgram()).toMatchSnapshot();
   });
 
-  it('ships exactly the seven committed subcommands', () => {
+  it('ships exactly the eight committed subcommands', () => {
     const names = describeProgram().commands.map((c) => c.name);
-    expect(names).toEqual(['doctor', 'init', 'migrate', 'profile', 'serve', 'setup', 'smoke']);
+    expect(names).toEqual([
+      'activity',
+      'doctor',
+      'init',
+      'migrate',
+      'profile',
+      'serve',
+      'setup',
+      'smoke',
+    ]);
   });
 
   it('keeps serve as the default command', () => {

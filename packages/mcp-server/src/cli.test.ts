@@ -121,6 +121,7 @@ describe('cli - version + help', () => {
     expect(out).toContain('init');
     expect(out).toContain('migrate');
     expect(out).toContain('setup');
+    expect(out).toContain('activity');
     expect(out).toContain('profile');
   });
 });
@@ -153,6 +154,15 @@ describe('cli - caller-owned profiles', () => {
     expect(out).toContain('list');
     expect(out).toContain('show');
     expect(out).toContain('remove');
+  });
+});
+
+describe('cli - activity sub-command', () => {
+  it('activity --help documents the local evidence view', async () => {
+    await runCli(['activity', '--help']);
+    const out = stdoutOutput();
+    expect(out).toContain('privacy-safe');
+    expect(out).toContain('--json');
   });
 });
 

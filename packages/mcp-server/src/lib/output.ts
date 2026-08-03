@@ -13,6 +13,7 @@
  *   so Node drains stdout/stderr naturally before exiting. The single
  *   exception (`serve`) is documented in commands/serve.ts.
  */
+import { observeCommandResult } from './activity.js';
 
 /**
  * Structured result emitted by a CLI sub-command.
@@ -108,5 +109,6 @@ export function emitResult(result: CommandResult, asJson: boolean): void {
   } else {
     process.stdout.write(renderPretty(result));
   }
+  observeCommandResult(result);
   process.exitCode = result.exitCode;
 }

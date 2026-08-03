@@ -25,6 +25,18 @@
 import { Command } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
 import { serveAction } from './commands/serve.js';
+import type { ActivityContext } from './lib/activity.js';
+
+async function captureCliActivity<T>(
+  context: ActivityContext,
+  action: () => Promise<T>,
+): Promise<T> {
+  // Unit tests intentionally execute command handlers in-process. Keep their
+  // synthetic runs out of a developer's real local evidence journal.
+  if (process.env.VITEST === 'true') return action();
+  const { captureActivity } = await import('./lib/activity.js');
+  return captureActivity(context, action);
+}
 
 export function buildProgram(): Command {
   const program = new Command('discord-mcp')
@@ -59,7 +71,9 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Load a caller-owned bot profile before checks')
     .action(async (options: { json?: boolean; online?: boolean; profile?: string }) => {
       const { doctorAction } = await import('./commands/doctor.js');
-      await doctorAction(options);
+      await captureCliActivity({ command: 'doctor', online: options.online === true }, async () =>
+        doctorAction(options),
+      );
     });
 
   program
@@ -77,7 +91,10 @@ export function buildProgram(): Command {
         profile?: string;
       }) => {
         const { smokeAction } = await import('./commands/smoke.js');
-        await smokeAction(options);
+        await captureCliActivity(
+          { command: 'smoke', confirmWrite: options.confirmWrite === true },
+          async () => smokeAction(options),
+        );
       },
     );
 
@@ -111,9 +128,18 @@ export function buildProgram(): Command {
         json?: boolean;
       }) => {
         const { setupAction } = await import('./commands/setup.js');
-        await setupAction(options);
+        await captureCliActivity({ command: 'setup' }, async () => setupAction(options));
       },
     );
+
+  program
+    .command('activity')
+    .description('Show local, privacy-safe setup and verification outcomes')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(async (options: { json?: boolean }) => {
+      const { activityAction } = await import('./commands/activity.js');
+      activityAction(options);
+    });
 
   const profile = program
     .command('profile')

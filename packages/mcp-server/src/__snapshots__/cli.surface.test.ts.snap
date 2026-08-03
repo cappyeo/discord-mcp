@@ -5,6 +5,13 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
   "commands": [
     {
       "isDefault": false,
+      "name": "activity",
+      "options": [
+        "--json",
+      ],
+    },
+    {
+      "isDefault": false,
       "name": "doctor",
       "options": [
         "--json",

@@ -1,13 +1,13 @@
 ---
 title: CLI
-description: discord-mcp CLI sub-command reference. Flags, exit codes, and examples for serve, setup, profile, doctor, smoke, init, and migrate.
+description: discord-mcp CLI sub-command reference. Flags, exit codes, and examples for serve, setup, activity, profile, doctor, smoke, init, and migrate.
 sidebar:
   order: 1
 ---
 
 import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-The `discord-mcp` binary is the single entry point with seven
+The `discord-mcp` binary is the single entry point with eight
 sub-commands routed by [commander](https://www.npmjs.com/package/commander):
 
 ```bash
@@ -17,7 +17,7 @@ discord-mcp <command> [options]
 `serve` is the default sub-command - running `discord-mcp` with no command
 boots the local stdio MCP server, equivalent to `discord-mcp serve`. Pass
 `--http` to serve a bearer-protected Streamable HTTP endpoint instead. The
-other six (`setup`, `profile`, `doctor`, `smoke`, `init`, `migrate`) are
+other seven (`setup`, `activity`, `profile`, `doctor`, `smoke`, `init`, `migrate`) are
 operator tools.
 
 Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
@@ -248,6 +248,38 @@ Profiles store only versioned metadata and the provider reference
 `env:DISCORD_TOKEN`; neither `setup` output nor the profile contains the token
 value. Selected guilds with `Administrator` still produce exit code `1` and a
 least-privilege warning.
+
+## `activity`
+
+```bash
+discord-mcp activity [--json]
+```
+
+Show the local evidence journal created by `setup`, `doctor`, and `smoke`.
+It is an operator-facing record, not telemetry: discord-mcp never sends it
+anywhere. Each record contains only time, command, outcome, and a small set of
+predefined technical signals. It never contains bot tokens, Discord identities,
+guild IDs, configuration paths, command arguments, or raw errors.
+
+The journal is capped at 200 recent records and lives beside the profile folder:
+`%APPDATA%\discord-mcp\activity.jsonl` on Windows,
+`~/Library/Application Support/discord-mcp/activity.jsonl` on macOS, and
+`${XDG_CONFIG_HOME:-~/.config}/discord-mcp/activity.jsonl` on Linux. Delete that
+local file to erase the journal; it does not change profiles or Discord.
+Set `DISCORD_MCP_ACTIVITY=off` for a per-run opt-out; this affects only the
+local journal and never the MCP server's Discord behavior.
+
+```bash
+# Human-readable recent outcomes.
+discord-mcp activity
+
+# Use the stable summary in automation or when sharing a redacted diagnosis.
+discord-mcp activity --json
+```
+
+Use this before changing the onboarding flow: it distinguishes completed setup,
+token/discovery failures, doctor check results, and whether the first smoke path
+reached identity/guild reads and cleaned up its own temporary write artifacts.
 
 ## `profile`
 

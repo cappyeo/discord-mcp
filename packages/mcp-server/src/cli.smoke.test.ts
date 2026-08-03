@@ -3,7 +3,7 @@
  *
  * Spawns the built `dist/cli.js` as a real subprocess and asserts:
  * 1. `--version` prints the package version.
- * 2. `--help` lists all seven sub-commands.
+ * 2. `--help` lists all eight sub-commands.
  * 3. `doctor --json` (without DISCORD_TOKEN) exits non-zero with parseable
  *    JSON that flags the missing token.
  *
@@ -14,6 +14,8 @@
  * fresh worktrees, in CI, and during local dev.
  */
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -34,7 +36,7 @@ function runCli(
   try {
     const stdout = execFileSync(process.execPath, [cliPath, ...args], {
       encoding: 'utf8',
-      env: { PATH: process.env.PATH ?? '', ...extraEnv },
+      env: { PATH: process.env.PATH ?? '', DISCORD_MCP_ACTIVITY: 'off', ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     return { stdout, stderr: '', status: 0 };
@@ -62,7 +64,7 @@ describe('cli binary smoke (post-build)', () => {
     expect(status).toBe(0);
   });
 
-  it('--help lists all seven subcommands', () => {
+  it('--help lists all eight subcommands', () => {
     const { stdout, stderr, status } = runCli(['--help']);
     const combined = stdout + stderr;
     expect(combined).toContain('serve');
@@ -70,8 +72,9 @@ describe('cli binary smoke (post-build)', () => {
     expect(combined).toContain('smoke');
     expect(combined).toContain('init');
     expect(combined).toContain('migrate');
-    expect(combined).toMatch(/\n  setup \[options\]\s/);
-    expect(combined).toMatch(/\n  profile\s/);
+    expect(combined).toMatch(/\n {2}setup \[options\]\s/);
+    expect(combined).toMatch(/\n {2}profile\s/);
+    expect(combined).toMatch(/\n {2}activity \[options\]\s/);
     expect(status).toBe(0);
   });
 
@@ -81,5 +84,28 @@ describe('cli binary smoke (post-build)', () => {
     const parsed = JSON.parse(stdout) as { ok: boolean; exitCode: number };
     expect(parsed.ok).toBe(false);
     expect(parsed.exitCode).toBe(2);
+  });
+
+  it('records a filtered local result that the built activity command can read', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'discord-mcp-cli-activity-'));
+    const env = { APPDATA: appData, DISCORD_MCP_ACTIVITY: '' };
+    try {
+      const doctor = runCli(['doctor', '--json'], env);
+      expect(doctor.status).toBe(2);
+
+      const activity = runCli(['activity', '--json'], env);
+      expect(activity.status).toBe(0);
+      const summary = JSON.parse(activity.stdout) as {
+        data: { total: number; recent: Array<{ command: string; outcome: string }> };
+      };
+      expect(summary.data.total).toBe(1);
+      expect(summary.data.recent[0]).toMatchObject({ command: 'doctor', outcome: 'failure' });
+
+      const journal = readFileSync(join(appData, 'discord-mcp', 'activity.jsonl'), 'utf8');
+      expect(journal).not.toContain('DISCORD_TOKEN');
+      expect(journal).not.toContain('Bot ');
+    } finally {
+      rmSync(appData, { recursive: true, force: true });
+    }
   });
 });
