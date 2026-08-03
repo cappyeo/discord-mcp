@@ -11,6 +11,17 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+## v0.14.4 - Portable guided setup
+
+Released **2026-08-03**.
+
+- Guided `setup` profile fragments now launch the exact `@discord-mcp/cli`
+  release through `npx`, rather than persisting an absolute local installation
+  or npm-cache path. They still start `serve --profile <name>` and keep
+  `DISCORD_TOKEN` outside generated configuration and profile metadata.
+- Added repository funding metadata for the maintainer's GitHub Sponsors
+  profile.
+
 ## v0.14.3 - Caller-owned bot profiles and safe setup
 
 Released **2026-08-03**.
