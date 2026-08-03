@@ -9,10 +9,13 @@ import '../../container.js';
 const DISCORD_API = 'https://discord.com/api/v10';
 
 describe('members_get_current_user', () => {
-  it('GETs /users/@me/guilds/:gid/member and returns bot member', async () => {
+  it('GETs /users/@me then /guilds/:gid/members/:botId and returns bot member', async () => {
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     server.use(
-      http.get(`${DISCORD_API}/users/@me/guilds/:gid/member`, () => {
+      http.get(`${DISCORD_API}/users/%40me`, () => {
+        return HttpResponse.json({ id: '655629772673939112' });
+      }),
+      http.get(`${DISCORD_API}/guilds/:gid/members/655629772673939112`, () => {
         return HttpResponse.json({
           user: { id: '655629772673939112', username: 'discord-mcp-bot' },
           nick: 'BotNick',

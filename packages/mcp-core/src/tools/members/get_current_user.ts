@@ -14,11 +14,15 @@ interface RawMember {
   premium_since?: string | null;
 }
 
+interface RawCurrentUser {
+  id: string;
+}
+
 export default defineTool({
   name: 'members_get_current_user',
   category: 'members',
   description: [
-    "**Purpose**: Fetch the current bot user's own member entry in a guild via `GET /users/@me/guilds/{guild.id}/member`.",
+    "**Purpose**: Fetch the current bot user's own member entry in a guild via `GET /users/@me` followed by `GET /guilds/{guild.id}/members/{bot.id}`.",
     '',
     '**When to use**:',
     "- Discover the bot's nick and role assignments in a target guild without needing the GUILD_MEMBERS intent.",
@@ -42,7 +46,10 @@ export default defineTool({
   },
   idempotent: true,
   handler: async (args) => {
-    const m = (await container.rest.get(Routes.userGuildMember(args.guild_id))) as RawMember;
+    const currentUser = (await container.rest.get(Routes.user('@me'))) as RawCurrentUser;
+    const m = (await container.rest.get(
+      Routes.guildMember(args.guild_id, currentUser.id),
+    )) as RawMember;
     const wrappedNick =
       m.nick !== null && m.nick !== undefined ? wrapUntrusted(m.nick, 'username') : '_(no nick)_';
     return dualResult({
