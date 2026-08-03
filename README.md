@@ -131,6 +131,8 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | --- | --- |
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
 | `discord-mcp setup` | Verify one caller-owned bot, save a non-secret profile, and generate its client configuration. |
+| `discord-mcp activity` | Show the local, privacy-safe evidence journal for setup and verification outcomes. |
+| `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
 | `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
 | `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
 | `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, and optional network connectivity. |

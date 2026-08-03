@@ -84,6 +84,17 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--profile <name>",
       ],
     },
+    {
+      "isDefault": false,
+      "name": "update",
+      "options": [
+        "--apply",
+        "--check",
+        "--config <path>",
+        "--json",
+        "--profile <name>",
+      ],
+    },
   ],
   "globalOptions": [
     "-V, --version",

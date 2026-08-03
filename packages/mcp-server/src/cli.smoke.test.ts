@@ -64,7 +64,7 @@ describe('cli binary smoke (post-build)', () => {
     expect(status).toBe(0);
   });
 
-  it('--help lists all eight subcommands', () => {
+  it('--help lists all nine subcommands', () => {
     const { stdout, stderr, status } = runCli(['--help']);
     const combined = stdout + stderr;
     expect(combined).toContain('serve');
@@ -75,6 +75,7 @@ describe('cli binary smoke (post-build)', () => {
     expect(combined).toMatch(/\n {2}setup \[options\]\s/);
     expect(combined).toMatch(/\n {2}profile\s/);
     expect(combined).toMatch(/\n {2}activity \[options\]\s/);
+    expect(combined).toMatch(/\n {2}update \[options\]\s/);
     expect(status).toBe(0);
   });
 

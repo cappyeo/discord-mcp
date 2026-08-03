@@ -11,6 +11,12 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Added `discord-mcp update --profile <name> [--check|--apply]` for generated
+  Codex launchers. It compares the pinned launcher version with npm `latest`;
+  `--apply` is explicit, updates exactly one recognized launcher atomically,
+  and fails closed on custom or ambiguous configuration. The check never sends
+  bot tokens, Discord identities, guild IDs, or profile contents to npm.
+
 ## v0.14.6 - Actionable activity evidence
 
 Released **2026-08-03**.

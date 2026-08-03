@@ -41,7 +41,7 @@ describe('CLI surface', () => {
     expect(describeProgram()).toMatchSnapshot();
   });
 
-  it('ships exactly the eight committed subcommands', () => {
+  it('ships exactly the nine committed subcommands', () => {
     const names = describeProgram().commands.map((c) => c.name);
     expect(names).toEqual([
       'activity',
@@ -52,6 +52,7 @@ describe('CLI surface', () => {
       'serve',
       'setup',
       'smoke',
+      'update',
     ]);
   });
 

@@ -122,6 +122,7 @@ describe('cli - version + help', () => {
     expect(out).toContain('migrate');
     expect(out).toContain('setup');
     expect(out).toContain('activity');
+    expect(out).toContain('update');
     expect(out).toContain('profile');
   });
 });
@@ -163,6 +164,17 @@ describe('cli - activity sub-command', () => {
     const out = stdoutOutput();
     expect(out).toContain('privacy-safe');
     expect(out).toContain('--json');
+  });
+});
+
+describe('cli - update sub-command', () => {
+  it('update --help documents the explicit check and apply flow', async () => {
+    await runCli(['update', '--help']);
+    const out = stdoutOutput();
+    expect(out).toContain('--profile');
+    expect(out).toContain('--check');
+    expect(out).toContain('--apply');
+    expect(out).toContain('--config');
   });
 });
 

@@ -68,13 +68,14 @@ There is no `version` subcommand. `serve` is registered as commander's
 that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
 :::
 
-`discord-mcp --help` lists eight subcommands:
+`discord-mcp --help` lists nine subcommands:
 
 | Subcommand | What it does |
 | ---------- | ------------ |
 | `serve` | Start the local stdio MCP server. **Default** - a bare `discord-mcp` runs this. Use `serve --http` for a bearer-protected remote endpoint. |
 | `setup` | Verify one caller-owned bot, save non-secret profile metadata, and generate its client config. |
 | `activity` | Show the local, privacy-safe evidence journal for setup and verification outcomes. |
+| `update` | Check a generated Codex launcher for a new release; `--apply` is always explicit. |
 | `profile` | List, show, or remove local non-secret bot profiles. |
 | `doctor` | Diagnose config, token shape, and (with `--online`) connectivity. |
 | `smoke` | Verify the real MCP-to-Discord path; writes require the explicit `--confirm-write` flag. |

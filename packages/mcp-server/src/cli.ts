@@ -141,6 +141,27 @@ export function buildProgram(): Command {
       activityAction(options);
     });
 
+  program
+    .command('update')
+    .description('Check for a newer CLI and explicitly update one generated Codex launcher')
+    .requiredOption('--profile <name>', 'Caller-owned Codex profile to inspect')
+    .option('--check', 'Check only (default)')
+    .option('--apply', 'Update one exact generated Codex launcher after checking')
+    .option('--config <path>', 'Override the default Codex config.toml path')
+    .option('--json', 'Emit machine-readable JSON instead of pretty output')
+    .action(
+      async (options: {
+        profile: string;
+        check?: boolean;
+        apply?: boolean;
+        config?: string;
+        json?: boolean;
+      }) => {
+        const { updateAction } = await import('./commands/update.js');
+        await updateAction(options);
+      },
+    );
+
   const profile = program
     .command('profile')
     .description('List, inspect, or remove non-secret caller-owned bot profiles');

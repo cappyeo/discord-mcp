@@ -1,13 +1,13 @@
 ---
 title: CLI
-description: discord-mcp CLI sub-command reference. Flags, exit codes, and examples for serve, setup, activity, profile, doctor, smoke, init, and migrate.
+description: discord-mcp CLI sub-command reference. Flags, exit codes, and examples for serve, setup, activity, update, profile, doctor, smoke, init, and migrate.
 sidebar:
   order: 1
 ---
 
 import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-The `discord-mcp` binary is the single entry point with eight
+The `discord-mcp` binary is the single entry point with nine
 sub-commands routed by [commander](https://www.npmjs.com/package/commander):
 
 ```bash
@@ -17,7 +17,7 @@ discord-mcp <command> [options]
 `serve` is the default sub-command - running `discord-mcp` with no command
 boots the local stdio MCP server, equivalent to `discord-mcp serve`. Pass
 `--http` to serve a bearer-protected Streamable HTTP endpoint instead. The
-other seven (`setup`, `activity`, `profile`, `doctor`, `smoke`, `init`, `migrate`) are
+other eight (`setup`, `activity`, `update`, `profile`, `doctor`, `smoke`, `init`, `migrate`) are
 operator tools.
 
 Source: [`packages/mcp-server/src/cli.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/cli.ts).
@@ -143,7 +143,7 @@ discord-mcp doctor --profile devbot --online
 | `1`  | At least one check returned `warn`, no fails.                          |
 | `2`  | At least one check returned `fail` (e.g. invalid token, missing env).  |
 
-The exit-code policy is uniform across `setup`, `profile`, `doctor`, `smoke`, `init`, and `migrate`:
+The exit-code policy is uniform across `setup`, `profile`, `doctor`, `smoke`, `init`, `migrate`, and `update`:
 `0` = success, `1` = success-with-work-left, `2` = couldn't run.
 
 ### See also
@@ -281,6 +281,43 @@ Use this before changing the onboarding flow: it distinguishes completed setup,
 token/discovery failures, the safe `administrator-warning` least-privilege
 signal, doctor check results, and whether the first smoke path reached
 identity/guild reads and cleaned up its own temporary write artifacts.
+
+## `update`
+
+```bash
+discord-mcp update --profile <name> [--check]
+discord-mcp update --profile <name> --apply
+```
+
+Check the npm `latest` release against the exact version pinned in one generated
+Codex launcher. A normal check does not modify configuration. `--apply` updates
+only the matching `npx ... @discord-mcp/cli@<version> serve --profile <name>`
+array and writes the result atomically.
+
+The command loads only the non-secret local profile to confirm that it belongs
+to Codex. It never resolves or sends `DISCORD_TOKEN`, bot identity, guild IDs,
+or profile contents to npm. Custom wrappers, multiline TOML, and multiple
+matching launchers fail closed and are left untouched.
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--profile <name>` | string | required | Saved caller-owned profile generated for Codex. |
+| `--check` | boolean | `true` | Explicit spelling of the default read-only check. Cannot be combined with `--apply`. |
+| `--apply` | boolean | `false` | Explicitly update exactly one generated Codex launcher after a newer release is found. |
+| `--config <path>` | string | `$CODEX_HOME/config.toml` or `~/.codex/config.toml` | Override the user-level Codex config location. |
+| `--json` | boolean | `false` | Emit the structured version/status result. |
+
+```bash
+# Check only. Exit 1 means an update is available, not that the bot failed.
+discord-mcp update --profile devbot
+
+# Apply the already-reviewed choice, then restart Codex.
+discord-mcp update --profile devbot --apply
+```
+
+`update` never uses `@latest` in the generated launcher and never installs a
+version silently. The explicit apply step preserves caller control over bot
+behavior and Discord permissions.
 
 ## `profile`
 
