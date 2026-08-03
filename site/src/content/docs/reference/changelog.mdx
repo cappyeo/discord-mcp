@@ -9,7 +9,14 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
-## Unreleased
+## v0.14.8 - Read-only launcher update discovery
+
+Released **2026-08-03**.
+
+- `doctor --online --profile <codex-profile>` now reports whether its exact
+  generated launcher has a newer npm release. Discovery is read-only: it does
+  not send bot/profile data, modify configuration, or update automatically.
+  Custom and ambiguous launchers remain caller-managed.
 
 ## v0.14.7 - Explicit caller-controlled updates
 

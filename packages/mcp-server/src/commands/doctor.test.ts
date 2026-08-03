@@ -7,9 +7,11 @@
  * here only for the audit-sink scenarios - everything else uses real
  * env-var manipulation against the real check implementations.
  */
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { saveProfile } from '../lib/profiles.js';
 
 // Mock node:fs at module-eval time so audit-sink (file branch) can be
 // driven deterministically. Default impl is a no-op (writable). Tests
@@ -36,6 +38,11 @@ const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
 const originalToken = process.env.DISCORD_TOKEN;
 const originalAuditSink = process.env.MCP_AUDIT_SINK;
 const originalAuditFile = process.env.MCP_AUDIT_FILE;
+const originalCodexHome = process.env.CODEX_HOME;
+const originalExpectedBotId = process.env.DISCORD_EXPECTED_BOT_ID;
+const originalAllowedGuilds = process.env.ALLOWED_GUILDS;
+const originalToolSurface = process.env.MCP_TOOL_SURFACE;
+const originalGateway = process.env.GATEWAY;
 const originalIsTTY = process.stdout.isTTY;
 const originalExitCode = process.exitCode;
 
@@ -73,6 +80,31 @@ afterEach(() => {
   } else {
     delete process.env.MCP_AUDIT_FILE;
   }
+  if (originalCodexHome !== undefined) {
+    process.env.CODEX_HOME = originalCodexHome;
+  } else {
+    delete process.env.CODEX_HOME;
+  }
+  if (originalExpectedBotId !== undefined) {
+    process.env.DISCORD_EXPECTED_BOT_ID = originalExpectedBotId;
+  } else {
+    delete process.env.DISCORD_EXPECTED_BOT_ID;
+  }
+  if (originalAllowedGuilds !== undefined) {
+    process.env.ALLOWED_GUILDS = originalAllowedGuilds;
+  } else {
+    delete process.env.ALLOWED_GUILDS;
+  }
+  if (originalToolSurface !== undefined) {
+    process.env.MCP_TOOL_SURFACE = originalToolSurface;
+  } else {
+    delete process.env.MCP_TOOL_SURFACE;
+  }
+  if (originalGateway !== undefined) {
+    process.env.GATEWAY = originalGateway;
+  } else {
+    delete process.env.GATEWAY;
+  }
   Object.defineProperty(process.stdout, 'isTTY', {
     value: originalIsTTY,
     configurable: true,
@@ -91,6 +123,61 @@ function setTTY(value: boolean): void {
 
 function stdoutOutput(): string {
   return stdoutWrites.join('');
+}
+
+function createCodexProfileFixture(version = '0.14.6'): {
+  directory: string;
+  profileDirectory: string;
+  configPath: string;
+} {
+  const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-doctor-update-'));
+  const profileDirectory = join(directory, 'profiles');
+  const codexHome = join(directory, 'codex');
+  const configPath = join(codexHome, 'config.toml');
+  mkdirSync(codexHome, { recursive: true });
+  saveProfile(
+    {
+      version: 1,
+      name: 'devbot',
+      bot: { id: '123456789012345678', username: 'doctor-update-bot' },
+      credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+      allowedGuilds: ['987654321098765432'],
+      client: 'codex',
+      toolSurface: 'progressive',
+      gateway: false,
+    },
+    { directory: profileDirectory },
+  );
+  writeFileSync(
+    configPath,
+    [
+      '[mcp_servers.discord-mcp]',
+      'command = "npx"',
+      `args = ["--yes", "--loglevel=error", "@discord-mcp/cli@${version}", "serve", "--profile", "devbot"]`,
+      'env_vars = ["DISCORD_TOKEN"]',
+      '',
+    ].join('\n'),
+  );
+  process.env.CODEX_HOME = codexHome;
+  return { directory, profileDirectory, configPath };
+}
+
+function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof vi.fn> {
+  return vi.fn(async (input: string | URL | Request): Promise<Response> => {
+    const url = String(input);
+    if (url.includes('registry.npmjs.org')) {
+      return latestVersion === undefined
+        ? new Response('', { status: 503 })
+        : new Response(JSON.stringify({ 'dist-tags': { latest: latestVersion } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+    }
+    return new Response(JSON.stringify({ id: '123456789012345678', username: 'bot', bot: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
 }
 
 describe('doctor profile activation', () => {
@@ -171,6 +258,109 @@ describe('doctorAction - online check selection', () => {
     // token-online hit the network exactly once. otel-reachable did NOT
     // because OTEL_ENABLED=false → skips request.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('doctorAction - Codex launcher update discovery', () => {
+  it('warns about a newer generated launcher without changing the config', async () => {
+    const fixture = createCodexProfileFixture();
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+      const before = readFileSync(fixture.configPath, 'utf8');
+      vi.stubGlobal('fetch', onlineDoctorFetch('0.14.7'));
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          online: true,
+          profile: 'devbot',
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      const updateCheck = parsed.data.checks.find((check) => check.id === 'codex-launcher-update');
+      expect(parsed.exitCode).toBe(1);
+      expect(updateCheck).toMatchObject({
+        status: 'warn',
+        details: { currentVersion: '0.14.6', targetVersion: '0.14.7', updateAvailable: true },
+      });
+      expect(readFileSync(fixture.configPath, 'utf8')).toBe(before);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a custom launcher caller-managed without checking npm', async () => {
+    const fixture = createCodexProfileFixture();
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+      writeFileSync(
+        fixture.configPath,
+        [
+          '[mcp_servers.discord-mcp]',
+          'command = "powershell.exe"',
+          'args = ["-Command", "npx --yes @discord-mcp/cli@0.14.6 serve --profile devbot"]',
+          '',
+        ].join('\n'),
+      );
+      const fetchMock = onlineDoctorFetch('0.14.7');
+      vi.stubGlobal('fetch', fetchMock);
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          online: true,
+          profile: 'devbot',
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      const updateCheck = parsed.data.checks.find((check) => check.id === 'codex-launcher-update');
+      expect(parsed.exitCode).toBe(0);
+      expect(updateCheck).toMatchObject({ status: 'ok', details: { managed: false } });
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).includes('registry.npmjs.org')),
+      ).toBe(false);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('warns when npm update discovery is unavailable without changing the config', async () => {
+    const fixture = createCodexProfileFixture();
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+      const before = readFileSync(fixture.configPath, 'utf8');
+      vi.stubGlobal('fetch', onlineDoctorFetch(undefined));
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          online: true,
+          profile: 'devbot',
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      const updateCheck = parsed.data.checks.find((check) => check.id === 'codex-launcher-update');
+      expect(parsed.exitCode).toBe(1);
+      expect(updateCheck).toMatchObject({ status: 'warn', details: { updateAvailable: null } });
+      expect(readFileSync(fixture.configPath, 'utf8')).toBe(before);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
   });
 });
 

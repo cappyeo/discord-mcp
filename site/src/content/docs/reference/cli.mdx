@@ -108,13 +108,15 @@ discord-mcp doctor [--profile <name>] [--json] [--online]
 
 Diagnose configuration, token, and connectivity issues. Runs a registry of
 checks (token format, env-var parse, audit sink, OTel config, etc.) and
-aggregates results into a single structured report.
+aggregates results into a single structured report. With `--online --profile`
+for a generated Codex profile, it also checks the pinned launcher version
+against npm `latest`.
 
 | Flag        | Type    | Default | Description                                                                                                                                    |
 | ----------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--json`    | boolean | `false` | Emit machine-readable JSON instead of pretty TTY output. Use this in CI.                                                                       |
-| `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). Without this flag only offline checks run, so doctor stays cheap.      |
-| `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. |
+| `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). With a generated Codex profile, also performs one read-only npm version check. Without this flag only offline checks run, so doctor stays cheap. |
+| `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. A generated Codex profile enables launcher update discovery with `--online`. |
 
 ### Examples
 
@@ -131,7 +133,8 @@ DISCORD_TOKEN=Bot.xxx discord-mcp doctor --online
 # Full online + JSON report - typical pre-deploy gate.
 discord-mcp doctor --online --json | jq .
 
-# Verify a saved caller-owned bot profile and its identity lock.
+# Verify a saved caller-owned bot profile, its identity lock, and (for a
+# generated Codex launcher) whether an explicit update is available.
 discord-mcp doctor --profile devbot --online
 ```
 
@@ -140,11 +143,16 @@ discord-mcp doctor --profile devbot --online
 | Code | Meaning                                                                |
 | ---- | ---------------------------------------------------------------------- |
 | `0`  | All checks ok.                                                         |
-| `1`  | At least one check returned `warn`, no fails.                          |
+| `1`  | At least one check returned `warn`, no fails (including an available launcher update). |
 | `2`  | At least one check returned `fail` (e.g. invalid token, missing env).  |
 
 The exit-code policy is uniform across `setup`, `profile`, `doctor`, `smoke`, `init`, `migrate`, and `update`:
 `0` = success, `1` = success-with-work-left, `2` = couldn't run.
+
+The update-status check never reads or sends `DISCORD_TOKEN`, bot identity,
+guild IDs, or profile contents to npm. It never modifies `config.toml`; use
+[`update --apply`](#update) only after reviewing the reported version. Custom
+or ambiguous launchers are marked caller-managed and left alone.
 
 ### See also
 
@@ -315,7 +323,7 @@ discord-mcp update --profile devbot
 discord-mcp update --profile devbot --apply
 
 # First use from a launcher pinned before v0.14.7.
-npx --yes @discord-mcp/cli@0.14.7 update --profile devbot --apply
+npx --yes @discord-mcp/cli@0.14.8 update --profile devbot --apply
 ```
 
 `update` never uses `@latest` in the generated launcher and never installs a

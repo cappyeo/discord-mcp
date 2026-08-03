@@ -29,11 +29,37 @@ interface VersionParts {
   readonly prerelease?: string;
 }
 
-interface LauncherMatch {
+export interface LauncherMatch {
   readonly configName: string;
   readonly argsStart: number;
   readonly argsEnd: number;
   readonly currentVersion: string;
+}
+
+export type CodexLauncherUpdateErrorKind =
+  | 'config-missing'
+  | 'config-read'
+  | 'launcher-unrecognized'
+  | 'launcher-ambiguous'
+  | 'registry-unavailable'
+  | 'version-unsafe';
+
+export class CodexLauncherUpdateError extends Error {
+  constructor(
+    readonly kind: CodexLauncherUpdateErrorKind,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export interface CodexLauncherUpdateInspection {
+  readonly configPath: string;
+  readonly config: string;
+  readonly launcher: LauncherMatch;
+  readonly currentVersion: string;
+  readonly targetVersion: string;
+  readonly updateAvailable: boolean;
 }
 
 function parseVersion(value: string): VersionParts | undefined {
@@ -80,7 +106,9 @@ function compareVersions(left: string, right: string): number | undefined {
   return comparePrerelease(leftParts.prerelease, rightParts.prerelease);
 }
 
-function resolveCodexConfigPath(options: UpdateOptions): string {
+function resolveCodexConfigPath(
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'>,
+): string {
   if (options.config !== undefined) return resolve(options.config);
   const env = options.env ?? process.env;
   const root = env.CODEX_HOME?.trim() || join(options.homeDirectory ?? homedir(), '.codex');
@@ -199,6 +227,110 @@ function writeAtomically(path: string, content: string): void {
   }
 }
 
+export async function inspectCodexLauncherUpdate(
+  profile: DiscordMcpProfile,
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env' | 'registryUrl'> = {},
+): Promise<CodexLauncherUpdateInspection> {
+  const configPath = resolveCodexConfigPath(options);
+  if (!existsSync(configPath)) {
+    throw new CodexLauncherUpdateError('config-missing', `Expected ${configPath}.`);
+  }
+
+  let config: string;
+  try {
+    config = readFileSync(configPath, 'utf8');
+  } catch (error) {
+    throw new CodexLauncherUpdateError(
+      'config-read',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  const launchers = findGeneratedCodexLaunchers(config, profile.name);
+  if (launchers.length === 0) {
+    throw new CodexLauncherUpdateError(
+      'launcher-unrecognized',
+      'No exact npx launcher for this profile was found. Custom wrappers are left unchanged.',
+    );
+  }
+  if (launchers.length > 1) {
+    throw new CodexLauncherUpdateError(
+      'launcher-ambiguous',
+      `Found ${launchers.length} matching launchers. Remove the ambiguity before retrying.`,
+    );
+  }
+
+  const launcher = launchers[0];
+  if (launcher === undefined) {
+    throw new CodexLauncherUpdateError(
+      'launcher-unrecognized',
+      'No exact npx launcher for this profile was found.',
+    );
+  }
+
+  let targetVersion: string;
+  try {
+    targetVersion = await latestPublishedVersion(options.registryUrl);
+  } catch (error) {
+    throw new CodexLauncherUpdateError(
+      'registry-unavailable',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  const comparison = compareVersions(targetVersion, launcher.currentVersion);
+  if (comparison === undefined) {
+    throw new CodexLauncherUpdateError(
+      'version-unsafe',
+      `Current version: ${launcher.currentVersion}; registry version: ${targetVersion}`,
+    );
+  }
+
+  return {
+    configPath,
+    config,
+    launcher,
+    currentVersion: launcher.currentVersion,
+    targetVersion,
+    updateAvailable: comparison > 0,
+  };
+}
+
+function emitInspectionError(error: unknown, asJson: boolean): void {
+  if (error instanceof CodexLauncherUpdateError) {
+    const result =
+      error.kind === 'config-missing'
+        ? {
+            summary: 'could not find the Codex configuration file',
+            errors: [
+              `${error.message} Run setup again or pass --config <path> for a nonstandard location.`,
+            ],
+          }
+        : error.kind === 'config-read'
+          ? { summary: 'could not read the Codex configuration file', errors: [error.message] }
+          : error.kind === 'launcher-unrecognized' || error.kind === 'launcher-ambiguous'
+            ? {
+                summary: 'could not identify exactly one generated Codex launcher',
+                errors: [error.message],
+              }
+            : error.kind === 'registry-unavailable'
+              ? { summary: 'could not check for an update', errors: [error.message] }
+              : { summary: 'could not compare package versions safely', errors: [error.message] };
+    emitResult({ ok: false, exitCode: 2, ...result }, asJson);
+    return;
+  }
+
+  emitResult(
+    {
+      ok: false,
+      exitCode: 2,
+      summary: 'could not check for an update',
+      errors: [error instanceof Error ? error.message : String(error)],
+    },
+    asJson,
+  );
+}
+
 export async function updateAction(options: UpdateOptions): Promise<void> {
   if (options.apply === true && options.check === true) {
     emitResult(
@@ -243,111 +375,26 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
     return;
   }
 
-  const configPath = resolveCodexConfigPath(options);
-  if (!existsSync(configPath)) {
-    emitResult(
-      {
-        ok: false,
-        exitCode: 2,
-        summary: 'could not find the Codex configuration file',
-        errors: [
-          `Expected ${configPath}. Run setup again or pass --config <path> for a nonstandard location.`,
-        ],
-      },
-      options.json === true,
-    );
-    return;
-  }
-
-  let config: string;
+  let inspection: CodexLauncherUpdateInspection;
   try {
-    config = readFileSync(configPath, 'utf8');
+    inspection = await inspectCodexLauncherUpdate(profile, options);
   } catch (error) {
-    emitResult(
-      {
-        ok: false,
-        exitCode: 2,
-        summary: 'could not read the Codex configuration file',
-        errors: [error instanceof Error ? error.message : String(error)],
-      },
-      options.json === true,
-    );
+    emitInspectionError(error, options.json === true);
     return;
   }
 
-  const launchers = findGeneratedCodexLaunchers(config, profile.name);
-  if (launchers.length !== 1) {
-    emitResult(
-      {
-        ok: false,
-        exitCode: 2,
-        summary: 'could not identify exactly one generated Codex launcher',
-        errors: [
-          launchers.length === 0
-            ? 'No exact npx launcher for this profile was found. Custom wrappers are left unchanged.'
-            : `Found ${launchers.length} matching launchers. Remove the ambiguity before retrying.`,
-        ],
-      },
-      options.json === true,
-    );
-    return;
-  }
-
-  const launcher = launchers[0];
-  if (launcher === undefined) {
-    emitResult(
-      {
-        ok: false,
-        exitCode: 2,
-        summary: 'could not identify exactly one generated Codex launcher',
-        errors: ['No exact npx launcher for this profile was found.'],
-      },
-      options.json === true,
-    );
-    return;
-  }
-  const currentVersion = launcher.currentVersion;
-  let targetVersion: string;
-  try {
-    targetVersion = await latestPublishedVersion(options.registryUrl);
-  } catch (error) {
-    emitResult(
-      {
-        ok: false,
-        exitCode: 2,
-        summary: 'could not check for an update',
-        errors: [error instanceof Error ? error.message : String(error)],
-      },
-      options.json === true,
-    );
-    return;
-  }
-
-  const comparison = compareVersions(targetVersion, currentVersion);
-  if (comparison === undefined) {
-    emitResult(
-      {
-        ok: false,
-        exitCode: 2,
-        summary: 'could not compare package versions safely',
-        errors: [`Current version: ${currentVersion}`, `Registry version: ${targetVersion}`],
-      },
-      options.json === true,
-    );
-    return;
-  }
-  if (comparison <= 0) {
+  if (!inspection.updateAvailable) {
     emitResult(
       {
         ok: true,
         exitCode: 0,
-        summary: `discord-mcp is up to date (${currentVersion})`,
+        summary: `discord-mcp is up to date (${inspection.currentVersion})`,
         details: [`Profile: ${profile.name}`, 'No bot token or Discord data was sent to npm.'],
         data: {
           package: PACKAGE_NAME,
           profile: profile.name,
-          currentVersion,
-          targetVersion,
+          currentVersion: inspection.currentVersion,
+          targetVersion: inspection.targetVersion,
           updateAvailable: false,
         },
       },
@@ -361,7 +408,7 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
       {
         ok: false,
         exitCode: 1,
-        summary: `update available: ${currentVersion} -> ${targetVersion}`,
+        summary: `update available: ${inspection.currentVersion} -> ${inspection.targetVersion}`,
         details: [
           `Profile: ${profile.name}`,
           `Apply explicitly: discord-mcp update --profile ${profile.name} --apply`,
@@ -371,8 +418,8 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
         data: {
           package: PACKAGE_NAME,
           profile: profile.name,
-          currentVersion,
-          targetVersion,
+          currentVersion: inspection.currentVersion,
+          targetVersion: inspection.targetVersion,
           updateAvailable: true,
         },
       },
@@ -381,14 +428,14 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
     return;
   }
 
-  const args = config.slice(launcher.argsStart, launcher.argsEnd);
+  const args = inspection.config.slice(inspection.launcher.argsStart, inspection.launcher.argsEnd);
   const nextArgs = args.replace(
-    `${PACKAGE_NAME}@${launcher.currentVersion}`,
-    `${PACKAGE_NAME}@${targetVersion}`,
+    `${PACKAGE_NAME}@${inspection.launcher.currentVersion}`,
+    `${PACKAGE_NAME}@${inspection.targetVersion}`,
   );
-  const updatedConfig = `${config.slice(0, launcher.argsStart)}${nextArgs}${config.slice(launcher.argsEnd)}`;
+  const updatedConfig = `${inspection.config.slice(0, inspection.launcher.argsStart)}${nextArgs}${inspection.config.slice(inspection.launcher.argsEnd)}`;
   try {
-    writeAtomically(configPath, updatedConfig);
+    writeAtomically(inspection.configPath, updatedConfig);
   } catch (error) {
     emitResult(
       {
@@ -406,17 +453,17 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
     {
       ok: true,
       exitCode: 0,
-      summary: `updated Codex launcher: ${launcher.currentVersion} -> ${targetVersion}`,
+      summary: `updated Codex launcher: ${inspection.launcher.currentVersion} -> ${inspection.targetVersion}`,
       details: [
         `Profile: ${profile.name}`,
-        `Server: ${launcher.configName}`,
+        `Server: ${inspection.launcher.configName}`,
         'Restart Codex to start the newly pinned version.',
       ],
       data: {
         package: PACKAGE_NAME,
         profile: profile.name,
-        currentVersion: launcher.currentVersion,
-        targetVersion,
+        currentVersion: inspection.launcher.currentVersion,
+        targetVersion: inspection.targetVersion,
         updateAvailable: true,
         applied: true,
       },

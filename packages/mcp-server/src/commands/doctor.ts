@@ -25,7 +25,8 @@
 import { type Config, loadConfig } from '@discord-mcp/core';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
 import { emitResult } from '../lib/output.js';
-import { activateProfile } from '../lib/profiles.js';
+import { activateProfile, type DiscordMcpProfile } from '../lib/profiles.js';
+import { CodexLauncherUpdateError, inspectCodexLauncherUpdate } from './update.js';
 
 export interface DoctorOptions {
   json?: boolean;
@@ -34,10 +35,68 @@ export interface DoctorOptions {
   profileDirectory?: string;
 }
 
+async function codexLauncherUpdateCheck(profile: DiscordMcpProfile): Promise<CheckResult> {
+  try {
+    const inspection = await inspectCodexLauncherUpdate(profile);
+    if (inspection.updateAvailable) {
+      return {
+        id: 'codex-launcher-update',
+        status: 'warn',
+        message: `Update available: ${inspection.currentVersion} -> ${inspection.targetVersion}. Apply only after review.`,
+        details: {
+          profile: profile.name,
+          currentVersion: inspection.currentVersion,
+          targetVersion: inspection.targetVersion,
+          updateAvailable: true,
+        },
+      };
+    }
+    return {
+      id: 'codex-launcher-update',
+      status: 'ok',
+      message: `Generated Codex launcher is current (${inspection.currentVersion}).`,
+      details: {
+        profile: profile.name,
+        currentVersion: inspection.currentVersion,
+        targetVersion: inspection.targetVersion,
+        updateAvailable: false,
+      },
+    };
+  } catch (error) {
+    if (error instanceof CodexLauncherUpdateError) {
+      if (error.kind === 'launcher-unrecognized' || error.kind === 'launcher-ambiguous') {
+        return {
+          id: 'codex-launcher-update',
+          status: 'ok',
+          message:
+            'Skipped: this Codex launcher is custom or ambiguous and remains caller-managed.',
+          details: { profile: profile.name, managed: false },
+        };
+      }
+      if (error.kind === 'config-missing' || error.kind === 'config-read') {
+        return {
+          id: 'codex-launcher-update',
+          status: 'warn',
+          message: 'Could not read the Codex configuration, so update status is unknown.',
+          details: { profile: profile.name, updateAvailable: null },
+        };
+      }
+    }
+    return {
+      id: 'codex-launcher-update',
+      status: 'warn',
+      message:
+        'Could not check npm for a newer launcher version. Discord connectivity is unaffected.',
+      details: { profile: profile.name, updateAvailable: null },
+    };
+  }
+}
+
 export async function doctorAction(opts: DoctorOptions): Promise<void> {
+  let profile: DiscordMcpProfile | undefined;
   if (opts.profile !== undefined) {
     try {
-      activateProfile(opts.profile, {
+      profile = activateProfile(opts.profile, {
         ...(opts.profileDirectory === undefined ? {} : { directory: opts.profileDirectory }),
       });
     } catch (error) {
@@ -80,6 +139,10 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
         message: `check threw: ${e instanceof Error ? e.message : String(e)}`,
       });
     }
+  }
+
+  if (opts.online === true && profile?.client === 'codex') {
+    results.push(await codexLauncherUpdateCheck(profile));
   }
 
   const fails = results.filter((r) => r.status === 'fail').length;
