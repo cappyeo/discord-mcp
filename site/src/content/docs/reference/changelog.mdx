@@ -9,6 +9,17 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.3 - Public template URL input
+
+Released **2026-08-04**.
+
+- `templates_get` now accepts either a raw Discord Guild Template code or its
+  canonical `https://discord.new/<code>` URL. It parses the URL locally and
+  calls Discord's official template endpoint directly; it does not follow a
+  redirect, enter the source guild, or create a server.
+- Only HTTPS `discord.new` URLs with one code path segment are accepted. The
+  returned snapshot remains fenced as untrusted third-party template data.
+
 ## v0.16.2 - Dogfood hardening
 
 Released **2026-08-03**.

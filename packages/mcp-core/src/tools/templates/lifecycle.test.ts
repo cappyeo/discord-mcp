@@ -4,6 +4,7 @@ import { container } from '@sapphire/pieces';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import '../../container.js';
+import { PublicTemplateReference } from './_lib/template.js';
 import create from './create.js';
 import deleteTemplate from './delete.js';
 import diff from './diff.js';
@@ -75,6 +76,31 @@ describe('Guild Template tools', () => {
     });
     expect(result.structuredContent.source_guild).toEqual(template.serialized_source_guild);
     expect(result.structuredContent.untrusted_text).toContain('<untrusted_discord_template');
+  });
+
+  it('GETs a public template from its canonical discord.new URL without following it', async () => {
+    useRest();
+    server.use(
+      http.get(`${DISCORD_API}/guilds/templates/:code`, ({ params }) => {
+        expect(params.code).toBe(code);
+        return HttpResponse.json(template);
+      }),
+    );
+
+    const result = await run(get, 'templates_get', {
+      template_code: `https://discord.new/${code}`,
+    });
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent.template).toMatchObject({ code });
+  });
+
+  it('accepts only a template code or canonical discord.new URL', () => {
+    expect(PublicTemplateReference.safeParse(code).success).toBe(true);
+    expect(PublicTemplateReference.safeParse(`https://discord.new/${code}`).success).toBe(true);
+    expect(PublicTemplateReference.safeParse(`https://example.com/${code}`).success).toBe(false);
+    expect(
+      PublicTemplateReference.safeParse(`https://discord.new/${code}?next=elsewhere`).success,
+    ).toBe(false);
   });
 
   it('inspects template structure and isolates raw template names from the dossier', async () => {

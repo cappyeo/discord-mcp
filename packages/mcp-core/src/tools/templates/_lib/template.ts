@@ -13,6 +13,53 @@ export const TemplateCode = z
     'Template code may contain only letters, numbers, underscores, and hyphens.',
   );
 
+/**
+ * Public Guild Templates are normally shared as https://discord.new/<code>.
+ * Keep the lookup on Discord's API rather than following an arbitrary URL.
+ */
+export function templateCodeFromReference(reference: string): string {
+  const directCode = TemplateCode.safeParse(reference.trim());
+  if (directCode.success) return directCode.data;
+
+  let url: URL;
+  try {
+    url = new URL(reference.trim());
+  } catch {
+    throw new Error(
+      'Template reference must be a Discord template code or https://discord.new/<code>.',
+    );
+  }
+
+  const pathSegments = url.pathname.split('/').filter(Boolean);
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname !== 'discord.new' ||
+    url.search !== '' ||
+    url.hash !== '' ||
+    pathSegments.length !== 1
+  ) {
+    throw new Error(
+      'Template reference must be a Discord template code or https://discord.new/<code>.',
+    );
+  }
+
+  return TemplateCode.parse(pathSegments[0]);
+}
+
+export const PublicTemplateReference = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine((reference) => {
+    try {
+      templateCodeFromReference(reference);
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Template reference must be a Discord template code or https://discord.new/<code>.');
+
 export interface RawGuildTemplate {
   code: string;
   name: string;
