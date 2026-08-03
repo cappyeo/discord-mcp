@@ -129,7 +129,14 @@ function outcomeFor(result: CommandResult): ActivityOutcome {
 }
 
 function setupSignals(result: CommandResult): string[] {
-  if (result.exitCode === 0 || result.exitCode === 1) return ['profile-config-generated'];
+  if (result.exitCode === 0) return ['profile-config-generated'];
+  if (result.exitCode === 1) {
+    const signals = ['profile-config-generated'];
+    if (result.warnings?.some((warning) => warning.includes('Administrator'))) {
+      signals.push('administrator-warning');
+    }
+    return signals;
+  }
   const text = `${result.summary}\n${result.errors?.join('\n') ?? ''}`;
   if (text.includes('DISCORD_TOKEN')) return ['missing-launch-token'];
   if (text.includes('guild discovery failed')) return ['discord-discovery-failed'];

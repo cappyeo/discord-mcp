@@ -59,6 +59,36 @@ describe('activity evidence', () => {
     expect(raw).not.toContain('"123"');
   });
 
+  it('records an Administrator setup warning without the Discord identity', async () => {
+    const options = location();
+    const originalWrite = process.stdout.write;
+    process.stdout.write = (() => true) as typeof process.stdout.write;
+    try {
+      await captureActivity({ command: 'setup', ...options }, async () => {
+        emitResult(
+          {
+            ok: false,
+            exitCode: 1,
+            summary: 'generated Codex config',
+            warnings: ['Bot has Administrator in Test Guild (123456789012345678).'],
+          },
+          true,
+        );
+      });
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+
+    expect(readActivity(options)[0]).toMatchObject({
+      command: 'setup',
+      outcome: 'warning',
+      signals: ['profile-config-generated', 'administrator-warning'],
+    });
+    const raw = readFileSync(resolveActivityPath(options), 'utf8');
+    expect(raw).not.toContain('Test Guild');
+    expect(raw).not.toContain('123456789012345678');
+  });
+
   it('keeps the journal bounded to the latest records', () => {
     const options = location();
     for (let index = 0; index <= ACTIVITY_RETENTION; index += 1) {

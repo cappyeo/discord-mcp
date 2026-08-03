@@ -507,7 +507,14 @@ export async function initAction(opts: InitOptions): Promise<void> {
   const serverArgs: string[] =
     profileName === undefined
       ? [resolveCliPath()]
-      : ['--yes', `@discord-mcp/cli@${packageJson.version}`, 'serve', '--profile', profileName];
+      : [
+          '--yes',
+          '--loglevel=error',
+          `@discord-mcp/cli@${packageJson.version}`,
+          'serve',
+          '--profile',
+          profileName,
+        ];
 
   // 7. Generate snippet.
   const envVars: Record<string, string> = {};

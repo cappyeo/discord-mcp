@@ -11,6 +11,18 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+## v0.14.6 - Actionable activity evidence
+
+Released **2026-08-03**.
+
+- Setup warnings caused by a selected bot having Discord `Administrator` now
+  record the safe, non-identifying `administrator-warning` signal in local
+  Activity Evidence. The journal still excludes every Discord identity and
+  guild ID.
+- Generated profile launchers pass `--loglevel=error` to `npx`, so unrelated
+  npm configuration warnings from the caller's project do not add startup
+  noise while actual errors remain visible.
+
 ## v0.14.5 - Local activity evidence
 
 Released **2026-08-03**.

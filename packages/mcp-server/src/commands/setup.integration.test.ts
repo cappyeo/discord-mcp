@@ -87,6 +87,7 @@ describe('guided caller-owned bot setup', () => {
     const parsed = result();
     expect(parsed.ok).toBe(true);
     expect(parsed.data?.content).toContain('command = "npx"');
+    expect(parsed.data?.content).toContain('"--loglevel=error"');
     expect(parsed.data?.content).toContain(`"@discord-mcp/cli@${packageJson.version}"`);
     expect(parsed.data?.content).toContain('"serve", "--profile", "devbot"');
     expect(parsed.data?.content).toContain('env_vars = ["DISCORD_TOKEN"]');
@@ -117,6 +118,7 @@ describe('guided caller-owned bot setup', () => {
     expect(content.mcpServers['discord-mcp'].command).toBe('npx');
     expect(content.mcpServers['discord-mcp'].args).toEqual([
       '--yes',
+      '--loglevel=error',
       `@discord-mcp/cli@${packageJson.version}`,
       'serve',
       '--profile',
