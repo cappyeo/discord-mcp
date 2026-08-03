@@ -11,11 +11,20 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+## v0.14.7 - Explicit caller-controlled updates
+
+Released **2026-08-03**.
+
 - Added `discord-mcp update --profile <name> [--check|--apply]` for generated
   Codex launchers. It compares the pinned launcher version with npm `latest`;
   `--apply` is explicit, updates exactly one recognized launcher atomically,
   and fails closed on custom or ambiguous configuration. The check never sends
   bot tokens, Discord identities, guild IDs, or profile contents to npm.
+- `members_get_current_user` now uses the bot-compatible specified-member
+  Discord route after resolving the authenticated bot ID. It no longer calls
+  the user OAuth-only current-member endpoint, so a least-privilege bot can
+  retrieve its own allowed-guild membership without requiring
+  `GUILD_MEMBERS` intent.
 
 ## v0.14.6 - Actionable activity evidence
 

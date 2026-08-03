@@ -313,6 +313,9 @@ discord-mcp update --profile devbot
 
 # Apply the already-reviewed choice, then restart Codex.
 discord-mcp update --profile devbot --apply
+
+# First use from a launcher pinned before v0.14.7.
+npx --yes @discord-mcp/cli@0.14.7 update --profile devbot --apply
 ```
 
 `update` never uses `@latest` in the generated launcher and never installs a
