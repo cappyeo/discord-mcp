@@ -17,6 +17,20 @@ export class InternalError extends DiscordServerError {
   public override recoveryHint = 'Internal MCP server error. Check audit log + Sentry event.';
 }
 
+/** A caller-invoked third-party provider could not be reached or returned an invalid response. */
+export class ExternalServiceError extends DiscordServerError {
+  public readonly code = 'EXTERNAL_SERVICE_UNAVAILABLE';
+  public override recoveryHint =
+    'Retry later, or open the provider link in a browser and choose an asset manually.';
+  public constructor(
+    public readonly provider: string,
+    public readonly status?: number,
+    cause?: unknown,
+  ) {
+    super(`${provider} is unavailable`, cause);
+  }
+}
+
 /**
  * Surfaced when cockatiel's circuit breaker is open (or held isolated).
  * Plan 8 D.4: maps `BrokenCircuitError` / `IsolatedCircuitError`.

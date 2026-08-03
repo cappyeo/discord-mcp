@@ -135,6 +135,11 @@ export default defineConfig({
               ],
             },
             {
+              label: 'Inspiration',
+              collapsed: true,
+              items: ['tools/inspiration'],
+            },
+            {
               label: 'Monetization',
               collapsed: true,
               items: ['tools/users', 'tools/monetization', 'tools/meta'],

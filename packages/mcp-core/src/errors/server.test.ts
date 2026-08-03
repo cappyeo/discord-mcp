@@ -3,6 +3,7 @@ import {
   BulkheadFullError,
   CircuitOpenError,
   DiscordServerErrorImpl,
+  ExternalServiceError,
   InternalError,
 } from './server.js';
 
@@ -25,6 +26,17 @@ describe('InternalError', () => {
     expect(e.category).toBe('server');
     expect(e.retriable).toBe(true);
     expect(e.recoveryHint).toMatch(/audit log/);
+  });
+});
+
+describe('ExternalServiceError', () => {
+  it('keeps provider failures distinct from Discord failures', () => {
+    const e = new ExternalServiceError('Emoji.gg', 503);
+    expect(e.code).toBe('EXTERNAL_SERVICE_UNAVAILABLE');
+    expect(e.category).toBe('server');
+    expect(e.retriable).toBe(true);
+    expect(e.provider).toBe('Emoji.gg');
+    expect(e.status).toBe(503);
   });
 });
 

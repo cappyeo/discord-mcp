@@ -83,7 +83,7 @@ export function telemetryMiddleware(): ToolMiddleware {
         spanAttrs[ATTR_MCP_REQUEST_ID] = requestId;
       }
 
-      // Metric labels: bounded-cardinality only. tool.name (~192),
+      // Metric labels: bounded-cardinality only. tool.name (~193),
       // tool.category (~25), tool.idempotent (2), transport (1-3),
       // status (3). No request_id - that would explode the series
       // count and make the histograms useless.

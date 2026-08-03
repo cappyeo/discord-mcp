@@ -3,6 +3,7 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
+import { messageJumpUrl } from '../_lib/message-jump-url.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 import { validateComponentsV2 } from './_lib/validator.js';
@@ -63,13 +64,12 @@ export default defineTool({
     const m = (await container.rest.post(Routes.channelMessages(args.channel_id), {
       body,
     })) as SentMessage;
-    const jumpRoot = m.guild_id ?? '@me';
     return dualResult({
       text: `Sent V2 message ${m.id} to <#${m.channel_id}> (${args.components.length} top-level components).`,
       data: {
         message_id: m.id,
         channel_id: m.channel_id,
-        jump_url: `https://discord.com/channels/${jumpRoot}/${m.channel_id}/${m.id}`,
+        jump_url: await messageJumpUrl(m),
         component_count: args.components.length,
       },
     });

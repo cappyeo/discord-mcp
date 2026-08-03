@@ -13,12 +13,12 @@
 
 <p align="center">
   <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
-  192 tools for messages, moderation, members, channels, commands, webhooks, and more.
+  193 tools for Discord operations plus explicit Emoji.gg inspiration discovery.
 </p>
 
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/quickstart/"><strong>Quickstart</strong></a>
-  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 192 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 193 tools</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
 </p>
@@ -172,7 +172,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.14.8**; its core exports, CLI surface, environment schema, and 192-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.15.0**; its core exports, CLI surface, environment schema, and 193-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 ## License
 

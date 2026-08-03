@@ -3,6 +3,7 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { DiscordNotFoundError, ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
+import { messageJumpUrl } from '../_lib/message-jump-url.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 import { interpolateTemplate } from './_lib/interpolate.js';
@@ -67,13 +68,12 @@ export default defineTool({
     const m = (await container.rest.post(Routes.channelMessages(args.channel_id), {
       body: { flags: IS_COMPONENTS_V2, components },
     })) as { id: string; channel_id: string; guild_id?: string };
-    const jumpRoot = m.guild_id ?? '@me';
     return dualResult({
       text: `Sent template "${args.template}" as message ${m.id} to <#${m.channel_id}>.`,
       data: {
         message_id: m.id,
         channel_id: m.channel_id,
-        jump_url: `https://discord.com/channels/${jumpRoot}/${m.channel_id}/${m.id}`,
+        jump_url: await messageJumpUrl(m),
         template: args.template,
       },
     });

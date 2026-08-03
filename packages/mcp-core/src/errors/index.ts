@@ -17,5 +17,6 @@ export {
   BulkheadFullError,
   CircuitOpenError,
   DiscordServerErrorImpl,
+  ExternalServiceError,
   InternalError,
 } from './server.js';

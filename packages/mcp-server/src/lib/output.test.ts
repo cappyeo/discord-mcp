@@ -81,13 +81,13 @@ describe('emitResult - JSON mode', () => {
     const result: CommandResult = {
       ok: true,
       summary: 'done',
-      data: { tools: 192, transport: 'stdio' },
+      data: { tools: 193, transport: 'stdio' },
       exitCode: 0,
     };
     emitResult(result, true);
 
     const parsed = JSON.parse(lastWrite()) as CommandResult;
-    expect(parsed.data).toEqual({ tools: 192, transport: 'stdio' });
+    expect(parsed.data).toEqual({ tools: 193, transport: 'stdio' });
   });
 });
 

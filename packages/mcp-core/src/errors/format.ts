@@ -13,6 +13,7 @@ import {
   DiscordRateLimitError,
   DiscordServerError,
   DryRunPreview,
+  ExternalServiceError,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
   ScopeRejectedError,
@@ -413,6 +414,23 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
       recoveryHint: e.recoveryHint,
       text: `**Authentication Failed**\n\n${e.message}\n\n**Recovery**: ${e.recoveryHint}`,
       structured: {},
+    });
+  }
+
+  if (e instanceof ExternalServiceError) {
+    return makeError({
+      code: e.code,
+      retriable: true,
+      category: 'server',
+      recoveryHint: e.recoveryHint ?? 'retry later',
+      text:
+        `**External Provider Unavailable**\n\n` +
+        `${e.provider} could not serve this read-only request.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: {
+        provider: e.provider,
+        ...(e.status === undefined ? {} : { status: e.status }),
+      },
     });
   }
 

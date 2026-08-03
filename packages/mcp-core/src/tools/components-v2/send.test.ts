@@ -32,7 +32,9 @@ describe('components_v2_send', () => {
     expect(r.isError).toBe(false);
     expect(r.structuredContent.message_id).toBe('999000999000999000');
     expect(r.structuredContent.component_count).toBe(1);
-    expect(r.structuredContent.jump_url).toMatch(/discord\.com\/channels/);
+    expect(r.structuredContent.jump_url).toBe(
+      'https://discord.com/channels/999000999000999000/112233445566778899/999000999000999000',
+    );
   });
 
   it('rejects invalid layout offline (does not call Discord)', async () => {

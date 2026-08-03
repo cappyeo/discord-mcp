@@ -1,6 +1,6 @@
 ---
 title: From PaSympa
-description: Migrate from PaSympa's discord_* tool surface (~91 tools) onto discord-mcp's 192-tool catalog.
+description: Migrate from PaSympa's discord_* tool surface (~91 tools) onto discord-mcp's 193-tool catalog.
 sidebar:
   order: 1
 ---
@@ -30,7 +30,7 @@ per-entry notes.
   Discord REST path.
   See [Operations: telemetry](/discord-mcp/operations/telemetry/) and
   [Architecture: rate limits](/discord-mcp/architecture/rate-limits/).
-- **Broad 192-tool Discord surface** - the catalog includes stickers, automod, polls, application
+- **Broad Discord surface** - 192 Discord tools cover stickers, automod, polls, application
   commands, onboarding, voice state, stage instances, scheduled events
   (subscribers + invites), and the Components V2 layout primitives.
 - **Components V2 first-class** - dedicated `components_v2_send` and
@@ -99,7 +99,8 @@ per-entry notes.
    ```
 
    Merge the printed snippet, set `DISCORD_TOKEN`, then restart your MCP client.
-   The 192 discord-mcp tools replace PaSympa's 91.
+   The 192 Discord-operation tools replace PaSympa's 91; the separate
+   `inspiration` category remains optional.
 
 </Steps>
 
@@ -174,7 +175,7 @@ report's `unmapped` list:
 
 - [Adapter authoring guide](/discord-mcp/migrate/authoring/) - for adding
   more source servers to this list.
-- [discord-mcp tools (192)](/discord-mcp/tools/) - auto-generated reference.
+- [discord-mcp tools (193)](/discord-mcp/tools/) - auto-generated reference.
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate) - flags
   and exit codes.
 - [Architecture: gateway](/discord-mcp/architecture/gateway/) - how

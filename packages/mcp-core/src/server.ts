@@ -125,6 +125,7 @@ import GuildModifyCurrentVoiceState from './tools/guild/modify_current_voice_sta
 import GuildModifyUserVoiceState from './tools/guild/modify_user_voice_state.js';
 import GuildModifyWelcomeScreen from './tools/guild/modify_welcome_screen.js';
 import GuildModifyWidget from './tools/guild/modify_widget.js';
+import InspirationEmojiGgSearch from './tools/inspiration/emoji_gg_search.js';
 import IntelligenceClassifyMessages from './tools/intelligence/classify_messages.js';
 import IntelligenceDraftResponse from './tools/intelligence/draft_response.js';
 import IntelligenceExtractEntities from './tools/intelligence/extract_entities.js';
@@ -290,7 +291,7 @@ let cachedToolListCatalog: ToolListCatalog | undefined;
 /**
  * Tool definitions are compiled into JSON Schema once per process. HTTP stays
  * stateless and still creates a fresh MCP Server per request, but avoids
- * repeating the expensive Zod conversion for the same 192 immutable tools.
+ * repeating the expensive Zod conversion for the same 193 immutable tools.
  */
 function getToolListCatalog(toolStore: ToolStore): ToolListCatalog {
   if (cachedToolListCatalog !== undefined) return cachedToolListCatalog;
@@ -992,6 +993,10 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     piece: IntelligenceExtractEntities as unknown as ConcreteTool,
   });
   await toolStore.loadPiece({
+    name: 'inspiration_emoji_gg_search',
+    piece: InspirationEmojiGgSearch as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
     name: 'interactions_create_response',
     piece: InteractionsCreateResponse as unknown as ConcreteTool,
   });
@@ -1244,7 +1249,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
           'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
         ]
       : [
-          'Discord MCP server: 192 tools over the Discord REST API (messages, channels,',
+          'Discord MCP server: 193 tools for Discord operations plus explicit external inspiration discovery (messages, channels,',
           'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
           'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
           'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls.',

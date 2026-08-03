@@ -26,9 +26,15 @@ describe('components_v2_send_from_template', () => {
         vars: { title: 'Hello', body: 'world', cta_label: 'Click', cta_url: 'https://example.com' },
       },
       { signal: new AbortController().signal },
-    )) as { isError: boolean; structuredContent: { message_id: string; template: string } };
+    )) as {
+      isError: boolean;
+      structuredContent: { message_id: string; template: string; jump_url: string };
+    };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.message_id).toBe('999000999000999000');
     expect(r.structuredContent.template).toBe('announcement');
+    expect(r.structuredContent.jump_url).toBe(
+      'https://discord.com/channels/999000999000999000/112233445566778899/999000999000999000',
+    );
   });
 });

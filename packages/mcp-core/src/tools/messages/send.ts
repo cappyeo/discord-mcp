@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
+import { messageJumpUrl } from '../_lib/message-jump-url.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 
@@ -57,13 +58,12 @@ export default defineTool({
       body: { content: args.content, tts: args.tts ?? false },
     })) as DiscordMessageResponse;
 
-    const jumpRoot = msg.guild_id ?? '@me';
     return dualResult({
       text: `Sent message ${msg.id} to <#${msg.channel_id}>.`,
       data: {
         message_id: msg.id,
         channel_id: msg.channel_id,
-        jump_url: `https://discord.com/channels/${jumpRoot}/${msg.channel_id}/${msg.id}`,
+        jump_url: await messageJumpUrl(msg),
         timestamp: msg.timestamp,
       },
     });

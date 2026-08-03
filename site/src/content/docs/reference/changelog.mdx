@@ -9,6 +9,20 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.15.0 - External inspiration discovery
+
+Released **2026-08-03**.
+
+- Added `inspiration_emoji_gg_search`, an opt-in, caller-invoked read-only
+  Emoji.gg discovery tool. It returns candidate metadata only: no Discord
+  mutation, emoji download, automatic import, or sharing of bot credentials,
+  guild IDs, caller profiles, or search terms with Emoji.gg. Review the
+  individual asset page and licence before explicitly using `emojis_create`.
+- Emoji.gg is isolated in the new `inspiration` category, so callers can omit
+  it from `MCP_CATEGORIES` to keep a Discord-only tool surface.
+- Guild message sends now return canonical guild-aware Discord jump links even
+  when Discord omits `guild_id` from a create-message response.
+
 ## v0.14.8 - Read-only launcher update discovery
 
 Released **2026-08-03**.

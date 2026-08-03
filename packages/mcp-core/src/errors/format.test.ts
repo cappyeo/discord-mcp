@@ -15,7 +15,12 @@ import {
   ScopeRejectedError,
   ValidationError,
 } from './index.js';
-import { BulkheadFullError, CircuitOpenError, DiscordServerErrorImpl } from './server.js';
+import {
+  BulkheadFullError,
+  CircuitOpenError,
+  DiscordServerErrorImpl,
+  ExternalServiceError,
+} from './server.js';
 
 const stdio = { toolName: 'messages_send', transport: 'stdio' as const };
 const requestBody = { files: undefined, json: undefined } as const;
@@ -106,6 +111,20 @@ describe('formatErrorForUser', () => {
     expect(text).toMatch(/CLOUDFLARE BANNED/);
     expect(text).toMatch(/STOP/);
     expect(r.structuredContent).toMatchObject({ retry_after_ms: 3_600_000 });
+  });
+
+  it('formats an external provider outage without presenting it as a Discord failure', () => {
+    const r = formatErrorForUser(new ExternalServiceError('Emoji.gg', 503), stdio);
+    expect(r.structuredContent).toMatchObject({
+      code: 'EXTERNAL_SERVICE_UNAVAILABLE',
+      retriable: true,
+      category: 'server',
+      provider: 'Emoji.gg',
+      status: 503,
+    });
+    expect((r.content as Array<{ text: string }>)[0]!.text).toContain(
+      'External Provider Unavailable',
+    );
   });
 
   it('formats ScopeRejectedError', () => {

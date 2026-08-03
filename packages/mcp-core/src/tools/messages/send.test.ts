@@ -32,7 +32,7 @@ describe('messages_send tool', () => {
     });
     const data = (result as { structuredContent: { jump_url: string } }).structuredContent;
     expect(data.jump_url).toMatch(
-      /^https:\/\/discord\.com\/channels\/@me\/112233445566778899\/999000999000999000$/,
+      /^https:\/\/discord\.com\/channels\/999000999000999000\/112233445566778899\/999000999000999000$/,
     );
   });
 
