@@ -11,6 +11,19 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+## v0.14.5 - Local activity evidence
+
+Released **2026-08-03**.
+
+- Added `discord-mcp activity [--json]`, a local-only summary of recent
+  onboarding outcomes from `setup`, `doctor`, and `smoke`. It helps an
+  operator identify setup and verification friction without a telemetry
+  service or external account.
+- The capped local journal records only timestamps, command outcomes, and
+  predefined technical signals. It never stores or sends bot tokens, Discord
+  identities or guild IDs, paths, command arguments, or raw errors. Set
+  `DISCORD_MCP_ACTIVITY=off` to opt out for a run.
+
 ## v0.14.4 - Portable guided setup
 
 Released **2026-08-03**.
