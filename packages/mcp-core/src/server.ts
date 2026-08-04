@@ -1283,9 +1283,10 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     toolSurface === 'progressive'
       ? [
           'Progressive tool surface: call mcp_tools_search with the desired outcome,',
-          'then call the exact returned read/write/destructive dispatcher with that tool',
-          'name and input schema. Never substitute one dispatcher for another.',
-          'Do not guess hidden tool arguments. Search only returns tools authorized by',
+          "then, if it returns multiple compact matches, search the selected tool's exact",
+          'name to load its input schema before calling the returned read/write/destructive',
+          'dispatcher. Never substitute one dispatcher for another or guess hidden tool arguments.',
+          'Search only returns tools authorized by',
           'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
         ]
       : [

@@ -1,13 +1,9 @@
 import { container } from '@sapphire/pieces';
-import { Routes } from 'discord-api-types/v10';
+import { resolveChannelGuildId } from '../../rest/channel-guild-cache.js';
 
 interface MessageLocation {
   id: string;
   channel_id: string;
-  guild_id?: string;
-}
-
-interface ChannelLocation {
   guild_id?: string;
 }
 
@@ -21,10 +17,7 @@ export async function messageJumpUrl(message: MessageLocation): Promise<string> 
 
   if (guildId === undefined) {
     try {
-      const channel = (await container.rest.get(
-        Routes.channel(message.channel_id),
-      )) as ChannelLocation;
-      guildId = channel.guild_id;
+      guildId = await resolveChannelGuildId(container.rest, message.channel_id);
     } catch (error) {
       // The message already exists. Preserve a successful send rather than
       // returning an error that could cause callers to retry and duplicate it.

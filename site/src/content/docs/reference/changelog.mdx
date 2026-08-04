@@ -9,6 +9,23 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.4 - Efficient progressive discovery
+
+Released **2026-08-04**.
+
+- Progressive `mcp_tools_search` now returns compact matches by default for
+  ambiguous searches, avoiding repeated descriptions, annotations, and JSON
+  Schemas in the model context. A single returned match includes its complete
+  contract immediately; for multiple matches, search the selected exact tool
+  name to load its schema. `detail: "full"` remains available when a workflow
+  deliberately needs several contracts at once.
+- The measured eight-channel selection journey is 57.2% smaller than returning
+  all eight full contracts; the browse response alone is 81.4% smaller. These
+  are serialized MCP payload measurements, not a model-specific billing claim.
+- Channel-targeted message sends in an allowlisted deployment now share a
+  bounded channel-to-guild lookup between scope verification and canonical jump
+  link generation, removing a duplicate Discord REST metadata request.
+
 ## v0.16.3 - Public template URL input
 
 Released **2026-08-04**.

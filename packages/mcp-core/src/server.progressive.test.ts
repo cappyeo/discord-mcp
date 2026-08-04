@@ -76,7 +76,7 @@ describe('progressive tool surface', () => {
     expect(progressiveClient.getInstructions()).toContain('Progressive tool surface');
   });
 
-  it('discovers exact authorized schemas on demand', async () => {
+  it('returns a direct contract for a single match and exact authorized schemas on demand', async () => {
     const categories = await progressiveClient.callTool({
       name: 'mcp_tools_search',
       arguments: {},
@@ -91,7 +91,7 @@ describe('progressive tool surface', () => {
 
     const result = await progressiveClient.callTool({
       name: 'mcp_tools_search',
-      arguments: { query: 'send a message', limit: 5 },
+      arguments: { query: 'send a message', limit: 1 },
     });
     expect(result.isError).toBe(false);
     const matches = (result.structuredContent as { matches: Array<Record<string, unknown>> })
@@ -101,6 +101,7 @@ describe('progressive tool surface', () => {
     expect(send).toMatchObject({
       category: 'messages',
       dispatcher: 'mcp_tools_write',
+      summary: expect.any(String),
       inputSchema: expect.objectContaining({
         properties: expect.objectContaining({
           channel_id: expect.any(Object),
@@ -109,6 +110,52 @@ describe('progressive tool surface', () => {
       }),
       annotations: expect.objectContaining({ openWorldHint: true }),
     });
+
+    const exact = await progressiveClient.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'messages_send' },
+    });
+    expect(exact.isError).toBe(false);
+    const exactMatches = (exact.structuredContent as { matches: Array<Record<string, unknown>> })
+      .matches;
+    const exactSend = exactMatches.find((match) => match.name === 'messages_send');
+    expect(exactSend).toMatchObject({
+      inputSchema: expect.objectContaining({
+        properties: expect.objectContaining({
+          channel_id: expect.any(Object),
+          content: expect.any(Object),
+        }),
+      }),
+      annotations: expect.objectContaining({ openWorldHint: true }),
+    });
+  });
+
+  it('cuts category browse by 80% and the selected-tool discovery journey by 50%', async () => {
+    const [compact, full, exact] = await Promise.all([
+      progressiveClient.callTool({
+        name: 'mcp_tools_search',
+        arguments: { category: 'channels', limit: 8 },
+      }),
+      progressiveClient.callTool({
+        name: 'mcp_tools_search',
+        arguments: { category: 'channels', limit: 8, detail: 'full' },
+      }),
+      progressiveClient.callTool({
+        name: 'mcp_tools_search',
+        arguments: { query: 'channels_get' },
+      }),
+    ]);
+
+    expect(compact.isError).toBe(false);
+    expect(full.isError).toBe(false);
+    expect(exact.isError).toBe(false);
+    expect(compact.structuredContent).toMatchObject({ detail: 'compact' });
+    expect(full.structuredContent).toMatchObject({ detail: 'full' });
+    const compactBytes = Buffer.byteLength(JSON.stringify(compact.structuredContent));
+    const fullBytes = Buffer.byteLength(JSON.stringify(full.structuredContent));
+    expect(compactBytes).toBeLessThan(fullBytes * 0.2);
+    const exactBytes = Buffer.byteLength(JSON.stringify(exact.structuredContent));
+    expect(compactBytes + exactBytes).toBeLessThan(fullBytes * 0.5);
   });
 
   it('invokes a hidden discovered tool through the risk-matched dispatcher', async () => {

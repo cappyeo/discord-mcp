@@ -111,10 +111,14 @@ startup with the valid list instead of silently disabling a tool surface. The
 `full` advertises the existing 201-tool catalog for maximum client
 compatibility. `progressive` advertises only `mcp_tools_search` plus
 `mcp_tools_read`, `mcp_tools_write`, and `mcp_tools_destructive`: the model
-searches for an exact contract, then uses the dispatcher named by that result.
-The dispatchers expose accurate host approval annotations and reject a tool
-sent through the wrong risk route. This substantially reduces the initial
-`tools/list` payload for clients without native deferred MCP loading.
+searches for a compact match. A single match already carries its contract; for
+multiple matches, it searches the selected exact tool name before using the
+dispatcher named by that result. Set `detail: "full"` on `mcp_tools_search`
+only when several full contracts are necessary in one response. The dispatchers
+expose accurate host approval annotations and reject a tool sent through the
+wrong risk route. This substantially reduces both the initial `tools/list`
+payload and the common ambiguous-search payload for clients without native
+deferred MCP loading.
 
 This setting is not an authorization control. Search only returns tools allowed
 by `ALLOWED_GUILDS` and `MCP_CATEGORIES`, and every dispatched call still passes

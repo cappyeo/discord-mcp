@@ -1,6 +1,6 @@
 {
   "name": "@discord-mcp/cli",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",

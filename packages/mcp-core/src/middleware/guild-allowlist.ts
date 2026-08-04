@@ -2,14 +2,11 @@ import type { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import type { z } from 'zod';
 import { GuildNotAllowedError, GuildScopeUnresolvedError } from '../errors/client.js';
+import { resolveChannelGuildId } from '../rest/channel-guild-cache.js';
 import type { ToolMiddleware } from './compose.js';
 
 interface SchemaCarrier {
   readonly inputSchema: Record<string, z.ZodTypeAny>;
-}
-
-interface GuildChannel {
-  readonly guild_id?: string;
 }
 
 interface GuildWebhook {
@@ -90,7 +87,6 @@ function stringField(args: Record<string, unknown>, field: string): string | und
 }
 
 export class GuildScopePolicy {
-  private readonly channelGuilds = new Map<string, Promise<string>>();
   private readonly webhookGuilds = new Map<string, Promise<string>>();
   private readonly inviteGuilds = new Map<string, Promise<string>>();
   private readonly stickerGuilds = new Map<string, Promise<string | null>>();
@@ -212,12 +208,11 @@ export class GuildScopePolicy {
   }
 
   private resolveChannelGuild(channelId: string): Promise<string> {
-    return this.cached(this.channelGuilds, channelId, async () => {
-      const channel = (await this.rest.get(Routes.channel(channelId))) as GuildChannel;
-      if (channel.guild_id === undefined) {
+    return resolveChannelGuildId(this.rest, channelId).then((guildId) => {
+      if (guildId === undefined) {
         throw new GuildScopeUnresolvedError(`channel ${channelId}`);
       }
-      return channel.guild_id;
+      return guildId;
     });
   }
 

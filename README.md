@@ -62,10 +62,12 @@ $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only
 `mcp_tools_search` plus read, write, and destructive dispatchers, then loads
-exact Discord tool schemas on demand. The search result chooses the dispatcher
-whose annotations match the selected tool's risk. `MCP_CATEGORIES` remains the
-authorization boundary; progressive mode does not bypass confirmation,
-dry-run, audit, or other middleware.
+compact tool matches on demand. A single match already includes its schema;
+for multiple matches, search the selected tool's exact name before dispatch,
+or use `detail: "full"` when several contracts are needed together. The result
+chooses the dispatcher whose annotations match the selected tool's risk.
+`MCP_CATEGORIES` remains the authorization boundary; progressive mode does not
+bypass confirmation, dry-run, audit, or other middleware.
 
 Set `ALLOWED_GUILDS` to a comma-separated list of server IDs to enforce the
 bot's guild boundary inside discord-mcp. Direct guild calls use a constant-time
@@ -172,7 +174,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.16.3**; this source tree's core exports, CLI surface, environment schema, and 201-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.16.4**; this source tree's core exports, CLI surface, environment schema, and 201-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 ## License
 

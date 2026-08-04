@@ -39,6 +39,12 @@ const SearchArgsSchema = z
       .optional()
       .describe('Optional exact tool category. Omit query to browse this category.'),
     limit: z.number().int().min(1).max(20).default(8).describe('Maximum matches to return.'),
+    detail: z
+      .enum(['compact', 'full'])
+      .default('compact')
+      .describe(
+        "compact returns short match cards. full includes every matching description and inputSchema. An exact tool-name search includes that tool's contract in either mode.",
+      ),
   })
   .strict();
 
@@ -66,8 +72,8 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
   name: PROGRESSIVE_SEARCH_TOOL_NAME,
   description: [
     'Search the Discord tool catalog available to this caller.',
-    'Use this first in progressive mode, then call the exact dispatcher returned with the tool name and matching arguments.',
-    'Omit both query and category to list categories. Results include input schemas, safety annotations, and dispatcher names.',
+    'A single result includes its contract. For multiple compact results, search the selected exact tool name before dispatching.',
+    'Set detail:"full" only when several full contracts are necessary. Omit both query and category to list categories.',
     'Search results never expand MCP_CATEGORIES permissions.',
   ].join(' '),
   inputSchema: z.toJSONSchema(SearchArgsSchema, {
@@ -82,6 +88,7 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
         properties: {
           query: { anyOf: [{ type: 'string' }, { type: 'null' }] },
           category: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          detail: { type: 'string', enum: ['compact', 'full'] },
           total_matches: { type: 'integer' },
           matches: {
             type: 'array',
@@ -98,18 +105,12 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
                     PROGRESSIVE_DESTRUCTIVE_TOOL_NAME,
                   ],
                 },
+                summary: { type: 'string' },
                 description: { type: 'string' },
                 inputSchema: { type: 'object' },
                 annotations: { type: 'object' },
               },
-              required: [
-                'name',
-                'category',
-                'dispatcher',
-                'description',
-                'inputSchema',
-                'annotations',
-              ],
+              required: ['name', 'category', 'dispatcher', 'summary'],
             },
           },
           categories: {
@@ -124,7 +125,7 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
             },
           },
         },
-        required: ['query', 'category', 'total_matches', 'matches', 'categories'],
+        required: ['query', 'category', 'detail', 'total_matches', 'matches', 'categories'],
       },
       ERROR_ENVELOPE_SCHEMA,
     ],
@@ -247,6 +248,13 @@ function dispatcherFor(tool: McpTool): ProgressiveDispatcherName {
   return PROGRESSIVE_WRITE_TOOL_NAME;
 }
 
+function compactSummary(description: string | undefined): string {
+  const firstParagraph = (description ?? '').split(/\n\s*\n/, 1)[0] ?? '';
+  const normalized = firstParagraph.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= 180) return normalized;
+  return `${normalized.slice(0, 177).trimEnd()}...`;
+}
+
 /**
  * Search only the already-authorized catalog passed by the server. This is a
  * presentation adapter for hosts without native deferred MCP loading, not an
@@ -297,14 +305,24 @@ export function searchProgressiveTools(
         )
     : [];
 
-  const matches = ranked.slice(0, parsed.data.limit).map(({ tool, category }) => ({
-    name: tool.name,
-    category,
-    dispatcher: dispatcherFor(tool),
-    description: tool.description ?? '',
-    inputSchema: tool.inputSchema,
-    annotations: tool.annotations ?? {},
-  }));
+  const selected = ranked.slice(0, parsed.data.limit);
+  const includeAllContracts = parsed.data.detail === 'full' || selected.length === 1;
+  const matches = selected.map(({ tool, category }) => {
+    const includeContract = includeAllContracts || (query !== '' && normalize(tool.name) === query);
+    return {
+      name: tool.name,
+      category,
+      dispatcher: dispatcherFor(tool),
+      summary: compactSummary(tool.description),
+      ...(includeContract
+        ? {
+            description: tool.description ?? '',
+            inputSchema: tool.inputSchema,
+            annotations: tool.annotations ?? {},
+          }
+        : {}),
+    };
+  });
 
   return {
     isError: false,
@@ -312,13 +330,16 @@ export function searchProgressiveTools(
       {
         type: 'text',
         text: shouldListMatches
-          ? `Found ${ranked.length} matching tool(s); returned ${matches.length}. Use each match's exact dispatcher, tool name, and input schema.`
+          ? includeAllContracts
+            ? `Found ${ranked.length} matching tool(s); returned ${matches.length} full contract(s). Use each match's exact dispatcher, tool name, and input schema.`
+            : `Found ${ranked.length} matching tool(s); returned ${matches.length} compact match(es). Search an exact tool name to load its input schema before dispatching.`
           : `Available categories: ${categories.map((item) => `${item.name} (${item.tool_count})`).join(', ')}.`,
       },
     ],
     structuredContent: {
       query: parsed.data.query ?? null,
       category: parsed.data.category ?? null,
+      detail: parsed.data.detail,
       total_matches: ranked.length,
       matches,
       categories,

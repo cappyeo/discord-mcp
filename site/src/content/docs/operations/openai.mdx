@@ -114,9 +114,12 @@ ALLOWED_GUILDS = "111122223333444455"
 
 The model will see `mcp_tools_search` plus `mcp_tools_read`, `mcp_tools_write`,
 and `mcp_tools_destructive`. Each search match names the exact dispatcher whose
-host-visible annotations match that tool's risk. The dispatcher rejects a tool
-sent through the wrong risk route, then applies the same authorization and
-safety middleware as a direct call.
+host-visible annotations match that tool's risk. Searches return compact
+matches by default. A single match already carries its schema; for multiple
+matches, the model searches the chosen exact tool name before dispatching, or
+requests `detail: "full"` when it needs several contracts together. The
+dispatcher rejects a tool sent through the wrong risk route, then applies the
+same authorization and safety middleware as a direct call.
 
 In the ChatGPT desktop app, Codex MCP servers are managed from **Settings → MCP
 servers**. Add the same HTTPS endpoint through that surface when your account
