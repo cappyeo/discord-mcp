@@ -1,0 +1,40 @@
+---
+title: "Live demo: build a gaming server"
+description: Watch an AI agent create and verify a complete Discord gaming community through discord-mcp.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Live demo: build a gaming server
+
+This 87-second recording shows an AI agent using `discord-mcp` with a
+caller-owned Discord bot to turn a fresh test guild into a complete gaming
+community. It is a real interactive walkthrough, not a synthetic product
+animation.
+
+<video class="live-demo-video" controls preload="metadata" playsinline poster="/discord-mcp/demo/live-gaming-server-build.webp">
+  <source src="/discord-mcp/demo/live-gaming-server-build.mp4" type="video/mp4" />
+  Your browser does not support embedded video. <a href="https://cappyeo.github.io/discord-mcp/demo/live-gaming-server-build.mp4">Download the MP4 demo</a>.
+</video>
+
+## What the walkthrough demonstrates
+
+- Starting from a default Discord guild rather than a prepared mockup.
+- Building the channel tree, role system, permissions, and staff space through
+  typed MCP tools.
+- Enabling Community, Welcome Screen, Advanced Onboarding, and AutoMod.
+- Sending and pinning validated Components V2 welcome and guide cards.
+- Reading the final Discord state back to confirm the resulting structure.
+
+The recording uses a disposable test server and contains no bot credential.
+The final visual result is one example configuration; real deployments should
+still use a caller-owned bot with least-privilege Discord roles and narrow
+guild/category allowlists.
+
+<Aside type="note">
+The demo is evidence of an end-to-end interactive workflow, not a universal
+speed or cost benchmark. Model, client, Discord rate limits, and server design
+all affect a real run.
+</Aside>

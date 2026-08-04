@@ -66,6 +66,7 @@ export default defineConfig({
                 'recipes/gateway-subscribe',
               ],
             },
+            { label: 'Live demo', slug: 'showcase/live-gaming-server' },
             {
               label: 'Run in production',
               collapsed: true,

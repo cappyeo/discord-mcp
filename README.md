@@ -19,9 +19,24 @@
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/quickstart/"><strong>Quickstart</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 201 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
 </p>
+
+## Live demo
+
+<p align="center">
+  <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/">
+    <img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/site/public/demo/live-gaming-server-build.webp" alt="Discord gaming-server onboarding and final verification, built live through discord-mcp" width="960" />
+  </a>
+</p>
+
+An 87-second live walkthrough of an AI agent building a complete gaming
+community from a fresh Discord server through its caller-owned bot. It covers
+channels, safe role permissions, Community, Welcome Screen, onboarding,
+AutoMod, Components V2 cards, and final API readback. Watch the
+[full demo in the docs](https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/).
 
 ## How it works
 

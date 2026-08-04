@@ -25,6 +25,15 @@
   margin-block: 1.5rem 2.5rem;
 }
 
+.live-demo-video {
+  display: block;
+  inline-size: 100%;
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: 0.85rem;
+  background: var(--sl-color-black);
+  box-shadow: 0 1.5rem 3rem color-mix(in srgb, var(--sl-color-black) 24%, transparent);
+}
+
 @media (max-width: 40rem) {
   .sl-markdown-content table {
     display: block;
