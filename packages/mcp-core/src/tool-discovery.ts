@@ -1,5 +1,6 @@
 import type { CallToolResult, Tool as McpTool } from '@modelcontextprotocol/server';
 import { z } from 'zod';
+import { recordProgressiveDiscoveryEvidence } from './telemetry/performance-evidence.js';
 
 export const PROGRESSIVE_SEARCH_TOOL_NAME = 'mcp_tools_search';
 export const PROGRESSIVE_READ_TOOL_NAME = 'mcp_tools_read';
@@ -324,6 +325,16 @@ export function searchProgressiveTools(
     };
   });
 
+  const structuredContent = {
+    query: parsed.data.query ?? null,
+    category: parsed.data.category ?? null,
+    detail: parsed.data.detail,
+    total_matches: ranked.length,
+    matches,
+    categories,
+  };
+  recordProgressiveDiscoveryEvidence(structuredContent);
+
   return {
     isError: false,
     content: [
@@ -336,14 +347,7 @@ export function searchProgressiveTools(
           : `Available categories: ${categories.map((item) => `${item.name} (${item.tool_count})`).join(', ')}.`,
       },
     ],
-    structuredContent: {
-      query: parsed.data.query ?? null,
-      category: parsed.data.category ?? null,
-      detail: parsed.data.detail,
-      total_matches: ranked.length,
-      matches,
-      categories,
-    },
+    structuredContent,
   };
 }
 

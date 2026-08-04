@@ -28,6 +28,18 @@ export const METRIC_TOOL_DURATION = 'mcp.tool.duration_ms';
 export const METRIC_TOOL_CALLS = 'mcp.tool.calls';
 export const METRIC_TOOL_ERRORS = 'mcp.tool.errors';
 
+// --- Performance-evidence attributes and metrics ---
+// Every value is deliberately bounded. Do not add queries, Discord IDs,
+// message content, tool names, or other caller-provided values as labels.
+export const ATTR_DISCOVERY_DETAIL = 'mcp.discovery.detail';
+export const ATTR_DISCOVERY_CONTRACT_MODE = 'mcp.discovery.contract_mode';
+export const ATTR_DISCOVERY_MATCH_BUCKET = 'mcp.discovery.match_bucket';
+export const ATTR_CACHE_OUTCOME = 'mcp.cache.outcome';
+export const METRIC_DISCOVERY_SEARCHES = 'mcp.discovery.searches';
+export const METRIC_DISCOVERY_RESPONSE_BYTES = 'mcp.discovery.response_bytes';
+export const METRIC_CHANNEL_GUILD_CACHE_LOOKUPS = 'mcp.channel_guild_cache.lookups';
+export const METRIC_CHANNEL_GUILD_CACHE_DURATION = 'mcp.channel_guild_cache.duration_ms';
+
 // --- Resilience metrics (Plan 8 Phase D) ---
 // Circuit breaker state transitions; label `to_state` ∈ {open, half-open, closed}.
 export const METRIC_CIRCUIT_TRANSITIONS = 'mcp.circuit.transitions';

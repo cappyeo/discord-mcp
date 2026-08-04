@@ -1,5 +1,6 @@
 import type { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
+import { recordChannelGuildCacheLookup } from '../telemetry/performance-evidence.js';
 
 interface GuildChannel {
   readonly guild_id?: string;
@@ -22,22 +23,37 @@ function cacheFor(rest: REST): Map<string, Promise<string | undefined>> {
  * between guilds, so the successful result is safe to share between the
  * allowlist boundary and response helpers that need canonical jump links.
  */
-export function resolveChannelGuildId(rest: REST, channelId: string): Promise<string | undefined> {
+export async function resolveChannelGuildId(
+  rest: REST,
+  channelId: string,
+): Promise<string | undefined> {
   const cache = cacheFor(rest);
   const existing = cache.get(channelId);
-  if (existing !== undefined) return existing;
+  const outcome = existing === undefined ? 'miss' : 'hit';
+  const startedAt = performance.now();
 
-  if (cache.size >= MAX_CHANNEL_GUILD_CACHE_ENTRIES) {
-    const oldest = cache.keys().next().value;
-    if (oldest !== undefined) cache.delete(oldest);
+  let pending = existing;
+  if (pending === undefined) {
+    if (cache.size >= MAX_CHANNEL_GUILD_CACHE_ENTRIES) {
+      const oldest = cache.keys().next().value;
+      if (oldest !== undefined) cache.delete(oldest);
+    }
+
+    pending = (rest.get(Routes.channel(channelId)) as Promise<GuildChannel>)
+      .then((channel) => channel.guild_id)
+      .catch((error: unknown) => {
+        cache.delete(channelId);
+        throw error;
+      });
+    cache.set(channelId, pending);
   }
 
-  const pending = (rest.get(Routes.channel(channelId)) as Promise<GuildChannel>)
-    .then((channel) => channel.guild_id)
-    .catch((error: unknown) => {
-      cache.delete(channelId);
-      throw error;
-    });
-  cache.set(channelId, pending);
-  return pending;
+  try {
+    const guildId = await pending;
+    recordChannelGuildCacheLookup(outcome, 'ok', performance.now() - startedAt);
+    return guildId;
+  } catch (error) {
+    recordChannelGuildCacheLookup(outcome, 'error', performance.now() - startedAt);
+    throw error;
+  }
 }

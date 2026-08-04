@@ -23,6 +23,12 @@ describe('telemetry conventions', () => {
     expect(conventions.METRIC_TOOL_DURATION).toBe('mcp.tool.duration_ms');
     expect(conventions.METRIC_TOOL_CALLS).toBe('mcp.tool.calls');
     expect(conventions.METRIC_TOOL_ERRORS).toBe('mcp.tool.errors');
+    expect(conventions.METRIC_DISCOVERY_SEARCHES).toBe('mcp.discovery.searches');
+    expect(conventions.METRIC_DISCOVERY_RESPONSE_BYTES).toBe('mcp.discovery.response_bytes');
+    expect(conventions.METRIC_CHANNEL_GUILD_CACHE_LOOKUPS).toBe('mcp.channel_guild_cache.lookups');
+    expect(conventions.METRIC_CHANNEL_GUILD_CACHE_DURATION).toBe(
+      'mcp.channel_guild_cache.duration_ms',
+    );
   });
 
   it('exports the instrumentation name + version', () => {

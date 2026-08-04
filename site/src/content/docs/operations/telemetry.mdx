@@ -133,6 +133,22 @@ would explode cardinality on the histograms and break aggregation. Use spans
 correlation.
 </Aside>
 
+### Performance evidence metrics
+
+| Metric | Type | Description |
+| ------ | ---- | ----------- |
+| `mcp.discovery.searches` | Counter | Successful progressive-catalog searches. |
+| `mcp.discovery.response_bytes` | Histogram | UTF-8 byte size of the structured search response sent to the MCP transport. |
+| `mcp.channel_guild_cache.lookups` | Counter | Channel-to-guild resolver attempts, split by cache `hit` or `miss` and `status`. A miss is one REST lookup; a hit reused an existing lookup or result. |
+| `mcp.channel_guild_cache.duration_ms` | Histogram | Resolver wait time for the same bounded cache labels. |
+
+Discovery metrics use only `mcp.discovery.detail` (`compact` or `full`),
+`mcp.discovery.contract_mode` (`none`, `selected`, or `all`), and the bounded
+`mcp.discovery.match_bucket`. Cache metrics use only `mcp.cache.outcome`
+(`hit` or `miss`) plus `status` (`ok` or `error`). They never export search
+queries, tool names, channel or guild IDs, message content, tokens, or complete
+MCP payloads. The response is serialized locally only to measure its byte size.
+
 ### Resilience metrics
 
 | Metric | Type | Description |

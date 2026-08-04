@@ -9,6 +9,20 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.5 - Privacy-safe performance evidence
+
+Released **2026-08-05**.
+
+- OpenTelemetry now measures progressive discovery response size and shape with
+  bounded labels only. It distinguishes compact/full responses, contract mode,
+  and a small match-count bucket without exporting search queries, tool names,
+  schemas, or response payloads.
+- The shared channel-to-guild resolver now reports cache hits, misses, outcome,
+  and wait time. This provides production evidence of avoided REST lookups
+  while never exporting channel IDs, guild IDs, or message data.
+- New performance evidence is strictly observational: telemetry failures cannot
+  change a tool response or allowlist authorization decision.
+
 ## v0.16.4 - Efficient progressive discovery
 
 Released **2026-08-04**.
