@@ -33,7 +33,7 @@ describe('codexGenerator', () => {
     const snippet = codexGenerator.generate({
       ...baseConfig,
       serverPath: 'npx',
-      serverArgs: ['--yes', '@discord-mcp/cli@0.16.6', 'serve', '--profile', 'devbot'],
+      serverArgs: ['--yes', '@discord-mcp/cli@0.16.7', 'serve', '--profile', 'devbot'],
     });
 
     expect(snippet.content).toContain('startup_timeout_sec = 90');

@@ -14,6 +14,8 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "isDefault": false,
       "name": "doctor",
       "options": [
+        "--client <id>",
+        "--config <path>",
         "--json",
         "--online",
         "--profile <name>",

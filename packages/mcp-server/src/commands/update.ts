@@ -31,9 +31,25 @@ interface VersionParts {
 
 export interface LauncherMatch {
   readonly configName: string;
+  readonly sectionStart: number;
+  readonly sectionEnd: number;
   readonly argsStart: number;
   readonly argsEnd: number;
   readonly currentVersion: string;
+}
+
+/**
+ * Normalized, non-secret state from one generated Codex launcher. This is
+ * intentionally safe to return from `doctor`: it does not contain config
+ * text, environment values, token material, endpoints, or filesystem paths.
+ */
+export interface CodexClientConfigInspection {
+  readonly configName: string;
+  readonly currentVersion: string;
+  readonly enabled: boolean;
+  readonly startupTimeoutSec: number | null;
+  readonly dryRun: boolean | null;
+  readonly otelEnabled: boolean | null;
 }
 
 export type CodexLauncherUpdateErrorKind =
@@ -206,6 +222,8 @@ function findGeneratedCodexLaunchers(content: string, profile: string): Launcher
     const argsStart = sectionStart + (argsMatch.index ?? 0) + argsLine.indexOf(argsText);
     matches.push({
       configName,
+      sectionStart,
+      sectionEnd,
       argsStart,
       argsEnd: argsStart + argsText.length,
       currentVersion,
@@ -215,22 +233,26 @@ function findGeneratedCodexLaunchers(content: string, profile: string): Launcher
   return matches;
 }
 
-function writeAtomically(path: string, content: string): void {
-  const directory = dirname(path);
-  const mode = statSync(path).mode & 0o777;
-  const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
-  try {
-    writeFileSync(temporary, content, { encoding: 'utf8', flag: 'wx', mode });
-    renameSync(temporary, path);
-  } finally {
-    if (existsSync(temporary)) unlinkSync(temporary);
-  }
+interface GeneratedCodexLauncherFile {
+  readonly configPath: string;
+  readonly config: string;
+  readonly launcher: LauncherMatch;
+  readonly section: string;
+  readonly serverSettings: string;
 }
 
-export async function inspectCodexLauncherUpdate(
+function topLevelTomlTable(section: string): string {
+  const firstNewline = section.indexOf('\n');
+  if (firstNewline === -1) return section;
+  const afterHeader = section.slice(firstNewline + 1);
+  const nextTable = afterHeader.search(/^\[/m);
+  return nextTable === -1 ? section : section.slice(0, firstNewline + 1 + nextTable);
+}
+
+function readGeneratedCodexLauncher(
   profile: DiscordMcpProfile,
-  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env' | 'registryUrl'> = {},
-): Promise<CodexLauncherUpdateInspection> {
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'>,
+): GeneratedCodexLauncherFile {
   const configPath = resolveCodexConfigPath(options);
   if (!existsSync(configPath)) {
     throw new CodexLauncherUpdateError('config-missing', `Expected ${configPath}.`);
@@ -268,6 +290,111 @@ export async function inspectCodexLauncherUpdate(
     );
   }
 
+  return {
+    configPath,
+    config,
+    launcher,
+    section: config.slice(launcher.sectionStart, launcher.sectionEnd),
+    serverSettings: topLevelTomlTable(config.slice(launcher.sectionStart, launcher.sectionEnd)),
+  };
+}
+
+function escapedRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function tomlNumber(section: string, key: string): number | undefined {
+  const match = new RegExp(
+    `^${escapedRegExp(key)}\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(?:#.*)?$`,
+    'm',
+  ).exec(section);
+  if (match?.[1] === undefined) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function tomlBoolean(section: string, key: string): boolean | undefined {
+  const match = new RegExp(`^${escapedRegExp(key)}\\s*=\\s*(true|false)\\s*(?:#.*)?$`, 'm').exec(
+    section,
+  );
+  if (match?.[1] === 'true') return true;
+  if (match?.[1] === 'false') return false;
+  return undefined;
+}
+
+function codexEnvTable(section: string, configName: string): string | undefined {
+  const header = new RegExp(
+    `^\\[mcp_servers\\.${escapedRegExp(configName)}\\.env\\]\\s*(?:#.*)?$`,
+    'm',
+  ).exec(section);
+  if (header === null || header.index === undefined) return undefined;
+  const afterHeader = section.slice(header.index + header[0].length);
+  const nextTable = afterHeader.search(/^\[/m);
+  return afterHeader.slice(0, nextTable === -1 ? afterHeader.length : nextTable);
+}
+
+function tomlEnvBoolean(section: string, configName: string, key: string): boolean | null {
+  const env = codexEnvTable(section, configName);
+  if (env === undefined) return null;
+  const match = new RegExp(
+    `^${escapedRegExp(key)}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*(?:#.*)?$`,
+    'm',
+  ).exec(env);
+  if (match?.[1] === undefined) return null;
+  try {
+    const value: unknown = JSON.parse(match[1]);
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+  } catch {
+    // The caller gets an unknown state; raw TOML must never reach doctor output.
+  }
+  return null;
+}
+
+/**
+ * Read one generated Codex launcher without any registry, Discord, or write
+ * operation. The returned metadata is deliberately secret-safe for doctor.
+ */
+export function inspectCodexClientConfig(
+  profile: DiscordMcpProfile,
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'> = {},
+): CodexClientConfigInspection {
+  const source = readGeneratedCodexLauncher(profile, options);
+  const startupTimeoutSec =
+    tomlNumber(source.serverSettings, 'startup_timeout_sec') ??
+    (() => {
+      const milliseconds = tomlNumber(source.serverSettings, 'startup_timeout_ms');
+      return milliseconds === undefined ? null : milliseconds / 1_000;
+    })();
+
+  return {
+    configName: source.launcher.configName,
+    currentVersion: source.launcher.currentVersion,
+    enabled: tomlBoolean(source.serverSettings, 'enabled') ?? true,
+    startupTimeoutSec,
+    dryRun: tomlEnvBoolean(source.section, source.launcher.configName, 'MCP_DRY_RUN'),
+    otelEnabled: tomlEnvBoolean(source.section, source.launcher.configName, 'OTEL_ENABLED'),
+  };
+}
+
+function writeAtomically(path: string, content: string): void {
+  const directory = dirname(path);
+  const mode = statSync(path).mode & 0o777;
+  const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, content, { encoding: 'utf8', flag: 'wx', mode });
+    renameSync(temporary, path);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+}
+
+export async function inspectCodexLauncherUpdate(
+  profile: DiscordMcpProfile,
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env' | 'registryUrl'> = {},
+): Promise<CodexLauncherUpdateInspection> {
+  const source = readGeneratedCodexLauncher(profile, options);
+
   let targetVersion: string;
   try {
     targetVersion = await latestPublishedVersion(options.registryUrl);
@@ -278,19 +405,19 @@ export async function inspectCodexLauncherUpdate(
     );
   }
 
-  const comparison = compareVersions(targetVersion, launcher.currentVersion);
+  const comparison = compareVersions(targetVersion, source.launcher.currentVersion);
   if (comparison === undefined) {
     throw new CodexLauncherUpdateError(
       'version-unsafe',
-      `Current version: ${launcher.currentVersion}; registry version: ${targetVersion}`,
+      `Current version: ${source.launcher.currentVersion}; registry version: ${targetVersion}`,
     );
   }
 
   return {
-    configPath,
-    config,
-    launcher,
-    currentVersion: launcher.currentVersion,
+    configPath: source.configPath,
+    config: source.config,
+    launcher: source.launcher,
+    currentVersion: source.launcher.currentVersion,
     targetVersion,
     updateAvailable: comparison > 0,
   };

@@ -26,18 +26,82 @@ import { type Config, loadConfig } from '@discord-mcp/core';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
 import { emitResult } from '../lib/output.js';
 import { activateProfile, type DiscordMcpProfile } from '../lib/profiles.js';
-import { CodexLauncherUpdateError, inspectCodexLauncherUpdate } from './update.js';
+import {
+  CodexLauncherUpdateError,
+  inspectCodexClientConfig,
+  inspectCodexLauncherUpdate,
+} from './update.js';
 
 export interface DoctorOptions {
   json?: boolean;
   online?: boolean;
   profile?: string;
+  client?: string;
+  config?: string;
   profileDirectory?: string;
 }
 
-async function codexLauncherUpdateCheck(profile: DiscordMcpProfile): Promise<CheckResult> {
+function codexClientConfigCheck(profile: DiscordMcpProfile, config?: string): CheckResult {
+  if (profile.client !== 'codex') {
+    return {
+      id: 'codex-client-config',
+      status: 'warn',
+      message: 'Skipped: this saved profile was not generated for Codex.',
+      details: { profile: profile.name, audited: false, managed: false },
+    };
+  }
+
   try {
-    const inspection = await inspectCodexLauncherUpdate(profile);
+    const inspection =
+      config === undefined
+        ? inspectCodexClientConfig(profile)
+        : inspectCodexClientConfig(profile, { config });
+    return {
+      id: 'codex-client-config',
+      status: 'ok',
+      message: `Configured Codex launcher is ready for profile ${profile.name}.`,
+      details: {
+        profile: profile.name,
+        audited: true,
+        server: inspection.configName,
+        version: inspection.currentVersion,
+        enabled: inspection.enabled,
+        startupTimeoutSec: inspection.startupTimeoutSec,
+        dryRun: inspection.dryRun,
+        otelEnabled: inspection.otelEnabled,
+      },
+    };
+  } catch (error) {
+    if (error instanceof CodexLauncherUpdateError) {
+      const message =
+        error.kind === 'config-missing' || error.kind === 'config-read'
+          ? 'Could not read the saved Codex configuration, so client state is unknown.'
+          : 'Skipped: this Codex launcher is custom or ambiguous and remains caller-managed.';
+      return {
+        id: 'codex-client-config',
+        status: 'warn',
+        message,
+        details: { profile: profile.name, audited: false, managed: false },
+      };
+    }
+    return {
+      id: 'codex-client-config',
+      status: 'warn',
+      message: 'Could not inspect the saved Codex client configuration.',
+      details: { profile: profile.name, audited: false, managed: false },
+    };
+  }
+}
+
+async function codexLauncherUpdateCheck(
+  profile: DiscordMcpProfile,
+  config?: string,
+): Promise<CheckResult> {
+  try {
+    const inspection =
+      config === undefined
+        ? await inspectCodexLauncherUpdate(profile)
+        : await inspectCodexLauncherUpdate(profile, { config });
     if (inspection.updateAvailable) {
       return {
         id: 'codex-launcher-update',
@@ -93,6 +157,31 @@ async function codexLauncherUpdateCheck(profile: DiscordMcpProfile): Promise<Che
 }
 
 export async function doctorAction(opts: DoctorOptions): Promise<void> {
+  if (opts.client !== undefined && opts.client !== 'codex') {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: `unsupported client audit: ${opts.client}`,
+        errors: ['Only --client codex is currently supported.'],
+      },
+      opts.json === true,
+    );
+    return;
+  }
+  if (opts.client === 'codex' && opts.profile === undefined) {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: '--client codex requires --profile <name>',
+        errors: ['A saved Codex profile identifies exactly which launcher to audit.'],
+      },
+      opts.json === true,
+    );
+    return;
+  }
+
   let profile: DiscordMcpProfile | undefined;
   if (opts.profile !== undefined) {
     try {
@@ -141,8 +230,12 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
     }
   }
 
+  if (opts.client === 'codex' && profile !== undefined) {
+    results.push(codexClientConfigCheck(profile, opts.config));
+  }
+
   if (opts.online === true && profile?.client === 'codex') {
-    results.push(await codexLauncherUpdateCheck(profile));
+    results.push(await codexLauncherUpdateCheck(profile, opts.config));
   }
 
   const fails = results.filter((r) => r.status === 'fail').length;

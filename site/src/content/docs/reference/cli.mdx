@@ -104,6 +104,7 @@ Every other sub-command sets
 
 ```bash
 discord-mcp doctor [--profile <name>] [--json] [--online]
+discord-mcp doctor --profile <name> --client codex [--config <path>] [--json]
 ```
 
 Diagnose configuration, token, and connectivity issues. Runs a registry of
@@ -117,6 +118,8 @@ against npm `latest`.
 | `--json`    | boolean | `false` | Emit machine-readable JSON instead of pretty TTY output. Use this in CI.                                                                       |
 | `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). With a generated Codex profile, also performs one read-only npm version check. Without this flag only offline checks run, so doctor stays cheap. |
 | `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. A generated Codex profile enables launcher update discovery with `--online`. |
+| `--client <id>` | string | unset | Audit a saved MCP client configuration locally. Currently only `codex` is supported and requires `--profile`; it never calls npm or Discord. |
+| `--config <path>` | string | default Codex user config | Override the `config.toml` path only for `--client codex`; useful for a nonstandard `CODEX_HOME` or CI fixture. |
 
 ### Examples
 
@@ -136,6 +139,11 @@ discord-mcp doctor --online --json | jq .
 # Verify a saved caller-owned bot profile, its identity lock, and (for a
 # generated Codex launcher) whether an explicit update is available.
 discord-mcp doctor --profile devbot --online
+
+# Inspect the saved Codex launcher without a network call. This reports only
+# normalized state: launcher/version, enabled status, startup timeout,
+# dry-run, and OTel enabled state.
+discord-mcp doctor --profile devbot --client codex --json
 ```
 
 ### Exit codes
@@ -153,6 +161,15 @@ The update-status check never reads or sends `DISCORD_TOKEN`, bot identity,
 guild IDs, or profile contents to npm. It never modifies `config.toml`; use
 [`update --apply`](#update) only after reviewing the reported version. Custom
 or ambiguous launchers are marked caller-managed and left alone.
+
+`--client codex` does not change configuration or Discord state, but it is
+deliberately local: it reads the saved generated launcher and never returns the
+config text, token, other env values, OTel endpoint, or absolute config path.
+Like other `doctor` runs, it appends only predefined outcome signals to the
+privacy-safe local activity journal. It describes the configuration that Codex
+will use on its next start; restart Codex before treating a launcher change as
+active runtime state. Custom or ambiguous launchers remain caller-managed and
+produce a warning instead of being guessed or modified.
 
 ### See also
 

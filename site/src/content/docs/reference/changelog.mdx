@@ -9,6 +9,20 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.7 - Safe Codex client audit
+
+Released **2026-08-07**.
+
+- `discord-mcp doctor --profile <name> --client codex` now audits the saved
+  generated Codex launcher locally. It reports normalized launcher state only:
+  version, enabled state, startup timeout, dry-run, and OTel enabled state.
+- The audit never returns configuration text, bot tokens, other environment
+  values, OTLP endpoints, or absolute paths. It does not change configuration
+  or Discord state; like other doctor runs, it records only a filtered local
+  outcome in the privacy-safe activity journal.
+- An explicit `--config <path>` applies consistently to this client audit and
+  to the existing online launcher-update check when both options are used.
+
 ## v0.16.6 - Reliable first npx launch
 
 Released **2026-08-07**.

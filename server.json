@@ -9,17 +9,17 @@
     "id": "1223078565",
     "subfolder": "packages/mcp-server"
   },
-  "version": "0.16.6",
+  "version": "0.16.7",
   "websiteUrl": "https://cappyeo.github.io/discord-mcp/",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.16.6/site/src/assets/discord-mcp-logo-light.png",
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.16.7/site/src/assets/discord-mcp-logo-light.png",
       "mimeType": "image/png",
       "sizes": ["1024x1024"],
       "theme": "light"
     },
     {
-      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.16.6/site/src/assets/discord-mcp-logo-dark.png",
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.16.7/site/src/assets/discord-mcp-logo-dark.png",
       "mimeType": "image/png",
       "sizes": ["1024x1024"],
       "theme": "dark"
@@ -29,7 +29,7 @@
     {
       "registryType": "npm",
       "identifier": "@discord-mcp/cli",
-      "version": "0.16.6",
+      "version": "0.16.7",
       "transport": {
         "type": "stdio"
       },

@@ -254,6 +254,13 @@ describe('cli - doctor sub-command (Plan 9 Phase B)', () => {
     expect(out).toContain('token-format');
     expect(() => JSON.parse(out)).toThrow();
   });
+
+  it('doctor --help documents the explicit Codex client audit', async () => {
+    await runCli(['doctor', '--help']);
+    const out = stdoutOutput();
+    expect(out).toContain('--client <id>');
+    expect(out).toContain('--config <path>');
+  });
 });
 
 describe('cli - init sub-command (Plan 9 Phase D)', () => {

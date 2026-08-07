@@ -262,6 +262,130 @@ describe('doctorAction - online check selection', () => {
 });
 
 describe('doctorAction - Codex launcher update discovery', () => {
+  it('audits a generated Codex launcher locally without exposing environment values', async () => {
+    const fixture = createCodexProfileFixture('0.16.7');
+    const secret = 'Bot audit-secret-must-not-appear';
+    const endpoint = 'https://collector.example.test/private-path';
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+      writeFileSync(
+        fixture.configPath,
+        [
+          '[mcp_servers.discord-mcp]',
+          'command = "npx"',
+          'args = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.16.7", "serve", "--profile", "devbot"]',
+          'startup_timeout_sec = 90',
+          '',
+          '[mcp_servers.discord-mcp.env]',
+          `DISCORD_TOKEN = "${secret}"`,
+          'enabled = false',
+          'MCP_DRY_RUN = "true"',
+          'OTEL_ENABLED = "true"',
+          `OTEL_EXPORTER_OTLP_ENDPOINT = "${endpoint}"`,
+          '',
+        ].join('\n'),
+      );
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'codex',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      const clientCheck = parsed.data.checks.find((check) => check.id === 'codex-client-config');
+      expect(clientCheck).toMatchObject({
+        status: 'ok',
+        details: {
+          profile: 'devbot',
+          audited: true,
+          server: 'discord-mcp',
+          version: '0.16.7',
+          enabled: true,
+          startupTimeoutSec: 90,
+          dryRun: true,
+          otelEnabled: true,
+        },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(out).not.toContain(secret);
+      expect(out).not.toContain(endpoint);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a saved profile before auditing a Codex launcher', async () => {
+    const out = await runAndCapture(() => doctorAction({ json: true, client: 'codex' }));
+
+    const parsed = JSON.parse(out) as { exitCode: number; summary: string };
+    expect(parsed.exitCode).toBe(2);
+    expect(parsed.summary).toBe('--client codex requires --profile <name>');
+  });
+
+  it('uses the explicit config for both the local audit and online update check', async () => {
+    const fixture = createCodexProfileFixture('0.16.7');
+    const unrelatedCodexHome = join(fixture.directory, 'unrelated-codex');
+    try {
+      mkdirSync(unrelatedCodexHome, { recursive: true });
+      writeFileSync(
+        join(unrelatedCodexHome, 'config.toml'),
+        [
+          '[mcp_servers.discord-mcp]',
+          'command = "powershell.exe"',
+          'args = ["-Command", "custom launcher"]',
+          '',
+        ].join('\n'),
+      );
+      process.env.CODEX_HOME = unrelatedCodexHome;
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+      vi.stubGlobal('fetch', onlineDoctorFetch('0.16.7'));
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          online: true,
+          profile: 'devbot',
+          client: 'codex',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      expect(parsed.data.checks.find((check) => check.id === 'codex-client-config')).toMatchObject({
+        status: 'ok',
+        details: { version: '0.16.7' },
+      });
+      expect(
+        parsed.data.checks.find((check) => check.id === 'codex-launcher-update'),
+      ).toMatchObject({
+        status: 'ok',
+        details: { currentVersion: '0.16.7', targetVersion: '0.16.7', updateAvailable: false },
+      });
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects unsupported client audits before running the check suite', async () => {
+    const out = await runAndCapture(() => doctorAction({ json: true, client: 'cursor' }));
+
+    const parsed = JSON.parse(out) as { exitCode: number; summary: string };
+    expect(parsed.exitCode).toBe(2);
+    expect(parsed.summary).toBe('unsupported client audit: cursor');
+  });
+
   it('warns about a newer generated launcher without changing the config', async () => {
     const fixture = createCodexProfileFixture();
     try {

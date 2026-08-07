@@ -69,12 +69,22 @@ export function buildProgram(): Command {
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
     .option('--online', 'Run online checks against Discord (requires DISCORD_TOKEN)')
     .option('--profile <name>', 'Load a caller-owned bot profile before checks')
-    .action(async (options: { json?: boolean; online?: boolean; profile?: string }) => {
-      const { doctorAction } = await import('./commands/doctor.js');
-      await captureCliActivity({ command: 'doctor', online: options.online === true }, async () =>
-        doctorAction(options),
-      );
-    });
+    .option('--client <id>', 'Audit one saved MCP client configuration (currently: codex)')
+    .option('--config <path>', 'Override the Codex config.toml path for --client codex')
+    .action(
+      async (options: {
+        json?: boolean;
+        online?: boolean;
+        profile?: string;
+        client?: string;
+        config?: string;
+      }) => {
+        const { doctorAction } = await import('./commands/doctor.js');
+        await captureCliActivity({ command: 'doctor', online: options.online === true }, async () =>
+          doctorAction(options),
+        );
+      },
+    );
 
   program
     .command('smoke')
