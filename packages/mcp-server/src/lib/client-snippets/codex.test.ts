@@ -29,6 +29,16 @@ describe('codexGenerator', () => {
     expect(snippet.content).toContain('args = ["/opt/discord-mcp/cli.js", "--gateway"]');
   });
 
+  it('adds a startup grace period for npx launchers', () => {
+    const snippet = codexGenerator.generate({
+      ...baseConfig,
+      serverPath: 'npx',
+      serverArgs: ['--yes', '@discord-mcp/cli@0.16.6', 'serve', '--profile', 'devbot'],
+    });
+
+    expect(snippet.content).toContain('startup_timeout_sec = 90');
+  });
+
   it('adds progressive discovery without persisting the forwarded token', () => {
     const snippet = codexGenerator.generate({
       ...baseConfig,

@@ -573,7 +573,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
   const portabilityNote =
     profileName === undefined
       ? generator.id === 'codex'
-        ? 'For a portable Codex configuration, set command = "npx" and args = ["-y", "@discord-mcp/cli"] in the TOML fragment.'
+        ? 'For a portable Codex configuration, set command = "npx", args = ["-y", "@discord-mcp/cli"], and startup_timeout_sec = 90 in the TOML fragment.'
         : 'Adjust the `command` field if you install discord-mcp globally (e.g. set command="npx" args=["@discord-mcp/cli"]).'
       : `This profile uses a pinned npx launcher (@discord-mcp/cli@${packageJson.version}) instead of this installation's absolute CLI path. The non-secret profile itself remains local to this operating-system user.`;
 

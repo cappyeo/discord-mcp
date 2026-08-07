@@ -35,6 +35,10 @@ function renderCodexToml(cfg: SnippetConfig): string {
     `args = ${renderTomlStringArray(args)}`,
   ];
 
+  if (cfg.serverPath === 'npx') {
+    lines.push('startup_timeout_sec = 90');
+  }
+
   if (cfg.discordToken === undefined || cfg.discordToken === TOKEN_PLACEHOLDER) {
     lines.push('env_vars = ["DISCORD_TOKEN"]');
   }

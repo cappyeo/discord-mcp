@@ -9,6 +9,17 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.6 - Reliable first npx launch
+
+Released **2026-08-07**.
+
+- Guided Codex setup now adds `startup_timeout_sec = 90` when it emits the
+  portable, pinned `npx` launcher for a caller-owned bot profile. This prevents
+  Codex from abandoning a legitimate first start while npm fetches the package
+  into its local cache.
+- Local `node` launchers remain unchanged. The setting is a startup grace
+  period, not a claim that a cold npm download is faster.
+
 ## v0.16.5 - Privacy-safe performance evidence
 
 Released **2026-08-05**.

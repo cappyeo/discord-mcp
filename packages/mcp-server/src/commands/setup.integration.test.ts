@@ -90,6 +90,7 @@ describe('guided caller-owned bot setup', () => {
     expect(parsed.data?.content).toContain('"--loglevel=error"');
     expect(parsed.data?.content).toContain(`"@discord-mcp/cli@${packageJson.version}"`);
     expect(parsed.data?.content).toContain('"serve", "--profile", "devbot"');
+    expect(parsed.data?.content).toContain('startup_timeout_sec = 90');
     expect(parsed.data?.content).toContain('env_vars = ["DISCORD_TOKEN"]');
     expect(parsed.data?.content).not.toContain(TOKEN);
     expect(parsed.data?.content).not.toMatch(/[\\/]_npx[\\/]/);
