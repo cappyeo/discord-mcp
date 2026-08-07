@@ -45,6 +45,12 @@ const ConfigSchema = z.object({
   // calls still pass through MCP_CATEGORIES and the complete middleware chain.
   MCP_TOOL_SURFACE: z.enum(['full', 'progressive']).default('full'),
 
+  // Explicit all-write safety policy. `allow` preserves the historical
+  // behavior: non-destructive writes execute while destructive tools remain
+  // governed by MCP_DRY_RUN and __confirm. `preview` blocks every mutating
+  // tool before it reaches Discord, including non-destructive writes.
+  MCP_WRITE_MODE: z.enum(['allow', 'preview']).default('allow'),
+
   // --- OpenTelemetry (Plan 8 Phase A) ---
   // Master switch. When false, mcp-server skips SDK boot entirely (default behavior).
   OTEL_ENABLED: boolish(false),

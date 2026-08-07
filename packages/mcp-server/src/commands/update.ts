@@ -49,6 +49,7 @@ export interface CodexClientConfigInspection {
   readonly enabled: boolean;
   readonly startupTimeoutSec: number | null;
   readonly dryRun: boolean | null;
+  readonly writeMode: 'allow' | 'preview' | null;
   readonly otelEnabled: boolean | null;
 }
 
@@ -351,6 +352,20 @@ function tomlEnvBoolean(section: string, configName: string, key: string): boole
   return null;
 }
 
+function tomlEnvWriteMode(section: string, configName: string): 'allow' | 'preview' | null {
+  const env = codexEnvTable(section, configName);
+  if (env === undefined) return 'allow';
+  const match = /^MCP_WRITE_MODE\s*=\s*("(?:[^"\\]|\\.)*")\s*(?:#.*)?$/m.exec(env);
+  if (match?.[1] === undefined) return 'allow';
+  try {
+    const value: unknown = JSON.parse(match[1]);
+    return value === 'allow' || value === 'preview' ? value : null;
+  } catch {
+    // Raw TOML must never reach doctor output.
+    return null;
+  }
+}
+
 /**
  * Read one generated Codex launcher without any registry, Discord, or write
  * operation. The returned metadata is deliberately secret-safe for doctor.
@@ -373,6 +388,7 @@ export function inspectCodexClientConfig(
     enabled: tomlBoolean(source.serverSettings, 'enabled') ?? true,
     startupTimeoutSec,
     dryRun: tomlEnvBoolean(source.section, source.launcher.configName, 'MCP_DRY_RUN'),
+    writeMode: tomlEnvWriteMode(source.section, source.launcher.configName),
     otelEnabled: tomlEnvBoolean(source.section, source.launcher.configName, 'OTEL_ENABLED'),
   };
 }

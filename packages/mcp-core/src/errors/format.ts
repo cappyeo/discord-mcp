@@ -1,6 +1,7 @@
 import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import { BrokenCircuitError, BulkheadRejectedError } from 'cockatiel';
+import { DryRunPreview, WritePreview } from './client.js';
 import {
   BulkheadFullError,
   CancelledError,
@@ -12,7 +13,6 @@ import {
   DiscordPermissionError,
   DiscordRateLimitError,
   DiscordServerError,
-  DryRunPreview,
   ExternalServiceError,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
@@ -379,14 +379,15 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
     });
   }
 
-  if (e instanceof DryRunPreview) {
+  if (e instanceof DryRunPreview || e instanceof WritePreview) {
+    const label = e instanceof WritePreview ? '**Write Preview**' : '**Dry-Run**';
     return makeError({
       code: e.code,
       retriable: false,
       category: 'client',
       recoveryHint: e.recoveryHint ?? 'review the preview before enabling execution',
       text:
-        `**Dry-Run** (no action taken): would call \`${e.tool}\` with:\n\n` +
+        `${label} (no action taken): would call \`${e.tool}\` with:\n\n` +
         '```json\n' +
         JSON.stringify(e.preview, null, 2) +
         '\n```\n\n' +

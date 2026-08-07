@@ -29,6 +29,7 @@ import {
 import { preconditionMiddleware } from './middleware/precondition.js';
 import { telemetryMiddleware } from './middleware/telemetry.js';
 import { validateMiddleware } from './middleware/validate.js';
+import { writePreviewMiddleware } from './middleware/write-preview.js';
 import type { Tool } from './pieces/Tool.js';
 import { CategoryEnabled } from './preconditions/CategoryEnabled.js';
 import { ConfirmRequired } from './preconditions/ConfirmRequired.js';
@@ -1267,6 +1268,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     validateMiddleware(),
     guildAllowlistMiddleware(guildScopePolicy),
     categoryMiddleware(categoryAllowlist),
+    writePreviewMiddleware(deps.config.MCP_WRITE_MODE),
     preconditionMiddleware(preconditionStore),
     auditMiddleware(auditSink),
   ];

@@ -56,10 +56,13 @@ function codexClientConfigCheck(profile: DiscordMcpProfile, config?: string): Ch
       config === undefined
         ? inspectCodexClientConfig(profile)
         : inspectCodexClientConfig(profile, { config });
+    const writeModeWarning = inspection.writeMode === 'allow' && inspection.dryRun === true;
     return {
       id: 'codex-client-config',
-      status: 'ok',
-      message: `Configured Codex launcher is ready for profile ${profile.name}.`,
+      status: writeModeWarning ? 'warn' : 'ok',
+      message: writeModeWarning
+        ? 'Non-destructive writes remain enabled; set MCP_WRITE_MODE=preview for a no-mutation session.'
+        : `Configured Codex launcher is ready for profile ${profile.name}.`,
       details: {
         profile: profile.name,
         audited: true,
@@ -68,6 +71,7 @@ function codexClientConfigCheck(profile: DiscordMcpProfile, config?: string): Ch
         enabled: inspection.enabled,
         startupTimeoutSec: inspection.startupTimeoutSec,
         dryRun: inspection.dryRun,
+        writeMode: inspection.writeMode,
         otelEnabled: inspection.otelEnabled,
       },
     };

@@ -1,6 +1,7 @@
 import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
 import { BrokenCircuitError, BulkheadRejectedError, IsolatedCircuitError } from 'cockatiel';
 import { describe, expect, it } from 'vitest';
+import { DryRunPreview, WritePreview } from './client.js';
 import { formatErrorForUser } from './format.js';
 import {
   CancelledError,
@@ -9,7 +10,6 @@ import {
   DiscordNotFoundError,
   DiscordPermissionError,
   DiscordRateLimitError,
-  DryRunPreview,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
   ScopeRejectedError,
@@ -162,6 +162,20 @@ describe('formatErrorForUser', () => {
     expect(text).toMatch(/Dry-Run/);
     expect(text).toMatch(/"user_id"/);
     expect(text).toMatch(/"5"/);
+  });
+
+  it('formats WritePreview with the all-write recovery hint', () => {
+    const r = formatErrorForUser(
+      new WritePreview('channels_create_guild_channel', { name: 'test' }),
+      stdio,
+    );
+    expect(r.structuredContent).toMatchObject({
+      code: 'WRITE_PREVIEW',
+      tool: 'channels_create_guild_channel',
+    });
+    const text = (r.content as Array<{ text: string }>)[0]!.text;
+    expect(text).toMatch(/Write Preview/);
+    expect(text).toContain('MCP_WRITE_MODE=allow');
   });
 
   it('formats CancelledError', () => {

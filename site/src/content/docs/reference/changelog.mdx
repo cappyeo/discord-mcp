@@ -9,6 +9,20 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.8 - All-write preview safety
+
+Released **2026-08-08**.
+
+- `MCP_WRITE_MODE=preview` is now an explicit no-mutation mode. It blocks every
+  mutating tool before Discord receives a request, including ordinary writes
+  such as sending a message or creating a channel, and returns a redacted
+  `WRITE_PREVIEW` response instead.
+- The default remains `allow` for compatibility. Existing `MCP_DRY_RUN` and
+  `__confirm` safeguards continue to control destructive operations, while
+  `preview` is the clear choice for audits, planning and safe dogfood.
+- `discord-mcp doctor --client codex` reports the effective write mode and
+  warns when dry-run is enabled but non-destructive writes still remain active.
+
 ## v0.16.7 - Safe Codex client audit
 
 Released **2026-08-07**.

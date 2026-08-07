@@ -373,3 +373,48 @@ describe('destructive tool authorization (MCP_DRY_RUN=false)', () => {
     expect(JSON.stringify(r.structuredContent?.preview)).not.toContain('__confirm');
   });
 });
+
+describe('all-write preview authorization (MCP_WRITE_MODE=preview)', () => {
+  const fakeEnv = {
+    DISCORD_TOKEN: 'Bot fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    LOG_LEVEL: 'fatal',
+    MCP_WRITE_MODE: 'preview',
+  } as NodeJS.ProcessEnv;
+
+  let client: Client;
+
+  beforeAll(async () => {
+    const config = loadConfig(fakeEnv);
+    const logger = createLogger(config);
+    const rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const { server } = await buildServer({ rest, logger, config });
+    client = new Client({ name: 'write-preview-test', version: '0.0.0' }, { capabilities: {} });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  it('blocks a non-destructive write before the Discord handler', async () => {
+    const r = await client.callTool({
+      name: 'channels_create_guild_channel',
+      arguments: { guild_id: '111122223333444455', name: 'preview-only' },
+    });
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent).toMatchObject({
+      code: 'WRITE_PREVIEW',
+      tool: 'channels_create_guild_channel',
+      preview: { guild_id: '111122223333444455', name: 'preview-only' },
+    });
+  });
+
+  it('does not block read-only operations', async () => {
+    const r = await client.callTool({
+      name: 'channels_list',
+      arguments: { guild_id: '111122223333444455' },
+    });
+    expect(r.isError).toBe(false);
+  });
+});

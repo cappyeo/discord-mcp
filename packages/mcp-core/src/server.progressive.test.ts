@@ -26,9 +26,10 @@ describe('progressive tool surface', () => {
   let fullClient: Client;
   let progressiveClient: Client;
   let scopedClient: Client;
+  let previewClient: Client;
 
   beforeAll(async () => {
-    [fullClient, progressiveClient, scopedClient] = await Promise.all([
+    [fullClient, progressiveClient, scopedClient, previewClient] = await Promise.all([
       connect(BASE_ENV),
       connect({ ...BASE_ENV, MCP_TOOL_SURFACE: 'progressive' }),
       connect({
@@ -36,11 +37,17 @@ describe('progressive tool surface', () => {
         MCP_TOOL_SURFACE: 'progressive',
         MCP_CATEGORIES: 'messages,channels',
       }),
+      connect({ ...BASE_ENV, MCP_TOOL_SURFACE: 'progressive', MCP_WRITE_MODE: 'preview' }),
     ]);
   });
 
   afterAll(async () => {
-    await Promise.all([fullClient.close(), progressiveClient.close(), scopedClient.close()]);
+    await Promise.all([
+      fullClient.close(),
+      progressiveClient.close(),
+      scopedClient.close(),
+      previewClient.close(),
+    ]);
   });
 
   it('keeps the full 201-tool surface as the compatibility default', async () => {
@@ -231,6 +238,21 @@ describe('progressive tool surface', () => {
     expect(result.structuredContent).toMatchObject({
       code: 'DRY_RUN_PREVIEW',
       tool: 'messages_delete',
+    });
+  });
+
+  it('applies all-write preview after progressive write dispatch', async () => {
+    const result = await previewClient.callTool({
+      name: 'mcp_tools_write',
+      arguments: {
+        tool: 'messages_send',
+        args: { channel_id: '112233445566778899', content: 'preview only' },
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      code: 'WRITE_PREVIEW',
+      tool: 'messages_send',
     });
   });
 

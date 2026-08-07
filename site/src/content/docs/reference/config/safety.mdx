@@ -27,3 +27,20 @@ but it can surprise an operator who expected a destructive call to execute.
 If confirmation-gated tools keep returning `DRY_RUN_PREVIEW`, check this value
 byte-for-byte first. For the call-level requirement, see
 [Confirmation](/discord-mcp/architecture/confirmation/).
+
+### `MCP_WRITE_MODE`
+
+- **Values:** `allow` (default) or `preview`
+- **Use:** `preview` blocks **every** mutating tool before Discord is called,
+  including non-destructive writes such as creating a channel or sending a
+  message. It returns `WRITE_PREVIEW` with redacted arguments instead.
+
+`allow` retains the historical behavior for existing callers: non-destructive
+writes execute, while destructive tools still need the `MCP_DRY_RUN` and
+`__confirm` controls above. This makes `MCP_WRITE_MODE=preview` the explicit
+choice for no-mutation dogfood, audits, and planning sessions.
+
+```toml
+[mcp_servers.discord-mcp.env]
+MCP_WRITE_MODE = "preview"
+```

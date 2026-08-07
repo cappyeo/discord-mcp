@@ -280,6 +280,7 @@ describe('doctorAction - Codex launcher update discovery', () => {
           `DISCORD_TOKEN = "${secret}"`,
           'enabled = false',
           'MCP_DRY_RUN = "true"',
+          'MCP_WRITE_MODE = "preview"',
           'OTEL_ENABLED = "true"',
           `OTEL_EXPORTER_OTLP_ENDPOINT = "${endpoint}"`,
           '',
@@ -312,6 +313,7 @@ describe('doctorAction - Codex launcher update discovery', () => {
           enabled: true,
           startupTimeoutSec: 90,
           dryRun: true,
+          writeMode: 'preview',
           otelEnabled: true,
         },
       });
@@ -329,6 +331,48 @@ describe('doctorAction - Codex launcher update discovery', () => {
     const parsed = JSON.parse(out) as { exitCode: number; summary: string };
     expect(parsed.exitCode).toBe(2);
     expect(parsed.summary).toBe('--client codex requires --profile <name>');
+  });
+
+  it('warns when legacy dry-run does not protect non-destructive writes', async () => {
+    const fixture = createCodexProfileFixture('0.16.7');
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+      writeFileSync(
+        fixture.configPath,
+        [
+          '[mcp_servers.discord-mcp]',
+          'command = "npx"',
+          'args = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.16.7", "serve", "--profile", "devbot"]',
+          '',
+          '[mcp_servers.discord-mcp.env]',
+          'MCP_DRY_RUN = "true"',
+          '',
+        ].join('\n'),
+      );
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'codex',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      const clientCheck = parsed.data.checks.find((check) => check.id === 'codex-client-config');
+      expect(parsed.exitCode).toBe(1);
+      expect(clientCheck).toMatchObject({
+        status: 'warn',
+        details: { dryRun: true, writeMode: 'allow' },
+      });
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
   });
 
   it('uses the explicit config for both the local audit and online update check', async () => {

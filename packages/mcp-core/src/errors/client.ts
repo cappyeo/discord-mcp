@@ -110,7 +110,7 @@ export class GuildScopeUnresolvedError extends DiscordClientError {
 }
 
 export class DryRunPreview extends DiscordClientError {
-  public readonly code = 'DRY_RUN_PREVIEW';
+  public readonly code: string = 'DRY_RUN_PREVIEW';
   public readonly retriable = false;
   public constructor(
     public readonly tool: string,
@@ -118,6 +118,19 @@ export class DryRunPreview extends DiscordClientError {
   ) {
     super(`Dry-run: would call ${tool} with the given args`);
     this.recoveryHint = 'Set MCP_DRY_RUN=false AND pass __confirm:true to actually execute';
+  }
+}
+
+/**
+ * Preview emitted by the opt-in all-write safety policy. Unlike
+ * MCP_DRY_RUN, this blocks every mutating tool, not only destructive ones.
+ */
+export class WritePreview extends DryRunPreview {
+  public override readonly code = 'WRITE_PREVIEW';
+  public constructor(tool: string, preview: unknown) {
+    super(tool, preview);
+    this.recoveryHint =
+      'Set MCP_WRITE_MODE=allow to execute this mutation; destructive tools still require MCP_DRY_RUN=false and __confirm:true';
   }
 }
 
