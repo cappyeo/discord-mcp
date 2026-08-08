@@ -39,6 +39,9 @@ const EXTERNAL_REVIEW_MDX = join(
   'site/src/content/docs/reference/external-documentation-review.mdx',
 );
 const EXTERNAL_REVIEW_FORM = join(ROOT, '.github/ISSUE_TEMPLATE/documentation-review.yml');
+const BUG_REPORT_FORM = join(ROOT, '.github/ISSUE_TEMPLATE/bug-report.yml');
+const ISSUE_TEMPLATE_CONFIG = join(ROOT, '.github/ISSUE_TEMPLATE/config.yml');
+const SECURITY_POLICY = join(ROOT, 'SECURITY.md');
 
 /** Backticked snake_case identifiers, e.g. `messages_delete`. */
 const BACKTICKED = /`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g;
@@ -406,6 +409,42 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(form).not.toMatch(/\bid:\s*(?:discord_)?token\b/i);
     expect(form).toContain('Never include a bot token');
     expect(review).toContain('Never paste a bot token');
+  });
+
+  it('routes vulnerabilities privately and keeps public bug reports credential-safe', () => {
+    const advisoryUrl = 'https://github.com/cappyeo/discord-mcp/security/advisories/new';
+    const security = readFileSync(SECURITY_POLICY, 'utf8');
+    const form = readFileSync(BUG_REPORT_FORM, 'utf8');
+    const config = readFileSync(ISSUE_TEMPLATE_CONFIG, 'utf8');
+
+    expect(security).toContain(advisoryUrl);
+    expect(security).toContain('Do not open a public GitHub issue');
+    expect(security).toContain('latest public release');
+    expect(form).toContain('name: Bug report');
+    expect(form).toContain('  - bug');
+    expect(form).toContain(advisoryUrl);
+    expect(form).toContain('Do not use this form for a suspected security vulnerability');
+    expect(config).toContain('blank_issues_enabled: true');
+    expect(config).toContain(advisoryUrl);
+
+    for (const id of [
+      'impact',
+      'operating_system',
+      'mcp_client',
+      'transport',
+      'node_version',
+      'cli_version',
+      'expected',
+      'actual',
+      'reproduction',
+      'redacted_logs',
+      'safety',
+    ]) {
+      expect(form, `bug form field ${id}`).toContain(`id: ${id}`);
+    }
+
+    expect(form).not.toMatch(/\bid:\s*(?:discord_)?token\b/i);
+    expect(form).toContain('Never include a bot token');
   });
 
   it('classifies every section hub with the extended content schema', () => {

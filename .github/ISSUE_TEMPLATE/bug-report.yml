@@ -1,0 +1,131 @@
+name: Bug report
+description: Report a reproducible setup, compatibility, correctness, or performance problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not use this form for a suspected security vulnerability, authorization or guild-boundary bypass, cross-caller data exposure, or credential leak. [Report those privately](https://github.com/cappyeo/discord-mcp/security/advisories/new) and rotate any exposed credential immediately.
+
+        Reproduce with the current public release and a caller-owned bot in a private test server when possible. Never include a bot token, authorization header, webhook credential, client config, complete environment output, private server/member data, or unredacted Discord identifiers.
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: Choose the closest user-visible impact. Use private reporting if an access control can be bypassed.
+      options:
+        - Startup or authentication failure
+        - Wrong bot, guild, category, or permission behavior
+        - Unexpected write, preview, or confirmation behavior
+        - Incorrect tool result
+        - Performance or reliability regression
+        - Documentation or setup mismatch
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating_system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mcp_client
+    attributes:
+      label: MCP client
+      options:
+        - Codex
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - Generic MCP client
+        - Direct CLI or SDK
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: MCP transport
+      options:
+        - stdio
+        - Streamable HTTP
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js version
+      description: Paste only the output of `node --version`.
+      placeholder: v22.12.0
+    validations:
+      required: true
+
+  - type: input
+    id: cli_version
+    attributes:
+      label: discord-mcp version
+      description: Paste only the output of `discord-mcp --version`.
+      placeholder: 0.x.y
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the observable result you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe the observable result, including the exact redacted error when available.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: List the smallest safe sequence that reproduces the problem. Do not include a token, config, or real Discord identifiers.
+      placeholder: |
+        1. Run ...
+        2. Call ... with redacted values
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: redacted_logs
+    attributes:
+      label: Redacted evidence
+      description: Include relevant doctor output, tool result, or logs after removing credentials and identifying Discord data. Write "None" if unavailable.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-report safety
+      options:
+        - label: I did not include a bot token, authorization header, webhook credential, client config, or complete environment output.
+          required: true
+        - label: I redacted Discord IDs, server/channel names, usernames, and other private or identifying data.
+          required: true
+        - label: This is not a suspected security vulnerability or access-control bypass.
+          required: true
