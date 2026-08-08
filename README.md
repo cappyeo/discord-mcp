@@ -192,6 +192,14 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 `discord-mcp` is pre-1.0. The current public release is **v0.16.11**; this source tree's core exports, CLI surface, environment schema, and 201-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
+Help validate v1.0: if you have not authored discord-mcp or its documentation,
+follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)
+using only the public docs and package, then
+[submit a structured report](https://github.com/cappyeo/discord-mcp/issues/new?template=documentation-review.yml).
+Use a caller-owned bot in a private test server. Never include a bot token,
+client configuration, webhook credential, or unredacted Discord identifier in
+the report.
+
 ## License
 
 [MIT](LICENSE)

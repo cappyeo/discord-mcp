@@ -29,6 +29,7 @@ import {
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '../..');
+const ROOT_README = join(ROOT, 'README.md');
 const DOCS_DIR = join(ROOT, 'site/src/content/docs');
 const CONFIRMATION_MDX = join(ROOT, 'site/src/content/docs/architecture/confirmation.mdx');
 const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.mdx');
@@ -369,6 +370,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
   });
 
   it('keeps the external documentation review public, linked, and credential-safe', () => {
+    const readme = readFileSync(ROOT_README, 'utf8');
     const review = readFileSync(EXTERNAL_REVIEW_MDX, 'utf8');
     const form = readFileSync(EXTERNAL_REVIEW_FORM, 'utf8');
     const readiness = readFileSync(join(DOCS_DIR, 'reference/v1-readiness.mdx'), 'utf8');
@@ -377,6 +379,9 @@ describe('handwritten docs do not regress to known stale contracts', () => {
       'https://github.com/cappyeo/discord-mcp/issues/new?template=documentation-review.yml';
 
     expect(readiness).toContain(reviewRoute);
+    expect(readme).toContain(`https://cappyeo.github.io${reviewRoute}`);
+    expect(readme).toContain(formUrl);
+    expect(readme).toContain('Never include a bot token');
     expect(review).toContain(formUrl);
     expect(form).toContain(`https://cappyeo.github.io${reviewRoute}`);
     expect(form).toContain('name: External documentation review');
