@@ -1,0 +1,126 @@
+name: External documentation review
+description: Test the published onboarding journey and report evidence from a fresh-user perspective.
+title: "[Docs review]: "
+labels:
+  - documentation
+  - help wanted
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Follow the [external documentation review guide](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/) before submitting.
+
+        Use only a caller-owned bot and private test server. Never include a bot token, client config, webhook URL or token, authorization header, or unredacted Discord identifiers in this public issue.
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Review outcome
+      description: Select the furthest outcome you reached using the published documentation.
+      options:
+        - Completed the full journey
+        - Completed the read-only journey
+        - Blocked before the first read-only tool call
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating_system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mcp_client
+    attributes:
+      label: MCP client
+      options:
+        - Codex
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - Generic MCP client
+    validations:
+      required: true
+
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js version
+      description: Paste only the output of `node --version`.
+      placeholder: v22.12.0
+    validations:
+      required: true
+
+  - type: input
+    id: cli_version
+    attributes:
+      label: discord-mcp version
+      description: Paste only the output of `discord-mcp --version`.
+      placeholder: 0.16.11
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: journey
+    attributes:
+      label: Journey completed
+      description: Check every step you completed without inspecting the repository source.
+      options:
+        - label: I used the published documentation and public npm package.
+        - label: I created or used a caller-owned bot in a private test server.
+        - label: Guided setup created the intended profile and client snippet.
+        - label: After restart, the client showed the documented progressive or full tool surface.
+        - label: Online doctor checks completed.
+        - label: "`users_get_current` returned the intended bot."
+        - label: "`channels_list` returned channels from the intended test server."
+        - label: I sent and verified the tutorial test message in the private test server.
+
+  - type: textarea
+    id: first_friction
+    attributes:
+      label: First point of friction
+      description: What was the first instruction you had to reread, search for, or ask about? Write "None" if the journey was clear.
+      placeholder: Describe the first unclear step and the page where it happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected versus actual
+      description: For a completed review, describe the outcome you expected and observed. For a blocked review, include the exact redacted symptom.
+      placeholder: I expected ...; instead I observed ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: redacted_evidence
+    attributes:
+      label: Redacted evidence
+      description: Include pass/fail summaries, visible tool count, and redacted error text. Do not paste the client config or complete environment output.
+      placeholder: "Example: doctor 6/6 OK; client listed 4 tools; users_get_current succeeded."
+    validations:
+      required: true
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Highest-value improvement
+      description: What single documentation change would most improve this journey for the next new user?
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-report safety
+      options:
+        - label: I did not include a bot token, authorization header, webhook secret, or client config.
+          required: true
+        - label: I redacted Discord IDs, server/channel names, usernames, and other identifying details.
+          required: true

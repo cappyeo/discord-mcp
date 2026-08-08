@@ -32,6 +32,11 @@ const ROOT = join(__dirname, '../..');
 const DOCS_DIR = join(ROOT, 'site/src/content/docs');
 const CONFIRMATION_MDX = join(ROOT, 'site/src/content/docs/architecture/confirmation.mdx');
 const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.mdx');
+const EXTERNAL_REVIEW_MDX = join(
+  ROOT,
+  'site/src/content/docs/reference/external-documentation-review.mdx',
+);
+const EXTERNAL_REVIEW_FORM = join(ROOT, '.github/ISSUE_TEMPLATE/documentation-review.yml');
 
 /** Backticked snake_case identifiers, e.g. `messages_delete`. */
 const BACKTICKED = /`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g;
@@ -349,6 +354,41 @@ describe('handwritten docs do not regress to known stale contracts', () => {
 
     const tools = await loadAllTools();
     expect(clientSetup).toContain(`**${tools.length} visible direct tools**`);
+  });
+
+  it('keeps the external documentation review public, linked, and credential-safe', () => {
+    const review = readFileSync(EXTERNAL_REVIEW_MDX, 'utf8');
+    const form = readFileSync(EXTERNAL_REVIEW_FORM, 'utf8');
+    const readiness = readFileSync(join(DOCS_DIR, 'reference/v1-readiness.mdx'), 'utf8');
+    const reviewRoute = '/discord-mcp/reference/external-documentation-review/';
+    const formUrl =
+      'https://github.com/cappyeo/discord-mcp/issues/new?template=documentation-review.yml';
+
+    expect(readiness).toContain(reviewRoute);
+    expect(review).toContain(formUrl);
+    expect(form).toContain(`https://cappyeo.github.io${reviewRoute}`);
+    expect(form).toContain('name: External documentation review');
+    expect(form).toContain('  - documentation');
+    expect(form).toContain('  - help wanted');
+
+    for (const id of [
+      'outcome',
+      'operating_system',
+      'mcp_client',
+      'node_version',
+      'cli_version',
+      'journey',
+      'first_friction',
+      'expected_actual',
+      'redacted_evidence',
+      'safety',
+    ]) {
+      expect(form, `review form field ${id}`).toContain(`id: ${id}`);
+    }
+
+    expect(form).not.toMatch(/\bid:\s*(?:discord_)?token\b/i);
+    expect(form).toContain('Never include a bot token');
+    expect(review).toContain('Never paste a bot token');
   });
 
   it('classifies every section hub with the extended content schema', () => {

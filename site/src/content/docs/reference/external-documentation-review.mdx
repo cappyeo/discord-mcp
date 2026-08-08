@@ -1,0 +1,86 @@
+---
+title: External documentation review
+description: Independently test the published discord-mcp onboarding journey and submit credential-safe evidence.
+type: guide
+sidebar:
+  order: 5
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+This review is for someone who did not author discord-mcp or its documentation. Its purpose is
+to test whether a new user can reach a real Discord tool call using only the public site and
+published npm package. Do not inspect the repository source until after you submit the report;
+source knowledge can hide gaps that a real caller would encounter.
+
+An external review counts toward the v1.0.0 documentation gate only when the report identifies
+the reviewer's environment and outcome, shows redacted evidence from the published journey, and
+leaves no unresolved setup or safety blocker.
+
+<Aside type="danger">
+Use a caller-owned bot in a private test server. Never paste a bot token, client configuration,
+webhook URL or token, authorization header, complete environment output, or unredacted Discord
+identifiers into a GitHub issue. If you cannot create a safe test environment, review the prose
+without connecting a bot and mark the journey as blocked.
+</Aside>
+
+## Review journey
+
+<Steps>
+
+1. **Record the clean environment.**
+
+   Note the operating system, MCP client, `node --version`, and `discord-mcp --version`. Use the
+   current public release. Do not use a workspace checkout, local build, existing profile, or
+   maintainer-provided config.
+
+2. **Follow the tutorial without shortcuts.**
+
+   Begin at [Discord MCP tutorial](/discord-mcp/start/) and complete Unit 1 and Unit 2. Record
+   the first instruction you must reread, search for, or ask about. If an instruction is
+   ambiguous, do not silently rely on source code to resolve it.
+
+3. **Prove the setup read-only.**
+
+   After restarting the client, confirm that it shows the documented progressive or full tool
+   surface. Run the online profile diagnostic, then use `users_get_current` and `channels_list`
+   exactly as Unit 3 describes. This is the minimum completed read-only journey.
+
+4. **Complete the full journey when safe.**
+
+   In the private test channel, send and verify the single tutorial message. If you prefer not
+   to perform a write, stop after the read-only journey and report that scope explicitly. A
+   partial or blocked report is still useful, but it does not by itself complete the full-path
+   v1 documentation gate.
+
+5. **Submit one structured report.**
+
+   Open the [external documentation review form](https://github.com/cappyeo/discord-mcp/issues/new?template=documentation-review.yml).
+   Include the first friction point even if you recovered, distinguish expected from actual
+   behavior, and redact every credential and identifying Discord value.
+
+</Steps>
+
+## Evidence bar
+
+A useful report contains:
+
+- the released CLI version, Node.js version, operating system, and MCP client;
+- whether the full journey, read-only journey, or neither completed;
+- the first point of friction rather than only a final pass/fail verdict;
+- pass/fail summaries, visible tool count, and redacted error text; and
+- one highest-value improvement for the next new user.
+
+Do not upload screenshots that expose a token, client config, private server name, member list,
+or Discord IDs. Plain redacted text is usually enough.
+
+## Triage language
+
+- **Blocked:** the published instructions do not reach the first authenticated read-only call.
+- **Safety:** following the instructions could expose a credential or target the wrong server.
+- **Friction:** the reviewer recovered, but only after an undocumented detour or assumption.
+- **Polish:** the journey works and the issue is limited to wording, layout, or navigation.
+
+The readiness checkbox remains open until at least one independent full-path report exists and
+every blocking or safety finding from that report is resolved or explicitly documented before
+the v1.0.0 tag.
