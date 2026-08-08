@@ -5,12 +5,12 @@ sidebar:
   order: 5
 ---
 
-discord-mcp v0.16.9 is the current public release. v1.0.0 commits to API stability
+discord-mcp v0.16.10 is the current public release. v1.0.0 commits to API stability
 for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
 below is ticked. Re-evaluate the evidence before each release; unchecked items are
 real gates, not aspirational release notes.
 
-## Current source evidence (public release: v0.16.9)
+## Current source evidence (public release: v0.16.10)
 
 - 201 MCP tools across 30 categories.
 - 1280 passing tests (835 `@discord-mcp/core` + 373 `@discord-mcp/cli` + 72
@@ -25,7 +25,7 @@ real gates, not aspirational release notes.
   [HTTP transport security audit](/discord-mcp/operations/security-audit-2026-08-08/)
   covers authentication, Host/Origin, resource exhaustion, session and bot
   isolation, safety-policy parity, redaction and the reverse-proxy boundary.
-- `@discord-mcp/core@0.16.9` and `@discord-mcp/cli@0.16.9` are public on npm with
+- `@discord-mcp/core@0.16.10` and `@discord-mcp/cli@0.16.10` are public on npm with
   provenance. MCP Registry metadata and the public documentation are deployed.
 
 ## Pre-conditions for v1.0.0 tag
@@ -71,8 +71,8 @@ real gates, not aspirational release notes.
 - [x] CI fails if the `workspace:` protocol survives into a published
       manifest - npm does not rewrite it, and such a tarball is unrecoverable
       without a deprecate + republish
-- [x] `@discord-mcp/core` published to npm registry (current: 0.16.9)
-- [x] `@discord-mcp/cli` published to npm registry (current: 0.16.9)
+- [x] `@discord-mcp/core` published to npm registry (current: 0.16.10)
+- [x] `@discord-mcp/cli` published to npm registry (current: 0.16.10)
 - [x] `discord-mcp init` quickstart works after a clean global npm install -
       manually verified from the public 0.16.9 package on 2026-08-08
 - [x] CI installs both freshly packed tarballs into an empty consumer project,

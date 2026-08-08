@@ -9,6 +9,23 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.10 - Hardened remote HTTP transport
+
+Released **2026-08-08**.
+
+- Authenticated Streamable HTTP bodies are bounded before the MCP SDK buffers
+  them. The default 4 MiB ceiling covers normal Discord asset workflows while
+  declared and chunked overflow receive `413` and close the partial connection.
+- A 16-request in-flight bulkhead now bounds simultaneous per-request MCP
+  servers. Overflow is rejected immediately with `503` and `Retry-After: 1`
+  instead of retaining an application queue.
+- Remote bearer credentials must contain at least 32 characters. The production
+  Hono dependency is updated past its patched moderate advisories, and CI now
+  enforces the production audit at the moderate threshold.
+- The dated HTTP security review documents the caller-owned single-bot identity
+  boundary, real attack-oriented regression evidence, and the HTTPS proxy
+  controls still required for public deployments.
+
 ## v0.16.9 - Faster discovery and startup
 
 Released **2026-08-08**.
