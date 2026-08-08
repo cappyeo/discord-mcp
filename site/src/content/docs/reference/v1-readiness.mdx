@@ -5,29 +5,28 @@ sidebar:
   order: 5
 ---
 
-discord-mcp v0.13.0 is the correctness-audit release. v1.0.0 commits to API stability for
-6+ months. Tagging v1.0.0 from `main` happens **only** when every box below is
-ticked. Re-evaluate before each minor; the unchecked items below are the gating
-work that remains.
+discord-mcp v0.16.9 is the current public release. v1.0.0 commits to API stability
+for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
+below is ticked. Re-evaluate the evidence before each release; unchecked items are
+real gates, not aspirational release notes.
 
-## State at v0.13.0
+## Current evidence at v0.16.9
 
-- 192 MCP tools across 28 categories.
-- 1009 tests (711 `@discord-mcp/core` + 267 `@discord-mcp/cli` + 31 `site`),
-  0 unconditional skips, 1 documented `it.todo` (msw + undici interop, tracked
-  in `otel-undici.integration.test.ts`).
-- Coverage gate enforced on `@discord-mcp/core`: 98.9% statements / 98.6%
-  functions / 73.6% branches, with thresholds in `vitest.config.ts` set at the
-  measured level so the gate fails on a regression rather than sitting
-  permanently red or vacuous.
-- 4 perf bench files (`messages_send`, `mcp_pipeline`, gateway debounce, REST
-  policy chain) producing baseline numbers under `pnpm bench`.
-- Security audit pass - see
-  [the 2026-05-01 audit](/discord-mcp/operations/security-audit-2026-05-01/).
-  P1 fixed in-commit, P2 deferred. That page is a point-in-time record and has
-  since been superseded - the current audit is
-  [the 2026-07-27 audit](/discord-mcp/operations/security-audit-2026-07-27/).
-- npm publish dry-run verified for `@discord-mcp/core` and `@discord-mcp/cli`.
+- 201 MCP tools across 30 categories.
+- 1274 passing tests (834 `@discord-mcp/core` + 368 `@discord-mcp/cli` + 72
+  `site`), 0 unconditional skips, and 1 documented `it.todo` for the remaining
+  OTel parent-child integration seam.
+- Coverage gates run in CI for `@discord-mcp/core`: 98% statements and lines,
+  97% functions, and 73% branches.
+- 5 reproducible performance benches cover message send, MCP pipeline, gateway
+  debounce, REST policy, and progressive tool discovery.
+- The production dependency audit passed in CI on 2026-08-08. The latest
+  documented security review is the historical
+  [2026-07-27 audit](/discord-mcp/operations/security-audit-2026-07-27/); it
+  predates the live HTTP transport, so a current transport-level review remains
+  an explicit quality gate below.
+- `@discord-mcp/core@0.16.9` and `@discord-mcp/cli@0.16.9` are public on npm with
+  provenance. MCP Registry metadata and the public documentation are deployed.
 
 ## Pre-conditions for v1.0.0 tag
 
@@ -39,15 +38,17 @@ work that remains.
 - [x] `ResourceStore` extracted from `server.ts` (matches `ToolStore` /
       `PreconditionStore` pattern)
 - [x] 0 unconditional `.skip` calls, 1 documented `it.todo`
-- [x] Performance benchmarks for 4 hot paths
-- [x] Security audit pass - re-run `pnpm audit --audit-level=high --prod` at
-      tag time; last pass 2026-07-27 (0 high in the production tree)
+- [x] Performance benchmarks for 5 hot paths
+- [x] Production dependency audit in CI - re-run
+      `pnpm audit --audit-level=high --prod` at tag time; last pass 2026-08-08
 - [x] vitest globalSetup auto-builds mcp-core if `dist/` missing
 - [x] tsdown deprecation cleared (`external` -> `deps.neverBundle`)
 - [x] GitHub Actions Node 24 opt-in
-- [x] 0 biome info/warning lints
-- [x] Test count ≥ 1000 (1009)
-- [x] Coverage gate enforced in CI (98.9% statements, ≥ 80% target met)
+- [ ] Clean lint output with zero warnings - clean CI exits successfully, but
+      the current Astro source scan still reports 58 non-blocking warnings
+- [x] Test count ≥ 1000 (1274 passing)
+- [x] Coverage gate enforced in CI (98% statements and lines, 97% functions,
+      73% branches)
 - [x] No load-sensitive tests - the suite passes on consecutive cold-cache
       runs under full parallel load, not only in isolation
 - [x] Destructive-tool authorization actually works - `__confirm` survives
@@ -55,8 +56,8 @@ work that remains.
       tool permanently returned `DRY_RUN_PREVIEW`)
 - [x] `MCP_CATEGORIES` enforced at both the call gate and `tools/list` (was:
       declared by zero tools, so the documented control restricted nothing)
-- [x] `outputSchema` published for all 191 declaring tools and enforced
-      against handler results under test
+- [x] `outputSchema` published for every declaring tool and enforced against
+      handler results under test
 
 ### Distribution
 
@@ -70,17 +71,27 @@ work that remains.
 - [x] CI fails if the `workspace:` protocol survives into a published
       manifest - npm does not rewrite it, and such a tarball is unrecoverable
       without a deprecate + republish
-- [ ] `@discord-mcp/core` published to npm registry
-- [ ] `@discord-mcp/cli` published to npm registry
-- [ ] `discord-mcp init` quickstart works after `npm install -g
-      @discord-mcp/cli`
-- [ ] At least 30 days of soak time with active users post-publish
+- [x] `@discord-mcp/core` published to npm registry (current: 0.16.9)
+- [x] `@discord-mcp/cli` published to npm registry (current: 0.16.9)
+- [x] `discord-mcp init` quickstart works after a clean global npm install -
+      manually verified from the public 0.16.9 package on 2026-08-08
+- [x] CI installs both freshly packed tarballs into an empty consumer project,
+      runs the installed CLI, offline doctor, stdio initialization,
+      `tools/list`, and progressive discovery
+- [x] MCP Registry publication is part of the authenticated release workflow
+- [ ] At least 30 days of soak time with active users post-publish. The first
+      public npm release was 2026-08-01, so this cannot complete before
+      2026-08-31; external adoption evidence is still required
 
 ### Quality
 
-- [ ] No critical (P0) bugs filed against the published versions
-- [ ] No high-priority (P1) bugs unresolved
+- [x] No critical (P0) bugs currently filed against the published versions -
+      re-check at tag time; there were no open GitHub issues on 2026-08-08
+- [x] No high-priority (P1) bugs currently unresolved - re-check at tag time
 - [ ] Documentation reviewed by external party
+- [ ] Current security review covers both shipped transports. The documented
+      2026-07-27 review predates the live authenticated HTTP path; a green
+      dependency audit is necessary but not a transport threat-model review
 - [ ] Security review pass by external auditor (optional)
 
 ### API stability commitment
@@ -90,11 +101,11 @@ removal or rename fails CI instead of reaching a consumer.
 
 - [x] `@discord-mcp/core` exports frozen - `src/exports.test.ts`
 - [x] CLI flag set frozen - `packages/mcp-server/src/cli.surface.test.ts`
-      snapshots every subcommand and flag; `serve | doctor | init | migrate`
+      snapshots all nine committed subcommands and their flags
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
-- [x] Tool surface (192 tools) frozen - `src/tools/registry.invariants.test.ts`
+- [x] Tool surface (201 tools) frozen - `src/tools/registry.invariants.test.ts`
       also asserts destructive-iff-confirm-gated and complete annotations
 
 ## v1.0.0 commitment
@@ -108,13 +119,20 @@ removal or rename fails CI instead of reaching a consumer.
 - **Discord API tracking**: Discord deprecations may force adapter changes;
   these are documented in the changelog and shipped in patches.
 
-Tag v1.0.0 only when every checklist item above is checked.
+Tag v1.0.0 only when every required checklist item above is checked.
+
+## v1.0.0 transport and identity boundary
+
+- v1.0.0 includes local stdio and the already shipped bearer-protected
+  Streamable HTTP transport.
+- Each process still represents one caller-owned Discord bot. Authenticated
+  HTTP clients share that bot identity and its Discord permissions; it is not a
+  per-user authorization boundary.
+- User-token and OAuth/per-user flows remain deferred. Remote deployments must
+  not multiplex mutually untrusted callers through one bot process.
 
 ## What is NOT in v1.0.0
 
-- HTTP transport - stdio-only at v1.0.0. Streamable HTTP is on the v1.x
-  minor track.
-- OAuth flows - bot-token auth only at v1.0.0. User-token / OAuth deferred.
 - Components V3 - Discord has not released V3; the V2 surface is final.
 - i18n docs site - English-only at v1.0.0.
 
