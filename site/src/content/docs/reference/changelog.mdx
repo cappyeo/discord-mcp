@@ -9,6 +9,24 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.11 - Faster stateless HTTP startup
+
+Released **2026-08-09**.
+
+- Stateless HTTP requests now reuse one immutable, process-scoped tool registry
+  while retaining fresh MCP servers, policy stores, and caller-owned Discord
+  runtimes per request. Concurrent bot runtimes remain isolated.
+- Progressive mode compiles a tool's JSON Schema contract only when discovery
+  selects it instead of compiling all 201 contracts during startup. Full mode
+  keeps the complete compatibility surface unchanged.
+- Local comparative measurements reduced warm server construction by about 36%,
+  modern HTTP connection setup by about 49%, and working-set memory after 100
+  discovery calls by about 14%. These are release-machine measurements, not
+  network latency guarantees.
+- Clean-install CI now starts the packed CLI through both stdio and real
+  loopback HTTP, covering bearer rejection, request-size and concurrency limits,
+  modern stateless negotiation, progressive discovery, and write preview.
+
 ## v0.16.10 - Hardened remote HTTP transport
 
 Released **2026-08-08**.

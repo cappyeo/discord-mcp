@@ -7,7 +7,8 @@
  * MCP initialization, progressive tools/list, and discovery behavior.
  */
 import { strict as assert } from 'node:assert';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import {
   existsSync,
   mkdirSync,
@@ -17,9 +18,12 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { request } from 'node:http';
 import { createRequire } from 'node:module';
+import { createConnection, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 const repoRoot = resolve(import.meta.dirname, '../..');
 const tempPrefix = 'discord-mcp-package-acceptance-';
@@ -27,6 +31,7 @@ const tempRoot = mkdtempSync(join(tmpdir(), tempPrefix));
 const packRoot = join(tempRoot, 'packs');
 const installRoot = join(tempRoot, 'consumer');
 const usesCommandShim = process.platform === 'win32';
+const httpAccessToken = 'package-acceptance-access-token-at-least-32-chars';
 
 mkdirSync(packRoot);
 mkdirSync(installRoot);
@@ -113,6 +118,83 @@ function removeOwnedTempDirectory(directory) {
     `refusing to remove unexpected path: ${resolvedDirectory}`,
   );
   rmSync(resolvedDirectory, { recursive: true, force: true });
+}
+
+async function reserveLoopbackPort() {
+  const server = createServer();
+  await new Promise((resolveListen, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolveListen);
+  });
+  const address = server.address();
+  assert.ok(address !== null && typeof address !== 'string', 'could not reserve a loopback port');
+  await new Promise((resolveClose, reject) =>
+    server.close((error) => (error ? reject(error) : resolveClose())),
+  );
+  return address.port;
+}
+
+async function waitForHttpReady(endpoint, child, stderr, timeoutMs = 30_000) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    assert.equal(
+      child.exitCode,
+      null,
+      `packaged HTTP server exited before readiness: ${stderr().slice(0, 1_000)}`,
+    );
+    try {
+      const response = await fetch(endpoint, { method: 'POST' });
+      if (response.status === 401) return;
+    } catch {
+      // Listener startup races are expected while the child imports the package.
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  }
+  assert.fail('packaged HTTP server did not become ready within 30 seconds');
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null) return;
+  child.kill('SIGTERM');
+  await Promise.race([
+    once(child, 'exit'),
+    new Promise((resolveWait) => setTimeout(resolveWait, 3_000)),
+  ]);
+  if (child.exitCode === null) child.kill('SIGKILL');
+}
+
+async function postChunked(endpoint, body, headers = {}) {
+  return new Promise((resolveResponse, reject) => {
+    const req = request(
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${httpAccessToken}`,
+          'Content-Type': 'application/json',
+          'Transfer-Encoding': 'chunked',
+          ...headers,
+        },
+      },
+      (response) => {
+        response.resume();
+        response.once('end', () =>
+          resolveResponse({
+            status: response.statusCode ?? 0,
+            retryAfter: response.headers['retry-after'],
+          }),
+        );
+      },
+    );
+    req.once('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function percentile(samples, quantile) {
+  const ordered = [...samples].sort((left, right) => left - right);
+  return ordered[Math.min(ordered.length - 1, Math.ceil(ordered.length * quantile) - 1)];
 }
 
 try {
@@ -203,7 +285,7 @@ try {
   assert.match(doctor.summary, /0 fail, 0 warn/);
 
   const requireFromCli = createRequire(join(cliDirectory, 'package.json'));
-  const { Client } = requireFromCli('@modelcontextprotocol/client');
+  const { Client, StreamableHTTPClientTransport } = requireFromCli('@modelcontextprotocol/client');
   const { StdioClientTransport } = requireFromCli('@modelcontextprotocol/client/stdio');
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -247,8 +329,146 @@ try {
     await client.close();
   }
 
+  const httpPort = await reserveLoopbackPort();
+  const httpEndpoint = new URL(`http://127.0.0.1:${httpPort}/mcp`);
+  const httpEnvironment = {
+    ...serverEnvironment,
+    DISCORD_MCP_ACCESS_TOKEN: httpAccessToken,
+    MCP_HTTP_MAX_BODY_BYTES: '1024',
+    MCP_HTTP_MAX_IN_FLIGHT: '1',
+  };
+  const httpChild = spawn(
+    process.execPath,
+    [cliEntry, 'serve', '--http', '--host', '127.0.0.1', '--port', String(httpPort)],
+    {
+      cwd: installRoot,
+      env: httpEnvironment,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      windowsHide: true,
+    },
+  );
+  let httpStderr = '';
+  httpChild.stderr.on('data', (chunk) => {
+    httpStderr += String(chunk);
+  });
+  let discoveryP50 = 0;
+  let discoveryP95 = 0;
+
+  try {
+    await waitForHttpReady(httpEndpoint, httpChild, () => httpStderr);
+
+    const wrongBearer = await fetch(httpEndpoint, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer wrong-token' },
+    });
+    assert.equal(wrongBearer.status, 401);
+    assert.equal(wrongBearer.headers.get('www-authenticate'), 'Bearer');
+
+    const oversizedBody = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: {},
+      padding: 'x'.repeat(2_048),
+    });
+    const oversized = await fetch(httpEndpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${httpAccessToken}`,
+        'Content-Type': 'application/json',
+        'Content-Length': String(Buffer.byteLength(oversizedBody)),
+      },
+      body: oversizedBody,
+    });
+    assert.equal(oversized.status, 413);
+
+    const heldSocket = createConnection(httpPort, '127.0.0.1');
+    await once(heldSocket, 'connect');
+    heldSocket.write(
+      [
+        'POST /mcp HTTP/1.1',
+        `Host: 127.0.0.1:${httpPort}`,
+        `Authorization: Bearer ${httpAccessToken}`,
+        'Content-Type: application/json',
+        'Content-Length: 100',
+        '',
+        '{',
+      ].join('\r\n'),
+    );
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+    try {
+      const overloaded = await postChunked(
+        httpEndpoint,
+        JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+        { Accept: 'application/json, text/event-stream' },
+      );
+      assert.equal(overloaded.status, 503);
+      assert.equal(overloaded.retryAfter, '1');
+    } finally {
+      heldSocket.destroy();
+    }
+
+    const httpTransport = new StreamableHTTPClientTransport(httpEndpoint, {
+      requestInit: { headers: { Authorization: `Bearer ${httpAccessToken}` } },
+    });
+    const httpClient = new Client(
+      { name: 'discord-mcp-package-http-acceptance', version: '0.0.0' },
+      { versionNegotiation: { mode: 'auto' } },
+    );
+
+    try {
+      await httpClient.connect(httpTransport);
+      assert.equal(httpClient.getProtocolEra(), 'modern');
+      assert.equal(httpTransport.sessionId, undefined);
+      const { tools } = await httpClient.listTools();
+      assert.deepEqual(
+        tools.map((tool) => tool.name),
+        ['mcp_tools_search', 'mcp_tools_read', 'mcp_tools_write', 'mcp_tools_destructive'],
+      );
+
+      const discoverySamples = [];
+      for (let index = 0; index < 20; index += 1) {
+        const startedAt = performance.now();
+        const discovery = await httpClient.callTool({
+          name: 'mcp_tools_search',
+          arguments: { query: index % 2 === 0 ? 'channels_get' : 'channels', limit: 8 },
+        });
+        discoverySamples.push(performance.now() - startedAt);
+        assert.equal(discovery.isError, false);
+      }
+      discoveryP50 = percentile(discoverySamples, 0.5);
+      discoveryP95 = percentile(discoverySamples, 0.95);
+
+      const exactWrite = await httpClient.callTool({
+        name: 'mcp_tools_search',
+        arguments: { query: 'messages_send', limit: 1 },
+      });
+      assert.equal(exactWrite.structuredContent?.matches?.[0]?.dispatcher, 'mcp_tools_write');
+      const preview = await httpClient.callTool({
+        name: 'mcp_tools_write',
+        arguments: {
+          tool: 'messages_send',
+          args: {
+            channel_id: '111122223333444455',
+            content: 'package acceptance must not reach Discord',
+          },
+        },
+      });
+      assert.equal(preview.isError, true);
+      assert.equal(preview.structuredContent?.code, 'WRITE_PREVIEW');
+    } finally {
+      await httpClient.close();
+    }
+
+    assert.equal(httpStderr, '');
+  } finally {
+    await stopChild(httpChild);
+  }
+
   process.stdout.write(
-    `ok packaged @discord-mcp/core@${sourceCore.version} + @discord-mcp/cli@${sourceCli.version}\n`,
+    `ok packaged @discord-mcp/core@${sourceCore.version} + ` +
+      `@discord-mcp/cli@${sourceCli.version}; HTTP discovery ` +
+      `p50=${discoveryP50.toFixed(2)}ms p95=${discoveryP95.toFixed(2)}ms\n`,
   );
 } finally {
   removeOwnedTempDirectory(tempRoot);

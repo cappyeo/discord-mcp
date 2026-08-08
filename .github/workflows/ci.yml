@@ -50,7 +50,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: node .github/scripts/assert-no-workspace-protocol.mjs
-      - name: Verify clean-install packaged CLI
+      - name: Verify clean-install packaged transports
         run: node .github/scripts/assert-packaged-cli.mjs
   audit:
     runs-on: ubuntu-24.04

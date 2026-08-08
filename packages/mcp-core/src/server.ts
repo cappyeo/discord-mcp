@@ -290,77 +290,98 @@ const ERROR_ENVELOPE_JSON_SCHEMA = {
   required: ['code', 'retriable', 'category', 'recovery_hint'],
 } as const;
 
-interface ToolListCatalog {
-  categories: ReadonlyMap<string, string>;
-  requiredGuild: McpTool[];
-  defaultGuild: McpTool[];
+interface ToolContractVariants {
+  requiredGuild: McpTool;
+  defaultGuild: McpTool;
 }
 
-let cachedToolListCatalog: ToolListCatalog | undefined;
+const toolCategoriesByStore = new WeakMap<ToolStore, ReadonlyMap<string, string>>();
+const compiledToolContracts = new WeakMap<Tool, ToolContractVariants>();
+const lazyToolContracts = new WeakMap<Tool, ToolContractVariants>();
 
-/**
- * Tool definitions are compiled into JSON Schema once per process. HTTP stays
- * stateless and still creates a fresh MCP Server per request, but avoids
- * repeating the expensive Zod conversion for the same 201 immutable tools.
- */
-function getToolListCatalog(toolStore: ToolStore): ToolListCatalog {
-  if (cachedToolListCatalog !== undefined) return cachedToolListCatalog;
+function getToolCategories(toolStore: ToolStore): ReadonlyMap<string, string> {
+  const cached = toolCategoriesByStore.get(toolStore);
+  if (cached !== undefined) return cached;
+  const categories = new Map(
+    [...toolStore.values()].map((tool) => [tool.name, tool.category] as const),
+  );
+  toolCategoriesByStore.set(toolStore, categories);
+  return categories;
+}
 
-  const categories = new Map<string, string>();
-  const requiredGuild: McpTool[] = [];
-  const defaultGuild: McpTool[] = [];
+/** Compile one tool contract on first use instead of all 201 at HTTP startup. */
+function compileToolContracts(tool: Tool): ToolContractVariants {
+  const cached = compiledToolContracts.get(tool);
+  if (cached !== undefined) return cached;
 
-  for (const tool of toolStore.values()) {
-    categories.set(tool.name, tool.category);
-    const inputSchema = z.toJSONSchema(z.object(tool.inputSchema), {
-      target: 'draft-2020-12',
-      io: 'input',
-    }) as McpTool['inputSchema'];
-
-    if (tool.preconditions.includes('confirm_required')) {
-      inputSchema.properties ??= {};
-      (inputSchema.properties as Record<string, unknown>).__confirm = {
-        type: 'boolean',
-        description:
-          'Set true to authorize this destructive operation. Also requires the server ' +
-          'to run with MCP_DRY_RUN=false; otherwise a DRY_RUN_PREVIEW is returned.',
-      };
-    }
-
-    const entry: McpTool = {
-      name: tool.name,
-      description: tool.description,
-      inputSchema,
-      annotations: tool.annotations,
+  const inputSchema = z.toJSONSchema(z.object(tool.inputSchema), {
+    target: 'draft-2020-12',
+    io: 'input',
+  }) as McpTool['inputSchema'];
+  if (tool.preconditions.includes('confirm_required')) {
+    inputSchema.properties ??= {};
+    (inputSchema.properties as Record<string, unknown>).__confirm = {
+      type: 'boolean',
+      description:
+        'Set true to authorize this destructive operation. Also requires the server ' +
+        'to run with MCP_DRY_RUN=false; otherwise a DRY_RUN_PREVIEW is returned.',
     };
-    if (tool.outputSchema !== undefined) {
-      // Clients validate structuredContent even for isError results, so the
-      // published contract must accept both the success and error envelopes.
-      entry.outputSchema = {
-        type: 'object',
-        anyOf: [
-          z.toJSONSchema(z.looseObject(tool.outputSchema), { target: 'draft-2020-12' }),
-          ERROR_ENVELOPE_JSON_SCHEMA,
-        ],
-      } as McpTool['outputSchema'];
-    }
-    requiredGuild.push(entry);
-
-    if (Object.hasOwn(tool.inputSchema, 'guild_id') && Array.isArray(inputSchema.required)) {
-      defaultGuild.push({
-        ...entry,
-        inputSchema: {
-          ...inputSchema,
-          required: inputSchema.required.filter((field) => field !== 'guild_id'),
-        },
-      });
-    } else {
-      defaultGuild.push(entry);
-    }
   }
 
-  cachedToolListCatalog = { categories, requiredGuild, defaultGuild };
-  return cachedToolListCatalog;
+  const requiredGuild: McpTool = {
+    name: tool.name,
+    description: tool.description,
+    inputSchema,
+    annotations: tool.annotations,
+  };
+  if (tool.outputSchema !== undefined) {
+    // Clients validate structuredContent even for isError results, so the
+    // published contract must accept both the success and error envelopes.
+    requiredGuild.outputSchema = {
+      type: 'object',
+      anyOf: [
+        z.toJSONSchema(z.looseObject(tool.outputSchema), { target: 'draft-2020-12' }),
+        ERROR_ENVELOPE_JSON_SCHEMA,
+      ],
+    } as McpTool['outputSchema'];
+  }
+
+  const defaultGuild =
+    Object.hasOwn(tool.inputSchema, 'guild_id') && Array.isArray(inputSchema.required)
+      ? {
+          ...requiredGuild,
+          inputSchema: {
+            ...inputSchema,
+            required: inputSchema.required.filter((field) => field !== 'guild_id'),
+          },
+        }
+      : requiredGuild;
+  const variants = { requiredGuild, defaultGuild };
+  compiledToolContracts.set(tool, variants);
+  return variants;
+}
+
+function getToolContract(tool: Tool, hasDefaultGuild: boolean): McpTool {
+  const contracts = compileToolContracts(tool);
+  return hasDefaultGuild ? contracts.defaultGuild : contracts.requiredGuild;
+}
+
+/** Metadata stays eager for search; the selected input contract stays lazy. */
+function getLazyToolContract(tool: Tool, hasDefaultGuild: boolean): McpTool {
+  let variants = lazyToolContracts.get(tool);
+  if (variants === undefined) {
+    const lazy = (defaultGuild: boolean): McpTool => ({
+      name: tool.name,
+      description: tool.description,
+      get inputSchema() {
+        return getToolContract(tool, defaultGuild).inputSchema;
+      },
+      annotations: tool.annotations,
+    });
+    variants = { requiredGuild: lazy(false), defaultGuild: lazy(true) };
+    lazyToolContracts.set(tool, variants);
+  }
+  return hasDefaultGuild ? variants.defaultGuild : variants.requiredGuild;
 }
 
 function listVisibleTools(
@@ -368,15 +389,25 @@ function listVisibleTools(
   categoryAllowlist: ReadonlySet<string> | null,
   hasDefaultGuild: boolean,
   guildAllowlistEnabled: boolean,
+  eagerContracts: boolean,
 ): McpTool[] {
-  const catalog = getToolListCatalog(toolStore);
-  const tools = hasDefaultGuild ? catalog.defaultGuild : catalog.requiredGuild;
-  return tools.filter((tool) => {
-    if (!isToolVisibleWithGuildAllowlist(tool.name, guildAllowlistEnabled)) return false;
-    if (categoryAllowlist === null) return true;
-    const category = catalog.categories.get(tool.name)!;
-    return categoryAllowlist.has(category) || ALWAYS_ALLOWED_CATEGORIES.has(category);
-  });
+  const visible: McpTool[] = [];
+  for (const tool of toolStore.values()) {
+    if (!isToolVisibleWithGuildAllowlist(tool.name, guildAllowlistEnabled)) continue;
+    if (
+      categoryAllowlist !== null &&
+      !categoryAllowlist.has(tool.category) &&
+      !ALWAYS_ALLOWED_CATEGORIES.has(tool.category)
+    ) {
+      continue;
+    }
+    visible.push(
+      eagerContracts
+        ? getToolContract(tool, hasDefaultGuild)
+        : getLazyToolContract(tool, hasDefaultGuild),
+    );
+  }
+  return visible;
 }
 
 function listAdvertisedTools(
@@ -387,24 +418,11 @@ function listAdvertisedTools(
   return [PROGRESSIVE_SEARCH_TOOL, ...PROGRESSIVE_DISPATCH_TOOLS];
 }
 
-export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
-  const transport = deps.transport ?? 'stdio';
-  await verifyExpectedBotIdentity(deps.rest, deps.config.DISCORD_EXPECTED_BOT_ID);
-  // Do not write these dependencies into a process-wide singleton. Every MCP
-  // tool still accesses Sapphire's `container`, but its fields are now backed
-  // by AsyncLocalStorage and selected per tool request below. This prevents
-  // runtime context from bleeding between concurrent server instances; one
-  // deployment still intentionally uses the caller-owned bot configured on it.
-  const runtime: DiscordRuntime = {
-    rest: deps.rest,
-    logger: deps.logger,
-    config: deps.config,
-  };
+let sharedToolStorePromise: Promise<ToolStore> | undefined;
 
-  // --- Stores ---
+/** Load the immutable tool registry once and share it across MCP server instances. */
+async function createSharedToolStore(): Promise<ToolStore> {
   const toolStore = new ToolStore();
-  const preconditionStore = new PreconditionStore();
-  const resourceStore = new ResourceStore();
 
   // defineTool returns `typeof Tool` (abstract) - cast to concrete for Sapphire's loadPiece API.
   type ConcreteTool = new (...args: ConstructorParameters<typeof Tool>) => Tool;
@@ -1190,6 +1208,37 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   });
   await toolStore.loadAll();
 
+  return toolStore;
+}
+
+function getSharedToolStore(): Promise<ToolStore> {
+  sharedToolStorePromise ??= createSharedToolStore().catch((error: unknown) => {
+    sharedToolStorePromise = undefined;
+    throw error;
+  });
+  return sharedToolStorePromise;
+}
+
+export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
+  const transport = deps.transport ?? 'stdio';
+  await verifyExpectedBotIdentity(deps.rest, deps.config.DISCORD_EXPECTED_BOT_ID);
+  // Do not write these dependencies into a process-wide singleton. Every MCP
+  // tool still accesses Sapphire's `container`, but its fields are now backed
+  // by AsyncLocalStorage and selected per tool request below. This prevents
+  // runtime context from bleeding between concurrent server instances; one
+  // deployment still intentionally uses the caller-owned bot configured on it.
+  const runtime: DiscordRuntime = {
+    rest: deps.rest,
+    logger: deps.logger,
+    config: deps.config,
+  };
+
+  // Tool definitions are immutable and process-scoped. Runtime-bearing
+  // preconditions and resources remain per server instance.
+  const toolStore = await getSharedToolStore();
+  const preconditionStore = new PreconditionStore();
+  const resourceStore = new ResourceStore();
+
   preconditionStore.set(
     'category_enabled',
     new CategoryEnabled(
@@ -1280,10 +1329,11 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     categoryAllowlist,
     deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined,
     guildScopePolicy.enabled,
+    toolSurface === 'full',
   );
   const progressiveCatalog =
     toolSurface === 'progressive'
-      ? createProgressiveToolCatalog(visibleTools, getToolListCatalog(toolStore).categories)
+      ? createProgressiveToolCatalog(visibleTools, getToolCategories(toolStore))
       : undefined;
   const surfaceInstructions =
     toolSurface === 'progressive'
