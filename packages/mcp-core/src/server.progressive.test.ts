@@ -77,6 +77,8 @@ describe('progressive tool surface', () => {
     expect(
       progressiveTools.find((tool) => tool.name === 'mcp_tools_destructive')?.annotations,
     ).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    const progressiveBytes = Buffer.byteLength(JSON.stringify(progressiveTools));
+    expect(progressiveBytes).toBeLessThan(6_000);
     expect(Buffer.byteLength(JSON.stringify(progressiveTools))).toBeLessThan(
       Buffer.byteLength(JSON.stringify(fullTools)) * 0.1,
     );
@@ -125,6 +127,8 @@ describe('progressive tool surface', () => {
     expect(exact.isError).toBe(false);
     const exactMatches = (exact.structuredContent as { matches: Array<Record<string, unknown>> })
       .matches;
+    expect(exact.structuredContent).toMatchObject({ total_matches: 1 });
+    expect(exactMatches).toHaveLength(1);
     const exactSend = exactMatches.find((match) => match.name === 'messages_send');
     expect(exactSend).toMatchObject({
       inputSchema: expect.objectContaining({
@@ -162,6 +166,9 @@ describe('progressive tool surface', () => {
     const fullBytes = Buffer.byteLength(JSON.stringify(full.structuredContent));
     expect(compactBytes).toBeLessThan(fullBytes * 0.2);
     const exactBytes = Buffer.byteLength(JSON.stringify(exact.structuredContent));
+    expect(compactBytes).toBeLessThan(3_000);
+    expect(exactBytes).toBeLessThan(2_400);
+    expect(compactBytes + exactBytes).toBeLessThan(5_000);
     expect(compactBytes + exactBytes).toBeLessThan(fullBytes * 0.5);
   });
 

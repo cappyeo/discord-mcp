@@ -10,7 +10,7 @@ import {
 } from '@opentelemetry/sdk-metrics';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveChannelGuildId } from '../rest/channel-guild-cache.js';
-import { searchProgressiveTools } from '../tool-discovery.js';
+import { createProgressiveToolCatalog, searchProgressiveTools } from '../tool-discovery.js';
 
 describe('performance evidence telemetry', () => {
   let exporter: InMemoryMetricExporter;
@@ -38,11 +38,11 @@ describe('performance evidence telemetry', () => {
       { name: 'channels_list', description: 'List channels.', inputSchema: { type: 'object' } },
       { name: 'channels_edit', description: 'Edit one channel.', inputSchema: { type: 'object' } },
     ];
-    searchProgressiveTools(
-      { query: 'channels', limit: 3 },
+    const catalog = createProgressiveToolCatalog(
       visibleTools,
       new Map(visibleTools.map((tool) => [tool.name, 'channels'])),
     );
+    searchProgressiveTools({ query: 'channels', limit: 3 }, catalog);
     await reader.forceFlush();
 
     const all = exporter

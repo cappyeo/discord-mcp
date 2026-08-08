@@ -202,22 +202,34 @@ function normalizeCategory(value: string): string {
     .replace(/[\s-]+/g, '_');
 }
 
-function scoreTool(tool: McpTool, category: string, query: string): number {
+interface SearchableTool {
+  tool: McpTool;
+  category: string;
+  normalizedName: string;
+  normalizedCategory: string;
+  normalizedDescription: string;
+}
+
+export interface ProgressiveToolCatalog {
+  searchable: readonly SearchableTool[];
+  categories: readonly { name: string; tool_count: number }[];
+  byCategory: ReadonlyMap<string, readonly SearchableTool[]>;
+  byExactQuery: ReadonlyMap<string, SearchableTool>;
+  byName: ReadonlyMap<string, McpTool>;
+}
+
+function scoreTool(tool: SearchableTool, query: string, terms: readonly string[]): number {
   if (query === '') return 1;
 
-  const name = normalize(tool.name);
-  const description = normalize(tool.description ?? '');
-  const normalizedCategory = normalize(category);
-  const terms = query.split(' ').filter((term) => term !== '' && !SEARCH_STOP_WORDS.has(term));
   let score = 0;
 
-  if (name === query) score += 200;
-  if (name.startsWith(query)) score += 80;
-  if (normalizedCategory === query) score += 40;
+  if (tool.normalizedName === query) score += 200;
+  if (tool.normalizedName.startsWith(query)) score += 80;
+  if (tool.normalizedCategory === query) score += 40;
   for (const term of terms) {
-    if (name.includes(term)) score += 25;
-    if (normalizedCategory.includes(term)) score += 12;
-    if (description.includes(term)) score += 4;
+    if (tool.normalizedName.includes(term)) score += 25;
+    if (tool.normalizedCategory.includes(term)) score += 12;
+    if (tool.normalizedDescription.includes(term)) score += 4;
   }
   return score;
 }
@@ -256,6 +268,45 @@ function compactSummary(description: string | undefined): string {
   return `${normalized.slice(0, 177).trimEnd()}...`;
 }
 
+/** Compile immutable search metadata once per server instead of per query. */
+export function createProgressiveToolCatalog(
+  visibleTools: readonly McpTool[],
+  categoriesByName: ReadonlyMap<string, string>,
+): ProgressiveToolCatalog {
+  const searchable = visibleTools
+    .filter((tool) => tool.name !== 'mcp_pipeline' && tool.name !== PROGRESSIVE_SEARCH_TOOL_NAME)
+    .map((tool) => {
+      const category = categoriesByName.get(tool.name) ?? 'unknown';
+      return {
+        tool,
+        category,
+        normalizedName: normalize(tool.name),
+        normalizedCategory: normalize(category),
+        normalizedDescription: normalize(tool.description ?? ''),
+      };
+    });
+
+  const byCategory = new Map<string, SearchableTool[]>();
+  const byExactQuery = new Map<string, SearchableTool>();
+  const byName = new Map<string, McpTool>();
+  for (const entry of searchable) {
+    const categoryTools = byCategory.get(entry.category);
+    if (categoryTools === undefined) byCategory.set(entry.category, [entry]);
+    else categoryTools.push(entry);
+    byExactQuery.set(entry.normalizedName, entry);
+    byName.set(entry.tool.name, entry.tool);
+  }
+  for (const tools of byCategory.values()) {
+    tools.sort((left, right) => left.tool.name.localeCompare(right.tool.name));
+  }
+
+  const categories = [...byCategory]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, tools]) => ({ name, tool_count: tools.length }));
+
+  return { searchable, categories, byCategory, byExactQuery, byName };
+}
+
 /**
  * Search only the already-authorized catalog passed by the server. This is a
  * presentation adapter for hosts without native deferred MCP loading, not an
@@ -263,8 +314,7 @@ function compactSummary(description: string | undefined): string {
  */
 export function searchProgressiveTools(
   rawArgs: unknown,
-  visibleTools: readonly McpTool[],
-  categoriesByName: ReadonlyMap<string, string>,
+  catalog: ProgressiveToolCatalog,
 ): CallToolResult {
   const parsed = SearchArgsSchema.safeParse(rawArgs ?? {});
   if (!parsed.success) {
@@ -274,42 +324,35 @@ export function searchProgressiveTools(
   const query = normalize(parsed.data.query ?? '');
   const categoryFilter =
     parsed.data.category === undefined ? undefined : normalizeCategory(parsed.data.category);
-  const searchable = visibleTools.filter(
-    (tool) => tool.name !== 'mcp_pipeline' && tool.name !== PROGRESSIVE_SEARCH_TOOL_NAME,
-  );
-
-  const categoryCounts = new Map<string, number>();
-  for (const tool of searchable) {
-    const category = categoriesByName.get(tool.name);
-    if (category !== undefined) {
-      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
-    }
-  }
-  const categories = [...categoryCounts]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, tool_count]) => ({ name, tool_count }));
 
   const shouldListMatches = query !== '' || categoryFilter !== undefined;
-  const ranked = shouldListMatches
-    ? searchable
-        .map((tool) => {
-          const category = categoriesByName.get(tool.name) ?? 'unknown';
-          return { tool, category, score: scoreTool(tool, category, query) };
-        })
-        .filter(
-          ({ category, score }) =>
-            (categoryFilter === undefined || category === categoryFilter) && score > 0,
-        )
-        .sort(
-          (left, right) =>
-            right.score - left.score || left.tool.name.localeCompare(right.tool.name),
-        )
-    : [];
+  const exact = query === '' ? undefined : catalog.byExactQuery.get(query);
+  const exactInScope =
+    exact !== undefined && (categoryFilter === undefined || exact.category === categoryFilter)
+      ? exact
+      : undefined;
+  const terms = query.split(' ').filter((term) => term !== '' && !SEARCH_STOP_WORDS.has(term));
+  const candidates =
+    categoryFilter === undefined
+      ? catalog.searchable
+      : (catalog.byCategory.get(categoryFilter) ?? []);
+  const ranked = !shouldListMatches
+    ? []
+    : exactInScope !== undefined
+      ? [{ entry: exactInScope, score: 200 }]
+      : candidates
+          .map((entry) => ({ entry, score: scoreTool(entry, query, terms) }))
+          .filter(({ score }) => score > 0)
+          .sort(
+            (left, right) =>
+              right.score - left.score || left.entry.tool.name.localeCompare(right.entry.tool.name),
+          );
 
   const selected = ranked.slice(0, parsed.data.limit);
   const includeAllContracts = parsed.data.detail === 'full' || selected.length === 1;
-  const matches = selected.map(({ tool, category }) => {
-    const includeContract = includeAllContracts || (query !== '' && normalize(tool.name) === query);
+  const matches = selected.map(({ entry }) => {
+    const { tool, category } = entry;
+    const includeContract = includeAllContracts || entry.normalizedName === query;
     return {
       name: tool.name,
       category,
@@ -331,7 +374,7 @@ export function searchProgressiveTools(
     detail: parsed.data.detail,
     total_matches: ranked.length,
     matches,
-    categories,
+    categories: catalog.categories,
   };
   recordProgressiveDiscoveryEvidence(structuredContent);
 
@@ -344,7 +387,7 @@ export function searchProgressiveTools(
           ? includeAllContracts
             ? `Found ${ranked.length} matching tool(s); returned ${matches.length} full contract(s). Use each match's exact dispatcher, tool name, and input schema.`
             : `Found ${ranked.length} matching tool(s); returned ${matches.length} compact match(es). Search an exact tool name to load its input schema before dispatching.`
-          : `Available categories: ${categories.map((item) => `${item.name} (${item.tool_count})`).join(', ')}.`,
+          : `Available categories: ${catalog.categories.map((item) => `${item.name} (${item.tool_count})`).join(', ')}.`,
       },
     ],
     structuredContent,
@@ -361,7 +404,7 @@ export type ProgressiveInvoke = (
 export async function dispatchProgressiveTool(
   dispatcher: ProgressiveDispatcherName,
   rawArgs: unknown,
-  visibleTools: readonly McpTool[],
+  catalog: ProgressiveToolCatalog,
   invoke: ProgressiveInvoke,
   signal: AbortSignal,
 ): Promise<CallToolResult> {
@@ -370,9 +413,7 @@ export async function dispatchProgressiveTool(
     return validationError(parsed.error.issues.map((issue) => issue.message).join('; '));
   }
 
-  const tool = visibleTools.find(
-    (candidate) => candidate.name === parsed.data.tool && candidate.name !== 'mcp_pipeline',
-  );
+  const tool = catalog.byName.get(parsed.data.tool);
   if (tool === undefined) {
     return clientError(
       'TOOL_NOT_AVAILABLE',

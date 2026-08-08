@@ -35,8 +35,12 @@ vi.mock('@discord-mcp/core', async (importOriginal) => {
     wrapRestWithResilience: vi.fn(actual.wrapRestWithResilience),
   };
 });
+vi.mock('../otel.js', () => ({
+  startOtel: vi.fn(() => ({ shutdown: vi.fn(async () => {}) })),
+}));
 
 import { createGatewayClient, createLogger, wrapRestWithResilience } from '@discord-mcp/core';
+import { startOtel } from '../otel.js';
 import { startStdio } from './stdio.js';
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
@@ -82,6 +86,7 @@ beforeEach(() => {
   process.env.MCP_AUDIT_ENABLED = 'false';
   delete process.env.DISCORD_EXPECTED_BOT_ID;
   delete process.env.GATEWAY;
+  delete process.env.OTEL_ENABLED;
 });
 
 afterEach(() => {
@@ -89,6 +94,29 @@ afterEach(() => {
 });
 
 describe('startStdio', () => {
+  it('does not load the OpenTelemetry runtime when telemetry is disabled', async () => {
+    const client = await boot();
+    try {
+      expect(startOtel).not.toHaveBeenCalled();
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('starts OpenTelemetry before serving tools when explicitly enabled', async () => {
+    process.env.OTEL_ENABLED = 'true';
+    const client = await boot();
+    try {
+      expect(startOtel).toHaveBeenCalledTimes(1);
+      expect(lastLogger().info).toHaveBeenCalledWith(
+        { otel: 'enabled' },
+        'OpenTelemetry SDK started',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
   it('boots the whole chain and serves the registered tools over the transport', async () => {
     const client = await boot();
     try {

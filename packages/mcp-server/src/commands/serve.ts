@@ -14,8 +14,6 @@
  * process.exitCode + return so Node drains stdout/stderr first.
  */
 import { activateProfile } from '../lib/profiles.js';
-import { startHttp } from '../transports/http.js';
-import { startStdio } from '../transports/stdio.js';
 
 export interface ServeOptions {
   gateway?: boolean;
@@ -40,6 +38,7 @@ export async function serveAction(options: ServeOptions): Promise<void> {
       throw new Error('Gateway subscriptions are available only with the stdio transport.');
     }
     if (options.http === true) {
+      const { startHttp } = await import('../transports/http.js');
       await startHttp({
         ...(options.host === undefined ? {} : { host: options.host }),
         ...(options.port === undefined ? {} : { port: options.port }),
@@ -48,6 +47,7 @@ export async function serveAction(options: ServeOptions): Promise<void> {
       if (options.gateway === true || profile?.gateway === true) {
         process.env.GATEWAY = '1';
       }
+      const { startStdio } = await import('../transports/stdio.js');
       await startStdio();
     }
   } catch (e) {

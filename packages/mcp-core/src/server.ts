@@ -38,6 +38,7 @@ import { ResourceStore } from './stores/ResourceStore.js';
 import { ToolStore } from './stores/ToolStore.js';
 import { redactCredentialUrl } from './telemetry/redact.js';
 import {
+  createProgressiveToolCatalog,
   dispatchProgressiveTool,
   PROGRESSIVE_DISPATCH_TOOLS,
   PROGRESSIVE_SEARCH_TOOL,
@@ -1274,13 +1275,16 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   ];
 
   const toolSurface = deps.config.MCP_TOOL_SURFACE;
-  const visibleTools = () =>
-    listVisibleTools(
-      toolStore,
-      categoryAllowlist,
-      deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined,
-      guildScopePolicy.enabled,
-    );
+  const visibleTools = listVisibleTools(
+    toolStore,
+    categoryAllowlist,
+    deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined,
+    guildScopePolicy.enabled,
+  );
+  const progressiveCatalog =
+    toolSurface === 'progressive'
+      ? createProgressiveToolCatalog(visibleTools, getToolListCatalog(toolStore).categories)
+      : undefined;
   const surfaceInstructions =
     toolSurface === 'progressive'
       ? [
@@ -1331,7 +1335,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     // alone is not a control (a client can call an unlisted tool by name), and
     // gating alone leaves the agent's context full of tools that only fail.
     return {
-      tools: listAdvertisedTools(visibleTools(), toolSurface),
+      tools: listAdvertisedTools(visibleTools, toolSurface),
     };
   });
 
@@ -1391,17 +1395,18 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     args: unknown,
     signal: AbortSignal,
   ): Promise<CallToolResult> => {
-    if (toolName === PROGRESSIVE_SEARCH_TOOL_NAME && toolSurface === 'progressive') {
-      return searchProgressiveTools(args, visibleTools(), getToolListCatalog(toolStore).categories);
+    if (toolName === PROGRESSIVE_SEARCH_TOOL_NAME && progressiveCatalog !== undefined) {
+      return searchProgressiveTools(args, progressiveCatalog);
     }
     if (
       toolSurface === 'progressive' &&
+      progressiveCatalog !== undefined &&
       PROGRESSIVE_DISPATCH_TOOLS.some((tool) => tool.name === toolName)
     ) {
       return dispatchProgressiveTool(
         toolName as ProgressiveDispatcherName,
         args,
-        visibleTools(),
+        progressiveCatalog,
         invokeTool,
         signal,
       );

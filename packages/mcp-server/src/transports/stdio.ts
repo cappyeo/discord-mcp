@@ -10,7 +10,7 @@ import {
 import { REST } from '@discordjs/rest';
 import type { Transport } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import { type OtelHandle, startOtel } from '../otel.js';
+import type { OtelHandle } from '../otel.js';
 
 /**
  * @param opts.transport Transport to connect the MCP server to. Defaults to a
@@ -29,7 +29,9 @@ export async function startStdio(
   // Boot OTel BEFORE buildServer so global tracer/meter providers exist
   // by the time the telemetry middleware fetches them. Returns null when
   // OTEL_ENABLED is false (default), preserving v0.7.0 behavior.
-  const otel: OtelHandle | null = startOtel(config);
+  const otel: OtelHandle | null = config.OTEL_ENABLED
+    ? (await import('../otel.js')).startOtel(config)
+    : null;
   if (otel !== null) {
     logger.info({ otel: 'enabled' }, 'OpenTelemetry SDK started');
   }

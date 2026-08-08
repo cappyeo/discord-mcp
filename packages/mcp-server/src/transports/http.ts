@@ -16,7 +16,7 @@ import {
   toNodeHandler,
 } from '@modelcontextprotocol/node';
 import { createMcpHandler } from '@modelcontextprotocol/server';
-import { startOtel } from '../otel.js';
+import type { OtelHandle } from '../otel.js';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 3000;
@@ -57,7 +57,9 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     circuitHalfOpenAfterMs: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
   });
   await verifyExpectedBotIdentity(rest, config.DISCORD_EXPECTED_BOT_ID);
-  const otel = startOtel(config);
+  const otel: OtelHandle | null = config.OTEL_ENABLED
+    ? (await import('../otel.js')).startOtel(config)
+    : null;
   if (otel !== null) {
     logger.info({ otel: 'enabled' }, 'OpenTelemetry SDK started');
   }

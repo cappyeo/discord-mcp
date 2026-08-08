@@ -9,6 +9,23 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.16.9 - Faster discovery and startup
+
+Released **2026-08-08**.
+
+- Progressive discovery now compiles its searchable 201-tool catalog once per
+  server. Exact-name search and risk-matched dispatch use indexed lookups, while
+  category groups and normalized descriptions are reused instead of rebuilt for
+  every request. Exact-name searches return exactly one contract.
+- A reproducible full-registry MCP benchmark and absolute serialized-payload
+  budgets now guard the common category-browse and exact-contract journey. On
+  the release machine, ambiguous search latency fell by 76% and exact-contract
+  lookup by 87%; these are local benchmark measurements, not network claims.
+- The CLI dynamically loads only the selected transport and loads the
+  OpenTelemetry SDK only when enabled. This reduces default stdio startup work
+  and makes lightweight CLI commands such as `--version` avoid the MCP, HTTP,
+  Discord REST, and telemetry runtime graph entirely.
+
 ## v0.16.8 - All-write preview safety
 
 Released **2026-08-08**.
