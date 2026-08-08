@@ -117,8 +117,9 @@ for 2025-era Streamable HTTP clients. Every authenticated client shares the
 deployment's caller-owned Discord bot identity, so use least-privilege Discord
 roles plus narrow `ALLOWED_GUILDS` and `MCP_CATEGORIES` allowlists. The
 [OpenAI remote MCP guide](https://cappyeo.github.io/discord-mcp/operations/openai/)
-covers HTTPS, Responses API `tool_search`/`defer_loading`, Codex progressive
-discovery, and the current OAuth boundary.
+covers HTTPS, the default 4 MiB body and 16-request in-flight ceilings,
+Responses API `tool_search`/`defer_loading`, Codex progressive discovery, and
+the current OAuth boundary.
 
 ## What you get
 

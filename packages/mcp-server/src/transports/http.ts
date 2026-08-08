@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { Readable } from 'node:stream';
 import {
   buildPolicy,
   buildServer,
@@ -21,6 +22,8 @@ import type { OtelHandle } from '../otel.js';
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 3000;
 
+class RequestBodyTooLarge extends Error {}
+
 export interface StartHttpOptions {
   host?: string;
   port?: number;
@@ -28,11 +31,62 @@ export interface StartHttpOptions {
 }
 
 function hasValidBearerToken(authorization: string | undefined, expectedToken: string): boolean {
-  if (authorization === undefined || !authorization.startsWith('Bearer ')) return false;
+  const match = authorization?.match(/^Bearer +(.+)$/i);
+  if (match === undefined || match === null) return false;
 
-  const suppliedToken = Buffer.from(authorization.slice('Bearer '.length));
+  const suppliedToken = Buffer.from(match[1] as string);
   const expected = Buffer.from(expectedToken);
   return suppliedToken.length === expected.length && timingSafeEqual(suppliedToken, expected);
+}
+
+async function readRequestBody(
+  req: IncomingMessage,
+  maxBytes: number,
+): Promise<Buffer | undefined> {
+  const method = req.method?.toUpperCase();
+  if (method === 'GET' || method === 'HEAD') return undefined;
+
+  const declaredLength = req.headers['content-length'];
+  if (
+    typeof declaredLength === 'string' &&
+    /^\d+$/.test(declaredLength) &&
+    Number(declaredLength) > maxBytes
+  ) {
+    throw new RequestBodyTooLarge();
+  }
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    totalBytes += buffer.byteLength;
+    if (totalBytes > maxBytes) throw new RequestBodyTooLarge();
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
+/** Replay a bounded body through the SDK's structural Node request adapter. */
+function replayRequest(req: IncomingMessage, body: Buffer): IncomingMessage {
+  const replay = Readable.from(body.byteLength === 0 ? [] : [body]);
+  return Object.assign(replay, {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+  }) as IncomingMessage;
+}
+
+function rejectAndClose(
+  req: IncomingMessage,
+  res: ServerResponse,
+  status: number,
+  headers: Record<string, string> = {},
+): void {
+  // Closing prevents a partially unread body from contaminating keep-alive.
+  res.writeHead(status, { ...headers, Connection: 'close' });
+  res.end(() => {
+    if (!req.destroyed) req.destroy();
+  });
 }
 
 /**
@@ -95,6 +149,7 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   const isLoopbackHost = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const validateHost = isLoopbackHost ? localhostHostValidation() : undefined;
   const validateOrigin = isLoopbackHost ? localhostOriginValidation() : undefined;
+  let inFlight = 0;
 
   const server = createServer(async (req, res) => {
     if (req.url === undefined || new URL(req.url, 'http://localhost').pathname !== '/mcp') {
@@ -112,10 +167,34 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     if (validateHost !== undefined && !validateHost(req, res)) return;
     if (validateOrigin !== undefined && !validateOrigin(req, res)) return;
 
-    // The SDK's structural Node request type marks `method` as optional while
-    // IncomingMessage spells it as `string | undefined`; the runtime shape is
-    // the native object the adapter expects.
-    await handleMcpRequest(req as never, res);
+    if (inFlight >= config.MCP_HTTP_MAX_IN_FLIGHT) {
+      rejectAndClose(req, res, 503, { 'Retry-After': '1' });
+      return;
+    }
+
+    inFlight += 1;
+    try {
+      let body: Buffer | undefined;
+      try {
+        body = await readRequestBody(req, config.MCP_HTTP_MAX_BODY_BYTES);
+      } catch (error) {
+        if (error instanceof RequestBodyTooLarge) {
+          rejectAndClose(req, res, 413);
+        } else {
+          res.destroy(error instanceof Error ? error : undefined);
+        }
+        return;
+      }
+
+      // The SDK adapter currently buffers the incoming stream without a byte
+      // ceiling. Replay only the body we have already bounded above.
+      await handleMcpRequest(
+        body === undefined ? (req as never) : (replayRequest(req, body) as never),
+        res,
+      );
+    } finally {
+      inFlight -= 1;
+    }
   });
 
   let cleanupPromise: Promise<void> | undefined;

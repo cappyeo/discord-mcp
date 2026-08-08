@@ -10,21 +10,21 @@ for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required b
 below is ticked. Re-evaluate the evidence before each release; unchecked items are
 real gates, not aspirational release notes.
 
-## Current evidence at v0.16.9
+## Current source evidence (public release: v0.16.9)
 
 - 201 MCP tools across 30 categories.
-- 1274 passing tests (834 `@discord-mcp/core` + 368 `@discord-mcp/cli` + 72
+- 1280 passing tests (835 `@discord-mcp/core` + 373 `@discord-mcp/cli` + 72
   `site`), 0 unconditional skips, and 1 documented `it.todo` for the remaining
   OTel parent-child integration seam.
 - Coverage gates run in CI for `@discord-mcp/core`: 98% statements and lines,
   97% functions, and 73% branches.
 - 5 reproducible performance benches cover message send, MCP pipeline, gateway
   debounce, REST policy, and progressive tool discovery.
-- The production dependency audit passed in CI on 2026-08-08. The latest
-  documented security review is the historical
-  [2026-07-27 audit](/discord-mcp/operations/security-audit-2026-07-27/); it
-  predates the live HTTP transport, so a current transport-level review remains
-  an explicit quality gate below.
+- The production dependency audit passes through the moderate threshold on
+  2026-08-08. The current
+  [HTTP transport security audit](/discord-mcp/operations/security-audit-2026-08-08/)
+  covers authentication, Host/Origin, resource exhaustion, session and bot
+  isolation, safety-policy parity, redaction and the reverse-proxy boundary.
 - `@discord-mcp/core@0.16.9` and `@discord-mcp/cli@0.16.9` are public on npm with
   provenance. MCP Registry metadata and the public documentation are deployed.
 
@@ -40,13 +40,13 @@ real gates, not aspirational release notes.
 - [x] 0 unconditional `.skip` calls, 1 documented `it.todo`
 - [x] Performance benchmarks for 5 hot paths
 - [x] Production dependency audit in CI - re-run
-      `pnpm audit --audit-level=high --prod` at tag time; last pass 2026-08-08
+      `pnpm audit --audit-level=moderate --prod` at tag time; last pass 2026-08-08
 - [x] vitest globalSetup auto-builds mcp-core if `dist/` missing
 - [x] tsdown deprecation cleared (`external` -> `deps.neverBundle`)
 - [x] GitHub Actions Node 24 opt-in
 - [ ] Clean lint output with zero warnings - clean CI exits successfully, but
       the current Astro source scan still reports 58 non-blocking warnings
-- [x] Test count ≥ 1000 (1274 passing)
+- [x] Test count ≥ 1000 (1280 passing)
 - [x] Coverage gate enforced in CI (98% statements and lines, 97% functions,
       73% branches)
 - [x] No load-sensitive tests - the suite passes on consecutive cold-cache
@@ -89,9 +89,9 @@ real gates, not aspirational release notes.
       re-check at tag time; there were no open GitHub issues on 2026-08-08
 - [x] No high-priority (P1) bugs currently unresolved - re-check at tag time
 - [ ] Documentation reviewed by external party
-- [ ] Current security review covers both shipped transports. The documented
-      2026-07-27 review predates the live authenticated HTTP path; a green
-      dependency audit is necessary but not a transport threat-model review
+- [x] Current security review covers both shipped transports. The 2026-08-08
+      review includes attack-oriented HTTP regression tests and explicit
+      residual deployment obligations
 - [ ] Security review pass by external auditor (optional)
 
 ### API stability commitment

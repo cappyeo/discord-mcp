@@ -32,7 +32,7 @@ was supplied. See [Credential lifecycle](/discord-mcp/operations/credentials/).
 
 ### `DISCORD_MCP_ACCESS_TOKEN`
 
-- **Type:** non-empty string
+- **Type:** string, minimum 32 characters
 - **Default:** required only for `discord-mcp serve --http`
 - **Use:** Shared bearer credential for requests to the remote `/mcp` endpoint. It is independent of the Discord bot token.
 - **Example:** `DISCORD_MCP_ACCESS_TOKEN=replace-with-a-long-random-secret`
@@ -40,6 +40,28 @@ was supplied. See [Credential lifecycle](/discord-mcp/operations/credentials/).
 Send it as `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>`. Use a high-entropy
 secret stored in a secret manager. This credential authorizes every client with
 the same Discord bot identity; it is not per-user OAuth.
+
+### `MCP_HTTP_MAX_BODY_BYTES`
+
+- **Type:** integer from 1,024 through 67,108,864
+- **Default:** `4194304` (4 MiB)
+- **Use:** Bounds the actual request bytes before the MCP SDK buffers or parses them.
+- **Example:** `MCP_HTTP_MAX_BODY_BYTES=8388608`
+
+Oversized declared and chunked bodies receive `413 Payload Too Large`. The
+default accommodates Discord's base64 asset inputs without allowing one caller
+to allocate unbounded process memory.
+
+### `MCP_HTTP_MAX_IN_FLIGHT`
+
+- **Type:** integer from 1 through 1,024
+- **Default:** `16`
+- **Use:** Caps authenticated HTTP exchanges being processed at once.
+- **Example:** `MCP_HTTP_MAX_IN_FLIGHT=32`
+
+Overflow receives `503 Service Unavailable` with `Retry-After: 1`; the server
+does not retain an internal queue. This is a process bulkhead, not a per-user
+rate limit. Keep a caller-aware rate and timeout policy at the public proxy.
 
 For TLS, reverse-proxy, Responses API, and Codex setup, see
 [OpenAI remote MCP](/discord-mcp/operations/openai/).

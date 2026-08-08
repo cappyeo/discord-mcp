@@ -1,0 +1,145 @@
+---
+title: HTTP transport security audit - 2026-08-08
+description: Threat-model and attack-oriented review of discord-mcp's bearer-protected Streamable HTTP transport, including verified remediations and residual deployment boundaries.
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+- **Reviewer:** discord-mcp maintainers
+- **Review baseline:** `v0.13.4..5e68782`, covering the introduction and later
+  evolution of the HTTP transport; remediations were verified in the current
+  tree on 2026-08-08.
+- **Shipped surface:** local stdio plus stateless Streamable HTTP at `/mcp`.
+- **Identity model:** one caller-owned Discord bot and one shared remote bearer
+  credential per process. OAuth and per-user Discord authorization are out of
+  scope for v1.
+
+<Aside type="caution">
+This review closes the transport-level v1 gate for the remediated source tree.
+The public v0.16.9 package predates the application-level body and in-flight
+limits described below. Keep that release on loopback behind a hardened HTTPS
+proxy until a package containing these remediations is published.
+</Aside>
+
+## Review method
+
+The review used two independent passes:
+
+1. **Engineering security:** traced the native `node:http` request through
+   bearer authentication, Host/Origin validation, the MCP SDK Node adapter,
+   the per-request server factory, shared middleware, Discord REST and logs.
+2. **Specification fidelity:** compared that behavior with the documented
+   caller-owned-bot boundary, MCP SDK v2 HTTP guidance, the OpenAI remote MCP
+   contract and the v1 readiness promises.
+
+Potential findings were not accepted from source inspection alone. Material
+concerns were reproduced through a real loopback HTTP server or socket and then
+kept as regression tests.
+
+## Trust boundaries
+
+```text
+remote MCP caller
+  -> HTTPS reverse proxy (TLS, public Host/Origin, rate and timeout policy)
+  -> /mcp bearer check
+  -> loopback Host/Origin guard when applicable
+  -> body and in-flight limits
+  -> stateless MCP SDK handler
+  -> shared authorization / preview / confirmation middleware
+  -> caller-owned Discord bot
+  -> Discord API
+```
+
+The bearer credential identifies a deployment, not a person. Every successful
+caller gets the same bot permissions. Session isolation therefore prevents MCP
+state crossover; it does not create a per-user authorization boundary.
+
+## Findings and remediation
+
+| Priority | Finding | Evidence | Status |
+| --- | --- | --- | --- |
+| P1 | Authenticated request bodies were unbounded. The SDK Node adapter read the entire stream into a string before parsing it. | A chunked JSON body crossed a deliberately small test ceiling and reached SDK validation instead of receiving `413`. | **Fixed:** actual bytes are bounded before the SDK sees the stream. `MCP_HTTP_MAX_BODY_BYTES` defaults to 4 MiB. Both declared and chunked bodies receive `413`; the connection closes when a partial body remains. |
+| P1 | Authenticated requests could create an unbounded number of simultaneous per-request MCP servers. Discord REST's bulkhead did not protect request parsing or tool discovery. | A stalled request held its body open while a second request was still processed. | **Fixed:** `MCP_HTTP_MAX_IN_FLIGHT` defaults to 16. Overflow fast-rejects with `503` and `Retry-After: 1`; no queue is retained in process memory. |
+| P2 | A one-character remote bearer token satisfied configuration validation despite the documented high-entropy requirement. | `DISCORD_MCP_ACCESS_TOKEN` used `.min(1)`. | **Fixed:** configured values must contain at least 32 characters. This is a minimum guard, not an entropy detector; generate the value randomly. |
+| P2 | The locked production tree contained Hono 4.12.32 with three patched moderate advisories. | `pnpm audit --audit-level=moderate --prod` reported the affected paths. | **Fixed:** the direct dependency floor is 4.12.34 and the lock resolves 4.13.1. The same audit now reports no known vulnerabilities. |
+
+No P0 finding was identified. No P1 remains open in the remediated tree.
+
+## Controls verified
+
+### Authentication and endpoint handling
+
+- Only `/mcp` is routed; other paths return `404`.
+- Missing or wrong credentials return `401` with `WWW-Authenticate: Bearer`.
+- The auth scheme is case-insensitive and the credential comparison uses
+  `timingSafeEqual` after a length check.
+- The bearer value is compared before any request body is buffered and is not
+  passed into tool arguments, audit events or OpenTelemetry attributes.
+
+### Host, Origin and public binding
+
+The default listener is `127.0.0.1`. Loopback deployments apply the MCP SDK's
+localhost Host and Origin validators; attack-oriented tests prove untrusted
+values receive `403`. A deliberate non-loopback `--host` delegates public
+Host/Origin policy to the reverse proxy. That is an accepted deployment
+boundary, not a claim that a bare public listener is hardened.
+
+### Session and bot identity
+
+- HTTP is stateless: each exchange builds a fresh MCP server and does not issue
+  `Mcp-Session-Id`.
+- Discord REST resilience and the audit sink are process-scoped, but request
+  middleware state is isolated.
+- `DISCORD_EXPECTED_BOT_ID`, when configured, is verified before the listener
+  begins serving. A token for the wrong bot fails startup.
+
+### Safety-policy parity
+
+HTTP calls use the same `buildServer` path as stdio. A real HTTP regression
+test calls `messages_send` under `MCP_WRITE_MODE=preview` and receives
+`WRITE_PREVIEW` without reaching Discord. Category scope, guild scope,
+destructive confirmation, dry-run, audit and resilience remain in that shared
+middleware chain.
+
+## Residual risks and operator obligations
+
+- Put any public endpoint behind HTTPS. Redact `Authorization` in proxy access
+  and error logs.
+- Configure proxy connection/header/body timeouts and a caller-aware request
+  rate limit. The in-process control caps concurrent work; it is not an IP or
+  identity quota.
+- Keep `ALLOWED_GUILDS`, `MCP_CATEGORIES` and the bot's Discord role narrow.
+  Do not share one deployment between mutually untrusted users.
+- Rotate both the Discord bot token and remote bearer after suspected exposure.
+- Keep approvals enabled at the OpenAI caller for sensitive writes. The server
+  controls remain necessary even when caller approval is enabled.
+
+The official OpenAI guide likewise treats remote MCP servers as third-party
+services, supports Streamable HTTP, and recommends approvals for sensitive
+actions: [MCP and Connectors](https://developers.openai.com/api/docs/guides/tools-connectors-mcp).
+
+## Reproducing the evidence
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @discord-mcp/core exec vitest run src/config.test.ts src/config.surface.test.ts
+pnpm --filter @discord-mcp/cli exec vitest run src/transports/http.test.ts
+pnpm audit --audit-level=moderate --prod
+pnpm lint
+pnpm typecheck
+pnpm test
+```
+
+The HTTP suite covers missing/wrong credentials, case-insensitive bearer
+syntax, hostile Host/Origin, oversized chunked bodies, in-flight exhaustion,
+legacy and modern protocol negotiation, stateless discovery and write-preview
+parity.
+
+## Related
+
+- [OpenAI remote MCP](/discord-mcp/operations/openai/)
+- [Access and scope](/discord-mcp/reference/config/access/)
+- [v1.0.0 readiness](/discord-mcp/reference/v1-readiness/)
+- [Historical dependency audit - 2026-07-27](/discord-mcp/operations/security-audit-2026-07-27/)

@@ -68,7 +68,7 @@
     "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "commander": "^12.1.0",
-    "hono": "^4.11.4",
+    "hono": "^4.12.34",
     "zod": "^4.0.0"
   },
   "devDependencies": {

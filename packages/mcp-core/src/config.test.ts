@@ -33,16 +33,46 @@ describe('loadConfig', () => {
     ).toThrow(/DISCORD_EXPECTED_BOT_ID/);
   });
 
-  it('accepts a non-empty remote MCP bearer token and rejects an empty one', () => {
+  it('requires remote MCP bearer tokens to be at least 32 characters', () => {
+    const accessToken = 'remote-access-token-with-32-characters';
     expect(
       loadConfig({
         DISCORD_TOKEN: VALID_TOKEN,
-        DISCORD_MCP_ACCESS_TOKEN: 'remote-access-token',
+        DISCORD_MCP_ACCESS_TOKEN: accessToken,
       } as NodeJS.ProcessEnv).DISCORD_MCP_ACCESS_TOKEN,
-    ).toBe('remote-access-token');
+    ).toBe(accessToken);
+    for (const value of ['', 'short-access-token']) {
+      expect(() =>
+        loadConfig({
+          DISCORD_TOKEN: VALID_TOKEN,
+          DISCORD_MCP_ACCESS_TOKEN: value,
+        } as NodeJS.ProcessEnv),
+      ).toThrow(/DISCORD_MCP_ACCESS_TOKEN/);
+    }
+  });
+
+  it('validates HTTP resource limits and their defaults', () => {
+    const defaults = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
+    expect(defaults.MCP_HTTP_MAX_BODY_BYTES).toBe(4 * 1024 * 1024);
+    expect(defaults.MCP_HTTP_MAX_IN_FLIGHT).toBe(16);
+
+    const configured = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      MCP_HTTP_MAX_BODY_BYTES: '1024',
+      MCP_HTTP_MAX_IN_FLIGHT: '4',
+    } as NodeJS.ProcessEnv);
+    expect(configured.MCP_HTTP_MAX_BODY_BYTES).toBe(1024);
+    expect(configured.MCP_HTTP_MAX_IN_FLIGHT).toBe(4);
+
     expect(() =>
-      loadConfig({ DISCORD_TOKEN: VALID_TOKEN, DISCORD_MCP_ACCESS_TOKEN: '' } as NodeJS.ProcessEnv),
-    ).toThrow(/DISCORD_MCP_ACCESS_TOKEN/);
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_HTTP_MAX_BODY_BYTES: '1023',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/MCP_HTTP_MAX_BODY_BYTES/);
+    expect(() =>
+      loadConfig({ DISCORD_TOKEN: VALID_TOKEN, MCP_HTTP_MAX_IN_FLIGHT: '0' } as NodeJS.ProcessEnv),
+    ).toThrow(/MCP_HTTP_MAX_IN_FLIGHT/);
   });
 
   it('accepts a valid default guild ID and rejects malformed values', () => {

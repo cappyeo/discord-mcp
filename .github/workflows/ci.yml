@@ -62,4 +62,4 @@ jobs:
           node-version: '24.x'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level=high --prod
+      - run: pnpm audit --audit-level=moderate --prod

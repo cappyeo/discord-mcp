@@ -37,8 +37,9 @@ is not public by accident.
 
 ## Run the endpoint
 
-Generate a high-entropy bearer secret and keep it separate from the Discord bot
-token. Then start the server on the loopback interface for your reverse proxy:
+Generate a high-entropy bearer secret of at least 32 characters and keep it
+separate from the Discord bot token. Then start the server on the loopback
+interface for your reverse proxy:
 
 ```bash
 export DISCORD_TOKEN="Bot YOUR_DISCORD_BOT_TOKEN"
@@ -49,6 +50,12 @@ discord-mcp serve --http --host 127.0.0.1 --port 3000
 Your proxy should publish `https://discord-mcp.example.com/mcp` and forward it
 to `http://127.0.0.1:3000/mcp`. Requests without a matching
 `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>` header receive `401`.
+
+The server rejects bodies larger than `MCP_HTTP_MAX_BODY_BYTES` (4 MiB by
+default) with `413`, and fast-rejects work above `MCP_HTTP_MAX_IN_FLIGHT` (16 by
+default) with `503` plus `Retry-After: 1`. Configure the reverse proxy with
+connection/header/body timeouts and a caller-aware rate limit as well; the
+in-process bulkhead is not a per-user quota.
 
 The transport is stateless: each MCP request builds an isolated server runtime,
 with no `Mcp-Session-Id`. Modern clients use MCP `2026-07-28`; 2025-era clients
@@ -90,6 +97,9 @@ OpenAI documents `tool_search` for GPT-5.4 and later. It preserves the model's
 cache by injecting discovered tools at the end of context and can defer a whole
 MCP server rather than placing every tool definition in the initial prompt.
 Review each tool's risk before lowering approval or adding it to an allowlist.
+The Responses API does not store the MCP `authorization` value in the Response,
+so the caller must supply it on every Responses API creation request. See the
+official [MCP and Connectors guide](https://developers.openai.com/api/docs/guides/tools-connectors-mcp).
 
 ## Codex and ChatGPT desktop
 
@@ -134,11 +144,12 @@ for caller-native deferred loading.
 
 ## Operating checklist
 
-1. Use HTTPS and redact `Authorization` at the proxy.
+1. Use HTTPS; validate public Host/Origin; redact `Authorization` at the proxy.
 2. Store both tokens in a secret manager, not a checked-in `.env` file.
 3. Start with narrow `ALLOWED_GUILDS` and `MCP_CATEGORIES` allowlists plus a Discord test guild.
 4. Keep OpenAI tool approval on until the workflow has been reviewed.
-5. Configure an audit sink and monitor its `transport: "http"` events.
+5. Set proxy timeouts and caller-aware rate limits; tune the server body and in-flight ceilings only from measured demand.
+6. Configure an audit sink and monitor its `transport: "http"` events.
 
 For the exact environment-variable contract, see
 [Access and scope](/discord-mcp/reference/config/access/). For command flags,

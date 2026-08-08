@@ -28,7 +28,20 @@ const ConfigSchema = z.object({
     )
     .optional(),
   // Required by `serve --http`, but optional for the default local stdio transport.
-  DISCORD_MCP_ACCESS_TOKEN: z.string().min(1).optional(),
+  DISCORD_MCP_ACCESS_TOKEN: z
+    .string()
+    .min(32, 'DISCORD_MCP_ACCESS_TOKEN must be at least 32 characters')
+    .optional(),
+  // Bound authenticated HTTP work before the SDK buffers or builds a full MCP
+  // server. Defaults accommodate base64 Discord assets while keeping one bot
+  // process from accepting an unbounded amount of caller-controlled memory.
+  MCP_HTTP_MAX_BODY_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .max(64 * 1024 * 1024)
+    .default(4 * 1024 * 1024),
+  MCP_HTTP_MAX_IN_FLIGHT: z.coerce.number().int().min(1).max(1024).default(16),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   GATEWAY: boolish(false),
 
