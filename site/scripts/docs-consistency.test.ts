@@ -14,6 +14,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from '../../packages/mcp-core/node_modules/zod/index.js';
 import {
+  PROGRESSIVE_DESTRUCTIVE_TOOL_NAME,
+  PROGRESSIVE_READ_TOOL_NAME,
+  PROGRESSIVE_SEARCH_TOOL_NAME,
+  PROGRESSIVE_WRITE_TOOL_NAME,
+} from '../../packages/mcp-core/src/tool-discovery.js';
+import {
   buildOutputExample,
   buildSchemaExample,
   loadAllTools,
@@ -25,6 +31,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '../..');
 const DOCS_DIR = join(ROOT, 'site/src/content/docs');
 const CONFIRMATION_MDX = join(ROOT, 'site/src/content/docs/architecture/confirmation.mdx');
+const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.mdx');
 
 /** Backticked snake_case identifiers, e.g. `messages_delete`. */
 const BACKTICKED = /`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g;
@@ -328,6 +335,22 @@ describe('generated reference stays aligned with tool metadata', () => {
 });
 
 describe('handwritten docs do not regress to known stale contracts', () => {
+  it('documents the observable client tool surfaces from the runtime registry', async () => {
+    const clientSetup = readFileSync(CLIENT_SETUP_MDX, 'utf8');
+    const progressiveNames = [
+      PROGRESSIVE_SEARCH_TOOL_NAME,
+      PROGRESSIVE_READ_TOOL_NAME,
+      PROGRESSIVE_WRITE_TOOL_NAME,
+      PROGRESSIVE_DESTRUCTIVE_TOOL_NAME,
+    ];
+
+    expect(clientSetup).toContain(`**${progressiveNames.length} visible tools**`);
+    for (const name of progressiveNames) expect(clientSetup).toContain(`\`${name}\``);
+
+    const tools = await loadAllTools();
+    expect(clientSetup).toContain(`**${tools.length} visible direct tools**`);
+  });
+
   it('classifies every section hub with the extended content schema', () => {
     for (const page of [
       'index.mdx',

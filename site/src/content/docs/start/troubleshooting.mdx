@@ -62,6 +62,19 @@ share, or screenshot it.
    to the CLI installation that created it; regenerate it after moving or reinstalling Node.
 4. Fully quit and reopen the client, then inspect its MCP/server logs.
 
+## I changed the token, profile, config, or version but nothing changed
+
+The MCP server is a child process of the client. It reads the current profile, pinned package,
+and inherited environment only when that child starts.
+
+1. Run `discord-mcp profile show <name>` to confirm the saved bot, guild allowlist, client, and
+   tool surface.
+2. Make `DISCORD_TOKEN` available to the environment that will launch the MCP client. A passing
+   `doctor` in another terminal proves only that terminal's environment.
+3. Fully quit and reopen the client. A window reload may keep the old parent or MCP child alive.
+4. If startup still fails, run `discord-mcp doctor --profile <name> --online` from the intended
+   launch environment and compare its redacted result with the client logs.
+
 ## A tool returns `403 Missing Permissions`
 
 The bot is authenticated but its Discord role cannot perform the action in that channel.

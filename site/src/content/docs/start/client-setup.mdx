@@ -140,14 +140,51 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
   </div>
 </ClientTabs>
 
+## What success looks like after restart
+
+`setup` defaults to the progressive surface so the client does not have to load every Discord
+contract into its context at once. Check the saved choice with
+`discord-mcp profile show devbot`; the `Client/tool surface` line should match what you expect.
+
+### `progressive` (recommended)
+
+The client should show **4 visible tools**: `mcp_tools_search`, `mcp_tools_read`,
+`mcp_tools_write`, and `mcp_tools_destructive`. This is the expected working state, not a
+partial installation. The client searches for an exact Discord tool, then invokes it through
+the risk-matched dispatcher.
+
+### `full` (compatibility)
+
+The client should show **201 visible direct tools**. This mode exposes every Discord contract
+immediately, at a larger context and tool-selection cost.
+
+If your MCP client cannot use the discovery and dispatcher tools, rerun setup for the same
+verified bot with `--tool-surface full --force` plus your existing setup options, merge the
+new fragment, and restart the client.
+
+## Why a full restart is required
+
+The setup terminal and the MCP client are separate process trees:
+
+```text
+setup terminal  ->  verifies the bot and saves the profile/snippet
+MCP client      ->  starts discord-mcp as a child  ->  connects to Discord
+```
+
+The `discord-mcp` child reads its profile, package version, and inherited environment when the
+client starts it. Changing the token, profile, generated config, or pinned package does not
+rewrite an already-running child process. Fully quitting and reopening the MCP client makes it
+spawn a fresh child with the new state. Likewise, `doctor` checks the environment of the terminal
+where you run it; a passing result there does not change an older client process.
+
 The generated snippet runs a pinned `@discord-mcp/cli` package through `npx`, rather than
 an absolute CLI or npm-cache path, so restarting the client or replacing the installation
 does not require editing the fragment. The non-secret profile is still local to the
 operating-system user that created it. If you move machines, rerun `setup` there instead
 of copying the profile blindly.
 
-Once the snippet contains a real token, treat the whole client config as a secret: do not
-commit, share, or screenshot it.
+If you intentionally place a token directly in any client config, treat that whole file as a
+secret: do not commit, share, or screenshot it.
 
 After restarting, confirm that your client can list discord-mcp's tools without a startup
 error. Unit 3 performs the online token diagnostic and the first authenticated tool call, so
@@ -163,7 +200,7 @@ you do not need to expose the token to a second process yet.
 - [ ] `discord-mcp profile show devbot` reports the intended bot ID and guild allowlist.
 - [ ] The client launch environment supplies `DISCORD_TOKEN`; neither profile nor client config stores it.
 - [ ] I fully restarted the MCP client after changing its configuration.
-- [ ] The client can list discord-mcp tools without a server startup error.
+- [ ] The client can list the expected progressive or full tool surface without a server startup error.
 
 </TutorialChecklist>
 
