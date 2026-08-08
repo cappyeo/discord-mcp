@@ -32,6 +32,7 @@ const ROOT = join(__dirname, '../..');
 const DOCS_DIR = join(ROOT, 'site/src/content/docs');
 const CONFIRMATION_MDX = join(ROOT, 'site/src/content/docs/architecture/confirmation.mdx');
 const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.mdx');
+const REFERENCE_INDEX_MDX = join(ROOT, 'site/src/content/docs/reference/index.mdx');
 const EXTERNAL_REVIEW_MDX = join(
   ROOT,
   'site/src/content/docs/reference/external-documentation-review.mdx',
@@ -340,6 +341,17 @@ describe('generated reference stays aligned with tool metadata', () => {
 });
 
 describe('handwritten docs do not regress to known stale contracts', () => {
+  it('keeps the Reference changelog card aligned with the published CLI version', () => {
+    const cliPackage = JSON.parse(
+      readFileSync(join(ROOT, 'packages/mcp-server/package.json'), 'utf8'),
+    ) as { version: string };
+    const referenceIndex = readFileSync(REFERENCE_INDEX_MDX, 'utf8');
+
+    expect(referenceIndex).toContain(
+      `One section per release v0.0.0 → v${cliPackage.version}, with dates and user-visible changes.`,
+    );
+  });
+
   it('documents the observable client tool surfaces from the runtime registry', async () => {
     const clientSetup = readFileSync(CLIENT_SETUP_MDX, 'utf8');
     const progressiveNames = [
