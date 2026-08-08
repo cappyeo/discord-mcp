@@ -80,7 +80,12 @@ const icons = ['rocket', 'open-book', 'magnifier', 'puzzle'] as const;
     <Fragment slot="tabs">
       {
         sidebar.map(({ label, entries }, index) => (
-          <SidebarTab id={makeId(label)} initial={isInitial(label, entries)} class="sidebar-tab">
+          <SidebarTab
+            id={makeId(label)}
+            label={label}
+            initial={isInitial(label, entries)}
+            class="sidebar-tab"
+          >
             <Icon name={icons[index] ?? 'document'} />
             <span>{label}</span>
           </SidebarTab>

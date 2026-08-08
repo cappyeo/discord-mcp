@@ -45,8 +45,9 @@ real gates, not aspirational release notes.
 - [x] vitest globalSetup auto-builds mcp-core if `dist/` missing
 - [x] tsdown deprecation cleared (`external` -> `deps.neverBundle`)
 - [x] GitHub Actions Node 24 opt-in
-- [ ] Clean lint output with zero warnings - clean CI exits successfully, but
-      the current Astro source scan still reports 58 non-blocking warnings
+- [x] Clean lint output with zero warnings. Biome 2.4 full Astro support analyzes
+      frontmatter and template bindings together while retaining recommended
+      checks for component scripts, accessibility, and scoped CSS
 - [x] Test count ≥ 1000 (1280 passing)
 - [x] Coverage gate enforced in CI (98% statements and lines, 97% functions,
       73% branches)

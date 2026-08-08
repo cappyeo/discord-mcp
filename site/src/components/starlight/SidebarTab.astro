@@ -3,18 +3,19 @@ import type { HTMLAttributes } from 'astro/types';
 
 interface Props {
   id: string;
+  label: string;
   initial?: boolean;
   class?: string;
 }
 
-const { id, initial } = Astro.props;
+const { id, label, initial } = Astro.props;
 const attributes: HTMLAttributes<'a'> = initial
   ? { 'data-initial': 'true', 'aria-selected': 'true' }
   : {};
 ---
 
 <li class:list={Astro.props.class}>
-  <a href={`#${id}`} {...attributes}>
+  <a href={`#${id}`} aria-label={label} {...attributes}>
     <slot />
   </a>
 </li>

@@ -18,7 +18,7 @@
       if (!tabList || tabs.length === 0 || tabs.length !== panels.length) return;
 
       tabList.setAttribute('role', 'tablist');
-      let initialIndex = Math.max(
+      const initialIndex = Math.max(
         0,
         tabs.findIndex((tab) => tab.dataset.initial === 'true'),
       );

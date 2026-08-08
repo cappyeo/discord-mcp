@@ -19,6 +19,9 @@
       "arrowParentheses": "always"
     }
   },
+  "html": {
+    "experimentalFullSupportEnabled": true
+  },
   "linter": {
     "enabled": true,
     "rules": {

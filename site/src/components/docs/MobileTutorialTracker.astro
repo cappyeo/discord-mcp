@@ -37,12 +37,12 @@ import SetupTracker from './SetupTracker.astro';
     display: none;
   }
 
-  details[open] .caret {
-    transform: rotate(90deg);
-  }
-
   .caret {
     transition: transform 150ms ease;
+  }
+
+  details[open] .caret {
+    transform: rotate(90deg);
   }
 
   .tracker-content {

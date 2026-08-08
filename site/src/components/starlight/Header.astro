@@ -47,7 +47,11 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 
 <script>
   const menu = document.querySelector<HTMLDetailsElement>('.home-menu');
-  menu?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => menu.removeAttribute('open')));
+  menu?.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => {
+      menu.removeAttribute('open');
+    });
+  });
 </script>
 
 <style>
