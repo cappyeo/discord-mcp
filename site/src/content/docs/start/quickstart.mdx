@@ -23,10 +23,19 @@ first prove the connection with a read-only request, then send one message to a 
 <TutorialPreCheck>
 
 - Keep the bot installed in your private test server.
-- Confirm that your restarted MCP client lists discord-mcp's tools.
+- Confirm that your restarted MCP client lists the four progressive meta-tools described in
+  [Client setup](/discord-mcp/start/client-setup/), or the 203 direct tools if you deliberately
+  selected the compatibility surface.
 - Have the bot token and test server ID available privately.
 
 </TutorialPreCheck>
+
+<Aside type="note">
+This tutorial follows the recommended `progressive` surface: exact Discord tools are loaded
+with `mcp_tools_search` and invoked through a risk-matched dispatcher. If you intentionally
+configured the `full` surface, the same Discord tools are visible directly; keep the same
+arguments and safety boundary, but the meta-tool calls are unnecessary.
+</Aside>
 
 <Steps>
 
@@ -59,23 +68,32 @@ first prove the connection with a read-only request, then send one message to a 
 
    In the MCP client you restarted during Unit 2, ask:
 
-   > Use `users_get_current` and tell me the bot username and ID. Do not call any other tool.
+   > First call `mcp_tools_search` with `query` `users_get_current`. Confirm that the exact
+   > match names `mcp_tools_read` as its dispatcher, then call `mcp_tools_read` with `tool`
+   > `users_get_current` and `args` `{}`. Tell me the bot username and ID. Do not invoke any
+   > other Discord tool.
 
-   The tool needs no arguments. A successful result identifies the same bot you created in
-   the Developer Portal.
+   The hidden Discord tool needs no arguments. A successful dispatched result identifies the
+   same bot you created in the Developer Portal.
 
 3. **Discover the channel ID.**
 
    Replace the example with your copied server ID:
 
-   > Use `channels_list` with `guild_id` `999000999000999000`. Return the ID for `general`.
+   > First call `mcp_tools_search` with `query` `channels_list`. Confirm that the exact match
+   > names `mcp_tools_read` as its dispatcher, then call `mcp_tools_read` with `tool`
+   > `channels_list` and `args` `{"guild_id":"999000999000999000"}`. Return the ID for
+   > `general`. Do not invoke any other Discord tool.
 
    The result includes `channels[].id`. Keep the ID for the next step.
 
 4. **Send one test message.**
 
-   > Use `messages_send` with `channel_id` `112233445566778899` and content
-   > `hello from discord-mcp`.
+   > First call `mcp_tools_search` with `query` `messages_send`. Confirm that the exact match
+   > names `mcp_tools_write` as its dispatcher, then call `mcp_tools_write` with `tool`
+   > `messages_send` and `args`
+   > `{"channel_id":"112233445566778899","content":"hello from discord-mcp"}`. Do not
+   > invoke any other Discord tool.
 
    A successful result contains `message_id`, `channel_id`, `jump_url`, and `timestamp`.
    Open `jump_url` to verify the message in Discord.
@@ -83,9 +101,10 @@ first prove the connection with a read-only request, then send one message to a 
 </Steps>
 
 <Aside type="caution">
-`messages_send` is a write, but it is not destructive and is not confirmation-gated. It can
-execute on the first call. Keep onboarding inside a test server, set `ALLOWED_GUILDS` to that
-server ID, and grant the bot only the Discord permissions it needs.
+`mcp_tools_write` preserves the underlying tool's behavior; it does not add a confirmation
+step. `messages_send` is a write, but it is not destructive and is not confirmation-gated. It
+can execute on the first dispatched call. Keep onboarding inside a test server, set
+`ALLOWED_GUILDS` to that server ID, and grant the bot only the Discord permissions it needs.
 </Aside>
 
 <TutorialBox>
@@ -94,9 +113,10 @@ server ID, and grant the bot only the Discord permissions it needs.
 
 <TutorialChecklist>
 
-- [ ] `users_get_current` returned the bot account I created.
-- [ ] `channels_list` returned the channel ID from my private test server.
-- [ ] `messages_send` returned `message_id`, `channel_id`, `jump_url`, and `timestamp`.
+- [ ] Exact searches returned the expected read or write dispatcher and input contract.
+- [ ] `mcp_tools_read` returned my bot account and the channel ID from my private test server.
+- [ ] `mcp_tools_write` returned `message_id`, `channel_id`, `jump_url`, and `timestamp` from
+  `messages_send`.
 - [ ] I opened `jump_url` and verified the test message in Discord.
 
 </TutorialChecklist>

@@ -181,6 +181,18 @@ export default defineConfig({
             'architecture/sampling',
             'architecture/gateway',
             {
+              label: 'Migrate to discord-mcp',
+              collapsed: true,
+              items: [
+                { label: 'Migration overview', slug: 'migrate' },
+                'migrate/pasympa',
+                'migrate/quadslab',
+                'migrate/discord-ops',
+                'migrate/hubdustry',
+                'migrate/authoring',
+              ],
+            },
+            {
               label: 'Security audit archive',
               collapsed: true,
               items: [

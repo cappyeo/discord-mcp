@@ -22,10 +22,12 @@ import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 
 </TutorialPreCheck>
 
-The quickstart used an explicit tool name and Discord ID to make the final call predictable:
+The quickstart used an exact search and risk-matched dispatcher to make the final call
+predictable on the default progressive surface:
 
-> Use `messages_send` with `channel_id` `112233445566778899` and content
-> `hello from discord-mcp`. Do not call any other tool.
+> First call `mcp_tools_search` with `query` `messages_send`, then use the returned
+> `mcp_tools_write` dispatcher with `tool` `messages_send` and the supplied channel ID and
+> content. Do not invoke any other Discord tool.
 
 This avoided two common ambiguities: `messages_send` does not accept a channel name, and the
 server does not perform a separate human confirmation for this ordinary write. The prompt above
@@ -33,26 +35,49 @@ is the call you already completed; you do not need to send the message again.
 
 ## Request flow
 
-1. **Discovery.** The client obtains the tool catalog through MCP `tools/list`.
-2. **Selection.** The client selects the exact `messages_send` identifier.
-3. **Validation.** discord-mcp validates `channel_id` as a Discord snowflake and `content` as
+1. **Visible catalog.** MCP `tools/list` returns the four progressive meta-tools, not all 203
+   Discord contracts.
+2. **Exact discovery.** `mcp_tools_search` returns the `messages_send` input schema and names
+   `mcp_tools_write` as the required dispatcher.
+3. **Risk-matched dispatch.** The client sends the exact hidden tool name and its arguments to
+   `mcp_tools_write`. A read or destructive dispatcher would be rejected.
+4. **Validation.** discord-mcp validates `channel_id` as a Discord snowflake and `content` as
    a non-empty string of at most 2,000 characters.
-4. **Execution.** The server applies its middleware and resilience policy, then sends an HTTP
+5. **Execution.** The server applies its middleware and resilience policy, then sends an HTTP
    request to Discord's create-message endpoint.
-5. **Result.** The tool returns a text summary for the conversation and structured JSON that
+6. **Result.** The tool returns a text summary for the conversation and structured JSON that
    another tool can reuse.
 
-The MCP call arguments are:
+The client makes two MCP calls. The first loads the exact hidden contract:
 
 ```json
 {
-  "name": "messages_send",
+  "name": "mcp_tools_search",
   "arguments": {
-    "channel_id": "112233445566778899",
-    "content": "hello from discord-mcp"
+    "query": "messages_send"
   }
 }
 ```
+
+The search result names `mcp_tools_write`, so the second call wraps the Discord arguments
+under `args`:
+
+```json
+{
+  "name": "mcp_tools_write",
+  "arguments": {
+    "tool": "messages_send",
+    "args": {
+      "channel_id": "112233445566778899",
+      "content": "hello from discord-mcp"
+    }
+  }
+}
+```
+
+With the compatibility `full` surface, the client can select the exact Discord tool directly.
+The progressive path above is the tutorial default because it keeps the visible catalog small
+without changing validation, authorization, or the returned result.
 
 The structured result has this shape:
 
@@ -69,9 +94,10 @@ The IDs and timestamp above are examples. The keys match the runtime output sche
 
 ## Reuse structured output
 
-An MCP client can take `message_id` and `channel_id` from the result and pass them to a
-follow-up tool such as `reactions_create`, `messages_pin`, or `messages_edit`. This is safer
-than asking the model to reconstruct identifiers from prose.
+An MCP client can take `message_id` and `channel_id` from the result, search the exact
+follow-up tool such as `reactions_create`, `messages_pin`, or `messages_edit`, then pass the
+IDs through the dispatcher returned by that search. This is safer than asking the model to
+reconstruct identifiers from prose or guess a dispatcher's risk class.
 
 ## Safety boundary
 
@@ -89,6 +115,9 @@ channels, and actions required by your workflows.
 
 | Result | Meaning | Next action |
 |---|---|---|
+| `TOOL_NOT_AVAILABLE` | The hidden tool is unavailable to this caller or category scope. | Search the exact name again and check `MCP_CATEGORIES`. |
+| `DISPATCH_MODE_MISMATCH` | The client used read, write, or destructive dispatch incorrectly. | Use the exact `dispatcher` returned by the latest search. |
+| `WRITE_PREVIEW` | `MCP_WRITE_MODE=preview` blocked the ordinary write before Discord. | Keep the read-only proof, or intentionally change the test profile to `allow` and restart the client before retrying. |
 | Invalid arguments | A required field is missing or malformed. | Copy the numeric channel ID and keep content within 2,000 characters. |
 | `401` | The token is invalid or revoked. | Reset it in the Developer Portal and update the local config. |
 | `403` | The bot lacks channel permissions. | Check View Channel and Send Messages, including channel overrides. |
@@ -103,7 +132,8 @@ See the exact [`messages_send` reference](/discord-mcp/tools/messages/send/) or 
 
 <TutorialChecklist>
 
-- [ ] I can identify the tool name and arguments in the MCP request.
+- [ ] I can identify the exact search call and the nested dispatcher call.
+- [ ] I know to use the dispatcher returned by `mcp_tools_search`, not guess one.
 - [ ] I can identify `message_id`, `channel_id`, `jump_url`, and `timestamp` in the result.
 - [ ] I understand that `messages_send` writes immediately and is not confirmation-gated.
 - [ ] I know to reuse IDs from structured output instead of reconstructing them from prose.

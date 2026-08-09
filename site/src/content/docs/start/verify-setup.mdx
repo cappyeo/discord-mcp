@@ -26,9 +26,11 @@ create/send/edit/delete lifecycle and removes its temporary channel and message.
 
 ## Where are you going?
 
-The quickstart begins with diagnostics and `users_get_current`, so you can verify the client
-and token without changing Discord. It then uses `channels_list` to obtain a real ID before
-calling `messages_send` in your private test channel.
+The quickstart follows the default progressive surface. It loads each exact contract through
+`mcp_tools_search`, invokes `users_get_current` and `channels_list` through
+`mcp_tools_read`, then invokes `messages_send` through `mcp_tools_write` in your private
+test channel. The first two Discord calls verify the client, token, and real channel ID
+without changing Discord.
 
 The final lesson explains the request, validation, execution, and structured result so you
 can recognize the same flow in every tool reference.

@@ -119,4 +119,28 @@ describe('tutorial curriculum', () => {
   it('keeps troubleshooting outside tutorial progress', () => {
     expect(frontmatter('troubleshooting.mdx')).toMatch(/^type: guide$/m);
   });
+
+  it('teaches the default progressive path for the first live Discord calls', () => {
+    const verification = source('verify-setup.mdx');
+    const quickstart = source('quickstart.mdx');
+    const firstCall = source('first-tool-call.mdx');
+
+    expect(verification).toContain('mcp_tools_search');
+    expect(verification).toContain('mcp_tools_read');
+    expect(verification).toContain('mcp_tools_write');
+
+    for (const [tool, dispatcher] of [
+      ['users_get_current', 'mcp_tools_read'],
+      ['channels_list', 'mcp_tools_read'],
+      ['messages_send', 'mcp_tools_write'],
+    ] as const) {
+      expect(quickstart, `${tool}: exact progressive search`).toContain(`\`query\` \`${tool}\``);
+      expect(quickstart, `${tool}: risk-matched dispatcher`).toContain(`\`${dispatcher}\``);
+    }
+
+    expect(firstCall).toContain('"name": "mcp_tools_search"');
+    expect(firstCall).toContain('"name": "mcp_tools_write"');
+    expect(firstCall).toContain('"tool": "messages_send"');
+    expect(firstCall).not.toContain('"name": "messages_send"');
+  });
 });
