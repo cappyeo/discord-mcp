@@ -129,6 +129,16 @@ const routes: RouteAudit[] = [
     },
   },
   {
+    name: 'connection mode guide',
+    path: '/operations/clients/',
+    expectedText: [
+      'Choose a connection mode',
+      'Local stdio + progressive',
+      'Streamable HTTP + full',
+      'Gateway is not a transport',
+    ],
+  },
+  {
     name: 'tool-call flow',
     path: '/start/first-tool-call/',
     expectedText: ['How a tool call works', '"tool": "messages_send"', '"args": {'],

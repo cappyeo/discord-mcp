@@ -1,135 +1,136 @@
 ---
-title: Client compatibility
-description: The MCP capabilities discord-mcp needs, how to verify them in any client, and which features degrade when a capability is absent.
+title: Choose a connection mode
+description: Choose local stdio or remote HTTP, progressive or full tool discovery, and whether stdio needs live Discord Gateway notifications.
 sidebar:
   order: 4
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import ClientTabs from '../../../components/docs/ClientTabs.astro';
 
-The dependable compatibility contract is capability-based, not a hard-coded client version
-matrix. Client releases change independently, so verify the features you need in the current
-client rather than relying on an old “yes/no” table.
+Make three choices independently: where the MCP connection runs, how the tool catalog is
+advertised, and whether the workflow needs live Discord notifications. Start with the first row
+unless your MCP host or deployment model requires something else.
 
-## Local stdio contract
+## Recommended combinations
 
-A client can use discord-mcp's core surface when it can:
+| Combination | Use it when | Host-visible catalog | Gateway | Continue with |
+|---|---|---|---|---|
+| **Local stdio + progressive** | A local client can start discord-mcp and call its search/dispatcher tools. This is the guided setup default. | **4 visible tools** | Optional | [Client setup](/discord-mcp/start/client-setup/) |
+| **Local stdio + full** | A compatibility-oriented client must receive its allowed direct tool contracts up front. | up to 203 visible tools; allowlists can reduce this | Optional | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
+| **Streamable HTTP + full** | A remote caller has native deferred loading or tool search, such as the OpenAI Responses API. | up to 203 direct tools; the caller defers them | Unavailable | [OpenAI remote MCP](/discord-mcp/operations/openai/) |
+| **Streamable HTTP + progressive** | A remote MCP host lacks native deferred loading but can search and dispatch through MCP tools. | 4 discovery/dispatcher tools | Unavailable | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
 
-1. start a local process as an MCP server;
-2. communicate with it over stdio;
-3. pass `DISCORD_TOKEN` and other environment variables; and
-4. list and call MCP tools.
+<Aside type="caution" title="HTTP does not create per-user Discord identities">
+One HTTP deployment uses one Discord bot token and one shared bearer credential. Every
+authenticated caller acts with that bot's Discord permissions. If callers need different Discord
+rights, give them separate bots and deployment credentials rather than sharing one endpoint.
+</Aside>
 
-That contract is enough for the 198 Discord-operation tools. The separate
-Emoji.gg inspiration discovery tool is optional; resources, subscriptions, and
-sampling are optional extensions with narrower use cases.
+## 1. Choose the transport
 
-## Remote HTTP contract
+### Local stdio
 
-A remote client instead needs Streamable HTTP MCP support, a publicly reachable
-HTTPS `/mcp` endpoint, and a way to send the configured bearer credential.
-This covers the OpenAI Responses API and Codex. Remote HTTP negotiates MCP
-`2026-07-28` and preserves stateless 2025-era compatibility; neither path uses
-MCP session state. It does not support Discord Gateway subscriptions. See
-[OpenAI remote MCP](/discord-mcp/operations/openai/) for the shared-bot
-security model and setup.
+Use stdio when the MCP client can start a local process, communicate over stdin/stdout, and pass
+`DISCORD_TOKEN` through the child-process environment. It is the default transport, requires no
+public network listener, and is the only transport that can add Gateway notifications.
 
-## Feature requirements
+The guided path verifies one caller-owned bot, saves a non-secret local profile, and generates the
+client fragment:
+
+```bash
+discord-mcp setup --profile devbot --client generic
+```
+
+Follow [Client setup](/discord-mcp/start/client-setup/) for Codex, Claude Desktop, Claude Code,
+Cursor, or a generic stdio host.
+
+### Streamable HTTP
+
+Use HTTP when the MCP caller cannot start the local process or must reach a separately operated
+deployment. The caller needs Streamable HTTP MCP support, a public HTTPS `/mcp` endpoint, and a way
+to send `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>`. The server is stateless and binds to
+`127.0.0.1` by default so a reverse proxy can own TLS and public ingress deliberately.
+
+HTTP does not support Gateway subscriptions. It still exposes the same Discord tool behavior,
+authorization policy, safety middleware, and progressive/full choice as stdio. Follow
+[OpenAI remote MCP](/discord-mcp/operations/openai/) for the shared-bot security model, proxy
+boundary, and deployment example.
+
+## 2. Choose the tool surface
+
+The tool surface changes what the MCP host sees; it does not change what the bot is authorized to
+do. `MCP_CATEGORIES`, `ALLOWED_GUILDS`, Discord permissions, and write controls still apply after
+discovery.
+
+- **`progressive`** advertises `mcp_tools_search`, `mcp_tools_read`, `mcp_tools_write`, and
+  `mcp_tools_destructive`. The host searches for an exact Discord tool, then calls it through the
+  risk-matched dispatcher. Use it when the host does not already defer a large MCP catalog.
+- **`full`** advertises up to 203 direct tools. `MCP_CATEGORIES` and `ALLOWED_GUILDS` can
+  intentionally hide contracts that the configured server scope cannot use. Choose this surface
+  for compatibility or when the caller already supplies native deferred loading, such as OpenAI
+  Responses API `tool_search`.
+
+Guided `setup` defaults to `progressive` because it is the better local starting point.
+Raw `serve` and legacy `init` default to `full` for backward compatibility. An OpenAI HTTP
+deployment normally keeps `full` because adding server-side discovery would create a second
+discovery layer; a remote Codex setup can use `progressive` when the client itself does not defer
+MCP tools.
+
+See [`MCP_TOOL_SURFACE`](/discord-mcp/reference/config/access/#mcp_tool_surface) for the exact
+environment contract. Switching an existing profile or client fragment requires a client restart
+because the already-running MCP child does not reload its startup configuration.
+
+## 3. Decide whether to add Gateway
+
+Gateway is not a transport. It is an optional stdio-only event layer that connects to Discord's
+Gateway WebSocket and turns selected events into MCP resource notifications. REST-backed tool
+calls work without it.
+
+Enable it with guided setup or direct stdio startup:
+
+```bash
+discord-mcp setup --profile devbot --client generic --gateway
+discord-mcp serve --gateway
+```
+
+The notification surface uses known resource URIs and subscriptions; it does not implement live
+`resources/list` or `resources/read`. Capability advertisement alone is not proof that the Gateway
+client connected, so verify one real event before depending on it. HTTP does not support Gateway
+subscriptions and rejects CLI/profile combinations that request both modes.
+
+Read the [Gateway architecture](/discord-mcp/architecture/gateway/) for exact event mappings, then
+run the [Gateway subscription recipe](/discord-mcp/recipes/gateway-subscribe/).
+
+## Client capability requirements
+
+Client releases change independently, so verify capabilities instead of relying on a hard-coded
+version matrix.
 
 | discord-mcp feature | Client capability | Behavior when absent |
 |---|---|---|
-| Discord tool catalog | `tools` | Core functionality is unavailable. |
+| Discord tool catalog | `tools` list/call | Core functionality is unavailable. |
+| Progressive discovery | Ability to call the four visible MCP tools | Use the full surface if the host cannot search and dispatch. |
 | Components V2 schema/template catalog | `resources` list/read | Use the tool reference and builder tools instead. |
-| Live Gateway notifications | resource subscriptions | The client cannot receive push updates; REST tools still work. |
-| Intelligence tools | sampling | The tool returns a host-processing fallback payload rather than a completed LLM analysis. |
-| Confirmation gate | none beyond tools | The `__confirm` contract is a tool argument; discord-mcp does not use MCP elicitation. |
+| Live Gateway notifications | Resource subscriptions | REST tools still work; the client cannot receive push updates. |
+| Intelligence tools | Sampling | The tool returns a host-processing fallback payload instead of completed analysis. |
+| Confirmation gate | No capability beyond tools | `__confirm` is a tool argument; discord-mcp does not require MCP elicitation. |
 
 <Aside type="caution">
-The server currently advertises subscription support even when Gateway mode is not active.
-Treat live subscriptions as experimental and verify an actual update end-to-end before building
-a workflow around them.
+The server advertises subscription support even when Gateway mode is inactive. Treat a real
+notification—not initialization metadata—as the success signal.
 </Aside>
 
-## Generate the client config
+## Verify the chosen mode
 
-<ClientTabs>
-  <div slot="claude-desktop">
+1. Run `discord-mcp doctor --online --profile devbot` where `DISCORD_TOKEN` is available.
+2. Restart the MCP client and inspect `tools/list`: expect four tools for `progressive`; `full` can
+   expose up to 203, with fewer expected when category or guild allowlists narrow the server.
+3. Follow the [verified first-tool flow](/discord-mcp/start/quickstart/) for a read-only identity
+   and channel check through the chosen surface.
+4. If the workflow needs sampling, verify whether the result is completed or a host-processing
+   fallback.
+5. If Gateway is enabled, prove one real subscription notification end to end.
 
-  ```bash
-  discord-mcp init --client claude-desktop
-  ```
-
-  Merge the generated entry into Claude Desktop's `mcpServers` object and fully restart the app.
-
-  </div>
-  <div slot="claude-code">
-
-  ```bash
-  discord-mcp init --client claude-code
-  ```
-
-  Merge the output into the user or project MCP config supported by your Claude Code release.
-
-  </div>
-  <div slot="codex">
-
-  ```bash
-  discord-mcp init --client codex
-  ```
-
-  Merge the TOML fragment into `~/.codex/config.toml`. The default uses
-  `env_vars = ["DISCORD_TOKEN"]`; start Codex from an environment that defines
-  that variable so the token is not persisted in `config.toml`.
-
-  </div>
-  <div slot="cursor">
-
-  ```bash
-  discord-mcp init --client cursor
-  ```
-
-  Merge the output into Cursor's user or project MCP config and restart the editor.
-
-  </div>
-  <div slot="generic">
-
-  ```bash
-  discord-mcp init --client generic
-  ```
-
-  Place the standard `mcpServers` entry where your client documents local stdio servers.
-
-  </div>
-</ClientTabs>
-
-If you did not install the CLI globally, the scoped one-off command is
-`npx --yes @discord-mcp/cli@latest`. Do not substitute an unscoped package name.
-
-## Verify instead of assuming
-
-For every client and release:
-
-1. Run `discord-mcp doctor --online` in a terminal with `DISCORD_TOKEN` set.
-2. Restart the client and confirm `users_get_current` succeeds.
-3. Confirm `channels_list` can discover a test channel.
-4. If you need intelligence, run its smallest example and inspect whether the response is a
-   completed result or a host-processing fallback.
-5. If you need Gateway events, verify one real subscription update after starting with
-   `--gateway`; do not infer support from the initialization capability alone.
-
-## Server-side controls
-
-- `ALLOWED_GUILDS` verifies direct and indirectly resolved Discord guild targets,
-  and hides global writes whose guild cannot be proven before execution.
-- `MCP_CATEGORIES` limits which tool categories are advertised and callable.
-- `MCP_TOOL_SURFACE=progressive` advertises search plus risk-specific read,
-  write, and destructive dispatchers instead of the full catalog; it does not
-  expand `MCP_CATEGORIES` authorization.
-- `MCP_DRY_RUN` affects only tools that declare the confirmation precondition.
-- `OTEL_ENABLED` changes server-side observability, not the client capability contract.
-
-Continue with [Client setup](/discord-mcp/start/client-setup/) for local stdio,
-[OpenAI remote MCP](/discord-mcp/operations/openai/) for a remote endpoint, the
-[sampling architecture](/discord-mcp/architecture/sampling/), or
-[Gateway architecture](/discord-mcp/architecture/gateway/).
+For exact flags, see the [CLI reference](/discord-mcp/reference/cli/). For all access controls, see
+[Access and scope](/discord-mcp/reference/config/access/). For startup problems, use
+[Troubleshooting](/discord-mcp/start/troubleshooting/).

@@ -24,6 +24,10 @@ saves a non-secret local profile, and generates a client-specific configuration 
 Codex receives TOML and the other first-class clients receive JSON. It prints the fragment
 by default, so you stay in control of the file you merge it into.
 
+If you need remote HTTP, the full direct-tool catalog, or live Gateway notifications, first
+[choose a connection mode](/discord-mcp/operations/clients/). The tutorial below follows the
+recommended local stdio + progressive path.
+
 <TutorialPreCheck>
 
 - Confirm that `discord-mcp --version` works in your terminal.
@@ -159,8 +163,9 @@ search-and-dispatch path; do not switch to the full surface just to follow the t
 
 ### `full` (compatibility)
 
-The client should show **203 visible direct tools**. This mode exposes every Discord contract
-immediately, at a larger context and tool-selection cost.
+The client can show **up to 203 visible direct tools**. `MCP_CATEGORIES` and `ALLOWED_GUILDS`
+can intentionally reduce that number; this mode exposes every contract allowed by the resulting
+server scope immediately, at a larger context and tool-selection cost.
 
 If your MCP client cannot use the discovery and dispatcher tools, rerun setup for the same
 verified bot with `--tool-surface full --force` plus your existing setup options, merge the

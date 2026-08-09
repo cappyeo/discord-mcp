@@ -369,7 +369,9 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     for (const name of progressiveNames) expect(clientSetup).toContain(`\`${name}\``);
 
     const tools = await loadAllTools();
-    expect(clientSetup).toContain(`**${tools.length} visible direct tools**`);
+    expect(clientSetup).toContain(`**up to ${tools.length} visible direct tools**`);
+    expect(clientSetup).toContain('`MCP_CATEGORIES`');
+    expect(clientSetup).toContain('`ALLOWED_GUILDS`');
   });
 
   it('keeps the external documentation review public, linked, and credential-safe', () => {

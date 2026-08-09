@@ -163,7 +163,7 @@ export default defineConfig({
               ],
             },
             'reference/cli',
-            { label: 'Client capabilities', slug: 'operations/clients' },
+            { label: 'Connection modes', slug: 'operations/clients' },
             'reference/api-core',
             'reference/changelog',
             'reference/external-documentation-review',
