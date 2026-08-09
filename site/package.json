@@ -12,6 +12,7 @@
     "predev": "pnpm generate-tools",
     "prebuild": "pnpm generate-tools",
     "test:browser": "tsx scripts/audit-rendered-docs.ts",
+    "test:links": "tsx scripts/verify-dist-links.ts",
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
@@ -19,6 +20,7 @@
     "@axe-core/playwright": "^4.12.1",
     "@discord-mcp/core": "workspace:*",
     "astro": "^5.0.0",
+    "parse5": "^7.3.0",
     "playwright": "^1.62.1",
     "sharp": "^0.33.0",
     "tsx": "^4.19.0",

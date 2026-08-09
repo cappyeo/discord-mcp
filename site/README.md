@@ -27,17 +27,23 @@ pnpm --filter site preview
 Serves `dist/` locally on port 4321 - useful to verify Pagefind search
 before deploying.
 
-## Rendered browser and accessibility audit
+## Rendered artifact audits
 
 Install the lockfile-pinned Chromium headless shell once, build the site, then run the audit:
 
 ```bash
 pnpm --filter site exec playwright install --only-shell chromium
 pnpm --filter site build
+pnpm --filter site test:links
 pnpm --filter site test:browser
 ```
 
-The audit serves the exact `site/dist` artifact on a loopback-only ephemeral port and checks 14
+The link audit parses every generated HTML document and checks all same-origin `href`, `src`,
+`poster`, and meta-refresh targets against the exact, case-sensitive `site/dist` artifact. Internal
+fragments must resolve to an `id` or legacy anchor in their target document. External URLs remain
+outside this offline gate.
+
+The browser audit serves the same artifact on a loopback-only ephemeral port and checks 14
 desktop-light/mobile-dark scenarios across onboarding, generated tool docs, migration, and the live
 demo. It fails on any axe WCAG A/AA or best-practice violation, same-origin HTTP failure, browser
 runtime error, missing semantic landmark, broken representative interaction, or horizontal viewport
@@ -48,9 +54,10 @@ pixels. An unknown target or any sample below its WCAG AA threshold fails the bu
 rule-wide contrast exception. A rendered canary proves on every run that the verifier accepts an AA
 gradient case and rejects an intentional sub-AA case.
 
-GitHub Actions installs Chromium with its system dependencies and runs this audit before the Pages
-artifact can be uploaded. Pull requests affecting the site, generated tool source, lockfile, or docs
-workflow run the same build-and-audit gate without deploying.
+GitHub Actions runs the full link audit, then installs Chromium with its system dependencies and runs
+the browser audit before the Pages artifact can be uploaded. Pull requests affecting the site,
+generated tool source, lockfile, or docs workflow run the same build-and-audit gate without
+deploying.
 
 ## Regenerate tool reference
 
@@ -77,6 +84,7 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
   - `DocsCardGrid.astro` - data-driven cards for section hubs
   - `ClientTabs.astro` - synchronized Claude Desktop / Claude Code / Cursor / generic tabs
 - `scripts/generate-tool-docs.ts` - tool MDX generator
+- `scripts/verify-dist-links.ts` - full generated-route, asset, and fragment integrity gate
 - `scripts/audit-rendered-docs.ts` - real-browser semantic, accessibility, interaction, and layout gate
 - `scripts/rendered-contrast.ts` - tested color parsing, compositing, and WCAG contrast math used by the browser gate
 
@@ -97,8 +105,9 @@ and the shared MDX building blocks in `src/components/docs/`.
   environment-variable contract grouped by concern. Update both the reference
   and the hand-authored sidebar when a runtime setting changes.
 - Verify every documentation change with `pnpm --filter site test` and
-  `pnpm --filter site build` before publishing. Run `pnpm --filter site test:browser` after the build
-  for any change that can affect rendered content, navigation, interaction, or layout.
+  `pnpm --filter site build` before publishing. Run `pnpm --filter site test:links` after every build,
+  and run `pnpm --filter site test:browser` for any change that can affect rendered content,
+  navigation, interaction, or layout.
 
 ## GitHub Pages setup (operators)
 

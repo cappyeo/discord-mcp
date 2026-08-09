@@ -193,6 +193,9 @@ importers:
       astro:
         specifier: ^5.0.0
         version: 5.18.1(@types/node@24.12.2)(jiti@2.6.1)(rollup@4.60.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      parse5:
+        specifier: ^7.3.0
+        version: 7.3.0
       playwright:
         specifier: ^1.62.1
         version: 1.62.1

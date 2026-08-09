@@ -39,6 +39,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @discord-mcp/core build
       - run: pnpm --filter site build
+      - name: Audit generated links
+        run: pnpm --filter site test:links
       - name: Install Chromium headless shell
         run: pnpm --filter site exec playwright install --with-deps --only-shell chromium
       - name: Audit rendered docs
