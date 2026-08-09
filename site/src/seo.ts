@@ -38,7 +38,6 @@ const structuredData = {
       sameAs: [
         'https://github.com/cappyeo/discord-mcp',
         'https://www.npmjs.com/package/@discord-mcp/cli',
-        'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.cappyeo/discord-mcp',
       ],
     },
   ],

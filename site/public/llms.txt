@@ -10,7 +10,7 @@
 - Source and issues: https://github.com/cappyeo/discord-mcp
 - CLI package: https://www.npmjs.com/package/@discord-mcp/cli
 - Core library: https://www.npmjs.com/package/@discord-mcp/core
-- Official MCP Registry record: https://registry.modelcontextprotocol.io/v0.1/servers/io.github.cappyeo/discord-mcp
+- Official MCP Registry record: https://registry.modelcontextprotocol.io/v0.1/servers/io.github.cappyeo%2Fdiscord-mcp/versions/latest
 
 ## Product facts
 

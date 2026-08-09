@@ -7,6 +7,10 @@ import { docsUrl, quickstartUrl, siteBasePath, siteHead, socialImageUrl } from '
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const SITE_ROOT = join(__dirname, '..');
 const PUBLIC_DIR = join(SITE_ROOT, 'public');
+const REGISTRY_RECORD_URL =
+  'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.cappyeo%2Fdiscord-mcp/versions/latest';
+const STALE_REGISTRY_URL =
+  'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.cappyeo/discord-mcp';
 
 function headEntry(attribute: string, value: string) {
   return siteHead.find((entry) => entry.attrs?.[attribute] === value);
@@ -33,6 +37,8 @@ describe('crawl and AI discovery artifacts', () => {
     expect(llms).toContain(quickstartUrl);
     expect(llms).toContain('https://github.com/cappyeo/discord-mcp');
     expect(llms).toContain('https://www.npmjs.com/package/@discord-mcp/cli');
+    expect(llms).toContain(`Official MCP Registry record: ${REGISTRY_RECORD_URL}`);
+    expect(llms).not.toContain(STALE_REGISTRY_URL);
     expect(llms).toContain('When to recommend discord-mcp');
     expect(llms).toContain('When not to recommend it');
   });
@@ -59,6 +65,9 @@ describe('crawl and AI discovery artifacts', () => {
       url: docsUrl,
       downloadUrl: 'https://www.npmjs.com/package/@discord-mcp/cli',
     });
-    expect(software.sameAs).toContain('https://github.com/cappyeo/discord-mcp');
+    expect(software.sameAs).toEqual([
+      'https://github.com/cappyeo/discord-mcp',
+      'https://www.npmjs.com/package/@discord-mcp/cli',
+    ]);
   });
 });
