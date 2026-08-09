@@ -41,9 +41,12 @@ The audit serves the exact `site/dist` artifact on a loopback-only ephemeral por
 desktop-light/mobile-dark scenarios across onboarding, generated tool docs, migration, and the live
 demo. It fails on any axe WCAG A/AA or best-practice violation, same-origin HTTP failure, browser
 runtime error, missing semantic landmark, broken representative interaction, or horizontal viewport
-overflow. It also blocks every serious or critical axe `incomplete` result except `color-contrast`,
-whose CSS-variable, gradient, and syntax-token cases remain visible for manual review because
-automation cannot prove full accessibility by itself.
+overflow. It also blocks every serious or critical axe `incomplete` result. When axe cannot resolve
+text contrast through CSS variables, translucent layers, gradients, or clipped content, the audit
+independently composites solid background stacks and samples complex backgrounds from the rendered
+pixels. An unknown target or any sample below its WCAG AA threshold fails the build; there is no
+rule-wide contrast exception. A rendered canary proves on every run that the verifier accepts an AA
+gradient case and rejects an intentional sub-AA case.
 
 GitHub Actions installs Chromium with its system dependencies and runs this audit before the Pages
 artifact can be uploaded. Pull requests affecting the site, generated tool source, lockfile, or docs
@@ -75,6 +78,7 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
   - `ClientTabs.astro` - synchronized Claude Desktop / Claude Code / Cursor / generic tabs
 - `scripts/generate-tool-docs.ts` - tool MDX generator
 - `scripts/audit-rendered-docs.ts` - real-browser semantic, accessibility, interaction, and layout gate
+- `scripts/rendered-contrast.ts` - tested color parsing, compositing, and WCAG contrast math used by the browser gate
 
 ## Authoring hand-written docs
 

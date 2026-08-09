@@ -5,15 +5,24 @@ import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { type Browser, chromium, type Page } from 'playwright';
+import sharp from 'sharp';
+import {
+  compositeColor,
+  contrastRatio,
+  parseCssColor,
+  type RgbaColor,
+  requiredContrastRatio,
+} from './rendered-contrast.js';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const DIST_DIR = resolve(SCRIPT_DIR, '../dist');
 const BASE_PATH = '/discord-mcp';
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 const BLOCKING_INCOMPLETE_IMPACTS = new Set(['critical', 'serious']);
-// Axe cannot reliably calculate contrast through every CSS variable, gradient, and syntax token.
-// Keep these findings visible for manual review while blocking every other serious/critical result.
-const MANUAL_REVIEW_ONLY_INCOMPLETE_RULES = new Set(['color-contrast']);
+
+type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>;
+type AxeFinding = AxeResults['violations'][number];
+type AxeNode = AxeFinding['nodes'][number];
 
 interface RouteAudit {
   name: string;
@@ -27,6 +36,38 @@ interface ViewportAudit {
   width: number;
   height: number;
   colorScheme: 'light' | 'dark';
+}
+
+interface ContrastBackgroundLayer {
+  backgroundColor: string;
+  backgroundImage: string;
+  backdropFilter: string;
+  boxShadow: string;
+  filter: string;
+  mixBlendMode: string;
+  opacity: string;
+}
+
+interface ContrastProbe {
+  backgrounds: ContrastBackgroundLayer[];
+  elementHeight: number;
+  elementWidth: number;
+  fontSize: number;
+  fontWeight: number;
+  foreground: string;
+  id: string;
+  requiresRenderedSample: boolean;
+  selector: string;
+  text: string;
+  textRects: Array<{ bottom: number; left: number; right: number; top: number }>;
+  unsupportedForegroundEffects: string[];
+}
+
+interface ContrastEvidence {
+  minimumRatio: number;
+  probeCount: number;
+  reasons: string;
+  renderedSampleCount: number;
 }
 
 const routes: RouteAudit[] = [
@@ -425,13 +466,384 @@ async function startStaticServer(): Promise<{ origin: string; close: () => Promi
   };
 }
 
-function formatAxeFinding(
-  finding: Awaited<ReturnType<AxeBuilder['analyze']>>['violations'][number],
-): string {
+function formatAxeFinding(finding: AxeFinding): string {
   const targets = finding.nodes.flatMap((node) => node.target.map((target) => String(target)));
   const visibleTargets = targets.slice(0, 5).join(', ');
   const omittedTargets = targets.length > 5 ? `, +${targets.length - 5} more` : '';
   return `${finding.id} [${finding.impact ?? 'unknown'}] ${finding.help} (${visibleTargets}${omittedTargets}) ${finding.helpUrl}`;
+}
+
+let contrastProbeSequence = 0;
+
+function axeNodeSelector(node: AxeNode): string {
+  if (node.target.length !== 1 || typeof node.target[0] !== 'string') {
+    throw new Error(`unsupported axe contrast target: ${JSON.stringify(node.target)}`);
+  }
+  return node.target[0];
+}
+
+function axeContrastReasons(node: AxeNode): string[] {
+  return node.any.flatMap((check) => {
+    const messageKey = (check.data as { messageKey?: unknown } | null)?.messageKey;
+    return typeof messageKey === 'string' ? [messageKey] : [];
+  });
+}
+
+async function collectContrastProbes(page: Page, node: AxeNode): Promise<ContrastProbe[]> {
+  const selector = axeNodeSelector(node);
+  const target = page.locator(selector);
+  await requireCount(target, 1, `axe contrast target ${selector}`);
+  const prefix = `rendered-contrast-${++contrastProbeSequence}`;
+  const forceRenderedSample = axeContrastReasons(node).some((reason) =>
+    ['bgGradient', 'bgOverlap', 'elmPartiallyObscured', 'elmPartiallyObscuring'].includes(reason),
+  );
+
+  return target.evaluate(
+    (
+      element,
+      { forceRenderedSample: forceSample, prefix: probePrefix, selector: targetSelector },
+    ) => {
+      const visibleTextElements = [element, ...element.querySelectorAll('*')].filter(
+        (candidate) => {
+          const hasDirectText = [...candidate.childNodes].some(
+            (child) => child.nodeType === Node.TEXT_NODE && Boolean(child.textContent?.trim()),
+          );
+          if (!hasDirectText) return false;
+
+          const styles = getComputedStyle(candidate);
+          const bounds = candidate.getBoundingClientRect();
+          return (
+            styles.display !== 'none' &&
+            styles.visibility !== 'hidden' &&
+            Number.parseFloat(styles.opacity) > 0 &&
+            bounds.width > 0 &&
+            bounds.height > 0
+          );
+        },
+      );
+
+      return visibleTextElements.map((candidate, index) => {
+        const styles = getComputedStyle(candidate);
+        const candidateBounds = candidate.getBoundingClientRect();
+        const id = `${probePrefix}-${index}`;
+        candidate.setAttribute('data-rendered-contrast-probe', id);
+        const backgrounds = [];
+        const unsupportedForegroundEffects = [];
+        let hasComplexPseudoBackground = false;
+
+        for (let current: Element | null = candidate; current; current = current.parentElement) {
+          const currentStyles = getComputedStyle(current);
+          backgrounds.push({
+            backgroundColor: currentStyles.backgroundColor,
+            backgroundImage: currentStyles.backgroundImage,
+            backdropFilter: currentStyles.backdropFilter,
+            boxShadow: currentStyles.boxShadow,
+            filter: currentStyles.filter,
+            mixBlendMode: currentStyles.mixBlendMode,
+            opacity: currentStyles.opacity,
+          });
+          if (Number.parseFloat(currentStyles.opacity) !== 1) {
+            unsupportedForegroundEffects.push(`${current.tagName.toLowerCase()} opacity`);
+          }
+          if (currentStyles.filter !== 'none') {
+            unsupportedForegroundEffects.push(`${current.tagName.toLowerCase()} filter`);
+          }
+          if (currentStyles.mixBlendMode !== 'normal') {
+            unsupportedForegroundEffects.push(`${current.tagName.toLowerCase()} mix-blend-mode`);
+          }
+          for (const pseudoName of ['::before', '::after'] as const) {
+            const pseudo = getComputedStyle(current, pseudoName);
+            const transparentBackground =
+              pseudo.backgroundColor === 'rgba(0, 0, 0, 0)' ||
+              pseudo.backgroundColor === 'transparent';
+            if (
+              pseudo.content !== 'none' &&
+              (!transparentBackground ||
+                pseudo.backgroundImage !== 'none' ||
+                pseudo.backdropFilter !== 'none' ||
+                pseudo.boxShadow !== 'none')
+            ) {
+              hasComplexPseudoBackground = true;
+            }
+          }
+        }
+        if (styles.textShadow !== 'none') unsupportedForegroundEffects.push('text-shadow');
+
+        const usesSvgFill =
+          candidate.namespaceURI === 'http://www.w3.org/2000/svg' &&
+          candidate.tagName.toLowerCase() === 'text';
+        const webkitTextFillColor = styles.getPropertyValue('-webkit-text-fill-color').trim();
+        const effectiveTextColor =
+          webkitTextFillColor && webkitTextFillColor.toLowerCase() !== 'currentcolor'
+            ? webkitTextFillColor
+            : styles.color;
+        const textRects = [...candidate.childNodes]
+          .filter(
+            (child) => child.nodeType === Node.TEXT_NODE && Boolean(child.textContent?.trim()),
+          )
+          .flatMap((child) => {
+            const range = document.createRange();
+            range.selectNodeContents(child);
+            return [...range.getClientRects()].map((rect) => ({
+              bottom: Math.min(candidateBounds.height, rect.bottom - candidateBounds.top),
+              left: Math.max(0, rect.left - candidateBounds.left),
+              right: Math.min(candidateBounds.width, rect.right - candidateBounds.left),
+              top: Math.max(0, rect.top - candidateBounds.top),
+            }));
+          })
+          .filter((rect) => rect.right > rect.left && rect.bottom > rect.top);
+        return {
+          backgrounds,
+          elementHeight: candidateBounds.height,
+          elementWidth: candidateBounds.width,
+          fontSize: Number.parseFloat(styles.fontSize),
+          fontWeight: Number.parseFloat(styles.fontWeight) || 400,
+          foreground: usesSvgFill ? styles.fill : effectiveTextColor,
+          id,
+          requiresRenderedSample: forceSample || hasComplexPseudoBackground,
+          selector: targetSelector,
+          text: [...candidate.childNodes]
+            .filter((child) => child.nodeType === Node.TEXT_NODE)
+            .map((child) => child.textContent ?? '')
+            .join(' ')
+            .trim()
+            .replace(/\s+/g, ' ')
+            .slice(0, 80),
+          textRects,
+          unsupportedForegroundEffects,
+        };
+      });
+    },
+    { forceRenderedSample, prefix, selector },
+  );
+}
+
+function resolveSolidBackground(probe: ContrastProbe): RgbaColor | undefined {
+  let background: RgbaColor = { red: 0, green: 0, blue: 0, alpha: 0 };
+
+  for (const layer of probe.backgrounds) {
+    if (
+      layer.backgroundImage !== 'none' ||
+      layer.backdropFilter !== 'none' ||
+      layer.boxShadow !== 'none' ||
+      layer.filter !== 'none'
+    ) {
+      return undefined;
+    }
+
+    const layerColor = parseCssColor(layer.backgroundColor);
+    if (!layerColor) return undefined;
+    background = compositeColor(background, layerColor);
+    if (background.alpha >= 0.999) return background;
+  }
+
+  return undefined;
+}
+
+function verifiedRatio(
+  foreground: RgbaColor,
+  background: RgbaColor,
+  requiredRatio: number,
+  probe: ContrastProbe,
+): number {
+  const renderedForeground = compositeColor(foreground, background);
+  const ratio = contrastRatio(renderedForeground, background);
+  if (ratio < requiredRatio) {
+    throw new Error(
+      `contrast ${ratio.toFixed(2)}:1 is below ${requiredRatio}:1 for ${probe.selector} ` +
+        `(${JSON.stringify(probe.text)}; foreground ${probe.foreground}; ` +
+        `background rgb(${background.red.toFixed(0)} ${background.green.toFixed(0)} ${background.blue.toFixed(0)}))`,
+    );
+  }
+  return ratio;
+}
+
+async function sampleRenderedBackground(
+  page: Page,
+  probe: ContrastProbe,
+  foreground: RgbaColor,
+  requiredRatio: number,
+): Promise<number> {
+  const locator = page.locator(`[data-rendered-contrast-probe="${probe.id}"]`);
+  await requireCount(locator, 1, `rendered contrast probe ${probe.id}`);
+  await locator.evaluate((element) => {
+    element.scrollIntoView({ block: 'center', inline: 'center' });
+  });
+  await page.evaluate(
+    () => new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame())),
+  );
+
+  await page.evaluate((id) => {
+    const style = document.createElement('style');
+    style.dataset.renderedContrastStyle = id;
+    style.textContent = `
+      [data-rendered-contrast-probe="${CSS.escape(id)}"],
+      [data-rendered-contrast-probe="${CSS.escape(id)}"] * {
+        color: transparent !important;
+        fill: transparent !important;
+        stroke: transparent !important;
+        text-decoration-color: transparent !important;
+        text-shadow: none !important;
+        -webkit-text-fill-color: transparent !important;
+      }
+    `;
+    document.head.append(style);
+  }, probe.id);
+
+  try {
+    await page.evaluate(
+      () => new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame())),
+    );
+    const screenshot = await locator.screenshot({ animations: 'disabled', scale: 'css' });
+    const { data, info } = await sharp(screenshot)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const horizontalScale = info.width / probe.elementWidth;
+    const verticalScale = info.height / probe.elementHeight;
+    const samplingRects =
+      probe.textRects.length > 0
+        ? probe.textRects
+        : [{ bottom: probe.elementHeight, left: 0, right: probe.elementWidth, top: 0 }];
+    let minimumRatio = Number.POSITIVE_INFINITY;
+    let minimumBackground: RgbaColor | undefined;
+
+    for (const rect of samplingRects) {
+      const startX = Math.max(0, Math.floor(rect.left * horizontalScale));
+      const endX = Math.min(info.width, Math.ceil(rect.right * horizontalScale));
+      const startY = Math.max(0, Math.floor(rect.top * verticalScale));
+      const endY = Math.min(info.height, Math.ceil(rect.bottom * verticalScale));
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = startX; x < endX; x += 1) {
+          const offset = (y * info.width + x) * info.channels;
+          if (data[offset + 3] < 250) continue;
+          const pixel: RgbaColor = {
+            red: data[offset],
+            green: data[offset + 1],
+            blue: data[offset + 2],
+            alpha: 1,
+          };
+          const ratio = contrastRatio(compositeColor(foreground, pixel), pixel);
+          if (ratio < minimumRatio) {
+            minimumRatio = ratio;
+            minimumBackground = pixel;
+          }
+        }
+      }
+    }
+
+    if (!Number.isFinite(minimumRatio) || !minimumBackground) {
+      throw new Error(`rendered contrast probe ${probe.id} produced no pixels`);
+    }
+    return verifiedRatio(foreground, minimumBackground, requiredRatio, probe);
+  } finally {
+    await page.evaluate((id) => {
+      document.querySelector(`style[data-rendered-contrast-style="${CSS.escape(id)}"]`)?.remove();
+    }, probe.id);
+  }
+}
+
+async function verifyIncompleteColorContrast(
+  page: Page,
+  finding: AxeFinding,
+): Promise<ContrastEvidence> {
+  let minimumRatio = Number.POSITIVE_INFINITY;
+  let probeCount = 0;
+  let renderedSampleCount = 0;
+  const reasonCounts = new Map<string, number>();
+
+  for (const node of finding.nodes) {
+    for (const reason of axeContrastReasons(node)) {
+      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+    }
+    const probes = await collectContrastProbes(page, node);
+    if (probes.length === 0) {
+      throw new Error(`axe contrast target has no visible text: ${axeNodeSelector(node)}`);
+    }
+
+    try {
+      for (const probe of probes) {
+        if (probe.unsupportedForegroundEffects.length > 0) {
+          throw new Error(
+            `unsupported foreground effects for ${probe.selector}: ${probe.unsupportedForegroundEffects.join(', ')}`,
+          );
+        }
+        const foreground = parseCssColor(probe.foreground);
+        if (!foreground || foreground.alpha === 0) {
+          throw new Error(
+            `cannot resolve foreground ${JSON.stringify(probe.foreground)} for ${probe.selector}`,
+          );
+        }
+        const requiredRatio = requiredContrastRatio(probe.fontSize, probe.fontWeight);
+        const background = probe.requiresRenderedSample ? undefined : resolveSolidBackground(probe);
+        const ratio = background
+          ? verifiedRatio(foreground, background, requiredRatio, probe)
+          : await sampleRenderedBackground(page, probe, foreground, requiredRatio);
+        if (!background) renderedSampleCount += 1;
+        minimumRatio = Math.min(minimumRatio, ratio);
+        probeCount += 1;
+      }
+    } finally {
+      await page
+        .locator(`[data-rendered-contrast-probe^="rendered-contrast-"]`)
+        .evaluateAll((elements) => {
+          for (const element of elements) {
+            element.removeAttribute('data-rendered-contrast-probe');
+          }
+        });
+    }
+  }
+
+  if (!Number.isFinite(minimumRatio) || probeCount === 0) {
+    throw new Error('axe returned a color-contrast finding without verifiable evidence');
+  }
+  const reasons = [...reasonCounts.entries()]
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(', ');
+  return { minimumRatio, probeCount, reasons, renderedSampleCount };
+}
+
+async function verifyContrastGateCanary(browser: Browser): Promise<void> {
+  const context = await browser.newContext({ viewport: { width: 320, height: 180 } });
+  const page = await context.newPage();
+
+  const verifyCanary = async (
+    foreground: string,
+    shouldPass: boolean,
+    textFillColor = 'currentcolor',
+  ): Promise<void> => {
+    await page.setContent(`
+      <!doctype html>
+      <html lang="en">
+        <body style="margin: 0; background: white">
+          <p style="margin: 1rem; padding: 1rem; color: ${foreground}; -webkit-text-fill-color: ${textFillColor}; background: linear-gradient(90deg, #f8f8fa, #d8dce8)">
+            Rendered contrast canary
+          </p>
+        </body>
+      </html>
+    `);
+    const axe = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
+    const finding = axe.incomplete.find((candidate) => candidate.id === 'color-contrast');
+    if (!finding) throw new Error('rendered contrast canary did not produce an axe incomplete');
+
+    try {
+      await verifyIncompleteColorContrast(page, finding);
+      if (!shouldPass) throw new Error('rendered contrast gate accepted its intentional failure');
+    } catch (error) {
+      if (shouldPass) throw error;
+      if (!(error instanceof Error) || !error.message.includes('is below')) throw error;
+    }
+  };
+
+  try {
+    await verifyCanary('rgb(17 17 20)', true);
+    await verifyCanary('rgb(190 194 204)', false);
+    await verifyCanary('rgb(17 17 20)', false, 'rgb(190 194 204)');
+    console.log('✓ rendered contrast gate canary: accepted AA and rejected sub-AA color/text-fill');
+  } finally {
+    await context.close();
+  }
 }
 
 async function auditScenario(
@@ -523,13 +935,23 @@ async function auditScenario(
     }
 
     const axe = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+    const verifiedIncomplete = new Set<AxeFinding>();
     for (const incomplete of axe.incomplete) {
-      console.warn(`  ? ${label}: manual review: ${formatAxeFinding(incomplete)}`);
+      if (incomplete.id === 'color-contrast') {
+        const evidence = await verifyIncompleteColorContrast(page, incomplete);
+        verifiedIncomplete.add(incomplete);
+        console.log(
+          `  ✓ ${label}: verified ${evidence.probeCount} indeterminate contrast samples ` +
+            `(minimum ${evidence.minimumRatio.toFixed(2)}:1; ${evidence.renderedSampleCount} rendered backgrounds; ` +
+            `${evidence.reasons || 'unclassified'})`,
+        );
+      } else {
+        console.warn(`  ? ${label}: manual review: ${formatAxeFinding(incomplete)}`);
+      }
     }
     const blockingIncomplete = axe.incomplete.filter(
       (finding) =>
-        BLOCKING_INCOMPLETE_IMPACTS.has(finding.impact ?? '') &&
-        !MANUAL_REVIEW_ONLY_INCOMPLETE_RULES.has(finding.id),
+        BLOCKING_INCOMPLETE_IMPACTS.has(finding.impact ?? '') && !verifiedIncomplete.has(finding),
     );
     if (blockingIncomplete.length > 0) {
       throw new Error(
@@ -564,6 +986,7 @@ let browser: Browser | undefined;
 
 try {
   browser = await chromium.launch({ headless: true });
+  await verifyContrastGateCanary(browser);
   for (const viewport of viewports) {
     for (const route of routes) await auditScenario(browser, staticServer.origin, route, viewport);
   }

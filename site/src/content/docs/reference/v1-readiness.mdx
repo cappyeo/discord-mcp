@@ -95,9 +95,11 @@ real gates, not aspirational release notes.
       demo with zero axe WCAG A/AA or best-practice violations, no console or
       same-origin HTTP failures, no horizontal viewport overflow, and working
       representative keyboard interactions. Unreviewed serious or critical axe
-      findings also fail the gate; unresolved contrast calculations remain
-      visible for manual review. Automated axe coverage complements rather than
-      replaces the independent documentation review below
+      findings also fail the gate. Contrast cases that axe cannot resolve are
+      independently verified from computed solid layers or rendered pixels;
+      unknown cases and samples below the applicable WCAG AA ratio fail rather
+      than entering a rule-wide allowlist. Automated coverage complements rather
+      than replaces the independent documentation review below
 - [x] No critical (P0) bugs currently filed against the published versions -
       re-checked at tag time on 2026-08-10; the sole open issue is the external
       documentation review request below

@@ -33,7 +33,7 @@ const { hasSidebar } = Astro.locals.starlightRoute;
   {
     !hasSidebar && (
       <details class="home-menu md:sl-hidden print:hidden">
-        <summary aria-label="Open documentation menu">Menu</summary>
+        <summary aria-label="Open documentation menu"></summary>
         <nav aria-label="Documentation">
           <a href="/discord-mcp/start/">Start</a>
           <a href="/discord-mcp/recipes/">Guides</a>
@@ -115,7 +115,7 @@ const { hasSidebar } = Astro.locals.starlightRoute;
       width: var(--sl-menu-button-size);
       height: var(--sl-menu-button-size);
       overflow: hidden;
-      color: transparent;
+      color: var(--sl-color-black);
       border-radius: 999px;
       background: var(--sl-color-white);
       box-shadow: var(--sl-shadow-md);
