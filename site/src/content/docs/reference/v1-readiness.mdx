@@ -5,15 +5,15 @@ sidebar:
   order: 5
 ---
 
-discord-mcp v0.16.11 is the current public release. v1.0.0 commits to API stability
+discord-mcp v0.17.0 is the current public release. v1.0.0 commits to API stability
 for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
 below is ticked. Re-evaluate the evidence before each release; unchecked items are
 real gates, not aspirational release notes.
 
-## Current source evidence (public release: v0.16.11)
+## Current source evidence (public release: v0.17.0)
 
-- 201 MCP tools across 30 categories.
-- 1280 passing tests (835 `@discord-mcp/core` + 373 `@discord-mcp/cli` + 72
+- 202 MCP tools across 31 categories.
+- 1303 passing tests (853 `@discord-mcp/core` + 373 `@discord-mcp/cli` + 77
   `site`), 0 unconditional skips, and 1 documented `it.todo` for the remaining
   OTel parent-child integration seam.
 - Coverage gates run in CI for `@discord-mcp/core`: 98% statements and lines,
@@ -22,11 +22,11 @@ real gates, not aspirational release notes.
   debounce, REST policy, progressive tool discovery, and stateless HTTP server
   construction.
 - The production dependency audit passes through the moderate threshold on
-  2026-08-08. The current
+  2026-08-09. The current
   [HTTP transport security audit](/discord-mcp/operations/security-audit-2026-08-08/)
   covers authentication, Host/Origin, resource exhaustion, session and bot
   isolation, safety-policy parity, redaction and the reverse-proxy boundary.
-- `@discord-mcp/core@0.16.11` and `@discord-mcp/cli@0.16.11` are public on npm with
+- `@discord-mcp/core@0.17.0` and `@discord-mcp/cli@0.17.0` are public on npm with
   provenance. MCP Registry metadata and the public documentation are deployed.
 
 ## Pre-conditions for v1.0.0 tag
@@ -41,14 +41,14 @@ real gates, not aspirational release notes.
 - [x] 0 unconditional `.skip` calls, 1 documented `it.todo`
 - [x] Performance benchmarks for 6 hot paths
 - [x] Production dependency audit in CI - re-run
-      `pnpm audit --audit-level=moderate --prod` at tag time; last pass 2026-08-08
+      `pnpm audit --audit-level=moderate --prod` at tag time; last pass 2026-08-09
 - [x] vitest globalSetup auto-builds mcp-core if `dist/` missing
 - [x] tsdown deprecation cleared (`external` -> `deps.neverBundle`)
 - [x] GitHub Actions Node 24 opt-in
 - [x] Clean lint output with zero warnings. Biome 2.4 full Astro support analyzes
       frontmatter and template bindings together while retaining recommended
       checks for component scripts, accessibility, and scoped CSS
-- [x] Test count ≥ 1000 (1280 passing)
+- [x] Test count ≥ 1000 (1303 passing)
 - [x] Coverage gate enforced in CI (98% statements and lines, 97% functions,
       73% branches)
 - [x] No load-sensitive tests - the suite passes on consecutive cold-cache
@@ -73,8 +73,8 @@ real gates, not aspirational release notes.
 - [x] CI fails if the `workspace:` protocol survives into a published
       manifest - npm does not rewrite it, and such a tarball is unrecoverable
       without a deprecate + republish
-- [x] `@discord-mcp/core` published to npm registry (current: 0.16.11)
-- [x] `@discord-mcp/cli` published to npm registry (current: 0.16.11)
+- [x] `@discord-mcp/core` published to npm registry (current: 0.17.0)
+- [x] `@discord-mcp/cli` published to npm registry (current: 0.17.0)
 - [x] `discord-mcp init` quickstart works after a clean global npm install -
       manually verified from the public 0.16.9 package on 2026-08-08
 - [x] CI installs both freshly packed tarballs into an empty consumer project,
@@ -90,8 +90,9 @@ real gates, not aspirational release notes.
 ### Quality
 
 - [x] No critical (P0) bugs currently filed against the published versions -
-      re-check at tag time; there were no open GitHub issues on 2026-08-08
-- [x] No high-priority (P1) bugs currently unresolved - re-check at tag time
+      re-checked at tag time on 2026-08-09; the sole open issue is the external
+      documentation review request below
+- [x] No high-priority (P1) bugs currently unresolved - re-checked on 2026-08-09
 - [ ] Documentation reviewed by external party. This requires at least one
       independent reviewer to complete the published
       [external documentation review](/discord-mcp/reference/external-documentation-review/)
@@ -113,14 +114,14 @@ removal or rename fails CI instead of reaching a consumer.
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
-- [x] Tool surface (201 tools) frozen - `src/tools/registry.invariants.test.ts`
+- [x] Tool surface (202 tools) frozen - `src/tools/registry.invariants.test.ts`
       also asserts destructive-iff-confirm-gated and complete annotations
 
 ## v1.0.0 commitment
 
 - **Semver**: breaking changes require a major bump (v2.0.0).
 - **API stability**: `@discord-mcp/core` exports stable for 6+ months.
-- **Tool surface**: 201 tools maintained; new tools = minor version.
+- **Tool surface**: 202 tools maintained; new tools = minor version.
 - **CLI flags**: `discord-mcp serve|doctor|init|migrate` flag set frozen.
 - **Config**: env var names + defaults frozen (additions allowed; renames
   forbidden).

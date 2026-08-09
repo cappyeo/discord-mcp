@@ -4,6 +4,7 @@ import { getToolDetailContext } from '../src/components/starlight/toolNavigation
 describe('tool detail navigation context', () => {
   it.each([
     ['tools/messages/send', 'messages', 'Messages'],
+    ['tools/permissions/explain', 'permissions', 'Permissions'],
     ['tools/components_v2/send.mdx', 'components_v2', 'Components v2'],
     ['/tools/app_emojis/create/', 'app_emojis', 'App emojis'],
   ])('parses %s', (routeId, category, categoryLabel) => {

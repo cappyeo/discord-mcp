@@ -87,7 +87,7 @@
  *      discord-ops ships profiles like `monitoring` (7 tools), `readonly`
  *      (7), `moderation` (7), `messaging` (5), `channels` (7), `webhooks`
  *      (6), and `full` (49). They reduce schema overhead by hiding tools
- *      from the client. discord-mcp ships the full surface (201 tools at
+ *      from the client. discord-mcp ships the full surface (202 tools at
  *      Phase D) and filters the advertised registry server-side with
  *      `MCP_CATEGORIES`. This isn't a translation
  *      problem - there's no source code for "the lite profile" that

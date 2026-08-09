@@ -50,9 +50,9 @@ describe('progressive tool surface', () => {
     ]);
   });
 
-  it('keeps the full 201-tool surface as the compatibility default', async () => {
+  it('keeps the full 202-tool surface as the compatibility default', async () => {
     const { tools } = await fullClient.listTools();
-    expect(tools).toHaveLength(201);
+    expect(tools).toHaveLength(202);
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 
@@ -138,6 +138,22 @@ describe('progressive tool surface', () => {
         }),
       }),
       annotations: expect.objectContaining({ openWorldHint: true }),
+    });
+
+    const permission = await progressiveClient.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'permissions_explain' },
+    });
+    expect(permission.isError).toBe(false);
+    expect(permission.structuredContent).toMatchObject({
+      total_matches: 1,
+      matches: [
+        expect.objectContaining({
+          name: 'permissions_explain',
+          category: 'permissions',
+          dispatcher: 'mcp_tools_read',
+        }),
+      ],
     });
   });
 

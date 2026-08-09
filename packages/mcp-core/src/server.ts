@@ -182,6 +182,7 @@ import SubscriptionsGet from './tools/monetization/subscriptions_get.js';
 import SubscriptionsList from './tools/monetization/subscriptions_list.js';
 import OnboardingGet from './tools/onboarding/get.js';
 import OnboardingModify from './tools/onboarding/modify.js';
+import PermissionsExplain from './tools/permissions/explain.js';
 import PollsEnd from './tools/polls/end.js';
 import PollsGetVoters from './tools/polls/get_voters.js';
 import ReactionsCreate from './tools/reactions/create.js';
@@ -309,7 +310,7 @@ function getToolCategories(toolStore: ToolStore): ReadonlyMap<string, string> {
   return categories;
 }
 
-/** Compile one tool contract on first use instead of all 201 at HTTP startup. */
+/** Compile one tool contract on first use instead of all 202 at HTTP startup. */
 function compileToolContracts(tool: Tool): ToolContractVariants {
   const cached = compiledToolContracts.get(tool);
   if (cached !== undefined) return cached;
@@ -712,6 +713,10 @@ async function createSharedToolStore(): Promise<ToolStore> {
     piece: MembersGetCurrentUser as unknown as ConcreteTool,
   });
   await toolStore.loadPiece({ name: 'roles_list', piece: RolesList as unknown as ConcreteTool });
+  await toolStore.loadPiece({
+    name: 'permissions_explain',
+    piece: PermissionsExplain as unknown as ConcreteTool,
+  });
   await toolStore.loadPiece({
     name: 'roles_create',
     piece: RolesCreate as unknown as ConcreteTool,
@@ -1346,7 +1351,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
           'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
         ]
       : [
-          'Discord MCP server: 201 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
+          'Discord MCP server: 202 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
           'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
           'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
           'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls.',

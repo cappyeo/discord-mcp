@@ -104,6 +104,7 @@ export default defineConfig({
               items: [
                 'tools/members',
                 'tools/roles',
+                'tools/permissions',
                 'tools/automod',
                 'tools/guild',
                 'tools/templates',

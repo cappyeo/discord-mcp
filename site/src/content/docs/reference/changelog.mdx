@@ -9,6 +9,25 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.17.0 - Explain effective Discord permissions
+
+Released **2026-08-09**.
+
+- Added `permissions_explain`, a read-only preflight tool that evaluates a
+  member or role against guild permissions, channel overwrites, implicit
+  prerequisites, active timeouts, thread inheritance, and supported role
+  hierarchy actions.
+- Results include a structured decision trace, missing or ineffective
+  permissions, hierarchy evidence, warnings, and confidence. When Discord does
+  not expose enough evidence, the tool returns a partial unknown result instead
+  of inventing an allow or deny decision.
+- Added the `permissions` category and expanded progressive discovery, guild
+  allowlist, generated-reference, and contract coverage for the 202-tool,
+  31-category catalog.
+- Updated `discord-api-types` to 0.38.53 for current permission flags. The tool
+  remains advisory: it does not grant permissions, mutate Discord, or replace
+  Discord's final server-side authorization decision.
+
 ## v0.16.11 - Faster stateless HTTP startup
 
 Released **2026-08-09**.

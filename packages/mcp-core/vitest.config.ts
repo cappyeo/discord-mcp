@@ -6,14 +6,15 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     setupFiles: ['../mcp-server-mocks/src/setup.ts'],
     // Registry-wide suites (tools/registry.invariants, audit/redact) walk the
-    // tools tree and dynamically import all 201 modules. That takes ~4s alone
+    // tools tree and dynamically import all 202 modules. That takes ~4s alone
     // and exceeds the 5000ms default once 250 other files are competing for
     // worker threads - the same load sensitivity that made the CLI doctor
     // suite flaky. 20s still trips on a genuine hang.
     testTimeout: 20_000,
-    // registry.invariants does its walk in beforeAll, which is governed by
-    // hookTimeout (default 10s) rather than testTimeout.
-    hookTimeout: 30_000,
+    // Registry walks run in beforeAll, which is governed by hookTimeout. Give
+    // them enough headroom when the full 270-file suite is saturating workers;
+    // focused runs still finish in about 10s.
+    hookTimeout: 60_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

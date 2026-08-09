@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index - 201 + 30 + 1
+ * tool, one index per category, and a top-level tools index - 202 + 31 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -100,7 +100,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 201 tools. Headings are bold-asterisk markdown - capture body text up to
+ * 202 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -461,6 +461,12 @@ export function buildSchemaExample(
     example.positions = [{ id: '123456789012345678', position: 1 }];
   }
 
+  if (options.toolName === 'permissions_explain') {
+    example.user_id = '123456789012345679';
+    example.channel_id = '123456789012345680';
+    example.action = 'send_messages';
+  }
+
   if (options.toolName === 'messages_bulk_delete' && fields.message_ids) {
     example.message_ids = ['123456789012345678', '123456789012345679'];
   }
@@ -801,10 +807,11 @@ export function renderToolsIndex(byCategory: Map<string, ToolMetadata[]>): strin
     {
       title: 'Moderation',
       description:
-        'Members, roles, AutoMod, server settings, Guild Templates, invites, audit records, and onboarding.',
+        'Members, roles, permission explanations, AutoMod, server settings, Guild Templates, invites, audit records, and onboarding.',
       categories: [
         'members',
         'roles',
+        'permissions',
         'automod',
         'guild',
         'templates',
