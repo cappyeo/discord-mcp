@@ -95,9 +95,9 @@ describe('MCP protocol contract', () => {
     expect(text).toMatch(/channel_id/);
   });
 
-  it('lists 202 tools after auto-discovery', async () => {
+  it('lists 203 tools after auto-discovery', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(202);
+    expect(tools.length).toBe(203);
     const names = new Set(tools.map((t) => t.name));
     for (const expected of [
       'messages_send',
@@ -210,12 +210,12 @@ describe('MCP protocol contract', () => {
 
   it('sends instructions that describe the actual tool surface', () => {
     // Was 'v0/Plan-1 - only messages_send available', injected into the
-    // agent's system context on a 202-tool server - actively steering the
+    // agent's system context on a 203-tool server - actively steering the
     // model away from 198 of them.
     const instructions = client.getInstructions() ?? '';
     expect(instructions).not.toContain('only messages_send');
     expect(instructions).not.toContain('Plan-1');
-    expect(instructions).toContain('202 tools');
+    expect(instructions).toContain('203 tools');
     expect(instructions).toContain('__confirm');
     expect(instructions).toContain('untrusted');
   });

@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index - 202 + 31 + 1
+ * tool, one index per category, and a top-level tools index - 203 + 31 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -100,7 +100,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 202 tools. Headings are bold-asterisk markdown - capture body text up to
+ * 203 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -518,6 +518,30 @@ export function buildOutputExample(tool: ToolMetadata): Record<string, unknown> 
       component: { type: 12, items: [{ media: { url: 'https://example.com/image.png' } }] },
     },
     webhooks_execute: { enqueued: true },
+    permissions_audit_channel: {
+      guild_id: '123456789012345678',
+      channel_id: '123456789012345679',
+      permission_source_channel_id: '123456789012345679',
+      requested_actions: ['view_channel'],
+      roles: [
+        {
+          id: '123456789012345680',
+          name: 'Member',
+          position: 1,
+          managed: false,
+          administrator: false,
+          actions: { view_channel: true },
+        },
+      ],
+      summary: {
+        role_count: 1,
+        by_action: { view_channel: { allowed: 1, denied: 0, unknown: 0 } },
+      },
+      member_overwrite_count: 0,
+      unknown_permission_bits: '0',
+      warnings: [],
+      confidence: 'complete',
+    },
     intelligence_summarize_channel: {
       summary: 'The team shipped the release and assigned one follow-up.',
       key_topics: ['release'],

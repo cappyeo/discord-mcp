@@ -13,12 +13,12 @@
 
 <p align="center">
   <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
-  202 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
+  203 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
 </p>
 
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/quickstart/"><strong>Quickstart</strong></a>
-  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 202 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 203 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
@@ -126,7 +126,7 @@ the current OAuth boundary.
 | Area | Examples |
 | --- | --- |
 | Messages and channels | Send, edit, pin, search, manage threads, forums, and permissions |
-| Moderation and safety | Permission preflight, role hierarchy, bans, AutoMod, bulk actions, and audit-aware operations |
+| Moderation and safety | Permission preflight, channel role audits, role hierarchy, bans, AutoMod, bulk actions, and audit-aware operations |
 | Community operations | Members, roles, invites, onboarding, events, polls, soundboard, and voice |
 | Application APIs | Slash commands, interactions, application emojis, webhooks, and entitlements |
 | Agent workflows | Tool output schemas, predictable errors, migration adapters, and client config generation |
@@ -190,7 +190,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.17.0**; this source tree's core exports, CLI surface, environment schema, and 202-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.18.0**; this source tree's core exports, CLI surface, environment schema, and 203-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

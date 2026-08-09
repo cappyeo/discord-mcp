@@ -9,6 +9,27 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.18.0 - Audit channel access across roles
+
+Released **2026-08-10**.
+
+- Added `permissions_audit_channel`, a read-only role-baseline audit for one
+  channel or thread. It evaluates every guild role independently with
+  `@everyone` for view, send, and manage access, with an optional action subset
+  to reduce output.
+- Standard channels require two Discord GETs and threads require three,
+  regardless of role count. The tool does not fetch members, make per-role
+  requests, or write to Discord; member-specific overwrites are counted and
+  explicitly excluded from role-level conclusions.
+- Thread evaluation uses parent overwrites, `SEND_MESSAGES_IN_THREADS`, and
+  `MANAGE_THREADS`. Private-thread membership that Discord cannot prove remains
+  unknown instead of being guessed.
+- Discord response identities and permission evidence are validated before
+  evaluation. Malformed or conflicting payloads fail closed, while missing
+  evidence and permission bits unknown to this build produce partial results
+  with warnings. The generated catalog now covers 203 tools across 31
+  categories.
+
 ## v0.17.0 - Explain effective Discord permissions
 
 Released **2026-08-09**.

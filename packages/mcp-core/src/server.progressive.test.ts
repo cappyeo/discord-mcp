@@ -50,9 +50,9 @@ describe('progressive tool surface', () => {
     ]);
   });
 
-  it('keeps the full 202-tool surface as the compatibility default', async () => {
+  it('keeps the full 203-tool surface as the compatibility default', async () => {
     const { tools } = await fullClient.listTools();
-    expect(tools).toHaveLength(202);
+    expect(tools).toHaveLength(203);
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 
@@ -150,6 +150,22 @@ describe('progressive tool surface', () => {
       matches: [
         expect.objectContaining({
           name: 'permissions_explain',
+          category: 'permissions',
+          dispatcher: 'mcp_tools_read',
+        }),
+      ],
+    });
+
+    const channelAudit = await progressiveClient.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'permissions_audit_channel' },
+    });
+    expect(channelAudit.isError).toBe(false);
+    expect(channelAudit.structuredContent).toMatchObject({
+      total_matches: 1,
+      matches: [
+        expect.objectContaining({
+          name: 'permissions_audit_channel',
           category: 'permissions',
           dispatcher: 'mcp_tools_read',
         }),

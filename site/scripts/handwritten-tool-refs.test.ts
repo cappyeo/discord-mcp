@@ -111,7 +111,7 @@ describe('hand-written docs only reference registered tools', () => {
     }
 
     expect(bad.sort(), 'hand-written docs reference tools that do not exist').toEqual([]);
-    // loadAllTools dynamically imports all 202 tool sources through tsx.
+    // loadAllTools dynamically imports all 203 tool sources through tsx.
   }, 60_000);
 });
 

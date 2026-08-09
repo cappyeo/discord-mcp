@@ -61,21 +61,22 @@ afterEach(async () => {
 });
 
 describe('ALLOWED_GUILDS server boundary', () => {
-  it('preserves the full 202-tool compatibility surface when unset', async () => {
+  it('preserves the full 203-tool compatibility surface when unset', async () => {
     const { client } = await connect();
-    expect((await client.listTools()).tools).toHaveLength(202);
+    expect((await client.listTools()).tools).toHaveLength(203);
   });
 
-  it('hides unprovable routes and advertises the remaining 180 tools', async () => {
+  it('hides unprovable routes and advertises the remaining 181 tools', async () => {
     const { client } = await connect({ ALLOWED_GUILDS: ALLOWED });
     const names = (await client.listTools()).tools.map((tool) => tool.name);
-    expect(names).toHaveLength(180);
+    expect(names).toHaveLength(181);
     expect(names).not.toContain('interactions_create_response');
     expect(names).not.toContain('commands_create_global');
     expect(names).not.toContain('users_create_dm');
     expect(names).toContain('users_get_current');
     expect(names).toContain('users_list_current_user_guilds');
     expect(names).toContain('mcp_pipeline');
+    expect(names).toContain('permissions_audit_channel');
     expect(names).toContain('permissions_explain');
     expect(client.getInstructions()).toContain('ALLOWED_GUILDS is active');
   });

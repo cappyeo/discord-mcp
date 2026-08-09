@@ -1,11 +1,20 @@
 import { container } from '@sapphire/pieces';
-import { ChannelType, OverwriteType, PermissionFlagsBits, Routes } from 'discord-api-types/v10';
+import { ChannelType, PermissionFlagsBits, Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { DiscordNotFoundError, ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { PermissionString } from '../_lib/permissions.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId, RoleId, Snowflake, UserId } from '../_lib/snowflake.js';
+import {
+  ALL_KNOWN_PERMISSION_BITS,
+  applyPermissionBits,
+  combineRoleOverwriteBits,
+  compareRoles,
+  indexPermissionOverwrites,
+  type RawChannel,
+  type RawRole,
+} from './_lib/evaluator.js';
 
 function permissionName(name: string): string {
   return name
@@ -20,7 +29,6 @@ const PERMISSION_ENTRIES = Object.entries(PermissionFlagsBits).map(
 const PERMISSIONS_BY_NAME = new Map<string, bigint>(PERMISSION_ENTRIES);
 const PERMISSION_NAMES = [...PERMISSIONS_BY_NAME.keys()] as [string, ...string[]];
 const PermissionName = z.enum(PERMISSION_NAMES);
-const ALL_KNOWN_PERMISSIONS = PERMISSION_ENTRIES.reduce((mask, [, bit]) => mask | bit, 0n);
 
 const ACTIONS = [
   'view_channel',
@@ -132,33 +140,10 @@ interface RawGuild {
   owner_id: string;
 }
 
-interface RawRole {
-  id: string;
-  name: string;
-  position: number;
-  permissions: string;
-  managed: boolean;
-}
-
 interface RawMember {
   user: { id: string };
   roles: string[];
   communication_disabled_until?: string | null;
-}
-
-interface RawOverwrite {
-  id: string;
-  type: number;
-  allow: string;
-  deny: string;
-}
-
-interface RawChannel {
-  id: string;
-  type: number;
-  guild_id?: string;
-  parent_id?: string | null;
-  permission_overwrites?: RawOverwrite[];
 }
 
 interface DecisionTraceEntry {
@@ -190,7 +175,7 @@ function applyPermissions(
   deny: bigint,
   note: string,
 ): bigint {
-  const after = (before & ~deny) | allow;
+  const after = applyPermissionBits(before, allow, deny);
   trace.push({
     stage,
     before: before.toString(),
@@ -200,12 +185,6 @@ function applyPermissions(
     note,
   });
   return after;
-}
-
-function compareRoles(left: RawRole, right: RawRole): number {
-  if (left.position !== right.position) return left.position - right.position;
-  if (left.id === right.id) return 0;
-  return BigInt(left.id) < BigInt(right.id) ? 1 : -1;
 }
 
 function highestRole(
@@ -611,7 +590,7 @@ export default defineTool({
         trace,
         'guild_owner',
         effective,
-        ALL_KNOWN_PERMISSIONS,
+        ALL_KNOWN_PERMISSION_BITS,
         0n,
         'Guild ownership grants every known permission and bypasses channel overwrites.',
       );
@@ -620,7 +599,7 @@ export default defineTool({
         trace,
         'administrator',
         effective,
-        ALL_KNOWN_PERMISSIONS,
+        ALL_KNOWN_PERMISSION_BITS,
         0n,
         'ADMINISTRATOR grants every known permission and bypasses channel overwrites.',
       );
@@ -648,12 +627,11 @@ export default defineTool({
           );
         }
         const overwrites = permissionChannel.permission_overwrites ?? [];
-        const everyoneOverwrite = overwrites.find(
-          (overwrite) => overwrite.type === OverwriteType.Role && overwrite.id === args.guild_id,
-        );
-        const everyoneAllow = BigInt(everyoneOverwrite?.allow ?? '0');
-        const everyoneDeny = BigInt(everyoneOverwrite?.deny ?? '0');
-        observedPermissions |= everyoneAllow | everyoneDeny;
+        const overwriteIndex = indexPermissionOverwrites(overwrites);
+        const everyoneOverwrite = overwriteIndex.roles.get(args.guild_id);
+        const everyoneAllow = everyoneOverwrite?.allow ?? 0n;
+        const everyoneDeny = everyoneOverwrite?.deny ?? 0n;
+        observedPermissions |= overwriteIndex.observed;
         effective = applyPermissions(
           trace,
           'channel_everyone',
@@ -663,34 +641,23 @@ export default defineTool({
           'Apply the channel @everyone overwrite: deny first, then allow.',
         );
 
-        let roleAllow = 0n;
-        let roleDeny = 0n;
-        for (const roleId of actorRoleIds) {
-          if (roleId === args.guild_id) continue;
-          const overwrite = overwrites.find(
-            (candidate) => candidate.type === OverwriteType.Role && candidate.id === roleId,
-          );
-          if (!overwrite) continue;
-          roleAllow |= BigInt(overwrite.allow);
-          roleDeny |= BigInt(overwrite.deny);
-        }
-        observedPermissions |= roleAllow | roleDeny;
+        const roleOverwrites = combineRoleOverwriteBits(
+          overwriteIndex,
+          actorRoleIds.filter((roleId) => roleId !== args.guild_id),
+        );
         effective = applyPermissions(
           trace,
           'channel_roles',
           effective,
-          roleAllow,
-          roleDeny,
+          roleOverwrites.allow,
+          roleOverwrites.deny,
           'Combine every subject-role overwrite, then apply deny before allow.',
         );
 
         if (hasUser) {
-          const memberOverwrite = overwrites.find(
-            (overwrite) => overwrite.type === OverwriteType.Member && overwrite.id === args.user_id,
-          );
-          const memberAllow = BigInt(memberOverwrite?.allow ?? '0');
-          const memberDeny = BigInt(memberOverwrite?.deny ?? '0');
-          observedPermissions |= memberAllow | memberDeny;
+          const memberOverwrite = overwriteIndex.members.get(args.user_id as string);
+          const memberAllow = memberOverwrite?.allow ?? 0n;
+          const memberDeny = memberOverwrite?.deny ?? 0n;
           effective = applyPermissions(
             trace,
             'channel_member',
@@ -793,7 +760,7 @@ export default defineTool({
         : confidence === 'partial'
           ? null
           : true;
-    const unknownPermissionBits = observedPermissions & ~ALL_KNOWN_PERMISSIONS;
+    const unknownPermissionBits = observedPermissions & ~ALL_KNOWN_PERMISSION_BITS;
     if (unknownPermissionBits !== 0n) {
       warnings.push(
         `Discord returned permission bits unknown to this build: ${unknownPermissionBits.toString()}.`,

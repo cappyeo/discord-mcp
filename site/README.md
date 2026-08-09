@@ -43,7 +43,7 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
 - `astro.config.ts` - Starlight config (sidebar, base path)
 - `src/content/docs/` - all MDX content
   - `start/` - quickstart pages (5)
-  - `tools/` - auto-generated tool reference (202 tools + 31 categories + 1 index)
+  - `tools/` - auto-generated tool reference (203 tools + 31 categories + 1 index)
   - `recipes/` - cookbook recipes (6)
   - `operations/` - operator guides (4)
   - `architecture/` - deep-dives (9)
