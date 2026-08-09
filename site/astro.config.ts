@@ -25,6 +25,8 @@ export default defineConfig({
       components: {
         Hero: './src/components/DiscordMcpHero.astro',
         Header: './src/components/starlight/Header.astro',
+        MarkdownContent: './src/components/starlight/MarkdownContent.astro',
+        MobileMenuToggle: './src/components/starlight/MobileMenuToggle.astro',
         PageSidebar: './src/components/starlight/PageSidebar.astro',
         PageTitle: './src/components/starlight/PageTitle.astro',
         Sidebar: './src/components/starlight/Sidebar.astro',

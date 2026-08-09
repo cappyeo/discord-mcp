@@ -11,12 +11,15 @@
     "generate-tools": "tsx scripts/generate-tool-docs.ts",
     "predev": "pnpm generate-tools",
     "prebuild": "pnpm generate-tools",
+    "test:browser": "tsx scripts/audit-rendered-docs.ts",
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
     "@astrojs/starlight": "^0.37.0",
+    "@axe-core/playwright": "^4.12.1",
     "@discord-mcp/core": "workspace:*",
     "astro": "^5.0.0",
+    "playwright": "^1.62.1",
     "sharp": "^0.33.0",
     "tsx": "^4.19.0",
     "vitest": "^3.2.0"

@@ -44,14 +44,14 @@ arguments and safety boundary, but the meta-tool calls are unnecessary.
    `doctor` reads the current terminal environment, not the client config. Set the token only
    for this terminal and run the online checks:
 
-   ```bash
+   ```bash title="Bash"
    read -rsp 'Discord bot token: ' DISCORD_TOKEN && printf '\n'
    export DISCORD_TOKEN
    discord-mcp doctor --profile devbot --online
    unset DISCORD_TOKEN
    ```
 
-   ```powershell
+   ```powershell title="PowerShell"
    $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
    discord-mcp doctor --profile devbot --online
    Remove-Item Env:DISCORD_TOKEN

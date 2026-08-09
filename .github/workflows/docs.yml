@@ -1,11 +1,18 @@
 name: Deploy docs
 
 on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'packages/mcp-core/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/docs.yml'
   push:
     branches: [main]
     paths:
       - 'site/**'
       - 'packages/mcp-core/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -13,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -32,11 +39,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @discord-mcp/core build
       - run: pnpm --filter site build
+      - name: Install Chromium headless shell
+        run: pnpm --filter site exec playwright install --with-deps --only-shell chromium
+      - name: Audit rendered docs
+        run: pnpm --filter site test:browser
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
         with:
           path: site/dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-24.04
     permissions:

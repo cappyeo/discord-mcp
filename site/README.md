@@ -27,6 +27,28 @@ pnpm --filter site preview
 Serves `dist/` locally on port 4321 - useful to verify Pagefind search
 before deploying.
 
+## Rendered browser and accessibility audit
+
+Install the lockfile-pinned Chromium headless shell once, build the site, then run the audit:
+
+```bash
+pnpm --filter site exec playwright install --only-shell chromium
+pnpm --filter site build
+pnpm --filter site test:browser
+```
+
+The audit serves the exact `site/dist` artifact on a loopback-only ephemeral port and checks 14
+desktop-light/mobile-dark scenarios across onboarding, generated tool docs, migration, and the live
+demo. It fails on any axe WCAG A/AA or best-practice violation, same-origin HTTP failure, browser
+runtime error, missing semantic landmark, broken representative interaction, or horizontal viewport
+overflow. It also blocks every serious or critical axe `incomplete` result except `color-contrast`,
+whose CSS-variable, gradient, and syntax-token cases remain visible for manual review because
+automation cannot prove full accessibility by itself.
+
+GitHub Actions installs Chromium with its system dependencies and runs this audit before the Pages
+artifact can be uploaded. Pull requests affecting the site, generated tool source, lockfile, or docs
+workflow run the same build-and-audit gate without deploying.
+
 ## Regenerate tool reference
 
 ```bash
@@ -52,6 +74,7 @@ into `site/src/content/docs/tools/`. Runs automatically before `dev` and
   - `DocsCardGrid.astro` - data-driven cards for section hubs
   - `ClientTabs.astro` - synchronized Claude Desktop / Claude Code / Cursor / generic tabs
 - `scripts/generate-tool-docs.ts` - tool MDX generator
+- `scripts/audit-rendered-docs.ts` - real-browser semantic, accessibility, interaction, and layout gate
 
 ## Authoring hand-written docs
 
@@ -70,7 +93,8 @@ and the shared MDX building blocks in `src/components/docs/`.
   environment-variable contract grouped by concern. Update both the reference
   and the hand-authored sidebar when a runtime setting changes.
 - Verify every documentation change with `pnpm --filter site test` and
-  `pnpm --filter site build` before publishing.
+  `pnpm --filter site build` before publishing. Run `pnpm --filter site test:browser` after the build
+  for any change that can affect rendered content, navigation, interaction, or layout.
 
 ## GitHub Pages setup (operators)
 

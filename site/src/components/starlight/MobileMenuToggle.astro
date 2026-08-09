@@ -1,0 +1,49 @@
+---
+import Default from '@astrojs/starlight/components/MobileMenuToggle.astro';
+---
+
+<Default />
+
+<script>
+  interface MenuHost extends HTMLElement {
+    setExpanded: (expanded: boolean) => void;
+    toggleExpanded: () => void;
+  }
+
+  for (const element of document.querySelectorAll<HTMLElement>('starlight-menu-button')) {
+    const host = element as MenuHost;
+    const button = host.querySelector<HTMLButtonElement>('button[aria-controls="starlight__sidebar"]');
+    if (!button) continue;
+
+    // Starlight 0.37 stores aria-expanded on the custom-element host. Keep its
+    // behavior and styling hooks while exposing the state only on the button.
+    host.removeAttribute('aria-expanded');
+    host.setExpanded = (expanded) => {
+      button.setAttribute('aria-expanded', String(expanded));
+      host.toggleAttribute('data-expanded', expanded);
+      document.body.toggleAttribute('data-mobile-menu-expanded', expanded);
+    };
+    host.toggleExpanded = () => host.setExpanded(button.getAttribute('aria-expanded') !== 'true');
+  }
+</script>
+
+<style is:global>
+  @layer starlight.core {
+    starlight-menu-button[data-expanded] button {
+      background-color: var(--sl-color-gray-2);
+      box-shadow: none;
+    }
+
+    starlight-menu-button[data-expanded] button .open-menu {
+      display: none;
+    }
+
+    starlight-menu-button[data-expanded] button .close-menu {
+      display: block;
+    }
+
+    [data-theme='light'] starlight-menu-button[data-expanded] button {
+      background-color: var(--sl-color-gray-5);
+    }
+  }
+</style>

@@ -34,6 +34,17 @@
   box-shadow: 0 1.5rem 3rem color-mix(in srgb, var(--sl-color-black) 24%, transparent);
 }
 
+.video-download-link {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.15em;
+}
+
+.sl-markdown-content .expressive-code pre[data-keyboard-scroll]:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+
 @media (max-width: 40rem) {
   .sl-markdown-content table {
     display: block;
@@ -43,6 +54,11 @@
     scrollbar-width: thin;
     border-inline: 1px solid var(--sl-color-hairline-light);
     box-shadow: inset -1rem 0 1rem -1rem color-mix(in srgb, var(--sl-color-black) 45%, transparent);
+  }
+
+  .sl-markdown-content table[data-keyboard-scroll]:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
   }
 
   .sl-markdown-content th,

@@ -13,9 +13,9 @@ real gates, not aspirational release notes.
 ## Current source evidence (public release: v0.18.0)
 
 - 203 MCP tools across 31 categories.
-- 1321 passing tests (871 `@discord-mcp/core` + 373 `@discord-mcp/cli` + 77
-  `site`), 0 unconditional skips, and 1 documented `it.todo` for the remaining
-  OTel parent-child integration seam.
+- More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
+  and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
+  remaining OTel parent-child integration seam.
 - Coverage gates run in CI for `@discord-mcp/core`: 98% statements and lines,
   97% functions, and 73% branches.
 - 6 reproducible performance benches cover message send, MCP pipeline, gateway
@@ -48,7 +48,7 @@ real gates, not aspirational release notes.
 - [x] Clean lint output with zero warnings. Biome 2.4 full Astro support analyzes
       frontmatter and template bindings together while retaining recommended
       checks for component scripts, accessibility, and scoped CSS
-- [x] Test count ≥ 1000 (1321 passing)
+- [x] Test count ≥ 1000 (more than 1,300 passing)
 - [x] Coverage gate enforced in CI (98% statements and lines, 97% functions,
       73% branches)
 - [x] No load-sensitive tests - the suite passes on consecutive cold-cache
@@ -89,6 +89,15 @@ real gates, not aspirational release notes.
 
 ### Quality
 
+- [x] The deployable docs artifact passes a real Chromium gate before GitHub
+      Pages upload. Fourteen desktop-light/mobile-dark scenarios cover the
+      homepage, onboarding, generated tool catalog/detail, migration, and live
+      demo with zero axe WCAG A/AA or best-practice violations, no console or
+      same-origin HTTP failures, no horizontal viewport overflow, and working
+      representative keyboard interactions. Unreviewed serious or critical axe
+      findings also fail the gate; unresolved contrast calculations remain
+      visible for manual review. Automated axe coverage complements rather than
+      replaces the independent documentation review below
 - [x] No critical (P0) bugs currently filed against the published versions -
       re-checked at tag time on 2026-08-10; the sole open issue is the external
       documentation review request below

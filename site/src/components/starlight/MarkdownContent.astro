@@ -1,0 +1,96 @@
+---
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+---
+
+<Default><slot /></Default>
+
+<script>
+  const managedTableAttribute = 'data-keyboard-scroll';
+  const managedCodeTabIndexAttribute = 'data-keyboard-scroll';
+  const managedCodeLabelAttribute = 'data-keyboard-scroll-label';
+  const managedCodeRoleAttribute = 'data-keyboard-scroll-role';
+  const tables = Array.from(
+    document.querySelectorAll<HTMLTableElement>('.sl-markdown-content table'),
+  );
+  const codeBlocks = Array.from(
+    document.querySelectorAll<HTMLElement>('.sl-markdown-content .expressive-code pre'),
+  );
+
+  const updateTableKeyboardAccess = (table: HTMLTableElement) => {
+    const isScrollable = table.scrollWidth > table.clientWidth + 1;
+    if (isScrollable && !table.hasAttribute('tabindex')) {
+      table.tabIndex = 0;
+      table.setAttribute(managedTableAttribute, '');
+      return;
+    }
+
+    if (!isScrollable && table.hasAttribute(managedTableAttribute)) {
+      table.removeAttribute('tabindex');
+      table.removeAttribute(managedTableAttribute);
+    }
+  };
+
+  const updateCodeBlockLabel = (codeBlock: HTMLElement) => {
+    const isScrollable = codeBlock.scrollWidth > codeBlock.clientWidth + 1;
+    const managedTabIndex = codeBlock.hasAttribute(managedCodeTabIndexAttribute);
+    const managedLabel = codeBlock.hasAttribute(managedCodeLabelAttribute);
+    const managedRole = codeBlock.hasAttribute(managedCodeRoleAttribute);
+
+    if (isScrollable && !codeBlock.hasAttribute('tabindex')) {
+      codeBlock.tabIndex = 0;
+      codeBlock.setAttribute(managedCodeTabIndexAttribute, '');
+    } else if (!isScrollable && managedTabIndex) {
+      codeBlock.removeAttribute('tabindex');
+      codeBlock.removeAttribute(managedCodeTabIndexAttribute);
+    }
+
+    if (isScrollable && !codeBlock.hasAttribute('role')) {
+      codeBlock.setAttribute('role', 'region');
+      codeBlock.setAttribute(managedCodeRoleAttribute, '');
+    } else if (!isScrollable && managedRole) {
+      codeBlock.removeAttribute('role');
+      codeBlock.removeAttribute(managedCodeRoleAttribute);
+    }
+
+    if (
+      isScrollable &&
+      (managedLabel ||
+        (!codeBlock.hasAttribute('aria-label') && !codeBlock.hasAttribute('aria-labelledby')))
+    ) {
+      const title = codeBlock
+        .closest('figure')
+        ?.querySelector<HTMLElement>('figcaption .title')
+        ?.textContent?.trim();
+      const language = codeBlock.dataset.language?.trim() || 'Code';
+      const position = codeBlocks.indexOf(codeBlock) + 1;
+      codeBlock.setAttribute('aria-label', `${title || language} code example ${position}`);
+      codeBlock.setAttribute(managedCodeLabelAttribute, '');
+      return;
+    }
+
+    if (!isScrollable && managedLabel) {
+      codeBlock.removeAttribute('aria-label');
+      codeBlock.removeAttribute(managedCodeLabelAttribute);
+    }
+  };
+
+  const updateAll = () => {
+    for (const table of tables) updateTableKeyboardAccess(table);
+    for (const codeBlock of codeBlocks) updateCodeBlockLabel(codeBlock);
+  };
+
+  updateAll();
+
+  if ('ResizeObserver' in window) {
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target instanceof HTMLTableElement) updateTableKeyboardAccess(entry.target);
+        else if (entry.target instanceof HTMLElement) updateCodeBlockLabel(entry.target);
+      }
+    });
+    for (const table of tables) observer.observe(table);
+    for (const codeBlock of codeBlocks) observer.observe(codeBlock);
+  } else {
+    window.addEventListener('resize', updateAll);
+  }
+</script>
