@@ -70,12 +70,12 @@ export const monitoredExternalLinks: readonly MonitoredExternalLink[] = [
   {
     allowedRedirectHosts: ['docs.discord.com'],
     label: 'Discord onboarding object',
-    sourceFile: 'site/src/content/docs/tools/onboarding/get.mdx',
+    sourceFile: 'packages/mcp-core/src/tools/onboarding/get.ts',
     sourceUrl: 'https://discord.com/developers/docs/resources/guild#guild-onboarding-object',
   },
   {
     label: 'Discord onboarding prompt structure',
-    sourceFile: 'site/src/content/docs/tools/onboarding/modify.mdx',
+    sourceFile: 'packages/mcp-core/src/tools/onboarding/modify.ts',
     sourceUrl:
       'https://docs.discord.com/developers/resources/guild#guild-onboarding-object-onboarding-prompt-structure',
   },

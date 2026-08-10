@@ -1,18 +1,22 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertExternalLinkOutcome,
   checkExternalLink,
   type ExternalFetch,
   type MonitoredExternalLink,
+  monitoredExternalLinks,
   validateExternalLinkManifest,
   verifyExternalLinkSources,
   verifyExternalLinks,
 } from './verify-external-links.js';
 
 const fixtureRoots: string[] = [];
+const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 function monitoredLink(overrides: Partial<MonitoredExternalLink> = {}): MonitoredExternalLink {
   return {
@@ -52,6 +56,20 @@ afterEach(async () => {
 });
 
 describe('external link manifest', () => {
+  it('anchors only to source files tracked in the clean repository', () => {
+    const trackedFiles = new Set(
+      execFileSync('git', ['ls-files', '-z'], { cwd: repositoryRoot, encoding: 'utf8' }).split(
+        '\0',
+      ),
+    );
+
+    expect(
+      monitoredExternalLinks
+        .map((link) => link.sourceFile)
+        .filter((sourceFile) => !trackedFiles.has(sourceFile)),
+    ).toEqual([]);
+  });
+
   it('rejects duplicate, insecure, placeholder, and escaping declarations', () => {
     const valid = monitoredLink();
 
