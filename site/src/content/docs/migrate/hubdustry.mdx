@@ -13,28 +13,30 @@ migrate any Discord tools because Hubdustry has none.
 
 ## Source
 
-- **Repo**:
-  [`jhm1909/Hubdustry`](https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp)
+- **Original upstream**: `jhm1909/Hubdustry` (no longer publicly reachable when
+  rechecked on 2026-08-11)
+- **Reference fixture**:
+  [bundled Hubdustry snapshot](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-server/test-fixtures/hubdustry-go-mcp/apps/mcp)
 - **Language**: Go (`mcp.NewTool(...)` registration pattern)
-- **Tool count (cutoff 2026-05-02)**: 8 tools - all server-admin /
-  files / containers / deploy / system-stats. Zero Discord tools.
+- **Tool count**: 5 tools in the bundled fixture - all file or deploy
+  administration. Zero Discord tools.
 - **Adapter source**:
   [`packages/mcp-server/src/lib/migrate-adapters/hubdustry-go-mcp.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-server/src/lib/migrate-adapters/hubdustry-go-mcp.ts)
 
 ## What this is
 
-Hubdustry's MCP server is a Go-based tool server for server administration:
-file operations, container lifecycle, deploy triggers, system metrics. It
-predates discord-mcp and lives in a different problem space entirely.
+The bundled Hubdustry fixture models a Go MCP server for server administration:
+file operations and deploy triggers. It lives in a different problem space
+from discord-mcp entirely.
 
 It is the **reference adapter** - the simplest possible
 implementation of the `MigrationSource` interface, with an empty NAME_MAP
-and a Go-specific extraction regex. Running it against a real Hubdustry
-clone produces:
+and a Go-specific extraction regex. Running it against the bundled reference
+fixture produces:
 
 ```
 mapped:    0
-unmapped:  8  (all Hubdustry tools)
+unmapped:  5  (all fixture tools)
 manual:    0
 warnings:  []
 ```
@@ -44,9 +46,9 @@ end-to-end while honestly reporting that there's nothing to translate.
 
 ## Why mostly unmapped
 
-discord-mcp is a Discord REST + Gateway server. Hubdustry's tools
-(`files.read`, `containers.deploy`, `system.stats`, etc.) have no Discord
-equivalents - they belong in a different MCP server entirely.
+discord-mcp is a Discord REST + Gateway server. The fixture's tools
+(`server.files.read`, `server.deploy.trigger`, `server.deploy.status`, etc.)
+have no Discord equivalents - they belong in a different MCP server entirely.
 
 ## What you actually need
 
@@ -65,23 +67,25 @@ If you're a Hubdustry user adding Discord capabilities to your agent:
 
   Merge the printed snippet, set `DISCORD_TOKEN`, then restart your MCP client.
   You now have N+1 servers configured, with
-  discord-mcp's 198 Discord tools (plus one optional inspiration tool) added
-  next to Hubdustry's 8 system tools.
+  discord-mcp's current registered tools added next to the server-administration
+  tools exposed by your Hubdustry deployment.
 
 ## Test the framework
 
-Even though there's nothing to translate, running the adapter against a
-Hubdustry clone is a useful smoke test for the migration framework itself
+Even though there's nothing to translate, running the adapter against the
+bundled fixture is a useful smoke test for the migration framework itself
 - it confirms that detection, file walking, and tool extraction all work
 on a Go codebase:
 
 ```bash
-git clone https://github.com/jhm1909/Hubdustry.git ~/hubdustry-clone
-discord-mcp migrate --from hubdustry-go-mcp --source ~/hubdustry-clone
+git clone --depth 1 https://github.com/cappyeo/discord-mcp.git ~/discord-mcp
+discord-mcp migrate --from hubdustry-go-mcp \
+  --source ~/discord-mcp/packages/mcp-server/test-fixtures/hubdustry-go-mcp
 ```
 
-Expected output: 8 unmapped tools, 0 mapped, 0 manual review, exit code 1
-(unmapped tools are non-fatal).
+Expected output: 5 unmapped tools, 0 mapped, 0 manual review, and exit code 1 by
+design. The adapter completed successfully; code 1 reports tools that still need
+review, not an adapter or runtime failure.
 
 If you're authoring a new adapter, this is also a useful negative test:
 your adapter's `detect()` MUST return `false` against the Hubdustry fixture,

@@ -12,6 +12,7 @@
     "predev": "pnpm generate-tools",
     "prebuild": "pnpm generate-tools",
     "test:browser": "tsx scripts/audit-rendered-docs.ts",
+    "test:external-links": "tsx scripts/verify-external-links.ts",
     "test:links": "tsx scripts/verify-dist-links.ts",
     "test": "vitest run --passWithNoTests"
   },
