@@ -77,6 +77,57 @@ const routes: RouteAudit[] = [
     expectedText: ['Discord tools for AI clients', 'Start the quickstart', '203 tools'],
   },
   {
+    name: 'site search journey',
+    path: '/',
+    expectedText: ['Discord tools for AI clients', 'Start from your goal'],
+    verify: async (page, viewport) => {
+      const journey =
+        viewport.width < 800
+          ? {
+              query: 'permissions_audit_channel',
+              title: 'permissions_audit_channel',
+              path: '/tools/permissions/audit_channel/',
+            }
+          : {
+              query: 'connection mode',
+              title: 'Choose a connection mode',
+              path: '/operations/clients/',
+            };
+
+      const searchButton = page.getByRole('button', { name: 'Search', exact: true });
+      await requireCount(searchButton, 1, 'site search button');
+      await searchButton.click();
+
+      const dialog = page.getByRole('dialog', { name: 'Search' });
+      await dialog.waitFor({ state: 'visible' });
+      await requireCount(dialog, 1, 'site search dialog');
+      const siteSearch = dialog.getByRole('search', { name: 'Search this site' });
+      await siteSearch.waitFor({ state: 'visible' });
+      await requireCount(siteSearch, 1, 'named site search');
+      const searchbox = siteSearch.getByRole('textbox', { name: 'Search' });
+      await searchbox.waitFor({ state: 'visible' });
+      await requireCount(searchbox, 1, 'site search textbox');
+      if (!(await searchbox.evaluate((element) => element === document.activeElement))) {
+        throw new Error('opening site search did not focus the search textbox');
+      }
+
+      await searchbox.fill(journey.query);
+      const result = siteSearch.locator(`a[href="${BASE_PATH}${journey.path}"]`, {
+        hasText: journey.title,
+      });
+      await result.waitFor({ state: 'visible' });
+      await requireCount(result, 1, `search result for ${journey.query}`);
+      await result.click();
+      await page.waitForURL((url) => url.pathname === `${BASE_PATH}${journey.path}`);
+      await requireCount(
+        page.getByRole('heading', { level: 1, name: journey.title, exact: true }),
+        1,
+        `search destination heading for ${journey.query}`,
+      );
+      await requireCount(page.getByRole('dialog', { name: 'Search' }), 0, 'closed search dialog');
+    },
+  },
+  {
     name: 'quickstart',
     path: '/start/quickstart/',
     expectedText: [
