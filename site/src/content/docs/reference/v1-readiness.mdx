@@ -12,7 +12,7 @@ real gates, not aspirational release notes.
 
 ## Current source evidence (public release: v0.18.1)
 
-- 203 MCP tools across 31 categories.
+- 204 MCP tools across 31 categories.
 - More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
   and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
   remaining OTel parent-child integration seam.
@@ -126,14 +126,14 @@ removal or rename fails CI instead of reaching a consumer.
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
-- [x] Tool surface (203 tools) frozen - `src/tools/registry.invariants.test.ts`
+- [x] Tool surface (204 tools) frozen - `src/tools/registry.invariants.test.ts`
       also asserts destructive-iff-confirm-gated and complete annotations
 
 ## v1.0.0 commitment
 
 - **Semver**: breaking changes require a major bump (v2.0.0).
 - **API stability**: `@discord-mcp/core` exports stable for 6+ months.
-- **Tool surface**: 203 tools maintained; new tools = minor version.
+- **Tool surface**: 204 tools maintained; new tools = minor version.
 - **CLI flags**: `discord-mcp serve|doctor|init|migrate` flag set frozen.
 - **Config**: env var names + defaults frozen (additions allowed; renames
   forbidden).

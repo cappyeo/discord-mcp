@@ -9,6 +9,18 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## Unreleased - Recommend verified templates
+
+- Added `templates_recommend`: submit one natural-language request to receive one
+  verified primary template and 0–3 bounded inspirations after live verification.
+  It is always strict and read-only. Explicitly dirty, malformed, unverified, or
+  NSFW templates are rejected; an unknown dirty state has medium confidence.
+  Risky source permission signals are surfaced and penalized, but all source
+  permissions and overwrites are discarded and regenerated. Third-party names
+  and descriptions remain fenced as untrusted text.
+- Onboarding, AutoMod, Components V2, and Activity Evidence remain later
+  generation steps through Discord MCP tools; this surface does not build a server.
+
 ## v0.18.1 - Correct Hubdustry reference metadata
 
 Released **2026-08-11**.

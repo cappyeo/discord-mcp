@@ -3,7 +3,7 @@
   "version": "0.18.1",
   "private": false,
   "type": "module",
-  "description": "Production-grade Discord MCP server core - 203 tools, OTel-instrumented, cockatiel-resilient.",
+  "description": "Production-grade Discord MCP server core - 204 tools, OTel-instrumented, cockatiel-resilient.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -38,8 +38,9 @@
   ],
   "scripts": {
     "build": "tsdown",
+    "catalog:build": "node --experimental-sqlite scripts/catalog/build.mjs",
     "dev": "tsdown --watch",
-    "test": "vitest run",
+    "test": "vitest run && node --experimental-sqlite --test scripts/catalog/build.test.mjs",
     "test:watch": "vitest",
     "bench": "vitest bench --run",
     "typecheck": "tsc --noEmit",

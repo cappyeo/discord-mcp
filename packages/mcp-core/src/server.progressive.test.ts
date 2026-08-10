@@ -50,9 +50,9 @@ describe('progressive tool surface', () => {
     ]);
   });
 
-  it('keeps the full 203-tool surface as the compatibility default', async () => {
+  it('keeps the full 204-tool surface as the compatibility default', async () => {
     const { tools } = await fullClient.listTools();
-    expect(tools).toHaveLength(203);
+    expect(tools).toHaveLength(204);
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 
@@ -83,6 +83,7 @@ describe('progressive tool surface', () => {
       Buffer.byteLength(JSON.stringify(fullTools)) * 0.1,
     );
     expect(progressiveClient.getInstructions()).toContain('Progressive tool surface');
+    expect(progressiveClient.getInstructions()).toContain('templates_recommend first');
   });
 
   it('returns a direct contract for a single match and exact authorized schemas on demand', async () => {
@@ -219,6 +220,31 @@ describe('progressive tool surface', () => {
     expect(result.structuredContent).toMatchObject({
       component: expect.objectContaining({ type: 17 }),
     });
+  });
+
+  it('discovers templates_recommend for a gaming server and reads it through mcp_tools_read', async () => {
+    const search = await progressiveClient.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'gaming server', limit: 20 },
+    });
+    expect(search.isError).toBe(false);
+    expect(search.structuredContent).toMatchObject({
+      matches: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'templates_recommend',
+          category: 'templates',
+          dispatcher: 'mcp_tools_read',
+        }),
+      ]),
+      categories: expect.arrayContaining([{ name: 'templates', tool_count: 9 }]),
+    });
+
+    const read = await progressiveClient.callTool({
+      name: 'mcp_tools_read',
+      arguments: { tool: 'templates_recommend', args: {} },
+    });
+    expect(read.isError).toBe(true);
+    expect(read.structuredContent).toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
   it('never exposes or dispatches beyond MCP_CATEGORIES', async () => {

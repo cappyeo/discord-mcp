@@ -16,8 +16,8 @@ unless your MCP host or deployment model requires something else.
 | Combination | Use it when | Host-visible catalog | Gateway | Continue with |
 |---|---|---|---|---|
 | **Local stdio + progressive** | A local client can start discord-mcp and call its search/dispatcher tools. This is the guided setup default. | **4 visible tools** | Optional | [Client setup](/discord-mcp/start/client-setup/) |
-| **Local stdio + full** | A compatibility-oriented client must receive its allowed direct tool contracts up front. | up to 203 visible tools; allowlists can reduce this | Optional | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
-| **Streamable HTTP + full** | A remote caller has native deferred loading or tool search, such as the OpenAI Responses API. | up to 203 direct tools; the caller defers them | Unavailable | [OpenAI remote MCP](/discord-mcp/operations/openai/) |
+| **Local stdio + full** | A compatibility-oriented client must receive its allowed direct tool contracts up front. | up to 204 visible tools; allowlists can reduce this | Optional | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
+| **Streamable HTTP + full** | A remote caller has native deferred loading or tool search, such as the OpenAI Responses API. | up to 204 direct tools; the caller defers them | Unavailable | [OpenAI remote MCP](/discord-mcp/operations/openai/) |
 | **Streamable HTTP + progressive** | A remote MCP host lacks native deferred loading but can search and dispatch through MCP tools. | 4 discovery/dispatcher tools | Unavailable | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
 
 <Aside type="caution" title="HTTP does not create per-user Discord identities">
@@ -65,7 +65,7 @@ discovery.
 - **`progressive`** advertises `mcp_tools_search`, `mcp_tools_read`, `mcp_tools_write`, and
   `mcp_tools_destructive`. The host searches for an exact Discord tool, then calls it through the
   risk-matched dispatcher. Use it when the host does not already defer a large MCP catalog.
-- **`full`** advertises up to 203 direct tools. `MCP_CATEGORIES` and `ALLOWED_GUILDS` can
+- **`full`** advertises up to 204 direct tools. `MCP_CATEGORIES` and `ALLOWED_GUILDS` can
   intentionally hide contracts that the configured server scope cannot use. Choose this surface
   for compatibility or when the caller already supplies native deferred loading, such as OpenAI
   Responses API `tool_search`.
@@ -124,7 +124,7 @@ notification—not initialization metadata—as the success signal.
 
 1. Run `discord-mcp doctor --online --profile devbot` where `DISCORD_TOKEN` is available.
 2. Restart the MCP client and inspect `tools/list`: expect four tools for `progressive`; `full` can
-   expose up to 203, with fewer expected when category or guild allowlists narrow the server.
+   expose up to 204, with fewer expected when category or guild allowlists narrow the server.
 3. Follow the [verified first-tool flow](/discord-mcp/start/quickstart/) for a read-only identity
    and channel check through the chosen surface.
 4. If the workflow needs sampling, verify whether the result is completed or a host-processing

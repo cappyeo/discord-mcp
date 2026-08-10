@@ -177,7 +177,7 @@ function sourceRoles(template: RawGuildTemplate): TemplateSourceRecord[] {
 }
 
 function hasPermission(value: unknown, flag: bigint): boolean {
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return false;
+  if (typeof value !== 'string' || value.length > 32 || !/^\d+$/.test(value)) return false;
   return (BigInt(value) & flag) === flag;
 }
 

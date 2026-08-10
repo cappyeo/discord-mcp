@@ -74,6 +74,17 @@ describe('built artifact', () => {
     }
   });
 
+  it('inlines the bundled template catalog into the package artifact', async () => {
+    // The catalog is imported by templates_recommend and the published package
+    // ships only dist/. Keep these checks on the built file so a source-only
+    // catalog test cannot pass when the JSON is accidentally left outside the
+    // package artifact or omitted by the bundler.
+    const { readFileSync } = await import('node:fs');
+    const bundle = readFileSync(DIST, 'utf8');
+    expect(bundle).toContain('d48cec3acf16c56138b7c303d711717aabc11b0e5813865b8926c2d6952212fe');
+    expect(bundle).toContain('WNSCpfHWnqXr');
+  });
+
   it('reports the real version from the built package', async () => {
     const mod = await importDist();
     expect(mod.VERSION).not.toBe('0.0.0');

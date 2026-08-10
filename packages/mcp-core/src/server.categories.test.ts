@@ -3,7 +3,7 @@
  *
  * It was advertised in two published doc pages and in an error recovery hint,
  * but the `category_enabled` precondition that implemented it was referenced
- * by zero of the 203 tools, so the variable restricted nothing: an operator
+ * by zero of the 204 tools, so the variable restricted nothing: an operator
  * who set `MCP_CATEGORIES=messages` still shipped a server that could ban
  * members and delete channels.
  *
@@ -56,7 +56,7 @@ describe('MCP_CATEGORIES allowlist', () => {
     expect(names).not.toContain('inspiration_emoji_gg_search');
     // meta stays reachable so introspection does not vanish on a scoped deploy.
     expect(names).toContain('mcp_pipeline');
-    expect(tools.length).toBeLessThan(203);
+    expect(tools.length).toBeLessThan(204);
   });
 
   it('rejects a disallowed tool called by name, not just hidden from the list', async () => {
@@ -91,14 +91,14 @@ describe('MCP_CATEGORIES validation and defaults', () => {
   it('allows everything when unset', async () => {
     const client = await connect(BASE_ENV);
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(203);
+    expect(tools.length).toBe(204);
     await client.close();
   });
 
   it('allows everything when blank', async () => {
     const client = await connect({ ...BASE_ENV, MCP_CATEGORIES: '   ' });
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(203);
+    expect(tools.length).toBe(204);
     await client.close();
   });
 

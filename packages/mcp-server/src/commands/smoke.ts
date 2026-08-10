@@ -5,7 +5,7 @@
  * lifecycle in a verified guild: create a temporary channel, send and edit one
  * marker message, then delete both artifacts. The command uses an in-memory MCP
  * client/server pair so it exercises the same schemas, middleware, audit, and
- * Discord REST path as an AI host without paying to load 203 tools into a model.
+ * Discord REST path as an AI host without paying to load 204 tools into a model.
  */
 import {
   buildPolicy,

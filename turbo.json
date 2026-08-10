@@ -17,6 +17,7 @@
       "outputs": ["coverage/**"],
       "inputs": [
         "src/**",
+        "scripts/**",
         "test/**",
         "test-fixtures/**",
         "vitest.config.ts",
