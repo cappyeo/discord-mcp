@@ -28,9 +28,13 @@ you explicitly opt in. `ALLOWED_GUILDS` is optional for backward compatibility,
 but strongly recommended whenever the bot can see more than one server.
 
 <Aside type="caution">
-Setting `MCP_DRY_RUN=false` enables execution only for the 30 confirmation-gated
-tools. Each call still needs `__confirm: true`; this is intentionally a two-key
-safety check.
+`MCP_DRY_RUN` applies only to the 30 confirmation-gated tools. Setting it to
+`false` removes the dry-run half of this gate for that set, but each call still
+needs `__confirm: true`.
+
+This setting does not protect ordinary writes. With the default
+`MCP_WRITE_MODE=allow`, ordinary writes can execute immediately. Set
+`MCP_WRITE_MODE=preview` when every mutation should return a preview instead.
 </Aside>
 
 ## Add controls by intent

@@ -14,9 +14,13 @@ import { Aside } from '@astrojs/starlight/components';
 - **Use:** Protects 30 destructive tools. With dry-run on, they return `DRY_RUN_PREVIEW` with redacted arguments instead of executing.
 - **Example:** `MCP_DRY_RUN=false`
 
-Setting the literal string `false` allows those tools to execute, but every call
-still requires `__confirm: true`. The other 163 tools are not affected, so this
-is not a global read-only switch.
+With `MCP_WRITE_MODE=allow`, setting the literal string `false` removes the
+dry-run half of this gate, but every call still requires `__confirm: true`.
+`MCP_WRITE_MODE=preview` blocks every mutation before this gate. Tools without
+the `confirm_required` precondition are unaffected by `MCP_DRY_RUN`, so this is
+not a global read-only switch. With the default allow mode, ordinary writes can
+execute immediately. Set `MCP_WRITE_MODE=preview` when every mutation should
+return a preview instead.
 
 <Aside type="danger">
 `MCP_DRY_RUN` is not in the Zod schema and `doctor` does not validate it. A typo

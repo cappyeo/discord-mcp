@@ -34,6 +34,8 @@ const ROOT_README = join(ROOT, 'README.md');
 const DOCS_DIR = join(ROOT, 'site/src/content/docs');
 const CONFIRMATION_MDX = join(ROOT, 'site/src/content/docs/architecture/confirmation.mdx');
 const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.mdx');
+const CONFIGURE_MDX = join(ROOT, 'site/src/content/docs/operations/configure.mdx');
+const SAFETY_REFERENCE_MDX = join(ROOT, 'site/src/content/docs/reference/config/safety.mdx');
 const REFERENCE_INDEX_MDX = join(ROOT, 'site/src/content/docs/reference/index.mdx');
 const CLI_REFERENCE_MDX = join(ROOT, 'site/src/content/docs/reference/cli.mdx');
 const HUBDUSTRY_MIGRATION_MDX = join(ROOT, 'site/src/content/docs/migrate/hubdustry.mdx');
@@ -376,6 +378,33 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(clientSetup).toContain(`**up to ${tools.length} visible direct tools**`);
     expect(clientSetup).toContain('`MCP_CATEGORIES`');
     expect(clientSetup).toContain('`ALLOWED_GUILDS`');
+  });
+
+  it('documents the complete write-control boundary from runtime metadata', async () => {
+    const tools = await loadAllTools();
+    const gatedCount = tools.filter((tool) =>
+      tool.preconditions.includes('confirm_required'),
+    ).length;
+    const configure = readFileSync(CONFIGURE_MDX, 'utf8');
+    const safety = readFileSync(SAFETY_REFERENCE_MDX, 'utf8');
+    const configureProse = configure.replace(/\s+/g, ' ');
+    const safetyProse = safety.replace(/\s+/g, ' ');
+
+    expect(configureProse).toContain(
+      `\`MCP_DRY_RUN\` applies only to the ${gatedCount} confirmation-gated tools`,
+    );
+    expect(configureProse).toContain('ordinary writes can execute immediately');
+    expect(configureProse).toContain('`MCP_WRITE_MODE=preview`');
+    expect(configureProse).not.toContain('server-wide preview key');
+
+    expect(safetyProse).toContain(`Protects ${gatedCount} destructive tools`);
+    expect(safetyProse).toContain(
+      'Tools without the `confirm_required` precondition are unaffected',
+    );
+    expect(safetyProse).toContain('ordinary writes can execute immediately');
+    expect(safetyProse).toContain('`MCP_WRITE_MODE=preview`');
+    expect(safetyProse).toContain('blocks every mutation before this gate');
+    expect(safety).not.toMatch(/The other \d+ tools/);
   });
 
   it('derives Hubdustry fixture claims from the real adapter result', async () => {
