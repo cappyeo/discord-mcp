@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://cappyeo.github.io/discord-mcp/start/quickstart/"><strong>Quickstart</strong></a>
+  <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 203 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>

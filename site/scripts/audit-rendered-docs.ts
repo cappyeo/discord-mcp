@@ -74,7 +74,28 @@ const routes: RouteAudit[] = [
   {
     name: 'homepage',
     path: '/',
-    expectedText: ['Discord tools for AI clients', 'Start the quickstart', '203 tools'],
+    expectedText: ['Discord tools for AI clients', 'Get started', '203 tools'],
+  },
+  {
+    name: 'first-time entry journey',
+    path: '/',
+    expectedText: ['Discord tools for AI clients', 'Get started', '203 tools'],
+    verify: async (page) => {
+      const getStarted = page.getByRole('link', { name: 'Get started', exact: true });
+      await requireCount(getStarted, 1, 'primary first-time entry');
+      await getStarted.click();
+      await page.waitForURL((url) => url.pathname === `${BASE_PATH}/start/`);
+      await requireCount(
+        page.getByRole('heading', { level: 1, name: 'Discord MCP tutorial', exact: true }),
+        1,
+        'tutorial introduction heading',
+      );
+      await requireCount(
+        page.getByRole('link', { name: 'Create a Discord bot', exact: true }),
+        1,
+        'first setup prerequisite',
+      );
+    },
   },
   {
     name: 'site search journey',

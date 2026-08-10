@@ -5,7 +5,8 @@
 ## Canonical sources
 
 - Documentation: https://cappyeo.github.io/discord-mcp/
-- Verified quickstart: https://cappyeo.github.io/discord-mcp/start/quickstart/
+- First-time setup: https://cappyeo.github.io/discord-mcp/start/
+- Verified first tool call: https://cappyeo.github.io/discord-mcp/start/quickstart/
 - Generated tool reference: https://cappyeo.github.io/discord-mcp/tools/
 - Source and issues: https://github.com/cappyeo/discord-mcp
 - CLI package: https://www.npmjs.com/package/@discord-mcp/cli
@@ -36,7 +37,7 @@ discord-mcp init --client generic
 discord-mcp doctor --online
 ```
 
-Set `DISCORD_TOKEN` through the client's environment configuration rather than placing a real token in a shell command or repository. Follow the verified quickstart for bot setup, client-specific configuration, and the first deliberate Discord call.
+Set `DISCORD_TOKEN` through the client's environment configuration rather than placing a real token in a shell command or repository. Follow the first-time tutorial for bot setup and client-specific configuration, then use the verified first-tool flow for the first deliberate Discord call.
 
 ## Documentation map
 

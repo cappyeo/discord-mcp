@@ -4,7 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const ROOT = join(__dirname, '../..');
 const START_DIR = join(__dirname, '../src/content/docs/start');
+const HOMEPAGE = join(ROOT, 'site/src/content/docs/index.mdx');
+const NOT_FOUND_PAGE = join(ROOT, 'site/src/pages/404.astro');
+const ROOT_README = join(ROOT, 'README.md');
+const LLMS_SUMMARY = join(ROOT, 'site/public/llms.txt');
+const SITE_README = join(ROOT, 'site/README.md');
+const V1_READINESS = join(ROOT, 'site/src/content/docs/reference/v1-readiness.mdx');
 
 const pages = [
   { file: 'index.mdx', route: '/discord-mcp/start/', order: 0, startsUnit: true },
@@ -69,6 +76,36 @@ function frontmatter(file: string): string {
 }
 
 describe('tutorial curriculum', () => {
+  it('routes public first-time entrypoints through the complete tutorial', () => {
+    const homepage = readFileSync(HOMEPAGE, 'utf8').replace(/\r\n/g, '\n');
+    const notFound = readFileSync(NOT_FOUND_PAGE, 'utf8');
+    const readme = readFileSync(ROOT_README, 'utf8');
+    const llms = readFileSync(LLMS_SUMMARY, 'utf8');
+
+    expect(homepage).toContain('- text: Get started\n      link: /discord-mcp/start/');
+    expect(homepage).toContain('[Follow the full setup tutorial →](/discord-mcp/start/)');
+    expect(readme).toContain(
+      'href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong>',
+    );
+    expect(notFound).toContain('href="/discord-mcp/start/">Open the tutorial</a>');
+    expect(llms).toContain('First-time setup: https://cappyeo.github.io/discord-mcp/start/');
+    expect(llms).toContain(
+      'Verified first tool call: https://cappyeo.github.io/discord-mcp/start/quickstart/',
+    );
+  });
+
+  it('does not hard-code browser or hand-written section inventory counts', () => {
+    for (const evidenceFile of [SITE_README, V1_READINESS]) {
+      const evidence = readFileSync(evidenceFile, 'utf8');
+      expect(evidence, evidenceFile).toContain('desktop-light/mobile-dark matrix');
+      expect(evidence, evidenceFile).not.toContain('desktop-light/mobile-dark scenarios');
+    }
+
+    expect(readFileSync(SITE_README, 'utf8')).not.toMatch(
+      /^ {2}- `(?:start|tools|recipes|operations|architecture|reference)\/`.*\(\d+\)$/m,
+    );
+  });
+
   it('has one ordered, explicit set of progress-tracked pages', () => {
     const actual = readdirSync(START_DIR)
       .filter((file) => file.endsWith('.mdx') && /^type: tutorial$/m.test(source(file)))

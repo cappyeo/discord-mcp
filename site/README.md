@@ -43,11 +43,12 @@ The link audit parses every generated HTML document and checks all same-origin `
 fragments must resolve to an `id` or legacy anchor in their target document. External URLs remain
 outside this offline gate.
 
-The browser audit serves the same artifact on a loopback-only ephemeral port and checks 14
-desktop-light/mobile-dark scenarios across onboarding, generated tool docs, migration, and the live
-demo. It fails on any axe WCAG A/AA or best-practice violation, same-origin HTTP failure, browser
-runtime error, missing semantic landmark, broken representative interaction, or horizontal viewport
-overflow. It also blocks every serious or critical axe `incomplete` result. When axe cannot resolve
+The browser audit serves the same artifact on a loopback-only ephemeral port and checks the
+desktop-light/mobile-dark matrix across the homepage, first-time entry, onboarding, search,
+generated tool docs, migration, and the live demo. It fails on any axe WCAG A/AA or best-practice
+violation, same-origin HTTP failure, browser runtime error, missing semantic landmark, broken
+representative interaction, or horizontal viewport overflow. It also blocks every serious or
+critical axe `incomplete` result. When axe cannot resolve
 text contrast through CSS variables, translucent layers, gradients, or clipped content, the audit
 independently composites solid background stacks and samples complex backgrounds from the rendered
 pixels. An unknown target or any sample below its WCAG AA threshold fails the build; there is no
@@ -66,20 +67,20 @@ pnpm --filter site generate-tools
 ```
 
 Reads `__toolMetadata` static from `@discord-mcp/core` exports and emits
-one MDX per tool plus 30 category index pages plus a top-level index
-into `site/src/content/docs/tools/`. Runs automatically before `dev` and
-`build`.
+one MDX page per tool, one index per registered category, and a top-level
+index into `site/src/content/docs/tools/`. Runs automatically before `dev`
+and `build`.
 
 ## Structure
 
 - `astro.config.ts` - Starlight config (sidebar, base path)
 - `src/content/docs/` - all MDX content
-  - `start/` - quickstart pages (5)
-  - `tools/` - auto-generated tool reference (203 tools + 31 categories + 1 index)
-  - `recipes/` - cookbook recipes (6)
-  - `operations/` - operator guides (4)
-  - `architecture/` - deep-dives (9)
-  - `reference/` - CLI, config, API, changelog (5)
+  - `start/` - guided setup and troubleshooting
+  - `tools/` - auto-generated tool and category reference
+  - `recipes/` - cookbook workflows
+  - `operations/` - operator deployment and safety guides
+  - `architecture/` - design deep-dives
+  - `reference/` - CLI, config, API, changelog, and release evidence
 - `src/components/docs/` - reusable MDX building blocks
   - `DocsCardGrid.astro` - data-driven cards for section hubs
   - `ClientTabs.astro` - synchronized Claude Desktop / Claude Code / Cursor / generic tabs

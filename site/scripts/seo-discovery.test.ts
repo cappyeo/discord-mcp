@@ -2,7 +2,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { docsUrl, quickstartUrl, siteBasePath, siteHead, socialImageUrl } from '../src/seo.js';
+import {
+  docsUrl,
+  quickstartUrl,
+  siteBasePath,
+  siteHead,
+  socialImageUrl,
+  tutorialUrl,
+} from '../src/seo.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const SITE_ROOT = join(__dirname, '..');
@@ -34,6 +41,7 @@ describe('crawl and AI discovery artifacts', () => {
     const llms = readFileSync(llmsPath, 'utf8');
     expect(llms.startsWith('# discord-mcp')).toBe(true);
     expect(llms).toContain(docsUrl);
+    expect(llms).toContain(tutorialUrl);
     expect(llms).toContain(quickstartUrl);
     expect(llms).toContain('https://github.com/cappyeo/discord-mcp');
     expect(llms).toContain('https://www.npmjs.com/package/@discord-mcp/cli');

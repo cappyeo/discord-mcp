@@ -1,6 +1,7 @@
 export const siteOrigin = 'https://cappyeo.github.io';
 export const siteBasePath = '/discord-mcp';
 export const docsUrl = `${siteOrigin}${siteBasePath}/`;
+export const tutorialUrl = `${docsUrl}start/`;
 export const quickstartUrl = `${docsUrl}start/quickstart/`;
 export const socialImageUrl =
   'https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-banner.jpg';
