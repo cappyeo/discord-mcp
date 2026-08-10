@@ -9,6 +9,19 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.18.1 - Correct Hubdustry reference metadata
+
+Released **2026-08-11**.
+
+- `discord-mcp migrate --list` no longer advertises the unreachable original
+  Hubdustry repository or its unverifiable historical tool-count estimate.
+- The CLI reference and migration guide now distinguish that unavailable
+  upstream from the bundled synthetic fixture. Running the real adapter against
+  the fixture reproducibly reports 0 mapped, 5 unmapped, and 0 manual-review
+  tools, with exit code 1 indicating remaining migration work.
+- A documentation drift guard derives those claims from the adapter result, so
+  future fixture or extraction changes cannot silently leave either guide stale.
+
 ## v0.18.0 - Audit channel access across roles
 
 Released **2026-08-10**.

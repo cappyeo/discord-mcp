@@ -8,7 +8,7 @@
  *
  * Plan 9 Phase E shipped the Hubdustry adapter as a reference
  * implementation (its tools are non-Discord - intentionally produces
- * "0 mapped, 8 unmapped, 0 manual review" against a real Hubdustry tree).
+ * "0 mapped, N unmapped, 0 manual review" against a Hubdustry-shaped tree).
  * Plan 11 Phase B adds the PaSympa adapter - the first Discord-using
  * adapter with a real {@link NAME_MAP} covering ~91 tools across 14
  * modules. Plan 11 Phase C adds quadslab. Plan 11 Phase D adds

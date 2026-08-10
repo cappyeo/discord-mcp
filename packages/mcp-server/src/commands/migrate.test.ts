@@ -182,19 +182,19 @@ describe('migrateAction - JSON output is parseable', () => {
 });
 
 describe('migrateAction - --list flag (Plan 11 Phase A)', () => {
-  it('TTY mode prints the listing with id, description, languages, tools, homepage', async () => {
+  it('TTY mode prints truthful metadata and omits unavailable Hubdustry claims', async () => {
     await migrateAction({ list: true });
     const out = stdoutOutput();
     expect(out).toContain('Available migration adapters');
     expect(out).toContain('hubdustry-go-mcp');
-    expect(out).toContain('Hubdustry Go MCP server');
+    expect(out).toContain('Hubdustry-shaped Go MCP fixture');
     expect(out).toContain('Languages: go');
-    expect(out).toContain('Tools: ~8');
-    expect(out).toContain('https://github.com/jhm1909/Hubdustry');
+    expect(out).not.toContain('Tools: ~8');
+    expect(out).not.toContain('https://github.com/jhm1909/Hubdustry');
     expect(out).toContain('Use: discord-mcp migrate --from <id>');
   });
 
-  it('--list --json emits a parseable adapters[] payload with full metadata', async () => {
+  it('--list --json omits unverifiable upstream metadata for the Hubdustry fixture', async () => {
     await migrateAction({ list: true, json: true });
     const parsed = JSON.parse(stdoutOutput()) as MigrateJsonResult;
     expect(parsed.ok).toBe(true);
@@ -206,8 +206,8 @@ describe('migrateAction - --list flag (Plan 11 Phase A)', () => {
     expect(hubdustry).toBeDefined();
     expect(hubdustry?.description).toContain('Hubdustry');
     expect(hubdustry?.languages).toEqual(['go']);
-    expect(hubdustry?.toolCountEstimate).toBe(8);
-    expect(hubdustry?.homepage).toBe('https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp');
+    expect(hubdustry?.toolCountEstimate).toBeUndefined();
+    expect(hubdustry?.homepage).toBeUndefined();
   });
 
   it('--list exits with code 0 (informational query, not an error)', async () => {

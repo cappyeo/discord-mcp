@@ -1,6 +1,6 @@
 {
   "name": "@discord-mcp/core",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "private": false,
   "type": "module",
   "description": "Production-grade Discord MCP server core - 203 tools, OTel-instrumented, cockatiel-resilient.",

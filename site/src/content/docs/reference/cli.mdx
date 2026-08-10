@@ -464,16 +464,18 @@ discord-mcp migrate --from <adapter> [--source <path>] [--json]
 
 Migrate from another Discord MCP setup. **Four adapters ship** today:
 
-| Adapter id         | Source                                                | Tools |
-| ------------------ | ----------------------------------------------------- | ----- |
-| `pasympa`          | PaSympa Discord MCP (TypeScript)                      | ~91   |
-| `quadslab`         | quadslab Discord MCP (`@quadslab.io`, TypeScript)     | ~139  |
-| `discord-ops`      | discord-ops by bookedsolidtech (TypeScript)           | ~49   |
-| `hubdustry-go-mcp` | Hubdustry Go MCP - **non-Discord reference adapter**  | 8     |
+| Adapter id         | Source                                                   | Upstream tool estimate |
+| ------------------ | -------------------------------------------------------- | ---------------------- |
+| `pasympa`          | PaSympa Discord MCP (TypeScript)                         | ~91                    |
+| `quadslab`         | quadslab Discord MCP (`@quadslab.io`, TypeScript)        | ~139                   |
+| `discord-ops`      | discord-ops by bookedsolidtech (TypeScript)              | ~49                    |
+| `hubdustry-go-mcp` | Hubdustry-shaped Go MCP - **non-Discord reference fixture** | unavailable          |
 
-`hubdustry-go-mcp` exists as the adapter-authoring example. Its tools are not
-Discord tools, so running it against a real Hubdustry tree produces "0 mapped,
-8 unmapped" by design. Use one of the other three for an actual migration.
+The original Hubdustry upstream is no longer publicly reachable, so `--list`
+deliberately omits its homepage and tool-count estimate instead of presenting
+unverifiable metadata. The bundled synthetic fixture contains **5 tools**;
+running the adapter against it produces 0 mapped, 5 unmapped, and 0 manual
+review by design. Use one of the other three adapters for an actual migration.
 
 | Flag             | Type    | Default | Description                                                                                                       |
 | ---------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------- |

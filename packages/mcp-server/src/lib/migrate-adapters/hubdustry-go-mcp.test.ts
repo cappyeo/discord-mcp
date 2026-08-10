@@ -34,15 +34,10 @@ describe('hubdustryGoMcpAdapter - id + description', () => {
 });
 
 describe('hubdustryGoMcpAdapter - Plan 11 Phase A metadata', () => {
-  it('declares the upstream homepage link', () => {
-    expect(hubdustryGoMcpAdapter.homepage).toBe(
-      'https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp',
-    );
-  });
-
-  it('declares languages: ["go"] and toolCountEstimate: 8', () => {
+  it('declares Go while omitting unavailable upstream metadata', () => {
     expect(hubdustryGoMcpAdapter.languages).toEqual(['go']);
-    expect(hubdustryGoMcpAdapter.toolCountEstimate).toBe(8);
+    expect(hubdustryGoMcpAdapter.homepage).toBeUndefined();
+    expect(hubdustryGoMcpAdapter.toolCountEstimate).toBeUndefined();
   });
 });
 

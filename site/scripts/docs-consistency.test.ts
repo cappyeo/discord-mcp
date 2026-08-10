@@ -19,6 +19,7 @@ import {
   PROGRESSIVE_SEARCH_TOOL_NAME,
   PROGRESSIVE_WRITE_TOOL_NAME,
 } from '../../packages/mcp-core/src/tool-discovery.js';
+import { hubdustryGoMcpAdapter } from '../../packages/mcp-server/src/lib/migrate-adapters/hubdustry-go-mcp.js';
 import {
   buildOutputExample,
   buildSchemaExample,
@@ -34,6 +35,9 @@ const DOCS_DIR = join(ROOT, 'site/src/content/docs');
 const CONFIRMATION_MDX = join(ROOT, 'site/src/content/docs/architecture/confirmation.mdx');
 const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.mdx');
 const REFERENCE_INDEX_MDX = join(ROOT, 'site/src/content/docs/reference/index.mdx');
+const CLI_REFERENCE_MDX = join(ROOT, 'site/src/content/docs/reference/cli.mdx');
+const HUBDUSTRY_MIGRATION_MDX = join(ROOT, 'site/src/content/docs/migrate/hubdustry.mdx');
+const HUBDUSTRY_FIXTURE_ROOT = join(ROOT, 'packages/mcp-server/test-fixtures/hubdustry-go-mcp');
 const EXTERNAL_REVIEW_MDX = join(
   ROOT,
   'site/src/content/docs/reference/external-documentation-review.mdx',
@@ -372,6 +376,40 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(clientSetup).toContain(`**up to ${tools.length} visible direct tools**`);
     expect(clientSetup).toContain('`MCP_CATEGORIES`');
     expect(clientSetup).toContain('`ALLOWED_GUILDS`');
+  });
+
+  it('derives Hubdustry fixture claims from the real adapter result', async () => {
+    const result = await hubdustryGoMcpAdapter.migrate(HUBDUSTRY_FIXTURE_ROOT);
+    const mapped = result.mappedTools.length;
+    const unmapped = result.unmappedTools.length;
+    const manual = result.manualReview.length;
+    const total = mapped + unmapped + manual;
+
+    const guide = readFileSync(HUBDUSTRY_MIGRATION_MDX, 'utf8');
+    expect(guide).toContain(`**Tool count**: ${total} tools in the bundled fixture`);
+    expect(guide).toMatch(new RegExp(`^mapped:\\s+${mapped}\\b`, 'm'));
+    expect(guide).toMatch(new RegExp(`^unmapped:\\s+${unmapped}\\b`, 'm'));
+    expect(guide).toMatch(new RegExp(`^manual:\\s+${manual}\\b`, 'm'));
+    expect(guide).toContain(
+      `Expected output: ${unmapped} unmapped tools, ${mapped} mapped, ${manual} manual review`,
+    );
+    expect(guide).toContain('bundled synthetic fixture');
+    expect(guide).not.toContain('bundled Hubdustry snapshot');
+
+    const cli = readFileSync(CLI_REFERENCE_MDX, 'utf8');
+    const start = cli.indexOf('## `migrate`');
+    expect(start, 'CLI reference must keep the migrate section').toBeGreaterThan(-1);
+    const following = cli.slice(start + 1);
+    const end = following.indexOf('\n## ');
+    const section = end === -1 ? cli.slice(start) : cli.slice(start, start + 1 + end);
+
+    expect(section).toContain(`contains **${total} tools**`);
+    expect(section).toContain(
+      `produces ${mapped} mapped, ${unmapped} unmapped, and ${manual} manual`,
+    );
+    expect(section).toMatch(/\| `hubdustry-go-mcp` .*\| unavailable\s+\|/);
+    expect(section).not.toContain('real Hubdustry tree');
+    expect(section).not.toMatch(/\b8 unmapped\b/);
   });
 
   it('keeps the external documentation review public, linked, and credential-safe', () => {

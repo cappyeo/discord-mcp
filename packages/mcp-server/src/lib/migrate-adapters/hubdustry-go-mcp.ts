@@ -1,14 +1,12 @@
 /**
  * Hubdustry Go MCP adapter - Plan 9 Phase E reference implementation.
  *
- * Hubdustry's MCP server (https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp)
- * was the user's previous Go-based project. Its tools are all
- * server-admin / files / containers / deploy / system-stats - none are
- * Discord - so against a real Hubdustry tree this adapter produces
+ * The original Hubdustry upstream is no longer publicly reachable. The
+ * repository therefore ships a synthetic Hubdustry-shaped fixture with
+ * file and deploy tools. None are Discord tools, so the fixture produces
  * `0 mapped, N unmapped, 0 manual review`. That's the intended output:
- * it demonstrates the framework while honestly reporting that Hubdustry
- * has nothing this MCP can run today. Plan 11 ships Discord-using
- * adapters with real mappings.
+ * it demonstrates the framework while honestly reporting that the source
+ * and discord-mcp have no overlapping operations.
  *
  * Detection strategy: look for `apps/mcp/main.go` or a top-level
  * `main.go` and read it; if either contains `hubdustry` or the
@@ -87,10 +85,8 @@ function readDirGoFiles(dir: string): string[] {
 
 export const hubdustryGoMcpAdapter: MigrationSource = {
   id: 'hubdustry-go-mcp',
-  description: 'Hubdustry Go MCP server (apps/mcp) - non-Discord tools, reference adapter',
-  homepage: 'https://github.com/jhm1909/Hubdustry/tree/main/apps/mcp',
+  description: 'Hubdustry-shaped Go MCP fixture - non-Discord reference adapter',
   languages: ['go'],
-  toolCountEstimate: 8,
 
   async detect(rootPath: string): Promise<boolean> {
     const candidates = [join(rootPath, 'main.go'), join(rootPath, 'apps', 'mcp', 'main.go')];

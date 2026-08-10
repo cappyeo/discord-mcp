@@ -1,22 +1,22 @@
 ---
 title: From Hubdustry (reference)
-description: Reference adapter - Hubdustry is a Go MCP for server administration, not Discord. Ships as the framework smoke test.
+description: A synthetic Hubdustry-shaped Go MCP fixture for validating the migration framework against non-Discord tools.
 sidebar:
   order: 4
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Hubdustry is the **reference adapter** - included to validate the migration
-framework end-to-end against a known-zero-overlap source. It does not
-migrate any Discord tools because Hubdustry has none.
+The Hubdustry-shaped fixture is the **reference adapter** - included to
+validate the migration framework end-to-end against a known-zero-overlap
+source. It does not migrate any Discord tools because the fixture has none.
 
 ## Source
 
 - **Original upstream**: `jhm1909/Hubdustry` (no longer publicly reachable when
   rechecked on 2026-08-11)
 - **Reference fixture**:
-  [bundled Hubdustry snapshot](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-server/test-fixtures/hubdustry-go-mcp/apps/mcp)
+  [bundled synthetic fixture](https://github.com/cappyeo/discord-mcp/tree/main/packages/mcp-server/test-fixtures/hubdustry-go-mcp/apps/mcp)
 - **Language**: Go (`mcp.NewTool(...)` registration pattern)
 - **Tool count**: 5 tools in the bundled fixture - all file or deploy
   administration. Zero Discord tools.
@@ -25,9 +25,9 @@ migrate any Discord tools because Hubdustry has none.
 
 ## What this is
 
-The bundled Hubdustry fixture models a Go MCP server for server administration:
-file operations and deploy triggers. It lives in a different problem space
-from discord-mcp entirely.
+The bundled synthetic fixture models a Go MCP server for server administration:
+file operations and deploy triggers. It lives in a different problem space from
+discord-mcp entirely.
 
 It is the **reference adapter** - the simplest possible
 implementation of the `MigrationSource` interface, with an empty NAME_MAP
