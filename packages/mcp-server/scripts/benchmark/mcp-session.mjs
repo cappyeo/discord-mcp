@@ -41,6 +41,12 @@ function redact(value, secrets) {
   return secrets.reduce((text, secret) => text.split(secret).join('[REDACTED]'), String(value));
 }
 
+function sessionError(message, code = null) {
+  const error = new Error(message);
+  if (typeof code === 'string' && code !== '') error.code = code;
+  return error;
+}
+
 async function closeQuietly(client, transport) {
   try {
     await client.close();
@@ -99,7 +105,7 @@ export async function openMcpBenchmarkSession({
             data !== null && typeof data === 'object' && typeof data.code === 'string'
               ? data.code
               : 'MCP_TOOL_ERROR';
-          throw new Error(`${name} failed (${code})`);
+          throw sessionError(`${name} failed (${code})`, code);
         }
         return data;
       },
@@ -114,8 +120,9 @@ export async function openMcpBenchmarkSession({
     const message = redact(error instanceof Error ? error.message : error, secrets);
     if (message.startsWith('missing required MCP tools:')) throw error;
     const stderrTail = redact(rawStderrTail, secrets).slice(-8_192);
-    throw new Error(
+    throw sessionError(
       `${message}${stderrTail.trim() === '' ? '' : `; child stderr: ${stderrTail.trim()}`}`,
+      error?.code,
     );
   }
 }

@@ -124,6 +124,96 @@ function automodRule(
 }
 
 describe('guild blueprint reconciliation safety', () => {
+  it('creates clean roles in reverse desired order and does not schedule a reorder', () => {
+    const result = reconcileGuildBlueprint(
+      `sha256:${'0'.repeat(64)}`,
+      blueprint,
+      baseSnapshot(botAndEveryone()),
+    );
+
+    expect(
+      result.operations
+        .filter((operation) => operation.resource === 'role' && operation.action === 'create')
+        .map((operation) => operation.key),
+    ).toEqual([...blueprint.role_order].reverse());
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ resource: 'role_order' })]),
+    );
+  });
+
+  it('does not reorder when every bound role is already observed in the desired order', () => {
+    const roles = [
+      ...botAndEveryone(),
+      ...blueprint.role_order.map((key, index) =>
+        roleFor(key, `1000000000000000${20 + index}`, { position: index + 1 }),
+      ),
+    ];
+    const result = reconcileGuildBlueprint(
+      `sha256:${'1'.repeat(64)}`,
+      blueprint,
+      baseSnapshot(roles),
+    );
+
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ resource: 'role_order' })]),
+    );
+  });
+
+  it('blocks an unsafe desired reorder without emitting a reorder operation', () => {
+    const roles = [
+      ...botAndEveryone().map((role) =>
+        role.id === '100000000000000010' ? { ...role, position: 4 } : role,
+      ),
+      ...blueprint.role_order.map((key, index) =>
+        roleFor(
+          key,
+          index === blueprint.role_order.length - 1
+            ? '100000000000000009'
+            : `1000000000000000${20 + index}`,
+          {
+            position: Math.max(1, 3 - index),
+          },
+        ),
+      ),
+    ];
+    const result = reconcileGuildBlueprint(
+      `sha256:${'2'.repeat(64)}`,
+      blueprint,
+      baseSnapshot(roles),
+    );
+
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'BOT_ROLE_HIERARCHY', resource: 'role_order' }),
+      ]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ resource: 'role_order' })]),
+    );
+  });
+
+  it('preserves a safe existing reorder operation', () => {
+    const roles = [
+      ...botAndEveryone(),
+      ...blueprint.role_order.map((key, index) =>
+        roleFor(key, `1000000000000000${20 + index}`, {
+          position: blueprint.role_order.length - index,
+        }),
+      ),
+    ];
+    const result = reconcileGuildBlueprint(
+      `sha256:${'3'.repeat(64)}`,
+      blueprint,
+      baseSnapshot(roles),
+    );
+
+    expect(result.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ resource: 'role_order', action: 'reorder' }),
+      ]),
+    );
+  });
+
   it('blocks duplicate unbound resources instead of guessing', () => {
     const member = blueprint.roles.find((role) => role.key === 'member')!;
     const snapshot = baseSnapshot([
@@ -159,6 +249,40 @@ describe('guild blueprint reconciliation safety', () => {
     );
     expect(result.bindings.roles.member).toBeUndefined();
     expect(result.operations.some((operation) => operation.key === 'member')).toBe(false);
+  });
+
+  it('allows a same-position role whose newer snowflake is below the bot role', () => {
+    const member = blueprint.roles.find((role) => role.key === 'member')!;
+    const role = roleFor(member.key, '100000000000000011', { position: 100 });
+
+    const result = reconcileGuildBlueprint(
+      `sha256:${'a'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone(), role]),
+    );
+
+    expect(result.bindings.roles.member).toBe(role.id);
+    expect(result.blockers).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'BOT_ROLE_HIERARCHY' })]),
+    );
+  });
+
+  it('blocks a same-position role whose older snowflake is at or above the bot role', () => {
+    const member = blueprint.roles.find((role) => role.key === 'member')!;
+    const role = roleFor(member.key, '100000000000000009', { position: 100 });
+
+    const result = reconcileGuildBlueprint(
+      `sha256:${'b'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone(), role]),
+    );
+
+    expect(result.bindings.roles.member).toBeUndefined();
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'BOT_ROLE_HIERARCHY', resource: `role:${role.id}` }),
+      ]),
+    );
   });
 
   it('adopts a unique bot-owned singleton AutoMod rule and plans an update', () => {

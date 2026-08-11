@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { Client } from '@modelcontextprotocol/client';
+import { describe, expect, it, vi } from 'vitest';
 import { openMcpBenchmarkSession } from './mcp-session.mjs';
 
 const SERVER_PATH = resolve(import.meta.dirname, 'fixtures/mcp-server.mjs');
@@ -84,5 +85,28 @@ describe('openMcpBenchmarkSession', () => {
         env: { AWS_SECRET_ACCESS_KEY: 'must-not-be-forwarded' },
       }),
     ).rejects.toThrow('unsupported MCP child environment keys');
+  });
+
+  it('preserves the structured MCP tool error code on the thrown session error', async () => {
+    const session = await openMcpBenchmarkSession({
+      cliPath: SERVER_PATH,
+      cwd: resolve(import.meta.dirname, '../..'),
+      env: {},
+    });
+    const callTool = vi
+      .spyOn(Client.prototype, 'callTool')
+      .mockResolvedValue({ isError: true, structuredContent: { code: 'GUILD_NOT_ALLOWED' } });
+
+    try {
+      await expect(session.callTool('guild_blueprint_plan', {})).rejects.toSatisfy((error) => {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.code).toBe('GUILD_NOT_ALLOWED');
+        expect(error.message).toBe('guild_blueprint_plan failed (GUILD_NOT_ALLOWED)');
+        return true;
+      });
+    } finally {
+      callTool.mockRestore();
+      await session.close();
+    }
   });
 });

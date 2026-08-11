@@ -203,7 +203,6 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
         'category',
         'channel',
         'guild',
-        'role_order',
         'channel_order',
         'welcome_screen',
         'onboarding',
@@ -294,7 +293,9 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
           id: snowflake(nextId++),
           name: string(body.name),
           color: number(body.color),
-          position: target.roles.length,
+          // Discord creates new roles at the same low position. Equal-position
+          // snowflake ordering then preserves the reverse desired create order.
+          position: 1,
           permissions: string(body.permissions),
           mentionable: boolean(body.mentionable),
           hoist: boolean(body.hoist),
@@ -474,7 +475,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
       expect(creates.categories).toBe(blueprint.categories.length);
       expect(creates.channels).toBe(blueprint.channels.length);
       expect(creates.guild).toBe(1);
-      expect(creates.roleOrder).toBe(1);
+      expect(creates.roleOrder).toBe(0);
       expect(creates.channelOrder).toBe(1);
       expect(creates.welcome).toBe(1);
       expect(creates.onboarding).toBe(1);
@@ -535,7 +536,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
         guild: 1,
         welcome: 1,
         onboarding: 1,
-        roleOrder: 1,
+        roleOrder: 0,
         channelOrder: 1,
       });
       expect(mutations.get('automod:create')).toBe(blueprint.automod.rules.length + 1);
@@ -592,7 +593,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
         guild: 1,
         welcome: 1,
         onboarding: 1,
-        roleOrder: 1,
+        roleOrder: 0,
         channelOrder: 1,
       });
 
@@ -620,7 +621,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
         guild: 1,
         welcome: 1,
         onboarding: 1,
-        roleOrder: 1,
+        roleOrder: 0,
         channelOrder: 1,
       });
     } finally {

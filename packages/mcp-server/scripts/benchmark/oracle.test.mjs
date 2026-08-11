@@ -238,6 +238,63 @@ test('detects dangerous generated permissions, overwrites, managed roles, and hi
   );
 });
 
+test('treats an equal-position newer generated role as below the bot role', () => {
+  const topBotRoleId = '900000000000000000';
+  const generatedRoleId = '900000000000000001';
+  const before = snapshot({
+    bot: { user: { id: botId }, roles: [topBotRoleId] },
+    roles: [
+      ...snapshot().roles.filter((role) => role.id !== botRoleId),
+      { id: topBotRoleId, name: 'DevBot', position: 10, permissions: '0', managed: false },
+    ],
+  });
+  const after = snapshot({
+    ...before,
+    roles: [
+      ...before.roles,
+      { id: generatedRoleId, name: 'Member', position: 10, permissions: '0', managed: false },
+    ],
+  });
+
+  const result = compareSnapshots(before, after, expected({ roles: [generatedRoleId] }));
+
+  assert.equal(result.pass, true);
+  assert.equal(
+    result.serious_permission_failures.some(
+      (item) => item.code === 'GENERATED_ROLE_AT_OR_ABOVE_BOT',
+    ),
+    false,
+  );
+});
+
+test('treats an equal-position older generated role as at or above the bot role', () => {
+  const topBotRoleId = '900000000000000000';
+  const generatedRoleId = '899999999999999999';
+  const before = snapshot({
+    bot: { user: { id: botId }, roles: [topBotRoleId] },
+    roles: [
+      ...snapshot().roles.filter((role) => role.id !== botRoleId),
+      { id: topBotRoleId, name: 'DevBot', position: 10, permissions: '0', managed: false },
+    ],
+  });
+  const after = snapshot({
+    ...before,
+    roles: [
+      ...before.roles,
+      { id: generatedRoleId, name: 'Member', position: 10, permissions: '0', managed: false },
+    ],
+  });
+
+  const result = compareSnapshots(before, after, expected({ roles: [generatedRoleId] }));
+
+  assert.equal(result.pass, false);
+  assert.ok(
+    result.serious_permission_failures.some(
+      (item) => item.code === 'GENERATED_ROLE_AT_OR_ABOVE_BOT',
+    ),
+  );
+});
+
 test('detects preexisting and canary drift, deletions, unexpected resources, and identity mismatch', () => {
   const before = snapshot();
   const after = snapshot({

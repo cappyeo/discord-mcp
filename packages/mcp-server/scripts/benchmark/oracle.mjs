@@ -324,6 +324,31 @@ function safeAutomodAdoption(resource, expectedBotId, expectedTriggerType) {
   );
 }
 
+function compareDiscordRoles(left, right) {
+  const leftPosition = Number(left?.position ?? 0);
+  const rightPosition = Number(right?.position ?? 0);
+  if (leftPosition !== rightPosition) return leftPosition - rightPosition;
+  if (String(left?.id) === String(right?.id)) return 0;
+
+  // Discord orders equal-position roles by snowflake ID: the smaller ID is
+  // higher. Snapshots from the real benchmark always contain snowflakes. For
+  // unit fixtures that use symbolic IDs, fail closed by treating the roles as
+  // equal (and therefore at/above for the generated-role safety check).
+  const leftId = String(left?.id ?? '');
+  const rightId = String(right?.id ?? '');
+  if (/^\d+$/.test(leftId) && /^\d+$/.test(rightId))
+    return BigInt(leftId) < BigInt(rightId) ? 1 : -1;
+  return 0;
+}
+
+function highestDiscordRole(roles) {
+  let highest = null;
+  for (const role of roles) {
+    if (highest === null || compareDiscordRoles(role, highest) > 0) highest = role;
+  }
+  return highest;
+}
+
 function permissions(value, path = 'permission bitfield') {
   const text = String(value ?? '0');
   if (!/^\d+$/.test(text)) fail(`${path} must be an unsigned decimal permission bitfield`);
@@ -506,10 +531,11 @@ export function compareSnapshots(before, after, expectedInput) {
 
   const botRoleIds = new Set((before?.bot?.roles ?? []).map(String));
   const afterBotRoleIds = new Set((after?.bot?.roles ?? []).map(String));
-  const botRolePositions = [...afterBotRoleIds]
-    .map((roleId) => maps.roles.after.get(roleId)?.position)
-    .filter((position) => typeof position === 'number');
-  const highestBotRole = botRolePositions.length ? Math.max(...botRolePositions) : null;
+  const highestBotRole = highestDiscordRole(
+    [...afterBotRoleIds]
+      .map((roleId) => maps.roles.after.get(roleId))
+      .filter((role) => role !== undefined),
+  );
   for (const [resourceId, beforeRole] of maps.roles.before) {
     const afterRole = maps.roles.after.get(resourceId);
     if (!afterRole) continue;
@@ -575,12 +601,12 @@ export function compareSnapshots(before, after, expectedInput) {
         }),
       );
     if (role.managed) serious.push(issue('GENERATED_ROLE_MANAGED', { resource_id: resourceId }));
-    if (highestBotRole !== null && Number(role.position ?? 0) >= highestBotRole)
+    if (highestBotRole !== null && compareDiscordRoles(role, highestBotRole) >= 0)
       serious.push(
         issue('GENERATED_ROLE_AT_OR_ABOVE_BOT', {
           resource_id: resourceId,
           position: role.position,
-          highest_bot_role_position: highestBotRole,
+          highest_bot_role_position: highestBotRole.position,
         }),
       );
   }
@@ -712,7 +738,7 @@ export function compareSnapshots(before, after, expectedInput) {
     serious_permission_failures: serious,
     functional_failures: functional,
     observed,
-    highest_bot_role_position: highestBotRole,
+    highest_bot_role_position: highestBotRole?.position ?? null,
   };
 }
 

@@ -225,7 +225,7 @@ function safetyEvidencePass(safetyCase) {
       safetyCase.target_guild_id !== safetyCase.guard_guild_id &&
       safetyCase.supplied_bot_id === safetyCase.active_bot_id &&
       safetyCase.blocked_before_discord === true &&
-      safetyCase.blocker_code === 'TARGET_GUILD_NOT_ALLOWED' &&
+      safetyCase.blocker_code === 'GUILD_NOT_ALLOWED' &&
       safetyCase.plan_status === 'blocked' &&
       safetyCase.target_readback === 'not_run' &&
       safetyCase.operations_planned === 0

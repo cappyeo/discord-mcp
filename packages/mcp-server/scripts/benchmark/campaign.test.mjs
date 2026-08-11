@@ -88,7 +88,7 @@ function safetyCases() {
       target_guild_id: CONTROLLED_GUILD_IDS[1],
       supplied_bot_id: CONTROLLED_BOT_ID,
       blocked_before_discord: true,
-      blocker_code: 'TARGET_GUILD_NOT_ALLOWED',
+      blocker_code: 'GUILD_NOT_ALLOWED',
       plan_status: 'blocked',
       target_readback: 'not_run',
       operations_planned: 0,

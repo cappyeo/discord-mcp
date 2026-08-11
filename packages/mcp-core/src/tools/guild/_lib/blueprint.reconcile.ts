@@ -21,6 +21,7 @@ import {
   type BlueprintPlanSummary,
   emptyBlueprintBindings,
 } from './blueprint.execution.schema.js';
+import { compareDiscordRoles, isDiscordRoleStrictlyBelow } from './blueprint.role-hierarchy.js';
 import type { GuildBlueprint } from './blueprint.schema.js';
 import {
   type BlueprintTargetSnapshot,
@@ -209,12 +210,6 @@ function blocker(
   return { code, message, resource, recovery_hint: recoveryHint };
 }
 
-function roleOrder(left: TargetRole, right: TargetRole): number {
-  if (left.position !== right.position) return left.position - right.position;
-  if (left.id === right.id) return 0;
-  return BigInt(left.id) < BigInt(right.id) ? 1 : -1;
-}
-
 function channelOrder(left: TargetChannel, right: TargetChannel): number {
   if (left.position !== right.position) return left.position - right.position;
   if (left.id === right.id) return 0;
@@ -224,7 +219,7 @@ function channelOrder(left: TargetChannel, right: TargetChannel): number {
 function botPermissionState(snapshot: BlueprintTargetSnapshot, blueprint: GuildBlueprint) {
   const everyone = snapshot.roles.find((role) => role.id === snapshot.guild.id);
   const assigned = snapshot.roles.filter((role) => snapshot.bot.roles.includes(role.id));
-  const top = [...assigned].sort(roleOrder).at(-1) ?? null;
+  const top = [...assigned].sort(compareDiscordRoles).at(-1) ?? null;
   let effective = everyone === undefined ? 0n : BigInt(everyone.permissions);
   for (const role of assigned) effective |= BigInt(role.permissions);
   const administrator =
@@ -442,7 +437,7 @@ function targetSnapshotId(
 
 function ensureBoundRoleManageable(
   role: TargetRole,
-  botTopPosition: number,
+  botTopRole: Pick<TargetRole, 'id' | 'position'> | null,
 ): BlueprintBlocker | null {
   if (role.managed) {
     return blocker(
@@ -452,7 +447,7 @@ function ensureBoundRoleManageable(
       'Remove the stale checkpoint binding or choose a non-managed role name.',
     );
   }
-  if (role.position >= botTopPosition) {
+  if (botTopRole === null || !isDiscordRoleStrictlyBelow(role, botTopRole)) {
     return blocker(
       'BOT_ROLE_HIERARCHY',
       'A generated role is at or above the bot highest role.',
@@ -515,15 +510,25 @@ export function reconcileGuildBlueprint(
   for (const key of Object.keys(bindings.roles)) {
     if (!desiredRoleKeys.has(key)) delete bindings.roles[key];
   }
-  for (const desired of blueprint.roles) {
+  const roleOrderIndex = new Map(blueprint.role_order.map((key, index) => [key, index]));
+  const desiredRolesForReconcile = [...blueprint.roles].sort(
+    (left, right) => roleOrderIndex.get(right.key)! - roleOrderIndex.get(left.key)!,
+  );
+  for (const desired of desiredRolesForReconcile) {
     let current =
       bindings.roles[desired.key] === undefined
         ? undefined
         : snapshot.roles.find((role) => role.id === bindings.roles[desired.key]);
     if (current === undefined) delete bindings.roles[desired.key];
     if (current !== undefined) {
-      const hierarchy = ensureBoundRoleManageable(current, permissionState.top_role_position);
-      if (hierarchy !== null) blockers.push(hierarchy);
+      const hierarchy = ensureBoundRoleManageable(
+        current,
+        snapshot.roles.find((role) => role.id === permissionState.top_role_id) ?? null,
+      );
+      if (hierarchy !== null) {
+        blockers.push(hierarchy);
+        continue;
+      }
       if (!roleMatches(current, desired)) {
         roleOperations.push(
           operation(
@@ -552,8 +557,14 @@ export function reconcileGuildBlueprint(
     }
     current = matches[0];
     if (current !== undefined) {
-      const hierarchy = ensureBoundRoleManageable(current, permissionState.top_role_position);
-      if (hierarchy !== null) blockers.push(hierarchy);
+      const hierarchy = ensureBoundRoleManageable(
+        current,
+        snapshot.roles.find((role) => role.id === permissionState.top_role_id) ?? null,
+      );
+      if (hierarchy !== null) {
+        blockers.push(hierarchy);
+        continue;
+      }
       if (!roleMatches(current, desired)) {
         blockers.push(
           blocker(
@@ -750,17 +761,38 @@ export function reconcileGuildBlueprint(
     ...channelOperations,
     ...stageOperations,
   ].some((item) => item.action === 'create');
-  let roleOrderingNeeded = anyStructuralCreate;
-  if (
-    !roleOrderingNeeded &&
-    blueprint.roles.every((role) => bindings.roles[role.key] !== undefined)
-  ) {
+  let roleOrderingNeeded = false;
+  if (blueprint.roles.every((role) => bindings.roles[role.key] !== undefined)) {
     const keyById = new Map(Object.entries(bindings.roles).map(([key, id]) => [id, key]));
     const currentOrder = snapshot.roles
       .filter((role) => keyById.has(role.id))
-      .sort(roleOrder)
+      .sort(compareDiscordRoles)
       .map((role) => keyById.get(role.id)!);
-    roleOrderingNeeded = canonicalJson(currentOrder) !== canonicalJson(blueprint.role_order);
+    if (
+      currentOrder.length === blueprint.role_order.length &&
+      canonicalJson(currentOrder) !== canonicalJson(blueprint.role_order)
+    ) {
+      const botTopRole =
+        snapshot.roles
+          .filter((role) => snapshot.bot.roles.includes(role.id))
+          .sort(compareDiscordRoles)
+          .at(-1) ?? null;
+      const unsafeRole = blueprint.role_order
+        .map((key, index) => ({ id: bindings.roles[key]!, position: index + 1 }))
+        .find((role) => botTopRole === null || !isDiscordRoleStrictlyBelow(role, botTopRole));
+      if (unsafeRole !== undefined) {
+        blockers.push(
+          blocker(
+            'BOT_ROLE_HIERARCHY',
+            'The desired role order would place a generated role at or above the bot highest role.',
+            'role_order',
+            'Move the bot role above every generated role; discord-mcp never elevates itself.',
+          ),
+        );
+      } else {
+        roleOrderingNeeded = true;
+      }
+    }
   }
   const desiredCategoryOrder = [...blueprint.categories]
     .sort((left, right) => left.position - right.position)

@@ -207,6 +207,26 @@ function channelById(snapshot, id) {
   return snapshot.channels.find((item) => item.id === id);
 }
 
+function compareDiscordRoles(left, right) {
+  const leftPosition = left.position ?? 0;
+  const rightPosition = right.position ?? 0;
+  if (leftPosition !== rightPosition) return leftPosition - rightPosition;
+  if (left.id === right.id) return 0;
+  return BigInt(left.id) < BigInt(right.id) ? 1 : -1;
+}
+
+function highestDiscordRole(roles) {
+  let highest = null;
+  for (const role of roles) {
+    if (highest === null || compareDiscordRoles(role, highest) > 0) highest = role;
+  }
+  return highest;
+}
+
+function roleAtOrAbove(role, highest) {
+  return highest === null || compareDiscordRoles(role, highest) >= 0;
+}
+
 function canaryFromSnapshot(snapshot, kind, name) {
   const items = kind === 'role' ? snapshot.roles : snapshot.channels;
   const matches = items.filter((item) => item.name === name);
@@ -237,6 +257,9 @@ function validateCanary(snapshot, role, channel, guildId) {
 }
 
 function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, fingerprint) {
+  const highestBotRole = highestDiscordRole(
+    snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
+  );
   return {
     schema_version: SCHEMA_VERSION,
     kind: 'discord-mcp-benchmark-baseline',
@@ -264,13 +287,7 @@ function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, f
           role.id === canaryRoleId ||
           role.managed ||
           (snapshot.bot.roles ?? []).includes(role.id) ||
-          role.position >=
-            Math.max(
-              ...snapshot.roles
-                .filter((item) => (snapshot.bot.roles ?? []).includes(item.id))
-                .map((item) => item.position ?? 0),
-              0,
-            ),
+          roleAtOrAbove(role, highestBotRole),
       )
       .map((role) => role.id)
       .sort(),
@@ -505,9 +522,10 @@ function assertCleanupInventory(ids, snapshot, baseline) {
       id === snapshot.guild.id
     )
       throw new Error('foreign, managed, or bot-assigned role binding');
-    const botRoles = snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id));
-    const highest = Math.max(...botRoles.map((item) => item.position ?? 0), 0);
-    if ((role.position ?? 0) >= highest) throw new Error('cleanup role is not below the bot role');
+    const highest = highestDiscordRole(
+      snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
+    );
+    if (roleAtOrAbove(role, highest)) throw new Error('cleanup role is not below the bot role');
   }
   for (const id of [...ids.categories, ...ids.channels]) {
     const channel = channelById(snapshot, id);
@@ -837,19 +855,14 @@ export async function initializeBenchmarkBaseline({
       });
     }
   }
-  const highestBotRole = Math.max(
-    ...snapshot.roles
-      .filter((item) => (snapshot.bot.roles ?? []).includes(item.id))
-      .map((item) => item.position ?? 0),
-    0,
+  const highestBotRole = highestDiscordRole(
+    snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
   );
   const preservedRoles = new Set([
     guildId,
     canaryRoleId,
     ...(snapshot.bot.roles ?? []),
-    ...snapshot.roles
-      .filter((role) => (role.position ?? 0) >= highestBotRole)
-      .map((role) => role.id),
+    ...snapshot.roles.filter((role) => roleAtOrAbove(role, highestBotRole)).map((role) => role.id),
   ]);
   for (const role of snapshot.roles)
     if (!preservedRoles.has(role.id) && !role.managed)

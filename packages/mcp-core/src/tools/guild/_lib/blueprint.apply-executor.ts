@@ -18,6 +18,7 @@ import type {
   BlueprintOperation,
   GuildBlueprintPlanPayload,
 } from './blueprint.execution.schema.js';
+import { compareDiscordRoles, isDiscordRoleStrictlyBelow } from './blueprint.role-hierarchy.js';
 import type {
   BlueprintTargetSnapshot,
   TargetOnboarding,
@@ -237,6 +238,19 @@ export async function executeBlueprintOperation(
       if (id === undefined) throw new BlueprintExecutionError('PLAN_DEPENDENCY_UNRESOLVED', key);
       return { id, position: index + 1 };
     });
+    const botTopRole = input.snapshot.roles
+      .filter((role) => input.snapshot.bot.roles.includes(role.id))
+      .sort(compareDiscordRoles)
+      .at(-1);
+    const unsafeRole = positions.find(
+      (role) => botTopRole === undefined || !isDiscordRoleStrictlyBelow(role, botTopRole),
+    );
+    if (unsafeRole !== undefined) {
+      throw new BlueprintExecutionError(
+        'BOT_ROLE_HIERARCHY',
+        'The current bot highest role cannot safely contain the proposed generated role order.',
+      );
+    }
     const response = await rest.patch(Routes.guildRoles(guildId), {
       body: positions,
       reason: auditReason,

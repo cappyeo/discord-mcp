@@ -121,6 +121,10 @@ function planStatus(plan) {
   return plan?.status === 'ready' || plan?.status === 'blocked' ? plan.status : 'blocked';
 }
 
+function sessionErrorCode(error) {
+  return typeof error?.code === 'string' && error.code !== '' ? error.code : null;
+}
+
 function readback(plan) {
   return plan?.verification?.target_readback === 'passed' ? 'passed' : 'not_run';
 }
@@ -193,7 +197,7 @@ async function runCase(input, caseName, dependencies) {
     caseName === 'wrong_bot'
       ? 'EXPECTED_BOT_MISMATCH'
       : caseName === 'wrong_guild'
-        ? 'TARGET_GUILD_NOT_ALLOWED'
+        ? 'GUILD_NOT_ALLOWED'
         : null;
   const evidence = emptyEvidence(caseName, input, targetGuildId, suppliedBotId);
   const beforeStates = [];
@@ -202,7 +206,8 @@ async function runCase(input, caseName, dependencies) {
   }
   let session = null;
   let plan = null;
-  let callMalformed = false;
+  let callError = null;
+  let toolCallError = null;
   let closeError = null;
   try {
     session = await dependencies.openSession({
@@ -212,15 +217,20 @@ async function runCase(input, caseName, dependencies) {
     });
     if (!record(session) || typeof session.callTool !== 'function')
       throw new Error('session is malformed');
-    plan = await session.callTool('guild_blueprint_plan', {
-      guild_id: targetGuildId,
-      expected_bot_id: suppliedBotId,
-      request: input.request,
-    });
+    try {
+      plan = await session.callTool('guild_blueprint_plan', {
+        guild_id: targetGuildId,
+        expected_bot_id: suppliedBotId,
+        request: input.request,
+      });
+    } catch (error) {
+      toolCallError = error;
+      throw error;
+    }
     if (!planShapeIsValid(plan, targetGuildId, suppliedBotId, expectedBlocker))
       throw new Error('plan response is malformed');
-  } catch {
-    callMalformed = true;
+  } catch (error) {
+    callError = error;
   } finally {
     if (session !== null) {
       if (typeof session.close !== 'function')
@@ -266,12 +276,17 @@ async function runCase(input, caseName, dependencies) {
   evidence.audit_entry_count = entries.length;
   evidence.mutation_count = entries.length;
   evidence.plan_status = planStatus(plan);
-  evidence.blocker_code = blockerCode(plan);
+  evidence.blocker_code = blockerCode(plan) ?? sessionErrorCode(toolCallError);
   evidence.blocked_before_discord =
     evidence.plan_status === 'blocked' && evidence.blocker_code === expectedBlocker;
   evidence.target_readback = readback(plan);
   evidence.operations_planned = operationsPlanned(plan);
-  evidence.passed = !callMalformed && evidencePass(evidence, expectedBlocker);
+  const expectedPublicGuildRejection =
+    caseName === 'wrong_guild' &&
+    plan === null &&
+    sessionErrorCode(toolCallError) === 'GUILD_NOT_ALLOWED';
+  evidence.passed =
+    (expectedPublicGuildRejection || callError === null) && evidencePass(evidence, expectedBlocker);
   return evidence;
 }
 

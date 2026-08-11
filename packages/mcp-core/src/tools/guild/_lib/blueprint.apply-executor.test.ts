@@ -1,5 +1,5 @@
 import type { REST } from '@discordjs/rest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { executeBlueprintOperation } from './blueprint.apply-executor.js';
 import {
   type BlueprintOperation,
@@ -90,7 +90,21 @@ function operation(
   };
 }
 
-const snapshot = {} as BlueprintTargetSnapshot;
+const snapshot = {
+  bot: { user: { id: BOT_ID }, roles: ['100000000000000010'] },
+  roles: [
+    {
+      id: '100000000000000010',
+      name: 'Bot',
+      color: 0,
+      position: 100,
+      permissions: '8',
+      mentionable: false,
+      hoist: false,
+      managed: false,
+    },
+  ],
+} as unknown as BlueprintTargetSnapshot;
 const signal = new AbortController().signal;
 
 describe('blueprint operation response validation', () => {
@@ -124,6 +138,42 @@ describe('blueprint operation response validation', () => {
         signal,
       }),
     ).rejects.toMatchObject({ code: 'DISCORD_RESPONSE_INVALID' });
+  });
+
+  it('performs zero REST calls when the proposed order reaches the bot role', async () => {
+    const patch = vi.fn(async () => []);
+    const unsafeSnapshot = {
+      ...snapshot,
+      roles: [{ ...snapshot.roles[0]!, position: 2 }],
+    } as BlueprintTargetSnapshot;
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { patch } as unknown as REST,
+        plan,
+        operation: operation('role_order', 'reorder', 'generated_roles'),
+        bindings: bindings(),
+        snapshot: unsafeSnapshot,
+        signal,
+      }),
+    ).rejects.toMatchObject({ code: 'BOT_ROLE_HIERARCHY' });
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('preserves a safe role reorder and validates every returned role', async () => {
+    const patch = vi.fn(async () => Object.values(bindings().roles).map((id) => ({ id })));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { patch } as unknown as REST,
+        plan,
+        operation: operation('role_order', 'reorder', 'generated_roles'),
+        bindings: bindings(),
+        snapshot,
+        signal,
+      }),
+    ).resolves.toEqual({ resource_id: null });
+    expect(patch).toHaveBeenCalledOnce();
   });
 
   it('rejects a Welcome Screen response that differs from the approved payload', async () => {

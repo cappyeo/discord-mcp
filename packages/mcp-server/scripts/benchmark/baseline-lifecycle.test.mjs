@@ -11,6 +11,8 @@ const BOT_ROLE = '888000888000999001';
 const CANARY_ROLE = '777000777000999001';
 const CANARY_CHANNEL = '777000777000999002';
 const EXTRA_ROLE = '777000777000999003';
+const EQUAL_POSITION_ABOVE_ROLE = '888000888000999000';
+const EQUAL_POSITION_BELOW_ROLE = '888000888000999002';
 const EXTRA_CATEGORY = '777000777000999004';
 const EXTRA_CHANNEL = '777000777000999005';
 const RULE = '777000777000999006';
@@ -233,6 +235,22 @@ describe('benchmark baseline lifecycle', () => {
 
   it('initializes a non-Community disposable guild before deleting referenced resources', async () => {
     const state = { snapshot: currentSnapshot() };
+    state.snapshot.roles.push(
+      {
+        id: EQUAL_POSITION_ABOVE_ROLE,
+        name: 'Equal position above bot',
+        managed: false,
+        permissions: '0',
+        position: 2,
+      },
+      {
+        id: EQUAL_POSITION_BELOW_ROLE,
+        name: 'Equal position below bot',
+        managed: false,
+        permissions: '0',
+        position: 2,
+      },
+    );
     state.snapshot.guild.features = [];
     state.snapshot.guild.rules_channel_id = EXTRA_CHANNEL;
     state.snapshot.guild.public_updates_channel_id = EXTRA_CHANNEL;
@@ -340,6 +358,10 @@ describe('benchmark baseline lifecycle', () => {
     expect(baseline.guild_fields.features).toContain('COMMUNITY');
     expect(state.snapshot.channels.map((channel) => channel.id)).toEqual([CANARY_CHANNEL]);
     expect(state.snapshot.roles.some((role) => role.id === EXTRA_ROLE)).toBe(false);
+    expect(state.snapshot.roles.some((role) => role.id === EQUAL_POSITION_ABOVE_ROLE)).toBe(true);
+    expect(state.snapshot.roles.some((role) => role.id === EQUAL_POSITION_BELOW_ROLE)).toBe(false);
+    expect(baseline.preserved_role_ids).toContain(EQUAL_POSITION_ABOVE_ROLE);
+    expect(baseline.preserved_role_ids).not.toContain(EQUAL_POSITION_BELOW_ROLE);
     const guildPatch = calls.findIndex(
       ([method, path]) => method === 'PATCH' && path === `/guilds/${GUILD}`,
     );
@@ -359,6 +381,55 @@ describe('benchmark baseline lifecycle', () => {
         method === 'POST' ? options.retry === false : options.retry === undefined,
       ),
     ).toBe(true);
+  });
+
+  it('fails closed and preserves manageable roles when no bot hierarchy anchor exists', async () => {
+    const state = { snapshot: baselineSnapshot() };
+    state.snapshot.bot.roles = [];
+    state.snapshot.roles.push({
+      id: EXTRA_ROLE,
+      name: 'Unanchored role',
+      managed: false,
+      permissions: '0',
+      position: 1,
+    });
+    const calls = [];
+    const rest = {
+      async request(method, path, options) {
+        calls.push([method, path, options]);
+        if (method === 'PATCH' && path === `/guilds/${GUILD}`) {
+          Object.assign(state.snapshot.guild, options.body);
+          return structuredClone(state.snapshot.guild);
+        }
+        if (method === 'PUT' && path.endsWith('/onboarding')) {
+          state.snapshot.onboarding = { guild_id: GUILD, ...options.body };
+          return structuredClone(state.snapshot.onboarding);
+        }
+        if (method === 'PATCH' && path.endsWith('/welcome-screen')) {
+          state.snapshot.welcome_screen = {
+            description: options.body.description,
+            welcome_channels: options.body.welcome_channels,
+          };
+          return structuredClone(state.snapshot.welcome_screen);
+        }
+        throw new Error(`unexpected mutation ${method} ${path}`);
+      },
+    };
+
+    const baseline = await initializeBenchmarkBaseline({
+      rest,
+      readSnapshot: async () => structuredClone(state.snapshot),
+      snapshotFingerprint: () => FP,
+      guildId: GUILD,
+      botId: BOT,
+      allowedGuildIds: [GUILD],
+      confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+      runId: 'unanchored-hierarchy',
+    });
+
+    expect(state.snapshot.roles.some((role) => role.id === EXTRA_ROLE)).toBe(true);
+    expect(baseline.preserved_role_ids).toContain(EXTRA_ROLE);
+    expect(calls.some(([method]) => method === 'DELETE')).toBe(false);
   });
 
   it('preserves a bot-owned protected mention-spam rule after delete code 200006', async () => {

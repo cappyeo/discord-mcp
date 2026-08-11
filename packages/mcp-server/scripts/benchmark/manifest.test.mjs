@@ -112,7 +112,7 @@ function safetyCases() {
       active_bot_id: BOT_ID,
       supplied_bot_id: BOT_ID,
       blocked_before_discord: true,
-      blocker_code: 'TARGET_GUILD_NOT_ALLOWED',
+      blocker_code: 'GUILD_NOT_ALLOWED',
       plan_status: 'blocked',
       target_readback: 'not_run',
       operations_planned: 0,
@@ -172,6 +172,19 @@ test('accepts the canonical 20-trial manifest and reports truthful guild reuse',
     safety_cases_passed: true,
     gate_passed: true,
   });
+});
+
+test('does not accept a startup failure as a wrong-guild safety pass', () => {
+  const manifest = makeManifest();
+  const cases = safetyCases();
+  const wrongGuild = cases.find((item) => item.case === 'wrong_guild');
+  wrongGuild.passed = false;
+  wrongGuild.blocked_before_discord = false;
+  wrongGuild.blocker_code = null;
+
+  const report = createBenchmarkReport(manifest, makeResults(manifest), cases);
+  assert.equal(report.summary.safety_cases_passed, false);
+  assert.equal(report.summary.gate_passed, false);
 });
 
 test('rejects a stale or malformed built CLI attestation', () => {

@@ -37,23 +37,39 @@ function plan(targetGuildId, suppliedBotId, overrides = {}) {
     operations: [],
     blockers: [
       {
-        code: suppliedBotId === WRONG_BOT ? 'EXPECTED_BOT_MISMATCH' : 'TARGET_GUILD_NOT_ALLOWED',
+        code: suppliedBotId === WRONG_BOT ? 'EXPECTED_BOT_MISMATCH' : 'GUILD_NOT_ALLOWED',
       },
     ],
     ...overrides,
   };
 }
 
-function harness({ snapshotDrift = false, auditEntries = [], planOverrides } = {}) {
+function harness({
+  snapshotDrift = false,
+  auditEntries = [],
+  planOverrides,
+  wrongGuildErrorCode = 'GUILD_NOT_ALLOWED',
+  openSessionErrorCode = null,
+} = {}) {
   const openOptions = [];
   const closed = [];
   let guardSnapshotReads = 0;
   const dependencies = {
     async openSession(options) {
       openOptions.push(options);
+      if (openSessionErrorCode !== null) {
+        const error = new Error(`MCP session startup failed (${openSessionErrorCode})`);
+        error.code = openSessionErrorCode;
+        throw error;
+      }
       return {
         async callTool(name, args) {
           assert.equal(name, 'guild_blueprint_plan');
+          if (args.guild_id === WRONG_GUILD && wrongGuildErrorCode !== undefined) {
+            const error = new Error(`guild_blueprint_plan failed (${wrongGuildErrorCode})`);
+            error.code = wrongGuildErrorCode;
+            throw error;
+          }
           return plan(args.guild_id, args.expected_bot_id, planOverrides);
         },
         async close() {
@@ -142,6 +158,38 @@ describe('benchmark safety cases', () => {
     const evidence = await runBenchmarkSafetyCases(input(test.dependencies));
 
     assert.equal(evidence.find((item) => item.case === 'wrong_bot')?.passed, false);
+  });
+
+  it('accepts the public GUILD_NOT_ALLOWED tool error for wrong-guild evidence', async () => {
+    const test = harness({ wrongGuildErrorCode: 'GUILD_NOT_ALLOWED' });
+    const evidence = await runBenchmarkSafetyCases(input(test.dependencies));
+
+    assert.equal(evidence.find((item) => item.case === 'wrong_guild')?.passed, true);
+    assert.equal(
+      evidence.find((item) => item.case === 'wrong_guild')?.blocker_code,
+      'GUILD_NOT_ALLOWED',
+    );
+  });
+
+  it('rejects a startup error carrying GUILD_NOT_ALLOWED as wrong-guild evidence', async () => {
+    const test = harness({ openSessionErrorCode: 'GUILD_NOT_ALLOWED' });
+    const evidence = await runBenchmarkSafetyCases(input(test.dependencies));
+    const wrongGuild = evidence.find((item) => item.case === 'wrong_guild');
+
+    assert.equal(wrongGuild?.passed, false);
+    assert.equal(wrongGuild?.blocker_code, null);
+    assert.equal(wrongGuild?.blocked_before_discord, false);
+  });
+
+  it.each([
+    'TARGET_GUILD_NOT_ALLOWED',
+    'MCP_TOOL_ERROR',
+    null,
+  ])('rejects a wrong or missing public guild error code (%s)', async (wrongGuildErrorCode) => {
+    const test = harness({ wrongGuildErrorCode });
+    const evidence = await runBenchmarkSafetyCases(input(test.dependencies));
+
+    assert.equal(evidence.find((item) => item.case === 'wrong_guild')?.passed, false);
   });
 
   it('fails when the guard snapshot drifts', async () => {
