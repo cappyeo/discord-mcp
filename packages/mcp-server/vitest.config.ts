@@ -11,7 +11,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     globalSetup: ['./vitest.global-setup.ts'],
     // These suites do real I/O - spawn `dist/cli.js` as a subprocess, bind
     // loopback HTTP servers, and re-evaluate the module graph via

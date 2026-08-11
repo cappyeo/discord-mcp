@@ -24,6 +24,7 @@
     "dev": "turbo run dev",
     "test": "turbo run test",
     "bench": "turbo run bench",
+    "benchmark:real": "node packages/mcp-server/scripts/benchmark/run-real-benchmark.mjs",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck"

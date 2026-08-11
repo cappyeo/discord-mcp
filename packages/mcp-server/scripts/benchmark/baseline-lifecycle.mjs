@@ -1,0 +1,800 @@
+const SNOWFLAKE = /^\d{17,20}$/;
+const RESET_PREFIX = 'RESET_DISPOSABLE_GUILD:';
+const CANARY_ROLE_NAME = '__discord_mcp_benchmark_canary_role__';
+const CANARY_CHANNEL_NAME = '__discord_mcp_benchmark_canary_channel__';
+const SCHEMA_VERSION = 1;
+const RESTORE_SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function record(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function snowflake(value, label) {
+  if (typeof value !== 'string' || !SNOWFLAKE.test(value))
+    throw new TypeError(`${label} must be a Discord snowflake`);
+  return value;
+}
+
+function requiredFunction(value, label) {
+  if (typeof value !== 'function') throw new TypeError(`${label} must be a function`);
+  return value;
+}
+
+function validateCommon({ guildId, botId, allowedGuildIds, confirmation }, action) {
+  snowflake(guildId, 'guildId');
+  snowflake(botId, 'botId');
+  if (!Array.isArray(allowedGuildIds) || allowedGuildIds.length === 0) {
+    throw new Error('allowedGuildIds must be a nonempty exact allowlist');
+  }
+  const allowed = new Set(
+    allowedGuildIds.map((id, index) => snowflake(id, `allowedGuildIds[${index}]`)),
+  );
+  if (allowed.size !== allowedGuildIds.length || !allowed.has(guildId)) {
+    throw new Error(`${action} guild is not in the exact allowlist`);
+  }
+  if (confirmation !== `${RESET_PREFIX}${guildId}`) {
+    throw new Error('disposable guild confirmation is required');
+  }
+  return allowed;
+}
+
+function assertSnapshot(snapshot, guildId, botId) {
+  if (!record(snapshot)) throw new Error('benchmark snapshot is malformed');
+  if (snapshot.guild?.id !== guildId) throw new Error('benchmark snapshot guild identity mismatch');
+  if (snapshot.bot?.user?.id !== botId) throw new Error('benchmark snapshot bot identity mismatch');
+  if (
+    !Array.isArray(snapshot.roles) ||
+    !Array.isArray(snapshot.channels) ||
+    !Array.isArray(snapshot.automod_rules)
+  ) {
+    throw new Error('benchmark snapshot inventory is malformed');
+  }
+  const all = [...snapshot.roles, ...snapshot.channels, ...snapshot.automod_rules];
+  for (const [index, item] of all.entries()) snowflake(item?.id, `snapshot resource ${index}`);
+  const roleIds = new Set(snapshot.roles.map((item) => item.id));
+  const channelIds = new Set(snapshot.channels.map((item) => item.id));
+  if (!roleIds.has(guildId)) throw new Error('snapshot is missing @everyone role');
+  for (const role of snapshot.roles) {
+    if (role.guild_id !== undefined && role.guild_id !== guildId)
+      throw new Error('role guild mismatch');
+    if (
+      typeof role.managed !== 'boolean' ||
+      typeof role.permissions !== 'string' ||
+      !/^\d+$/.test(role.permissions)
+    ) {
+      throw new Error('snapshot role security fields are malformed');
+    }
+  }
+  for (const channel of snapshot.channels) {
+    if (channel.guild_id !== guildId) throw new Error('channel guild mismatch');
+    if (!Number.isInteger(channel.type) || channel.type < 0)
+      throw new Error('snapshot channel type is malformed');
+    if (
+      channel.parent_id !== null &&
+      channel.parent_id !== undefined &&
+      !channelIds.has(channel.parent_id)
+    ) {
+      throw new Error('snapshot channel parent is foreign');
+    }
+  }
+  for (const rule of snapshot.automod_rules) {
+    if (rule.guild_id !== undefined && rule.guild_id !== guildId)
+      throw new Error('AutoMod rule guild mismatch');
+  }
+  const botRoles = new Set(snapshot.bot.roles ?? []);
+  for (const roleId of botRoles) snowflake(roleId, 'bot role');
+  return { roleIds, channelIds, botRoles };
+}
+
+function cloneJson(value) {
+  try {
+    const text = JSON.stringify(value);
+    if (text === undefined) throw new Error('value is not JSON serializable');
+    return JSON.parse(text);
+  } catch {
+    throw new Error('benchmark baseline must be JSON serializable');
+  }
+}
+
+function mutationReason(reason, fallback) {
+  const value = reason ?? fallback;
+  if (typeof value !== 'string' || value.trim() === '')
+    throw new TypeError('audit reason is required');
+  return value.slice(0, 480);
+}
+
+async function mutate(rest, method, path, options) {
+  requiredFunction(rest?.request, 'rest.request');
+  const requestOptions = { ...options };
+  if (method === 'POST') requestOptions.retry = false;
+  return rest.request(method, path, requestOptions);
+}
+
+function responseId(response, guildId, kind) {
+  if (!record(response)) throw new Error(`${kind} response is malformed`);
+  const id = snowflake(response.id, `${kind} response id`);
+  if (response.guild_id !== undefined && response.guild_id !== guildId)
+    throw new Error(`${kind} response guild mismatch`);
+  return id;
+}
+
+function responseGuild(response, guildId, kind) {
+  if (!record(response) || response.id !== guildId)
+    throw new Error(`${kind} response guild identity mismatch`);
+  if (response.guild_id !== undefined && response.guild_id !== guildId)
+    throw new Error(`${kind} response guild mismatch`);
+  return response;
+}
+
+function responseGuildScoped(response, guildId, kind) {
+  if (!record(response) || response.guild_id !== guildId)
+    throw new Error(`${kind} response guild identity mismatch`);
+  return response;
+}
+
+function responseOnboarding(response, guildId, kind) {
+  responseGuildScoped(response, guildId, kind);
+  if (
+    response.enabled !== false ||
+    response.mode !== 0 ||
+    !Array.isArray(response.prompts) ||
+    response.prompts.length !== 0 ||
+    !Array.isArray(response.default_channel_ids) ||
+    response.default_channel_ids.length !== 0
+  ) {
+    throw new Error(`${kind} response is not disabled and empty`);
+  }
+  return response;
+}
+
+function responseWelcome(response, kind) {
+  if (
+    !record(response) ||
+    response.description !== null ||
+    !Array.isArray(response.welcome_channels) ||
+    response.welcome_channels.length !== 0
+  ) {
+    throw new Error(`${kind} response is not empty`);
+  }
+  return response;
+}
+
+function roleById(snapshot, id) {
+  return snapshot.roles.find((item) => item.id === id);
+}
+function channelById(snapshot, id) {
+  return snapshot.channels.find((item) => item.id === id);
+}
+
+function canaryFromSnapshot(snapshot, kind, name) {
+  const items = kind === 'role' ? snapshot.roles : snapshot.channels;
+  const matches = items.filter((item) => item.name === name);
+  if (matches.length > 1) throw new Error(`duplicate ${kind} canary marker`);
+  return matches[0] ?? null;
+}
+
+function validateCanary(snapshot, role, channel, guildId) {
+  const canaryRole = roleById(snapshot, role);
+  const canaryChannel = channelById(snapshot, channel);
+  if (
+    !canaryRole ||
+    canaryRole.managed ||
+    canaryRole.name !== CANARY_ROLE_NAME ||
+    canaryRole.permissions !== '0'
+  ) {
+    throw new Error('canary role is missing or unsafe');
+  }
+  if (
+    !canaryChannel ||
+    canaryChannel.guild_id !== guildId ||
+    canaryChannel.name !== CANARY_CHANNEL_NAME ||
+    canaryChannel.type !== 0 ||
+    (canaryChannel.permission_overwrites ?? []).length !== 0
+  ) {
+    throw new Error('canary channel is missing or unsafe');
+  }
+}
+
+function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, fingerprint) {
+  return {
+    schema_version: SCHEMA_VERSION,
+    kind: 'discord-mcp-benchmark-baseline',
+    guild_id: guildId,
+    bot_id: botId,
+    fingerprint,
+    canary: { role_id: canaryRoleId, channel_id: canaryChannelId },
+    guild_fields: {
+      id: snapshot.guild.id,
+      name: snapshot.guild.name,
+      description: snapshot.guild.description ?? null,
+      preferred_locale: snapshot.guild.preferred_locale,
+      verification_level: snapshot.guild.verification_level,
+      default_message_notifications: snapshot.guild.default_message_notifications,
+      explicit_content_filter: snapshot.guild.explicit_content_filter,
+      rules_channel_id: snapshot.guild.rules_channel_id ?? canaryChannelId,
+      public_updates_channel_id: snapshot.guild.public_updates_channel_id ?? canaryChannelId,
+      safety_alerts_channel_id: snapshot.guild.safety_alerts_channel_id ?? canaryChannelId,
+      features: [...(snapshot.guild.features ?? [])].sort(),
+    },
+    preserved_role_ids: snapshot.roles
+      .filter(
+        (role) =>
+          role.id === guildId ||
+          role.id === canaryRoleId ||
+          role.managed ||
+          (snapshot.bot.roles ?? []).includes(role.id) ||
+          role.position >=
+            Math.max(
+              ...snapshot.roles
+                .filter((item) => (snapshot.bot.roles ?? []).includes(item.id))
+                .map((item) => item.position ?? 0),
+              0,
+            ),
+      )
+      .map((role) => role.id)
+      .sort(),
+    baseline_snapshot: cloneJson(snapshot),
+  };
+}
+
+function validateBaselineRecord(baseline) {
+  if (
+    !record(baseline) ||
+    baseline.schema_version !== SCHEMA_VERSION ||
+    baseline.kind !== 'discord-mcp-benchmark-baseline'
+  )
+    throw new Error('benchmark baseline record is malformed');
+  snowflake(baseline.guild_id, 'baseline.guild_id');
+  snowflake(baseline.bot_id, 'baseline.bot_id');
+  if (!/^sha256:[a-f0-9]{64}$/.test(baseline.fingerprint ?? ''))
+    throw new Error('baseline fingerprint is malformed');
+  snowflake(baseline.canary?.role_id, 'baseline.canary.role_id');
+  snowflake(baseline.canary?.channel_id, 'baseline.canary.channel_id');
+  if (!record(baseline.guild_fields) || baseline.guild_fields.id !== baseline.guild_id) {
+    throw new Error('baseline guild fields are malformed');
+  }
+  for (const field of [
+    'rules_channel_id',
+    'public_updates_channel_id',
+    'safety_alerts_channel_id',
+  ]) {
+    snowflake(baseline.guild_fields[field], `baseline.guild_fields.${field}`);
+  }
+  if (typeof baseline.guild_fields.name !== 'string' || baseline.guild_fields.name === '')
+    throw new Error('baseline guild name is malformed');
+  if (
+    baseline.guild_fields.description !== null &&
+    typeof baseline.guild_fields.description !== 'string'
+  )
+    throw new Error('baseline guild description is malformed');
+  if (typeof baseline.guild_fields.preferred_locale !== 'string')
+    throw new Error('baseline guild locale is malformed');
+  for (const field of [
+    'verification_level',
+    'default_message_notifications',
+    'explicit_content_filter',
+  ])
+    if (!Number.isInteger(baseline.guild_fields[field]) || baseline.guild_fields[field] < 0)
+      throw new Error(`baseline guild ${field} is malformed`);
+  if (
+    !Array.isArray(baseline.guild_fields.features) ||
+    !baseline.guild_fields.features.includes('COMMUNITY')
+  )
+    throw new Error('baseline guild must have Community enabled');
+  if (!Array.isArray(baseline.preserved_role_ids))
+    throw new Error('baseline preserved roles are malformed');
+  for (const id of baseline.preserved_role_ids) snowflake(id, 'baseline preserved role');
+  if (!record(baseline.baseline_snapshot)) throw new Error('baseline snapshot is missing');
+  assertSnapshot(baseline.baseline_snapshot, baseline.guild_id, baseline.bot_id);
+  validateCanary(
+    baseline.baseline_snapshot,
+    baseline.canary.role_id,
+    baseline.canary.channel_id,
+    baseline.guild_id,
+  );
+  assertDisabledCommunityState(baseline.baseline_snapshot, baseline.guild_id);
+  if (
+    baseline.baseline_snapshot.publication_history_complete?.[baseline.canary.channel_id] !== true
+  )
+    throw new Error('baseline canary message history is incomplete');
+  if ((baseline.baseline_snapshot.recent_messages?.[baseline.canary.channel_id] ?? []).length !== 0)
+    throw new Error('baseline canary message history is not empty');
+}
+
+function verifyIdentityAndCanary(snapshot, baseline) {
+  assertSnapshot(snapshot, baseline.guild_id, baseline.bot_id);
+  validateCanary(snapshot, baseline.canary.role_id, baseline.canary.channel_id, baseline.guild_id);
+  return snapshot;
+}
+
+function assertCommunityEnabled(snapshot) {
+  if (!Array.isArray(snapshot.guild?.features) || !snapshot.guild.features.includes('COMMUNITY'))
+    throw new Error('benchmark guild must have Community enabled');
+  if (snapshot.onboarding === null || snapshot.welcome_screen === null)
+    throw new Error('Community onboarding and welcome state are unavailable');
+}
+
+function assertDisabledCommunityState(snapshot, guildId) {
+  assertCommunityEnabled(snapshot);
+  const onboarding = snapshot.onboarding;
+  if (
+    onboarding.guild_id !== guildId ||
+    onboarding.enabled !== false ||
+    !Array.isArray(onboarding.prompts) ||
+    onboarding.prompts.length !== 0 ||
+    !Array.isArray(onboarding.default_channel_ids) ||
+    onboarding.default_channel_ids.length !== 0 ||
+    onboarding.mode !== 0
+  )
+    throw new Error('baseline onboarding is not disabled and empty');
+  const welcome = snapshot.welcome_screen;
+  if (
+    snapshot.guild.features.includes('WELCOME_SCREEN_ENABLED') ||
+    !Array.isArray(welcome.welcome_channels) ||
+    welcome.welcome_channels.length !== 0 ||
+    welcome.description !== null
+  )
+    throw new Error('baseline welcome screen is not disabled and empty');
+}
+
+async function readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId) {
+  const snapshot = await readSnapshot({
+    guildId,
+    botId,
+    messageChannelIds: [canaryChannelId],
+  });
+  if (snapshot.publication_history_complete?.[canaryChannelId] !== true)
+    throw new Error('canary message history is incomplete');
+  if ((snapshot.recent_messages?.[canaryChannelId] ?? []).length !== 0)
+    throw new Error('canary channel must have empty message history');
+  return snapshot;
+}
+
+function assertBaselineResourcesPresent(snapshot, baseline) {
+  const current = {
+    roles: new Set(snapshot.roles.map((item) => item.id)),
+    channels: new Set(snapshot.channels.map((item) => item.id)),
+    automod: new Set(snapshot.automod_rules.map((item) => item.id)),
+  };
+  const expected = baselineIds(baseline);
+  if (
+    [...expected.roles].some((id) => !current.roles.has(id)) ||
+    [...expected.channels].some((id) => !current.channels.has(id)) ||
+    [...expected.automod].some((id) => !current.automod.has(id))
+  ) {
+    throw new Error('BASELINE_RESOURCE_DRIFT');
+  }
+}
+
+export async function verifyBenchmarkBaseline({ readSnapshot, snapshotFingerprint, baseline }) {
+  requiredFunction(readSnapshot, 'readSnapshot');
+  requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
+  validateBaselineRecord(baseline);
+  const snapshot = await readCanarySnapshot(
+    readSnapshot,
+    baseline.guild_id,
+    baseline.bot_id,
+    baseline.canary.channel_id,
+  );
+  verifyIdentityAndCanary(snapshot, baseline);
+  assertDisabledCommunityState(snapshot, baseline.guild_id);
+  const fingerprint = snapshotFingerprint(snapshot);
+  if (fingerprint !== baseline.fingerprint) throw new Error('BASELINE_FINGERPRINT_DRIFT');
+  return { verified: true, guild_id: baseline.guild_id, bot_id: baseline.bot_id, fingerprint };
+}
+
+function uniqueBoundIds(values, label) {
+  if (!record(values)) throw new Error(`${label} bindings are malformed`);
+  const ids = [];
+  for (const [key, value] of Object.entries(values)) {
+    const id = typeof value === 'string' ? value : value?.id;
+    snowflake(id, `${label}.${key}`);
+    ids.push(id);
+  }
+  if (new Set(ids).size !== ids.length) throw new Error('duplicate cleanup binding');
+  return ids;
+}
+
+function cleanupBindings(cleanup) {
+  if (!record(cleanup) || !record(cleanup.bindings))
+    throw new Error('cleanup bindings are required');
+  const bindings = cleanup.bindings;
+  const roles = uniqueBoundIds(bindings.roles ?? {}, 'roles');
+  const categories = uniqueBoundIds(bindings.categories ?? {}, 'categories');
+  const channels = uniqueBoundIds(bindings.channels ?? {}, 'channels');
+  const automod = uniqueBoundIds(bindings.automod_rules ?? {}, 'automod_rules');
+  const publicationValues = uniqueBoundIds(bindings.publications ?? {}, 'publications');
+  if (!Array.isArray(cleanup.publication_targets))
+    throw new Error('cleanup.publication_targets are required');
+  const publicationTargets = cleanup.publication_targets.map((target, index) => {
+    if (!record(target)) throw new Error(`publication_targets[${index}] is malformed`);
+    return {
+      channel_id: snowflake(target.channel_id, `publication_targets[${index}].channel_id`),
+      message_id: snowflake(target.message_id, `publication_targets[${index}].message_id`),
+    };
+  });
+  const targetMessages = publicationTargets.map((target) => target.message_id);
+  if (
+    new Set(targetMessages).size !== targetMessages.length ||
+    targetMessages.length !== publicationValues.length ||
+    targetMessages.some((id) => !publicationValues.includes(id)) ||
+    publicationValues.some((id) => !targetMessages.includes(id))
+  )
+    throw new Error('publication targets do not exactly match publication bindings');
+  const all = [...roles, ...categories, ...channels, ...automod, ...publicationValues];
+  if (new Set(all).size !== all.length) throw new Error('cleanup bindings overlap');
+  return { roles, categories, channels, automod, messages: publicationValues, publicationTargets };
+}
+
+function baselineIds(baseline) {
+  const snapshot = baseline.baseline_snapshot;
+  return {
+    roles: new Set((snapshot.roles ?? []).map((item) => item.id)),
+    channels: new Set((snapshot.channels ?? []).map((item) => item.id)),
+    automod: new Set((snapshot.automod_rules ?? []).map((item) => item.id)),
+  };
+}
+
+function assertNoBaselineOverlap(ids, baseline) {
+  const base = baselineIds(baseline);
+  for (const id of ids.roles)
+    if (base.roles.has(id)) throw new Error('cleanup targets a baseline role');
+  for (const id of [...ids.categories, ...ids.channels])
+    if (base.channels.has(id)) throw new Error('cleanup targets a baseline channel');
+  for (const id of ids.automod)
+    if (base.automod.has(id)) throw new Error('cleanup targets a baseline AutoMod rule');
+}
+
+function assertCleanupInventory(ids, snapshot, baseline) {
+  assertNoBaselineOverlap(ids, baseline);
+  const roleSet = new Set(snapshot.roles.map((item) => item.id));
+  const channelSet = new Set(snapshot.channels.map((item) => item.id));
+  const automodSet = new Set(snapshot.automod_rules.map((item) => item.id));
+  for (const id of ids.roles) {
+    const role = roleById(snapshot, id);
+    if (
+      !roleSet.has(id) ||
+      !role ||
+      role.managed ||
+      (snapshot.bot.roles ?? []).includes(id) ||
+      id === snapshot.guild.id
+    )
+      throw new Error('foreign, managed, or bot-assigned role binding');
+    const botRoles = snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id));
+    const highest = Math.max(...botRoles.map((item) => item.position ?? 0), 0);
+    if ((role.position ?? 0) >= highest) throw new Error('cleanup role is not below the bot role');
+  }
+  for (const id of [...ids.categories, ...ids.channels]) {
+    const channel = channelById(snapshot, id);
+    if (
+      !channelSet.has(id) ||
+      !channel ||
+      channel.guild_id !== baseline.guild_id ||
+      channel.id === baseline.canary.channel_id
+    )
+      throw new Error('foreign or canary channel binding');
+    if (ids.categories.includes(id) && channel.type !== 4)
+      throw new Error('category binding is not a category');
+    if (ids.channels.includes(id) && channel.type === 4)
+      throw new Error('channel binding is a category');
+  }
+  for (const id of ids.automod) {
+    if (
+      !automodSet.has(id) ||
+      snapshot.automod_rules.find((rule) => rule.id === id)?.guild_id !== baseline.guild_id
+    )
+      throw new Error('foreign AutoMod binding');
+  }
+  const boundResources = new Set([...ids.roles, ...ids.categories, ...ids.channels]);
+  const base = baselineIds(baseline);
+  const orphans = snapshot.roles
+    .filter((item) => !base.roles.has(item.id) && !boundResources.has(item.id))
+    .concat(
+      snapshot.channels.filter(
+        (item) => !base.channels.has(item.id) && !boundResources.has(item.id),
+      ),
+    )
+    .concat(
+      snapshot.automod_rules.filter(
+        (item) => !base.automod.has(item.id) && !ids.automod.includes(item.id),
+      ),
+    );
+  if (orphans.length > 0) throw new Error('BASELINE_ORPHAN_DRIFT');
+}
+
+export async function restoreBenchmarkBaseline({
+  rest,
+  readSnapshot,
+  snapshotFingerprint,
+  baseline,
+  cleanup,
+  reason,
+  sleep = wait,
+}) {
+  requiredFunction(readSnapshot, 'readSnapshot');
+  requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
+  requiredFunction(rest?.request, 'rest.request');
+  requiredFunction(sleep, 'sleep');
+  validateBaselineRecord(baseline);
+  const ids = cleanupBindings(cleanup);
+  let snapshot = await readSnapshot({
+    guildId: baseline.guild_id,
+    botId: baseline.bot_id,
+    messageChannelIds: [
+      ...new Set([
+        baseline.canary.channel_id,
+        ...ids.publicationTargets.map((target) => target.channel_id),
+      ]),
+    ],
+  });
+  verifyIdentityAndCanary(snapshot, baseline);
+  if (
+    snapshot.publication_history_complete?.[baseline.canary.channel_id] !== true ||
+    (snapshot.recent_messages?.[baseline.canary.channel_id] ?? []).length !== 0
+  ) {
+    throw new Error('BASELINE_CANARY_MESSAGE_DRIFT');
+  }
+  assertBaselineResourcesPresent(snapshot, baseline);
+  assertCleanupInventory(ids, snapshot, baseline);
+  for (const target of ids.publicationTargets) {
+    const channel = channelById(snapshot, target.channel_id);
+    if (
+      !channel ||
+      !ids.channels.includes(target.channel_id) ||
+      ![0, 5].includes(channel.type) ||
+      baselineIds(baseline).channels.has(target.channel_id)
+    )
+      throw new Error('publication target channel is foreign or not frozen');
+  }
+  const messageTargets = [];
+  for (const target of ids.publicationTargets) {
+    const found = (snapshot.recent_messages?.[target.channel_id] ?? []).find(
+      (item) => item.id === target.message_id,
+    );
+    if (
+      !found ||
+      found.author?.id !== baseline.bot_id ||
+      (found.guild_id !== undefined && found.guild_id !== baseline.guild_id) ||
+      found.channel_id !== target.channel_id
+    )
+      throw new Error('publication message is not verified bot-authored');
+    if (snapshot.publication_history_complete?.[target.channel_id] !== true)
+      throw new Error('publication message history is incomplete');
+    messageTargets.push(target);
+  }
+  const auditReason = mutationReason(reason, `discord-mcp benchmark restore ${baseline.guild_id}`);
+  const routeBody = {
+    name: baseline.guild_fields.name,
+    description: baseline.guild_fields.description,
+    preferred_locale: baseline.guild_fields.preferred_locale,
+    verification_level: baseline.guild_fields.verification_level,
+    default_message_notifications: baseline.guild_fields.default_message_notifications,
+    explicit_content_filter: baseline.guild_fields.explicit_content_filter,
+    rules_channel_id: baseline.guild_fields.rules_channel_id,
+    public_updates_channel_id: baseline.guild_fields.public_updates_channel_id,
+    safety_alerts_channel_id: baseline.guild_fields.safety_alerts_channel_id,
+    features: baseline.guild_fields.features,
+  };
+  if (snapshot.onboarding !== null)
+    responseOnboarding(
+      await mutate(rest, 'PUT', `/guilds/${baseline.guild_id}/onboarding`, {
+        body: { prompts: [], default_channel_ids: [], enabled: false, mode: 0 },
+        reason: auditReason,
+      }),
+      baseline.guild_id,
+      'onboarding restore',
+    );
+  if (snapshot.welcome_screen !== null)
+    responseWelcome(
+      await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}/welcome-screen`, {
+        body: { enabled: false, welcome_channels: [], description: null },
+        reason: auditReason,
+      }),
+      'welcome restore',
+    );
+  const guildResponse = responseGuild(
+    await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}`, {
+      body: routeBody,
+      reason: auditReason,
+    }),
+    baseline.guild_id,
+    'guild restore',
+  );
+  if (
+    guildResponse.rules_channel_id !== baseline.guild_fields.rules_channel_id ||
+    guildResponse.public_updates_channel_id !== baseline.guild_fields.public_updates_channel_id ||
+    guildResponse.safety_alerts_channel_id !== baseline.guild_fields.safety_alerts_channel_id ||
+    !Array.isArray(guildResponse.features) ||
+    !guildResponse.features.includes('COMMUNITY')
+  ) {
+    throw new Error('guild restore response did not preserve the baseline Community routes');
+  }
+  for (const target of messageTargets)
+    await mutate(rest, 'DELETE', `/channels/${target.channel_id}/messages/${target.message_id}`, {
+      reason: auditReason,
+    });
+  for (const id of ids.automod)
+    await mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
+      reason: auditReason,
+    });
+  const channelObjects = [...ids.channels, ...ids.categories].map((id) =>
+    channelById(snapshot, id),
+  );
+  const childFirst = channelObjects.sort((left, right) => {
+    const leftCategory = left.type === 4 ? 1 : 0;
+    const rightCategory = right.type === 4 ? 1 : 0;
+    return leftCategory - rightCategory;
+  });
+  for (const channel of childFirst)
+    await mutate(rest, 'DELETE', `/channels/${channel.id}`, { reason: auditReason });
+  for (const id of ids.roles)
+    await mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/roles/${id}`, {
+      reason: auditReason,
+    });
+  let fingerprint;
+  let restored = false;
+  for (let attempt = 0; attempt < RESTORE_SETTLE_DELAYS_MS.length; attempt += 1) {
+    const delay = RESTORE_SETTLE_DELAYS_MS[attempt];
+    if (delay > 0) await sleep(delay);
+    snapshot = await readCanarySnapshot(
+      readSnapshot,
+      baseline.guild_id,
+      baseline.bot_id,
+      baseline.canary.channel_id,
+    );
+    verifyIdentityAndCanary(snapshot, baseline);
+    let communityStateExact = true;
+    try {
+      assertDisabledCommunityState(snapshot, baseline.guild_id);
+    } catch {
+      communityStateExact = false;
+    }
+    fingerprint = snapshotFingerprint(snapshot);
+    restored = communityStateExact && fingerprint === baseline.fingerprint;
+    if (restored) break;
+  }
+  if (!restored) throw new Error('BASELINE_RESTORE_QUARANTINE_FINGERPRINT_DRIFT');
+  return {
+    restored: true,
+    guild_id: baseline.guild_id,
+    bot_id: baseline.bot_id,
+    fingerprint,
+    deleted: {
+      messages: ids.publicationTargets.length,
+      automod_rules: ids.automod.length,
+      channels: channelObjects.length,
+      roles: ids.roles.length,
+    },
+  };
+}
+
+export async function initializeBenchmarkBaseline({
+  rest,
+  readSnapshot,
+  snapshotFingerprint,
+  guildId,
+  botId,
+  allowedGuildIds,
+  confirmation,
+  runId,
+}) {
+  requiredFunction(readSnapshot, 'readSnapshot');
+  requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
+  requiredFunction(rest?.request, 'rest.request');
+  validateCommon({ guildId, botId, allowedGuildIds, confirmation }, 'initializer');
+  if (typeof runId !== 'string' || runId.trim() === '') throw new TypeError('runId is required');
+  let snapshot = await readSnapshot({ guildId, botId });
+  assertSnapshot(snapshot, guildId, botId);
+  let canaryRole = canaryFromSnapshot(snapshot, 'role', CANARY_ROLE_NAME);
+  let canaryChannel = canaryFromSnapshot(snapshot, 'channel', CANARY_CHANNEL_NAME);
+  if (canaryRole && (canaryRole.managed || canaryRole.permissions !== '0'))
+    throw new Error('existing canary role is unsafe');
+  if (canaryChannel && (canaryChannel.guild_id !== guildId || canaryChannel.type !== 0))
+    throw new Error('existing canary channel is unsafe');
+  const reason = `discord-mcp benchmark baseline ${runId}`;
+  if (!canaryRole) {
+    canaryRole = await mutate(rest, 'POST', `/guilds/${guildId}/roles`, {
+      body: { name: CANARY_ROLE_NAME, permissions: '0', mentionable: false, hoist: false },
+      reason,
+    });
+    const id = responseId(canaryRole, guildId, 'canary role');
+    canaryRole = { id, name: CANARY_ROLE_NAME, permissions: '0', managed: false, position: 0 };
+  }
+  if (!canaryChannel) {
+    canaryChannel = await mutate(rest, 'POST', `/guilds/${guildId}/channels`, {
+      body: { name: CANARY_CHANNEL_NAME, type: 0, permission_overwrites: [] },
+      reason,
+    });
+    const id = responseId(canaryChannel, guildId, 'canary channel');
+    canaryChannel = {
+      id,
+      guild_id: guildId,
+      name: CANARY_CHANNEL_NAME,
+      type: 0,
+      parent_id: null,
+      permission_overwrites: [],
+    };
+  }
+  const canaryRoleId = canaryRole.id;
+  const canaryChannelId = canaryChannel.id;
+  snapshot = await readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId);
+  assertSnapshot(snapshot, guildId, botId);
+  validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
+  const routeResponse = await mutate(rest, 'PATCH', `/guilds/${guildId}`, {
+    body: {
+      rules_channel_id: canaryChannelId,
+      public_updates_channel_id: canaryChannelId,
+      safety_alerts_channel_id: canaryChannelId,
+      features: [...new Set([...(snapshot.guild.features ?? []), 'COMMUNITY'])].sort(),
+    },
+    reason,
+  });
+  const configuredGuild = responseGuild(routeResponse, guildId, 'guild Community route');
+  if (
+    configuredGuild.rules_channel_id !== canaryChannelId ||
+    configuredGuild.public_updates_channel_id !== canaryChannelId ||
+    configuredGuild.safety_alerts_channel_id !== canaryChannelId ||
+    !Array.isArray(configuredGuild.features) ||
+    !configuredGuild.features.includes('COMMUNITY')
+  ) {
+    throw new Error('guild Community route response is malformed');
+  }
+  responseOnboarding(
+    await mutate(rest, 'PUT', `/guilds/${guildId}/onboarding`, {
+      body: { prompts: [], default_channel_ids: [], enabled: false, mode: 0 },
+      reason,
+    }),
+    guildId,
+    'onboarding disable',
+  );
+  responseWelcome(
+    await mutate(rest, 'PATCH', `/guilds/${guildId}/welcome-screen`, {
+      body: { enabled: false, welcome_channels: [], description: null },
+      reason,
+    }),
+    'welcome disable',
+  );
+  for (const rule of snapshot.automod_rules)
+    await mutate(rest, 'DELETE', `/guilds/${guildId}/auto-moderation/rules/${rule.id}`, { reason });
+  const highestBotRole = Math.max(
+    ...snapshot.roles
+      .filter((item) => (snapshot.bot.roles ?? []).includes(item.id))
+      .map((item) => item.position ?? 0),
+    0,
+  );
+  const preservedRoles = new Set([
+    guildId,
+    canaryRoleId,
+    ...(snapshot.bot.roles ?? []),
+    ...snapshot.roles
+      .filter((role) => (role.position ?? 0) >= highestBotRole)
+      .map((role) => role.id),
+  ]);
+  for (const role of snapshot.roles)
+    if (!preservedRoles.has(role.id) && !role.managed)
+      await mutate(rest, 'DELETE', `/guilds/${guildId}/roles/${role.id}`, { reason });
+  const channels = snapshot.channels.filter((channel) => channel.id !== canaryChannelId);
+  channels.sort((left, right) => Number(left.type === 4) - Number(right.type === 4));
+  for (const channel of channels)
+    await mutate(rest, 'DELETE', `/channels/${channel.id}`, { reason });
+  snapshot = await readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId);
+  assertSnapshot(snapshot, guildId, botId);
+  validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
+  assertDisabledCommunityState(snapshot, guildId);
+  const fingerprint = snapshotFingerprint(snapshot);
+  if (typeof fingerprint !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(fingerprint))
+    throw new Error('baseline fingerprint is malformed');
+  const baseline = baselineView(
+    snapshot,
+    guildId,
+    botId,
+    canaryRoleId,
+    canaryChannelId,
+    fingerprint,
+  );
+  return cloneJson(baseline);
+}

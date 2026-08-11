@@ -1,0 +1,559 @@
+/**
+ * JSON-only manifest boundary for the real Discord benchmark.
+ *
+ * This module deliberately has no Discord or MCP dependencies. It is the
+ * first trust boundary for benchmark inputs and reports: malformed plans and
+ * credential-shaped data must fail before a runner can spawn a server or make
+ * a request.
+ */
+
+export const BENCHMARK_SCHEMA = 'discord-mcp.real-benchmark.v1';
+export const REPORT_SCHEMA = 'discord-mcp.real-benchmark-result.v1';
+
+const SNOWFLAKE_RE = /^\d{17,20}$/;
+const TRIAL_MODES = new Set(['full', 'forced_resume']);
+const TERMINAL_STATUSES = new Set([
+  'complete',
+  'already_current',
+  'partial',
+  'blocked',
+  'busy',
+  'stale',
+  'error',
+]);
+const SAFETY_CASES = new Set(['wrong_bot', 'wrong_guild', 'write_preview']);
+const DIGEST_RE = /^sha256:[a-f0-9]{64}$/;
+const VERIFIED_COUNT_KEYS = new Set([
+  'roles',
+  'categories',
+  'channels',
+  'automod_rules',
+  'publications',
+  'onboarding_prompts',
+]);
+const MANIFEST_KEYS = new Set([
+  'schema_version',
+  'run_id',
+  'commit',
+  'built_cli',
+  'api_version',
+  'reuse_policy',
+  'guild_diversity',
+  'trials',
+]);
+const TRIAL_KEYS = new Set(['trial_id', 'mode', 'guild_id', 'expected_bot_id', 'profile']);
+const REUSE_POLICY_KEYS = new Set(['strategy', 'max_trials_per_guild', 'rationale']);
+const DIVERSITY_KEYS = new Set(['total_trial_count', 'unique_guild_count', 'trials_per_guild']);
+const BUILT_CLI_KEYS = new Set(['entrypoint', 'sha256', 'source_commit']);
+const SECRET_KEY_WORDS = [
+  'token',
+  'authorization',
+  'bearer',
+  'apikey',
+  'password',
+  'cookie',
+  'secret',
+  'credential',
+];
+const SECRET_VALUE_RE =
+  /\b(?:(?:bot|bearer)\s+[a-z0-9._-]{20,}|(?:plan[\s_.-]*token|token|authorization|api[\s_.-]*key|password|cookie|secret|credential)\s*[:=]\s*\S+)/i;
+
+function isRecord(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function normalizeKey(key) {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isSecretKey(key) {
+  const normalized = normalizeKey(key);
+  return SECRET_KEY_WORDS.some((word) => normalized.includes(word));
+}
+
+function scanSecrets(value, path = '$', seen = new WeakSet(), errors = []) {
+  if (typeof value === 'string') {
+    if (SECRET_VALUE_RE.test(value)) {
+      errors.push(`${path}: secret-bearing value is not allowed`);
+    }
+    return errors;
+  }
+
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return errors;
+  if (typeof value !== 'object') {
+    errors.push(`${path}: only JSON values are allowed`);
+    return errors;
+  }
+  if (seen.has(value)) {
+    errors.push(`${path}: cyclic values are not allowed`);
+    return errors;
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      scanSecrets(item, `${path}[${index}]`, seen, errors);
+    }
+    return errors;
+  }
+  if (!isRecord(value)) {
+    errors.push(`${path}: only plain JSON objects are allowed`);
+    return errors;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (isSecretKey(key)) errors.push(`${childPath}: secret-bearing key is not allowed`);
+    scanSecrets(child, childPath, seen, errors);
+  }
+  return errors;
+}
+
+export function assertSecretFreeJson(value, path = '$') {
+  const errors = scanSecrets(value, path);
+  if (errors.length > 0)
+    throw new TypeError(`Secret-bearing benchmark artifact: ${errors.join('; ')}`);
+  return value;
+}
+
+function checkKeys(value, allowed, path, errors) {
+  if (!isRecord(value)) {
+    errors.push(`${path}: expected a plain object`);
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) errors.push(`${path}.${key}: unknown field`);
+  }
+}
+
+function isSnowflake(value) {
+  return typeof value === 'string' && SNOWFLAKE_RE.test(value);
+}
+
+function cloneJson(value) {
+  return structuredClone(value);
+}
+
+function calculateDiversity(trials) {
+  const trialsPerGuild = {};
+  for (const trial of trials) {
+    trialsPerGuild[trial.guild_id] = (trialsPerGuild[trial.guild_id] ?? 0) + 1;
+  }
+  return {
+    total_trial_count: trials.length,
+    unique_guild_count: Object.keys(trialsPerGuild).length,
+    trials_per_guild: trialsPerGuild,
+  };
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(',')}}`;
+}
+
+function sameJson(left, right) {
+  return canonicalJson(left) === canonicalJson(right);
+}
+
+function nonnegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function validFailureArray(value) {
+  return Array.isArray(value);
+}
+
+function validVerifiedCounts(value) {
+  if (!isRecord(value)) return false;
+  if (!sameJson([...Object.keys(value)].sort(), [...VERIFIED_COUNT_KEYS].sort())) return false;
+  return Object.values(value).every((count) => Number.isInteger(count) && count > 0);
+}
+
+function resultEvidencePass(result) {
+  const restartPass =
+    result.mode === 'forced_resume'
+      ? result.forced_resume_observed === true && result.restart_count >= 2
+      : result.forced_resume_observed === null && result.restart_count >= 1;
+  return (
+    result.eligible === true &&
+    result.terminal_status === 'complete' &&
+    result.snapshot_oracle_pass === true &&
+    result.blueprint_oracle_match === true &&
+    result.audit_oracle_pass === true &&
+    result.plan_snapshot_unchanged === true &&
+    result.replay_status === 'already_current' &&
+    result.evidence_status === 'verified' &&
+    result.audit_trail_complete === true &&
+    result.audit_entry_count > 0 &&
+    result.baseline_verified_before === true &&
+    result.baseline_restored_after === true &&
+    result.baseline_fingerprint_before === result.baseline_fingerprint_after &&
+    result.operations_planned > 0 &&
+    result.apply_calls > 0 &&
+    validVerifiedCounts(result.verified_counts) &&
+    result.serious_permission_failures.length === 0 &&
+    result.functional_failures.length === 0 &&
+    restartPass
+  );
+}
+
+function safetyEvidencePass(safetyCase) {
+  const noMutation =
+    safetyCase.snapshot_unchanged === true &&
+    safetyCase.audit_entry_count === 0 &&
+    safetyCase.mutation_count === 0;
+  if (!noMutation) return false;
+  if (safetyCase.case === 'wrong_bot') {
+    return (
+      safetyCase.target_guild_id === safetyCase.guard_guild_id &&
+      safetyCase.supplied_bot_id !== safetyCase.active_bot_id &&
+      safetyCase.blocked_before_discord === true &&
+      safetyCase.blocker_code === 'EXPECTED_BOT_MISMATCH' &&
+      safetyCase.plan_status === 'blocked' &&
+      safetyCase.target_readback === 'not_run' &&
+      safetyCase.operations_planned === 0
+    );
+  }
+  if (safetyCase.case === 'wrong_guild') {
+    return (
+      safetyCase.target_guild_id !== safetyCase.guard_guild_id &&
+      safetyCase.supplied_bot_id === safetyCase.active_bot_id &&
+      safetyCase.blocked_before_discord === true &&
+      safetyCase.blocker_code === 'TARGET_GUILD_NOT_ALLOWED' &&
+      safetyCase.plan_status === 'blocked' &&
+      safetyCase.target_readback === 'not_run' &&
+      safetyCase.operations_planned === 0
+    );
+  }
+  return (
+    safetyCase.target_guild_id === safetyCase.guard_guild_id &&
+    safetyCase.supplied_bot_id === safetyCase.active_bot_id &&
+    safetyCase.blocked_before_discord === false &&
+    safetyCase.blocker_code === null &&
+    safetyCase.plan_status === 'ready' &&
+    safetyCase.target_readback === 'passed' &&
+    safetyCase.operations_planned > 0
+  );
+}
+
+function validateManifestShape(input, errors) {
+  if (!isRecord(input)) {
+    errors.push('$: expected a plain JSON object');
+    return null;
+  }
+  checkKeys(input, MANIFEST_KEYS, '$', errors);
+  if (input.schema_version !== BENCHMARK_SCHEMA)
+    errors.push('$.schema_version: must be the real benchmark schema');
+  if (typeof input.run_id !== 'string' || input.run_id.trim() === '' || input.run_id.length > 128) {
+    errors.push('$.run_id: must contain 1-128 characters');
+  }
+  if (typeof input.commit !== 'string' || !/^[a-f0-9]{40}$/.test(input.commit)) {
+    errors.push('$.commit: must be a full lowercase Git commit SHA');
+  }
+  if (input.api_version !== '10') errors.push('$.api_version: must be 10');
+
+  checkKeys(input.built_cli, BUILT_CLI_KEYS, '$.built_cli', errors);
+  if (isRecord(input.built_cli)) {
+    if (input.built_cli.entrypoint !== 'packages/mcp-server/dist/cli.js') {
+      errors.push('$.built_cli.entrypoint: must be the built stdio CLI entrypoint');
+    }
+    if (!DIGEST_RE.test(input.built_cli.sha256 ?? '')) {
+      errors.push('$.built_cli.sha256: must be a sha256 digest');
+    }
+    if (input.built_cli.source_commit !== input.commit) {
+      errors.push('$.built_cli.source_commit: must match the manifest commit');
+    }
+  }
+
+  checkKeys(input.reuse_policy, REUSE_POLICY_KEYS, '$.reuse_policy', errors);
+  if (isRecord(input.reuse_policy)) {
+    if (!['controlled_reuse', 'unique_guilds'].includes(input.reuse_policy.strategy)) {
+      errors.push('$.reuse_policy.strategy: must explicitly describe reuse');
+    }
+    if (
+      !Number.isInteger(input.reuse_policy.max_trials_per_guild) ||
+      input.reuse_policy.max_trials_per_guild < 1
+    ) {
+      errors.push('$.reuse_policy.max_trials_per_guild: must be a positive integer');
+    }
+    if (
+      typeof input.reuse_policy.rationale !== 'string' ||
+      input.reuse_policy.rationale.trim() === ''
+    ) {
+      errors.push('$.reuse_policy.rationale: must be nonempty');
+    }
+  }
+
+  if (!Array.isArray(input.trials)) {
+    errors.push('$.trials: must be an array');
+    return null;
+  }
+  if (input.trials.length !== 20) errors.push('$.trials: must contain exactly 20 trials');
+  const trialIds = new Set();
+  const modeCounts = { full: 0, forced_resume: 0 };
+  for (const [index, trial] of input.trials.entries()) {
+    const path = `$.trials[${index}]`;
+    checkKeys(trial, TRIAL_KEYS, path, errors);
+    if (!isRecord(trial)) continue;
+    if (typeof trial.trial_id !== 'string' || trial.trial_id.trim() === '') {
+      errors.push(`${path}.trial_id: must be nonempty`);
+    } else if (trialIds.has(trial.trial_id)) {
+      errors.push(`${path}.trial_id: must be unique`);
+    } else {
+      trialIds.add(trial.trial_id);
+    }
+    if (!TRIAL_MODES.has(trial.mode)) errors.push(`${path}.mode: must be full or forced_resume`);
+    else modeCounts[trial.mode] += 1;
+    if (!isSnowflake(trial.guild_id)) errors.push(`${path}.guild_id: must be a Discord snowflake`);
+    if (!isSnowflake(trial.expected_bot_id))
+      errors.push(`${path}.expected_bot_id: must be a Discord snowflake`);
+    if (typeof trial.profile !== 'string' || trial.profile.trim() === '')
+      errors.push(`${path}.profile: must be nonempty`);
+  }
+  if (modeCounts.full !== 10) errors.push('$.trials: must contain exactly 10 full trials');
+  if (modeCounts.forced_resume !== 10)
+    errors.push('$.trials: must contain exactly 10 forced_resume trials');
+
+  checkKeys(input.guild_diversity, DIVERSITY_KEYS, '$.guild_diversity', errors);
+  const expectedDiversity = calculateDiversity(input.trials);
+  if (!isRecord(input.guild_diversity)) return { expectedDiversity, modeCounts };
+  if (input.guild_diversity.total_trial_count !== expectedDiversity.total_trial_count) {
+    errors.push('$.guild_diversity.total_trial_count: does not match trials');
+  }
+  if (input.guild_diversity.unique_guild_count !== expectedDiversity.unique_guild_count) {
+    errors.push('$.guild_diversity.unique_guild_count: does not match trials');
+  }
+  if (!sameJson(input.guild_diversity.trials_per_guild, expectedDiversity.trials_per_guild)) {
+    errors.push('$.guild_diversity.trials_per_guild: does not match trials');
+  }
+  if (isRecord(input.reuse_policy)) {
+    const maxTrials = Math.max(...Object.values(expectedDiversity.trials_per_guild), 0);
+    if (input.reuse_policy.max_trials_per_guild < maxTrials) {
+      errors.push('$.reuse_policy.max_trials_per_guild: is below actual guild reuse');
+    }
+    if (input.reuse_policy.strategy === 'unique_guilds' && maxTrials > 1) {
+      errors.push('$.reuse_policy.strategy: unique_guilds cannot reuse a guild');
+    }
+  }
+  return { expectedDiversity, modeCounts };
+}
+
+export function validateBenchmarkManifest(input) {
+  const errors = scanSecrets(input);
+  const details = validateManifestShape(input, errors);
+  if (errors.length > 0 || !details) return { ok: false, errors };
+  return {
+    ok: true,
+    manifest: input,
+    diversity: details.expectedDiversity,
+    modeCounts: details.modeCounts,
+  };
+}
+
+export function assertBenchmarkManifest(input) {
+  const result = validateBenchmarkManifest(input);
+  if (!result.ok) throw new TypeError(`Invalid benchmark manifest: ${result.errors.join('; ')}`);
+  return result.manifest;
+}
+
+export function createBenchmarkReport(manifest, trialResults = [], safetyCases = []) {
+  const validated = validateBenchmarkManifest(manifest);
+  if (!validated.ok)
+    throw new TypeError(`Invalid benchmark manifest: ${validated.errors.join('; ')}`);
+  const resultErrors = [
+    ...scanSecrets(trialResults, '$.results'),
+    ...scanSecrets(safetyCases, '$.safety_cases'),
+  ];
+  if (!Array.isArray(trialResults)) resultErrors.push('$.results: must be an array');
+  else if (trialResults.length !== 20)
+    resultErrors.push('$.results: must contain exactly 20 trial results');
+  if (!Array.isArray(safetyCases)) resultErrors.push('$.safety_cases: must be an array');
+  else if (safetyCases.length !== SAFETY_CASES.size)
+    resultErrors.push('$.safety_cases: must contain all three safety cases');
+
+  const trialsById = new Map(manifest.trials.map((trial) => [trial.trial_id, trial]));
+  const resultIds = new Set();
+  if (Array.isArray(trialResults)) {
+    for (const [index, result] of trialResults.entries()) {
+      const path = `$.results[${index}]`;
+      if (!isRecord(result)) {
+        resultErrors.push(`${path}: expected a plain object`);
+        continue;
+      }
+      const trial = trialsById.get(result.trial_id);
+      if (!trial) resultErrors.push(`${path}: trial result does not match the manifest`);
+      else {
+        if (resultIds.has(result.trial_id)) resultErrors.push(`${path}.trial_id: must be unique`);
+        resultIds.add(result.trial_id);
+        if (result.mode !== trial.mode) resultErrors.push(`${path}.mode: does not match the trial`);
+        if (result.guild_id !== trial.guild_id)
+          resultErrors.push(`${path}.guild_id: does not match the trial`);
+      }
+      if (typeof result.eligible !== 'boolean')
+        resultErrors.push(`${path}.eligible: must be boolean`);
+      if (!TERMINAL_STATUSES.has(result.terminal_status))
+        resultErrors.push(`${path}.terminal_status: is invalid`);
+      if (typeof result.oracle_match !== 'boolean')
+        resultErrors.push(`${path}.oracle_match: must be boolean`);
+      for (const field of ['snapshot_oracle_pass', 'blueprint_oracle_match', 'audit_oracle_pass']) {
+        if (typeof result[field] !== 'boolean') {
+          resultErrors.push(`${path}.${field}: must be boolean`);
+        }
+      }
+      if (!Array.isArray(result.serious_permission_failures))
+        resultErrors.push(`${path}.serious_permission_failures: must be an array`);
+      if (!validFailureArray(result.functional_failures))
+        resultErrors.push(`${path}.functional_failures: must be an array`);
+      if (typeof result.plan_snapshot_unchanged !== 'boolean')
+        resultErrors.push(`${path}.plan_snapshot_unchanged: must be boolean`);
+      if (
+        result.forced_resume_observed !== null &&
+        typeof result.forced_resume_observed !== 'boolean'
+      ) {
+        resultErrors.push(`${path}.forced_resume_observed: must be boolean or null`);
+      }
+      for (const field of [
+        'operations_planned',
+        'apply_calls',
+        'restart_count',
+        'audit_entry_count',
+      ]) {
+        if (!nonnegativeInteger(result[field]))
+          resultErrors.push(`${path}.${field}: must be a nonnegative integer`);
+      }
+      if (result.replay_status !== null && result.replay_status !== 'already_current')
+        resultErrors.push(`${path}.replay_status: must be already_current or null`);
+      if (
+        result.evidence_status !== null &&
+        !['verified', 'drifted', 'not_found', 'blocked'].includes(result.evidence_status)
+      ) {
+        resultErrors.push(`${path}.evidence_status: is invalid`);
+      }
+      if (typeof result.audit_trail_complete !== 'boolean')
+        resultErrors.push(`${path}.audit_trail_complete: must be boolean`);
+      if (result.verified_counts !== null && !validVerifiedCounts(result.verified_counts))
+        resultErrors.push(`${path}.verified_counts: is invalid`);
+      if (typeof result.baseline_verified_before !== 'boolean')
+        resultErrors.push(`${path}.baseline_verified_before: must be boolean`);
+      if (typeof result.baseline_restored_after !== 'boolean')
+        resultErrors.push(`${path}.baseline_restored_after: must be boolean`);
+      if (!DIGEST_RE.test(result.baseline_fingerprint_before ?? ''))
+        resultErrors.push(`${path}.baseline_fingerprint_before: must be a sha256 digest`);
+      if (!DIGEST_RE.test(result.baseline_fingerprint_after ?? ''))
+        resultErrors.push(`${path}.baseline_fingerprint_after: must be a sha256 digest`);
+      if (
+        validFailureArray(result.serious_permission_failures) &&
+        validFailureArray(result.functional_failures) &&
+        typeof result.eligible === 'boolean' &&
+        typeof result.oracle_match === 'boolean' &&
+        typeof result.snapshot_oracle_pass === 'boolean' &&
+        typeof result.blueprint_oracle_match === 'boolean' &&
+        typeof result.audit_oracle_pass === 'boolean' &&
+        nonnegativeInteger(result.operations_planned) &&
+        nonnegativeInteger(result.apply_calls) &&
+        nonnegativeInteger(result.restart_count) &&
+        nonnegativeInteger(result.audit_entry_count) &&
+        (result.verified_counts === null || validVerifiedCounts(result.verified_counts)) &&
+        typeof result.baseline_verified_before === 'boolean' &&
+        typeof result.baseline_restored_after === 'boolean'
+      ) {
+        const derived = resultEvidencePass(result);
+        if (result.oracle_match !== derived)
+          resultErrors.push(`${path}.oracle_match: disagrees with derived evidence`);
+      }
+    }
+  }
+
+  const observedSafetyCases = new Set();
+  if (Array.isArray(safetyCases)) {
+    for (const [index, safetyCase] of safetyCases.entries()) {
+      const path = `$.safety_cases[${index}]`;
+      if (!isRecord(safetyCase)) {
+        resultErrors.push(`${path}: expected a plain object`);
+        continue;
+      }
+      if (!SAFETY_CASES.has(safetyCase.case))
+        resultErrors.push(`${path}.case: is not a required safety case`);
+      else if (observedSafetyCases.has(safetyCase.case))
+        resultErrors.push(`${path}.case: must be unique`);
+      else observedSafetyCases.add(safetyCase.case);
+      if (typeof safetyCase.passed !== 'boolean')
+        resultErrors.push(`${path}.passed: must be boolean`);
+      for (const field of [
+        'guard_guild_id',
+        'target_guild_id',
+        'active_bot_id',
+        'supplied_bot_id',
+      ]) {
+        if (!isSnowflake(safetyCase[field]))
+          resultErrors.push(`${path}.${field}: must be a Discord snowflake`);
+      }
+      if (typeof safetyCase.blocked_before_discord !== 'boolean')
+        resultErrors.push(`${path}.blocked_before_discord: must be boolean`);
+      if (safetyCase.blocker_code !== null && typeof safetyCase.blocker_code !== 'string')
+        resultErrors.push(`${path}.blocker_code: must be string or null`);
+      if (!['ready', 'blocked'].includes(safetyCase.plan_status))
+        resultErrors.push(`${path}.plan_status: must be ready or blocked`);
+      if (!['passed', 'not_run'].includes(safetyCase.target_readback))
+        resultErrors.push(`${path}.target_readback: must be passed or not_run`);
+      for (const field of ['operations_planned', 'audit_entry_count', 'mutation_count']) {
+        if (!nonnegativeInteger(safetyCase[field]))
+          resultErrors.push(`${path}.${field}: must be a nonnegative integer`);
+      }
+      if (typeof safetyCase.snapshot_unchanged !== 'boolean')
+        resultErrors.push(`${path}.snapshot_unchanged: must be boolean`);
+      if (
+        typeof safetyCase.passed === 'boolean' &&
+        safetyCase.passed !== safetyEvidencePass(safetyCase)
+      ) {
+        resultErrors.push(`${path}.passed: disagrees with derived evidence`);
+      }
+    }
+    if (
+      observedSafetyCases.size !== SAFETY_CASES.size ||
+      [...SAFETY_CASES].some((name) => !observedSafetyCases.has(name))
+    ) {
+      resultErrors.push('$.safety_cases: must contain wrong_bot, wrong_guild, and write_preview');
+    }
+  }
+  if (resultErrors.length > 0)
+    throw new TypeError(`Invalid benchmark report data: ${resultErrors.join('; ')}`);
+
+  const eligible = trialResults.filter((result) => result.eligible).length;
+  const completed = trialResults.filter((result) => resultEvidencePass(result)).length;
+  const seriousPermissionFailures = trialResults.reduce(
+    (count, result) => count + result.serious_permission_failures.length,
+    0,
+  );
+  const safetyCasesPassed = safetyCases.every((safetyCase) => safetyCase.passed);
+
+  return {
+    schema_version: REPORT_SCHEMA,
+    manifest_schema_version: BENCHMARK_SCHEMA,
+    run_id: manifest.run_id,
+    commit: manifest.commit,
+    built_cli: cloneJson(manifest.built_cli),
+    api_version: manifest.api_version,
+    trial_count: trialResults.length,
+    mode_counts: { ...validated.modeCounts },
+    reuse_policy: cloneJson(manifest.reuse_policy),
+    guild_diversity: cloneJson(validated.diversity),
+    results: cloneJson(trialResults),
+    safety_cases: cloneJson(safetyCases),
+    summary: {
+      eligible,
+      completed,
+      success_rate: eligible === 0 ? 0 : completed / eligible,
+      serious_permission_failures: seriousPermissionFailures,
+      safety_cases_passed: safetyCasesPassed,
+      gate_passed:
+        eligible === 20 && completed >= 19 && seriousPermissionFailures === 0 && safetyCasesPassed,
+    },
+  };
+}
