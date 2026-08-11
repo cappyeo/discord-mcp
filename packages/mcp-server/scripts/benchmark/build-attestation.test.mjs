@@ -106,10 +106,21 @@ describe('built CLI attestation', () => {
       },
     });
 
-    expect(calls.map(({ args }) => args)).toEqual([
+    const pnpmArgs = [
       ['--filter', '@discord-mcp/core', 'build'],
       ['--filter', '@discord-mcp/cli', 'build'],
-    ]);
+    ];
+    const expectedCommand =
+      process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'pnpm';
+    const expectedArgs =
+      process.platform === 'win32'
+        ? pnpmArgs.map((args) => ['/d', '/s', '/c', 'pnpm.cmd', ...args])
+        : pnpmArgs;
+
+    expect(calls.map(({ command }) => command)).toEqual([expectedCommand, expectedCommand]);
+    expect(calls.map(({ args }) => args)).toEqual(expectedArgs);
     expect(calls.every(({ options }) => options.cwd === 'C:/workspace')).toBe(true);
+    expect(calls.every(({ options }) => options.shell === undefined)).toBe(true);
+    expect(calls.every(({ options }) => options.windowsHide === true)).toBe(true);
   });
 });

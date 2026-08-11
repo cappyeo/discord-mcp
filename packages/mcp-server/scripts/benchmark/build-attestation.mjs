@@ -13,11 +13,19 @@ const MAX_CLI_BYTES = 50 * 1024 * 1024;
 
 export async function buildBenchmarkCli({ cwd, execFile: run = execFile } = {}) {
   if (typeof run !== 'function') throw new TypeError('execFile must be a function');
-  const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
   const options = { cwd, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, windowsHide: true };
+  const invoke = (pnpmArgs) =>
+    process.platform === 'win32'
+      ? [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'pnpm.cmd', ...pnpmArgs]]
+      : ['pnpm', pnpmArgs];
   try {
-    await run(command, ['--filter', '@discord-mcp/core', 'build'], options);
-    await run(command, ['--filter', '@discord-mcp/cli', 'build'], options);
+    for (const pnpmArgs of [
+      ['--filter', '@discord-mcp/core', 'build'],
+      ['--filter', '@discord-mcp/cli', 'build'],
+    ]) {
+      const [command, args] = invoke(pnpmArgs);
+      await run(command, args, options);
+    }
   } catch {
     throw new Error('benchmark CLI build failed');
   }
