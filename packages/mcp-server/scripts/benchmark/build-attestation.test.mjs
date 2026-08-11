@@ -1,6 +1,6 @@
 import { execFile as nodeExecFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -60,7 +60,9 @@ describe('built CLI attestation', () => {
       sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
       source_commit: source.commit,
     });
-    expect(result.cliPath).toBe(join(source.cwd, 'packages', 'mcp-server', 'dist', 'cli.js'));
+    expect(result.cliPath).toBe(
+      await realpath(join(source.cwd, 'packages', 'mcp-server', 'dist', 'cli.js')),
+    );
   });
 
   it('rejects a build that changes tracked source', async () => {
