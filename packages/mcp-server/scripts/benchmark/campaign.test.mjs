@@ -113,6 +113,7 @@ function safetyCases() {
 
 function harness({
   seriousAt = null,
+  failedAt = [],
   restoreFailure = false,
   restoreFailuresBeforeSuccess = 0,
   preflightFailuresBeforeSuccess = 0,
@@ -160,11 +161,19 @@ function harness({
       async runTrial({ trial, baselineMessageChannelId }) {
         calls.push(['trial', trial.trial_id]);
         assert.equal(baselineMessageChannelId, CANARY_CHANNEL_IDS[trial.guild_id]);
+        const trialResult = result(
+          trial,
+          trial.trial_id === seriousAt ? [{ code: 'GENERATED_ROLE_DANGEROUS_PERMISSION' }] : [],
+        );
+        if (failedAt.includes(trial.trial_id)) {
+          trialResult.oracle_match = false;
+          trialResult.snapshot_oracle_pass = false;
+          trialResult.blueprint_oracle_match = false;
+          trialResult.audit_oracle_pass = false;
+          trialResult.functional_failures = [{ code: 'ORACLE_MISMATCH' }];
+        }
         return {
-          result: result(
-            trial,
-            trial.trial_id === seriousAt ? [{ code: 'GENERATED_ROLE_DANGEROUS_PERMISSION' }] : [],
-          ),
+          result: trialResult,
           cleanup: {
             guild_id: trial.guild_id,
             bot_id: trial.expected_bot_id,
@@ -323,6 +332,49 @@ describe('real benchmark campaign', () => {
     assert.equal(test.restores.length, 3);
     assert.equal(test.calls.filter(([kind]) => kind === 'trial').length, 3);
     assert.equal(test.artifacts.get('quarantine.json').trial_id, 'trial-03');
+    assert.equal(test.artifacts.has('report.json'), false);
+  });
+
+  it('fails fast at a restored trial boundary when the success threshold is unreachable', async () => {
+    const test = harness({ failedAt: ['trial-01', 'trial-02'] });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'SUCCESS_THRESHOLD_UNREACHABLE',
+    );
+    assert.equal(test.calls.filter(([kind]) => kind === 'trial').length, 2);
+    assert.equal(test.restores.length, 2);
+    assert.equal(test.artifacts.has('results/trial-01.json'), true);
+    assert.equal(test.artifacts.has('results/trial-02.json'), true);
+    assert.equal(test.artifacts.has('report.json'), false);
+    assert.deepEqual(test.artifacts.get('quarantine.json'), {
+      schema_version: 'discord-mcp.real-benchmark-quarantine.v1',
+      run_id: 'campaign-test',
+      commit: COMMIT,
+      code: 'SUCCESS_THRESHOLD_UNREACHABLE',
+      phase: 'trial_boundary',
+      trial_id: 'trial-02',
+      guild_id: CONTROLLED_GUILD_IDS[1],
+      passing_trials: 0,
+      completed_trials: 2,
+      remaining_trials: 18,
+      required_passing_trials: 19,
+      baseline_restored: true,
+    });
+  });
+
+  it('keeps serious permission failure precedence over threshold fail-fast', async () => {
+    const test = harness({ failedAt: ['trial-01'], seriousAt: 'trial-02' });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'SERIOUS_PERMISSION_FAILURE',
+    );
+    assert.equal(test.calls.filter(([kind]) => kind === 'trial').length, 2);
+    assert.equal(test.artifacts.get('quarantine.json').code, 'SERIOUS_PERMISSION_FAILURE');
+    assert.equal(test.artifacts.get('quarantine.json').phase, 'trial_oracle');
     assert.equal(test.artifacts.has('report.json'), false);
   });
 

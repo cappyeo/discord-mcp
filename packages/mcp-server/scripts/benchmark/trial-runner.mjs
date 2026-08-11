@@ -510,6 +510,9 @@ function nonterminalApplySummary(result) {
     error_code: result.error?.code ?? null,
     error_retriable: result.error?.retriable ?? null,
     error_status: result.error?.status ?? null,
+    ...(result.error?.retry_after_ms === undefined
+      ? {}
+      : { retry_after_ms: result.error.retry_after_ms }),
     next_action: result.next_action,
     blocker_codes: result.blockers.map((blocker) => blocker.code),
     blocker_resources: result.blockers.map((blocker) => blocker.resource),

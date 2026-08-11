@@ -548,6 +548,7 @@ describe('real benchmark trial orchestration', () => {
 
     assert.equal(outcome.result.oracle_match, true);
     assert.deepEqual(test.settleSleeps, [240_000]);
+    assert.equal(outcome.result.last_nonterminal_apply.retry_after_ms, 240_000);
   });
 
   it('fails closed instead of retrying before an unaffordable Retry-After', async () => {
@@ -559,6 +560,7 @@ describe('real benchmark trial orchestration', () => {
 
     assert.equal(outcome.result.terminal_status, 'error');
     assert.deepEqual(test.settleSleeps, []);
+    assert.equal(outcome.result.last_nonterminal_apply.retry_after_ms, 900_001);
     assert.ok(
       outcome.result.functional_failures.some(
         (failure) => failure.code === 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',

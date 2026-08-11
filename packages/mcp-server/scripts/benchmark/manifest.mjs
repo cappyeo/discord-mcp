@@ -175,7 +175,7 @@ function validVerifiedCounts(value) {
   return Object.values(value).every((count) => Number.isInteger(count) && count > 0);
 }
 
-function resultEvidencePass(result) {
+export function resultEvidencePass(result) {
   const restartPass =
     result.mode === 'forced_resume'
       ? result.forced_resume_observed === true && result.restart_count >= 2
