@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { desiredRoleBody } from './blueprint.desired.js';
+import { desiredAutoModBody, desiredRoleBody } from './blueprint.desired.js';
 import { compileGuildBlueprint } from './blueprint.js';
 import { reconcileGuildBlueprint } from './blueprint.reconcile.js';
-import type { BlueprintTargetSnapshot, TargetRole } from './blueprint.target.js';
+import type { BlueprintTargetSnapshot, TargetAutoModRule, TargetRole } from './blueprint.target.js';
 
 const blueprint = compileGuildBlueprint({
   request: 'Build a professional gaming community',
@@ -31,7 +31,10 @@ const blueprint = compileGuildBlueprint({
 const guildId = '100000000000000001';
 const botId = '100000000000000002';
 
-function baseSnapshot(roles: TargetRole[]): BlueprintTargetSnapshot {
+function baseSnapshot(
+  roles: TargetRole[],
+  automod_rules: TargetAutoModRule[] = [],
+): BlueprintTargetSnapshot {
   return {
     guild: {
       id: guildId,
@@ -50,7 +53,7 @@ function baseSnapshot(roles: TargetRole[]): BlueprintTargetSnapshot {
     bot: { user: { id: botId }, roles: ['100000000000000010'] },
     roles,
     channels: [],
-    automod_rules: [],
+    automod_rules,
     onboarding: null,
     welcome_screen: null,
     recent_messages: {},
@@ -98,6 +101,28 @@ function roleFor(key: string, id: string, overrides: Partial<TargetRole> = {}): 
   };
 }
 
+function automodRule(
+  id: string,
+  trigger_type: number,
+  creator_id: string,
+  overrides: Partial<TargetAutoModRule> = {},
+): TargetAutoModRule {
+  return {
+    id,
+    guild_id: guildId,
+    creator_id,
+    name: 'Existing rule',
+    event_type: 1,
+    trigger_type,
+    trigger_metadata: {},
+    actions: [],
+    enabled: true,
+    exempt_roles: [],
+    exempt_channels: [],
+    ...overrides,
+  };
+}
+
 describe('guild blueprint reconciliation safety', () => {
   it('blocks duplicate unbound resources instead of guessing', () => {
     const member = blueprint.roles.find((role) => role.key === 'member')!;
@@ -134,5 +159,170 @@ describe('guild blueprint reconciliation safety', () => {
     );
     expect(result.bindings.roles.member).toBeUndefined();
     expect(result.operations.some((operation) => operation.key === 'member')).toBe(false);
+  });
+
+  it('adopts a unique bot-owned singleton AutoMod rule and plans an update', () => {
+    const existing = automodRule('100000000000000011', 3, botId);
+    const result = reconcileGuildBlueprint(
+      `sha256:${'5'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone()], [existing]),
+    );
+
+    expect(result.bindings.automod_rules.spam).toBe(existing.id);
+    expect(result.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'update',
+          resource: 'automod_rule',
+          key: 'spam',
+        }),
+      ]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'create', resource: 'automod_rule', key: 'spam' }),
+      ]),
+    );
+  });
+
+  it('blocks a foreign-owned singleton AutoMod rule without creating or adopting it', () => {
+    const existing = automodRule('100000000000000011', 3, '100000000000000099');
+    const result = reconcileGuildBlueprint(
+      `sha256:${'6'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone()], [existing]),
+    );
+
+    expect(result.bindings.automod_rules.spam).toBeUndefined();
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'RESOURCE_CONFLICT',
+          resource: `automod-rule:${existing.id}`,
+        }),
+      ]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'create', resource: 'automod_rule', key: 'spam' }),
+      ]),
+    );
+  });
+
+  it('blocks a foreign-owned bound AutoMod rule before reconciling a matching trigger', () => {
+    const existing = automodRule('100000000000000013', 3, '100000000000000099');
+    const result = reconcileGuildBlueprint(
+      `sha256:${'8'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone()], [existing]),
+      {
+        roles: {},
+        categories: {},
+        channels: {},
+        automod_rules: { spam: existing.id },
+        publications: {},
+      },
+    );
+
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'RESOURCE_CONFLICT',
+          resource: `automod-rule:${existing.id}`,
+        }),
+      ]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'update', resource: 'automod_rule', key: 'spam' }),
+      ]),
+    );
+  });
+
+  it('blocks duplicate singleton triggers before adopting a desired-name match', () => {
+    const channelId = '100000000000000020';
+    const seedBindings = {
+      roles: {},
+      categories: {},
+      channels: { mod_log: channelId },
+      automod_rules: {},
+      publications: {},
+    };
+    const desired = blueprint.automod.rules.find((rule) => rule.key === 'spam')!;
+    const body = desiredAutoModBody(desired, seedBindings)!;
+    const exactMatch = automodRule('100000000000000013', 3, botId, {
+      name: body.name as string,
+      event_type: body.event_type as number,
+      trigger_metadata: body.trigger_metadata as Record<string, unknown>,
+      actions: body.actions as Array<Record<string, unknown>>,
+      enabled: body.enabled as boolean,
+      exempt_roles: body.exempt_roles as string[],
+      exempt_channels: body.exempt_channels as string[],
+    });
+    const duplicate = automodRule('100000000000000014', 3, botId);
+    const result = reconcileGuildBlueprint(
+      `sha256:${'9'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone()], [exactMatch, duplicate]),
+      seedBindings,
+    );
+
+    expect(result.bindings.automod_rules.spam).toBeUndefined();
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'AMBIGUOUS_RESOURCE', resource: 'automod-key:spam' }),
+      ]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ resource: 'automod_rule', key: 'spam' })]),
+    );
+  });
+
+  it('reports ownership conflict for an exact-name foreign singleton during preview', () => {
+    const desired = blueprint.automod.rules.find((rule) => rule.key === 'spam')!;
+    const existing = automodRule('100000000000000011', 3, '100000000000000099', {
+      name: desired.name,
+    });
+    const result = reconcileGuildBlueprint(
+      `sha256:${'6'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone()], [existing]),
+    );
+
+    expect(result.bindings.automod_rules.spam).toBeUndefined();
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'RESOURCE_CONFLICT',
+          message: expect.stringContaining('owned by another creator'),
+          resource: `automod-rule:${existing.id}`,
+        }),
+      ]),
+    );
+  });
+
+  it('fails closed when singleton AutoMod trigger candidates are ambiguous', () => {
+    const rules = [
+      automodRule('100000000000000011', 3, botId),
+      automodRule('100000000000000012', 3, botId),
+    ];
+    const result = reconcileGuildBlueprint(
+      `sha256:${'7'.repeat(64)}`,
+      blueprint,
+      baseSnapshot([...botAndEveryone()], rules),
+    );
+
+    expect(result.bindings.automod_rules.spam).toBeUndefined();
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'AMBIGUOUS_RESOURCE', resource: 'automod-key:spam' }),
+      ]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'create', resource: 'automod_rule', key: 'spam' }),
+      ]),
+    );
   });
 });

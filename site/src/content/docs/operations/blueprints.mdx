@@ -57,8 +57,12 @@ Apply acquires both a guild-wide lock and a plan lock, then re-reads and
 reconciles Discord at the start of every call or resume. It saves an
 authenticated append-only local checkpoint after every successful operation
 and performs an independent final readback. If the process or Discord fails,
-the next call adopts only exact Discord matches and continues from verified
-state; it does not blindly replay the previous request.
+the next call adopts exact Discord matches and continues from verified state;
+it does not blindly replay the previous request. The only bounded exception is
+a Discord-protected singleton AutoMod slot: the reconciler may bind the sole
+same-trigger rule when its `creator_id` is the exact caller-owned bot, then
+update it to the approved blueprint. Foreign-owned or ambiguous singleton rules
+block before mutation.
 
 The first apply must still match the snapshot shown by plan. Once a checkpoint
 is complete, that approval is terminal. Repeating it while Discord still matches

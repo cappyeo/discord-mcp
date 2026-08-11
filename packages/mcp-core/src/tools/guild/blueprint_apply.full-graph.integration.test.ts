@@ -398,6 +398,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
         const rule: TargetAutoModRule = {
           id: snowflake(nextId++),
           guild_id: GUILD_ID,
+          creator_id: BOT_ID,
           name: string(body.name),
           event_type: number(body.event_type),
           trigger_type: number(body.trigger_type),

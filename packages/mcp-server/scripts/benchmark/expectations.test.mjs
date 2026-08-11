@@ -221,3 +221,77 @@ test('fails closed for unknown permission, reference, binding, duplicate, and pr
     /already exists/,
   );
 });
+
+test('adopts only a bot-owned preexisting singleton AutoMod rule with an immutable trigger type', () => {
+  const adoptedBlueprint = blueprint();
+  adoptedBlueprint.automod.rules[0] = {
+    ...adoptedBlueprint.automod.rules[0],
+    trigger_type: 5,
+  };
+  const adoptedBefore = before();
+  adoptedBefore.automod_rules = [
+    {
+      id: ids.rule,
+      guild_id: guildId,
+      creator_id: botId,
+      trigger_type: 5,
+    },
+  ];
+
+  const expected = buildBenchmarkExpectations({
+    blueprint: adoptedBlueprint,
+    bindings: bindings(),
+    before: adoptedBefore,
+    guildId,
+    botId,
+  });
+
+  assert.deepEqual(expected.generated.automod_rules, []);
+  assert.deepEqual(expected.adopted_automod_rules, [ids.rule]);
+  assert.deepEqual(expected.adopted_automod_trigger_types, { [ids.rule]: 5 });
+  assert.equal(expected.bindings.automod_rules.safety, ids.rule);
+
+  assert.throws(
+    () =>
+      buildBenchmarkExpectations({
+        blueprint: adoptedBlueprint,
+        bindings: bindings(),
+        before: {
+          ...adoptedBefore,
+          automod_rules: [
+            ...adoptedBefore.automod_rules,
+            {
+              id: '10000000000000071',
+              guild_id: guildId,
+              creator_id: botId,
+              trigger_type: 5,
+            },
+          ],
+        },
+        guildId,
+        botId,
+      }),
+    /exactly one preexisting rule/,
+  );
+
+  for (const rule of [
+    { creator_id: '10000000000000003', trigger_type: 5 },
+    { creator_id: botId, trigger_type: 1 },
+  ]) {
+    const unsafeBefore = {
+      ...adoptedBefore,
+      automod_rules: [{ ...adoptedBefore.automod_rules[0], ...rule }],
+    };
+    assert.throws(
+      () =>
+        buildBenchmarkExpectations({
+          blueprint: adoptedBlueprint,
+          bindings: bindings(),
+          before: unsafeBefore,
+          guildId,
+          botId,
+        }),
+      /already exists/,
+    );
+  }
+});

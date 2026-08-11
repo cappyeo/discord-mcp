@@ -249,7 +249,13 @@ export async function readDiscordSnapshot(
       overwriteKeys.add(key);
     }
   }
-  for (const rule of automodRules) assertScopedId(rule?.guild_id, guildId, 'AutoMod rule');
+  for (const [index, rule] of automodRules.entries()) {
+    assertScopedId(rule?.guild_id, guildId, 'AutoMod rule');
+    assertSnowflake(rule?.creator_id, `AutoMod rules[${index}].creator_id`);
+    if (!Number.isInteger(rule?.trigger_type) || rule.trigger_type < 1 || rule.trigger_type > 6) {
+      throw new Error(`AutoMod rules[${index}].trigger_type must be an integer from 1 to 6`);
+    }
+  }
 
   const community = Array.isArray(guild.features) && guild.features.includes('COMMUNITY');
   const [onboarding, welcomeScreen] = community

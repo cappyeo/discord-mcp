@@ -15,6 +15,7 @@ const DANGEROUS_PERMISSION_BITS = Object.freeze({
 });
 
 const RESOURCE_KINDS = Object.freeze(['roles', 'channels', 'automod_rules', 'messages']);
+const SINGLETON_AUTOMOD_TRIGGER_TYPES = new Set([3, 4, 5]);
 const STATE_CHANGE_DOMAINS = Object.freeze([
   ['guild', 'guild'],
   ['onboarding', 'onboarding'],
@@ -69,6 +70,11 @@ function uniqueIds(values, path) {
   return result;
 }
 
+function sameIds(left, right) {
+  const leftIds = left instanceof Map ? [...left.keys()] : [...left];
+  return leftIds.length === right.size && leftIds.every((id) => right.has(id));
+}
+
 function decimalMap(value, path) {
   if (value === undefined) return {};
   if (value === null || typeof value !== 'object' || Array.isArray(value))
@@ -79,6 +85,21 @@ function decimalMap(value, path) {
       permissions(child, `${path}.${key}`).toString(),
     ]),
   );
+}
+
+function automodTriggerTypeMap(value, path, adoptedIds) {
+  if (value === undefined) fail(`${path} must be supplied for adopted AutoMod rules`);
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    fail(`${path} must be an object`);
+  const result = new Map();
+  for (const [key, child] of Object.entries(value)) {
+    const id = asId(key, `${path}.${key}`);
+    if (!Number.isInteger(child) || ![3, 4, 5].includes(child))
+      fail(`${path}.${key} must be a singleton AutoMod trigger type (3, 4, or 5)`);
+    result.set(id, child);
+  }
+  if (!sameIds(result, adoptedIds)) fail(`${path} must exactly map adopted AutoMod rules`);
+  return result;
 }
 
 function allowedStateChanges(value) {
@@ -127,6 +148,20 @@ function normalizeExpected(expected) {
       ),
     ]),
   );
+  const adoptedAutomodInput = expected.adopted_automod_rules;
+  const adoptedAutomod = uniqueIds(
+    idList(adoptedAutomodInput, 'expected.adopted_automod_rules'),
+    'expected.adopted_automod_rules',
+  );
+  const adoptedAutomodTriggerTypes = automodTriggerTypeMap(
+    expected.adopted_automod_trigger_types ?? (adoptedAutomod.size === 0 ? {} : undefined),
+    'expected.adopted_automod_trigger_types',
+    adoptedAutomod,
+  );
+  for (const id of adoptedAutomod) {
+    if (generated.automod_rules.has(id))
+      fail(`adopted AutoMod rule ${id} must not be listed as generated`);
+  }
   const bindings = expected.bindings ?? {};
   if (bindings === null || typeof bindings !== 'object' || Array.isArray(bindings))
     fail('expected.bindings must be an object');
@@ -138,9 +173,17 @@ function normalizeExpected(expected) {
         : null;
     if (targetKind === null) fail(`unsupported binding kind ${kind}`);
     for (const id of bindingValues(values, `expected.bindings.${kind}`)) {
-      if (!generated[targetKind].has(id))
-        fail(`binding ${id} is not an expected generated ${targetKind} id`);
+      const allowed =
+        generated[targetKind].has(id) || (targetKind === 'automod_rules' && adoptedAutomod.has(id));
+      if (!allowed) fail(`binding ${id} is not an expected generated ${targetKind} id`);
     }
+  }
+  const boundAutomodIds = new Set(
+    bindingValues(bindings.automod_rules, 'expected.bindings.automod_rules'),
+  );
+  for (const id of adoptedAutomod) {
+    if (!boundAutomodIds.has(id))
+      fail(`adopted AutoMod rule ${id} is not an expected AutoMod binding`);
   }
   const canary = expected.canary ?? {};
   const canaryRoles = uniqueIds(
@@ -164,6 +207,8 @@ function normalizeExpected(expected) {
     guildId,
     botId,
     generated: generatedIds,
+    adoptedAutomodRules: adoptedAutomod,
+    adoptedAutomodTriggerTypes,
     canary: { roles: canaryRoles, channels: canaryChannels },
     generatedRolePermissions,
     allowedOverwriteAllows,
@@ -271,6 +316,14 @@ function issue(code, details = {}) {
   return { code, ...details };
 }
 
+function safeAutomodAdoption(resource, expectedBotId, expectedTriggerType) {
+  return (
+    resource?.creator_id === expectedBotId &&
+    SINGLETON_AUTOMOD_TRIGGER_TYPES.has(resource?.trigger_type) &&
+    resource?.trigger_type === expectedTriggerType
+  );
+}
+
 function permissions(value, path = 'permission bitfield') {
   const text = String(value ?? '0');
   if (!/^\d+$/.test(text)) fail(`${path} must be an unsigned decimal permission bitfield`);
@@ -348,6 +401,36 @@ export function compareSnapshots(before, after, expectedInput) {
     stable((after?.bot?.roles ?? []).map(String).sort())
   ) {
     serious.push(issue('BOT_ROLE_ASSIGNMENTS_CHANGED'));
+  }
+  for (const resourceId of expected.adoptedAutomodRules) {
+    const beforeResource = maps.automod_rules.before.get(resourceId);
+    const afterResource = maps.automod_rules.after.get(resourceId);
+    const expectedTriggerType = expected.adoptedAutomodTriggerTypes.get(resourceId);
+    if (beforeResource === undefined)
+      serious.push(
+        issue('ADOPTED_AUTOMOD_RULE_MISSING_BEFORE', {
+          resource_id: resourceId,
+          snapshot: 'before',
+        }),
+      );
+    if (afterResource === undefined)
+      serious.push(
+        issue('ADOPTED_AUTOMOD_RULE_MISSING_AFTER', {
+          resource_id: resourceId,
+          snapshot: 'after',
+        }),
+      );
+    if (
+      beforeResource !== undefined &&
+      afterResource !== undefined &&
+      (!safeAutomodAdoption(beforeResource, expected.botId, expectedTriggerType) ||
+        !safeAutomodAdoption(afterResource, expected.botId, expectedTriggerType))
+    )
+      serious.push(
+        issue('UNSAFE_PREEXISTING_AUTOMOD_ADOPTION', {
+          resource_id: resourceId,
+        }),
+      );
   }
   for (const [domain, snapshotKey] of STATE_CHANGE_DOMAINS) {
     if (stable(before?.[snapshotKey] ?? null) === stable(after?.[snapshotKey] ?? null)) continue;
@@ -543,6 +626,21 @@ export function compareSnapshots(before, after, expectedInput) {
       const afterResource = maps[kind].after.get(resourceId);
       if (afterResource === undefined) continue;
       if (stable(beforeResource) !== stable(afterResource)) {
+        if (
+          kind === 'automod_rules' &&
+          expected.adoptedAutomodRules.has(resourceId) &&
+          safeAutomodAdoption(
+            beforeResource,
+            expected.botId,
+            expected.adoptedAutomodTriggerTypes.get(resourceId),
+          ) &&
+          safeAutomodAdoption(
+            maps.automod_rules.after.get(resourceId),
+            expected.botId,
+            expected.adoptedAutomodTriggerTypes.get(resourceId),
+          )
+        )
+          continue;
         serious.push(
           issue(`PREEXISTING_${kind.slice(0, -1).toUpperCase()}_CHANGED`, {
             resource_id: resourceId,

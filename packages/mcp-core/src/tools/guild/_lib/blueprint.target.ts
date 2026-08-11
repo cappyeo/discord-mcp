@@ -1,5 +1,6 @@
 import type { REST } from '@discordjs/rest';
 import { ChannelType, Routes } from 'discord-api-types/v10';
+import { UserId } from '../../_lib/snowflake.js';
 import type { BlueprintBindings } from './blueprint.execution.schema.js';
 import type { GuildBlueprint } from './blueprint.schema.js';
 
@@ -68,6 +69,7 @@ export interface TargetBotMember {
 export interface TargetAutoModRule {
   readonly id: string;
   readonly guild_id: string;
+  readonly creator_id: string;
   readonly name: string;
   readonly event_type: number;
   readonly trigger_type: number;
@@ -140,6 +142,15 @@ function assertTargetId(kind: string, expected: string, received: unknown): void
     throw new BlueprintTargetError(
       'TARGET_GUILD_MISMATCH',
       `${kind} response did not belong to the explicitly selected guild.`,
+    );
+  }
+}
+
+function assertTargetSnowflake(kind: string, received: unknown): void {
+  if (!UserId.safeParse(received).success) {
+    throw new BlueprintTargetError(
+      'TARGET_INVALID_SNOWFLAKE',
+      `${kind} response did not contain a valid Discord snowflake.`,
     );
   }
 }
@@ -257,7 +268,10 @@ export async function readBlueprintTargetSnapshot(
   for (const channel of channels) {
     if (channel.guild_id !== undefined) assertTargetId('Channel', guildId, channel.guild_id);
   }
-  for (const rule of automodRules) assertTargetId('AutoMod rule', guildId, rule.guild_id);
+  for (const rule of automodRules) {
+    assertTargetId('AutoMod rule', guildId, rule.guild_id);
+    assertTargetSnowflake('AutoMod rule creator_id', rule.creator_id);
+  }
 
   const community = guild.features.includes('COMMUNITY');
   const [onboarding, welcomeScreen] = community

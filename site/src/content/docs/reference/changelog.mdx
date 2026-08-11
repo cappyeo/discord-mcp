@@ -34,6 +34,11 @@ commit history and downloadable artifacts, see
   lock, target-bound dry-run, authenticated approval token, locally checkpointed
   resume, fail-closed reconciliation, and independent final Discord readback.
   Completed approvals cannot repair later drift; a fresh plan is required.
+- Community-protected singleton AutoMod rules can now be reused without a
+  duplicate create: adoption requires one matching immutable trigger and the
+  exact caller-owned bot as `creator_id`. Foreign-owned or ambiguous rules fail
+  closed, while the real-server benchmark restores an adopted protected rule to
+  its exact baseline instead of attempting an impossible delete.
 - Successful terminal apply now persists completion-only, authenticated Activity
   Evidence and returns its ID plus per-domain counts and enforced safety
   invariants. Partial or drifted results cannot claim terminal evidence.

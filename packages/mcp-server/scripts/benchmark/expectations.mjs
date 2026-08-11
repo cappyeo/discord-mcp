@@ -12,6 +12,7 @@ const BINDING_KINDS = Object.freeze([
   'automod_rules',
   'publications',
 ]);
+const SINGLETON_AUTOMOD_TRIGGER_TYPES = Object.freeze(new Set([3, 4, 5]));
 const PERMISSION_BITS = Object.freeze({
   VIEW_CHANNEL: 1n << 10n,
   READ_MESSAGE_HISTORY: 1n << 16n,
@@ -183,6 +184,29 @@ function validateBefore(before, guildId, botId) {
   if (botRoleIds.size !== botRoles.length) fail('before.bot.roles contains duplicate IDs');
   if (botRoleIds.has(guildId)) fail('bot role list must not contain the @everyone role');
   return { ids: new Set([...beforeResourceIds(before), ...botRoleIds]), botRoleIds };
+}
+
+function adoptedAutomodIds(blueprint, bindings, before, botId) {
+  const rules = array(before.automod_rules, 'before.automod_rules');
+  const byId = new Map(rules.map((rule) => [rule.id, rule]));
+  const adopted = [];
+  const triggerTypes = {};
+  for (const desired of array(blueprint.automod?.rules, 'blueprint.automod.rules')) {
+    const id = bindings.automod_rules[desired.key];
+    const existing = byId.get(id);
+    if (existing === undefined || !SINGLETON_AUTOMOD_TRIGGER_TYPES.has(desired.trigger_type))
+      continue;
+    if (existing.creator_id === botId && existing.trigger_type === desired.trigger_type) {
+      const sameTriggerRules = rules.filter((rule) => rule.trigger_type === desired.trigger_type);
+      if (sameTriggerRules.length !== 1)
+        fail(
+          `blueprint.automod.rules for singleton trigger type ${String(desired.trigger_type)} must have exactly one preexisting rule`,
+        );
+      adopted.push(id);
+      triggerTypes[id] = desired.trigger_type;
+    }
+  }
+  return { ids: adopted, triggerTypes };
 }
 
 function subjectReference(subject, bindings, path, guildId, botId) {
@@ -394,8 +418,12 @@ export function buildBenchmarkExpectations({ blueprint, bindings, before, guildI
   const keys = expectedKeys(blueprint);
   const exact = exactBindings(bindings, keys);
   const beforeState = validateBefore(before, guild, bot);
+  const adopted = adoptedAutomodIds(blueprint, exact.result, before, bot);
+  const adoptedAutomod = adopted.ids;
+  const adoptedAutomodIdsSet = new Set(adoptedAutomod);
   for (const id of exact.allIds) {
-    if (id === guild || id === bot || beforeState.ids.has(id))
+    const adopted = adoptedAutomodIdsSet.has(id);
+    if (id === guild || id === bot || (beforeState.ids.has(id) && !adopted))
       fail(`generated ID ${id} already exists in the target snapshot`);
   }
   collectReferences(blueprint, exact.result, guild, bot);
@@ -435,7 +463,9 @@ export function buildBenchmarkExpectations({ blueprint, bindings, before, guildI
   const generated = {
     roles: keys.roles.map((key) => exact.result.roles[key]),
     channels: generatedChannels,
-    automod_rules: keys.automod_rules.map((key) => exact.result.automod_rules[key]),
+    automod_rules: keys.automod_rules
+      .map((key) => exact.result.automod_rules[key])
+      .filter((id) => !adoptedAutomodIdsSet.has(id)),
     messages: keys.publications.map((key) => exact.result.publications[key]),
   };
   const botRoleIds = beforeState.botRoleIds;
@@ -459,6 +489,8 @@ export function buildBenchmarkExpectations({ blueprint, bindings, before, guildI
       automod_rules: exact.result.automod_rules,
       publications: exact.result.publications,
     },
+    adopted_automod_rules: [...adoptedAutomod],
+    adopted_automod_trigger_types: adopted.triggerTypes,
     canary,
     generated_role_permissions: generatedRolePermissions,
     allowed_overwrite_allows: allowedOverwriteAllows,

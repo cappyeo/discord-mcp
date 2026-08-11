@@ -347,6 +347,8 @@ function autoModMatches(rule: TargetAutoModRule, desired: Record<string, unknown
   return canonicalJson(normalizeAutoMod(rule)) === canonicalJson(normalizeAutoMod(desired));
 }
 
+const SINGLETON_AUTOMOD_TRIGGER_TYPES = new Set([3, 4, 5]);
+
 function containsMarker(value: unknown, marker: string): boolean {
   if (typeof value === 'string') return value.includes(marker);
   if (Array.isArray(value)) return value.some((item) => containsMarker(item, marker));
@@ -831,7 +833,16 @@ export function reconcileGuildBlueprint(
         : snapshot.automod_rules.find((rule) => rule.id === bindings.automod_rules[desired.key]);
     if (current === undefined) delete bindings.automod_rules[desired.key];
     if (current !== undefined) {
-      if (current.trigger_type !== desired.trigger_type) {
+      if (current.creator_id !== snapshot.bot.user.id) {
+        blockers.push(
+          blocker(
+            'RESOURCE_CONFLICT',
+            'A bound AutoMod rule is owned by another creator and cannot be reconciled.',
+            `automod-rule:${current.id}`,
+            'Rename or remove the foreign-owned rule, then create a fresh plan.',
+          ),
+        );
+      } else if (current.trigger_type !== desired.trigger_type) {
         blockers.push(
           blocker(
             'RESOURCE_CONFLICT',
@@ -854,6 +865,22 @@ export function reconcileGuildBlueprint(
       }
       continue;
     }
+    if (SINGLETON_AUTOMOD_TRIGGER_TYPES.has(desired.trigger_type)) {
+      const sameTrigger = snapshot.automod_rules.filter(
+        (rule) => rule.trigger_type === desired.trigger_type,
+      );
+      if (sameTrigger.length > 1) {
+        blockers.push(
+          blocker(
+            'AMBIGUOUS_RESOURCE',
+            `Multiple AutoMod rules use singleton trigger type ${desired.trigger_type}.`,
+            `automod-key:${desired.key}`,
+            'Remove duplicate singleton rules or resume with a valid checkpoint binding.',
+          ),
+        );
+        continue;
+      }
+    }
     const matches = snapshot.automod_rules.filter((rule) => rule.name === desired.name);
     if (matches.length > 1) {
       blockers.push(
@@ -868,7 +895,19 @@ export function reconcileGuildBlueprint(
     }
     current = matches[0];
     if (current !== undefined) {
-      if (body === null || !autoModMatches(current, body)) {
+      if (
+        SINGLETON_AUTOMOD_TRIGGER_TYPES.has(desired.trigger_type) &&
+        current.creator_id !== snapshot.bot.user.id
+      ) {
+        blockers.push(
+          blocker(
+            'RESOURCE_CONFLICT',
+            `An existing AutoMod rule with singleton trigger type ${desired.trigger_type} is owned by another creator and cannot be adopted.`,
+            `automod-rule:${current.id}`,
+            'Rename or remove the foreign-owned rule, then create a fresh plan.',
+          ),
+        );
+      } else if (body === null || !autoModMatches(current, body)) {
         blockers.push(
           blocker(
             'RESOURCE_CONFLICT',
@@ -881,6 +920,39 @@ export function reconcileGuildBlueprint(
         bindings.automod_rules[desired.key] = current.id;
       }
       continue;
+    }
+    if (SINGLETON_AUTOMOD_TRIGGER_TYPES.has(desired.trigger_type)) {
+      const sameTrigger = snapshot.automod_rules.filter(
+        (rule) => rule.trigger_type === desired.trigger_type,
+      );
+      const singleton = sameTrigger[0];
+      if (singleton !== undefined) {
+        if (singleton.creator_id !== snapshot.bot.user.id) {
+          blockers.push(
+            blocker(
+              'RESOURCE_CONFLICT',
+              `An existing AutoMod rule with singleton trigger type ${desired.trigger_type} is owned by another creator and cannot be adopted.`,
+              `automod-rule:${singleton.id}`,
+              'Rename or remove the foreign-owned rule, then create a fresh plan.',
+            ),
+          );
+          continue;
+        }
+        bindings.automod_rules[desired.key] = singleton.id;
+        if (body === null || !autoModMatches(singleton, body)) {
+          automodOperations.push(
+            operation(
+              'automod',
+              'update',
+              'automod_rule',
+              desired.key,
+              `Reconcile AutoMod rule ${desired.name}.`,
+              'medium',
+            ),
+          );
+        }
+        continue;
+      }
     }
     automodOperations.push(
       operation(

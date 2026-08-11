@@ -79,6 +79,7 @@ function fakeRest(
   recentMessages: unknown[],
   exactMessage: unknown | Error | undefined,
   messagePages: readonly (readonly unknown[])[] = [recentMessages, []],
+  automodRules: readonly unknown[] = [],
 ): REST {
   let messagePage = 0;
   return {
@@ -110,7 +111,7 @@ function fakeRest(
             channelId,
           ),
         ];
-      if (route === Routes.guildAutoModerationRules(guildId)) return [];
+      if (route === Routes.guildAutoModerationRules(guildId)) return automodRules;
       if (route === Routes.channelMessages(channelId)) {
         const page = messagePages[Math.min(messagePage, messagePages.length - 1)] ?? [];
         messagePage += 1;
@@ -126,6 +127,29 @@ function fakeRest(
 }
 
 describe('blueprint publication target readback', () => {
+  it('rejects an AutoMod rule whose creator_id is not a Discord snowflake', async () => {
+    await expect(
+      readBlueprintTargetSnapshot(
+        fakeRest(
+          '200000000000000001',
+          [],
+          undefined,
+          [[], []],
+          [
+            {
+              id: '400000000000000001',
+              guild_id: guildId,
+              creator_id: 'not-a-snowflake',
+            },
+          ],
+        ),
+        guildId,
+        botId,
+        blueprint,
+      ),
+    ).rejects.toMatchObject({ code: 'TARGET_INVALID_SNOWFLAKE' });
+  });
+
   it('fetches a checkpoint-bound message by exact id when it is outside recent history', async () => {
     const { publication, channelId, messageId, bindings, desired } = publicationFixture();
     const recent = Array.from({ length: 100 }, (_, index) => ({

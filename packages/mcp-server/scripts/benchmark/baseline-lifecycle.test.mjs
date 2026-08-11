@@ -15,6 +15,8 @@ const EXTRA_CATEGORY = '777000777000999004';
 const EXTRA_CHANNEL = '777000777000999005';
 const RULE = '777000777000999006';
 const MESSAGE = '777000777000999007';
+const PROTECTED_RULE = '777000777000999008';
+const FOREIGN_BOT = '666000666000666666';
 const FP = `sha256:${'a'.repeat(64)}`;
 
 function baselineSnapshot() {
@@ -71,7 +73,25 @@ function baselineSnapshot() {
   };
 }
 
-function makeBaseline() {
+function mentionSpamRule({ creator_id = BOT, enabled = false } = {}) {
+  return {
+    id: PROTECTED_RULE,
+    guild_id: GUILD,
+    creator_id,
+    name: 'Protected mention spam',
+    event_type: 1,
+    trigger_type: 5,
+    trigger_metadata: { mention_total_limit: 5, mention_raid_protection_enabled: true },
+    actions: [{ type: 1 }],
+    enabled,
+    exempt_roles: [],
+    exempt_channels: [],
+  };
+}
+
+function makeBaseline({ protectedRule = null } = {}) {
+  const snapshot = baselineSnapshot();
+  if (protectedRule) snapshot.automod_rules = [structuredClone(protectedRule)];
   return {
     schema_version: 1,
     kind: 'discord-mcp-benchmark-baseline',
@@ -93,7 +113,7 @@ function makeBaseline() {
       features: ['COMMUNITY'],
     },
     preserved_role_ids: [BOT_ROLE, CANARY_ROLE, GUILD],
-    baseline_snapshot: baselineSnapshot(),
+    baseline_snapshot: snapshot,
   };
 }
 
@@ -143,6 +163,39 @@ function dependencies(state, { drift = false } = {}) {
       return snapshot.roles.some((role) => role.id === EXTRA_ROLE) ? 'sha256:generated' : FP;
     },
   };
+}
+
+function protectedInitializerHarness({ creator_id = BOT, deleteError }) {
+  const state = { snapshot: baselineSnapshot() };
+  state.snapshot.automod_rules = [mentionSpamRule({ creator_id, enabled: true })];
+  const calls = [];
+  const rest = {
+    async request(method, path, options) {
+      calls.push([method, path, options]);
+      if (method === 'DELETE' && path.includes('/auto-moderation/rules/')) throw deleteError;
+      if (method === 'PATCH' && path.includes('/auto-moderation/rules/')) {
+        Object.assign(state.snapshot.automod_rules[0], options.body);
+        return structuredClone(state.snapshot.automod_rules[0]);
+      }
+      if (method === 'PATCH' && path === `/guilds/${GUILD}`) {
+        Object.assign(state.snapshot.guild, options.body);
+        return structuredClone(state.snapshot.guild);
+      }
+      if (method === 'PUT' && path.endsWith('/onboarding')) {
+        state.snapshot.onboarding = { guild_id: GUILD, ...options.body };
+        return structuredClone(state.snapshot.onboarding);
+      }
+      if (method === 'PATCH' && path.endsWith('/welcome-screen')) {
+        state.snapshot.welcome_screen = {
+          description: options.body.description,
+          welcome_channels: options.body.welcome_channels,
+        };
+        return structuredClone(state.snapshot.welcome_screen);
+      }
+      throw new Error(`unexpected mutation ${method} ${path}`);
+    },
+  };
+  return { state, calls, rest };
 }
 
 describe('benchmark baseline lifecycle', () => {
@@ -308,6 +361,96 @@ describe('benchmark baseline lifecycle', () => {
     ).toBe(true);
   });
 
+  it('preserves a bot-owned protected mention-spam rule after delete code 200006', async () => {
+    const harness = protectedInitializerHarness({
+      deleteError: Object.assign(new Error('Discord REST 400 code 200006: protected rule'), {
+        code: 200006,
+      }),
+    });
+    const baseline = await initializeBenchmarkBaseline({
+      rest: harness.rest,
+      readSnapshot: async () => structuredClone(harness.state.snapshot),
+      snapshotFingerprint: () => FP,
+      guildId: GUILD,
+      botId: BOT,
+      allowedGuildIds: [GUILD],
+      confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+      runId: 'protected-rule',
+    });
+    const rule = baseline.baseline_snapshot.automod_rules[0];
+    expect(rule).toMatchObject({
+      id: PROTECTED_RULE,
+      creator_id: BOT,
+      trigger_type: 5,
+      enabled: false,
+      actions: [{ type: 1 }],
+      exempt_roles: [],
+      exempt_channels: [],
+      trigger_metadata: { mention_total_limit: 5, mention_raid_protection_enabled: true },
+    });
+    expect(
+      harness.calls.some(
+        ([method, path]) =>
+          method === 'DELETE' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`),
+      ),
+    ).toBe(true);
+    const patch = harness.calls.find(
+      ([method, path]) =>
+        method === 'PATCH' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`),
+    );
+    expect(patch?.[2]?.body).toEqual({
+      name: 'Protected mention spam',
+      event_type: 1,
+      trigger_metadata: { mention_total_limit: 5, mention_raid_protection_enabled: true },
+      actions: [{ type: 1 }],
+      enabled: false,
+      exempt_roles: [],
+      exempt_channels: [],
+    });
+  });
+
+  it('fails closed for a foreign creator on protected delete code 200006', async () => {
+    const harness = protectedInitializerHarness({
+      creator_id: FOREIGN_BOT,
+      deleteError: Object.assign(new Error('Discord REST 400 code 200006'), { code: 200006 }),
+    });
+    await expect(
+      initializeBenchmarkBaseline({
+        rest: harness.rest,
+        readSnapshot: async () => structuredClone(harness.state.snapshot),
+        snapshotFingerprint: () => FP,
+        guildId: GUILD,
+        botId: BOT,
+        allowedGuildIds: [GUILD],
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+        runId: 'foreign-protected-rule',
+      }),
+    ).rejects.toThrow('200006');
+    expect(
+      harness.calls.some(
+        ([method, path]) => method === 'PATCH' && path.includes('/auto-moderation/'),
+      ),
+    ).toBe(false);
+  });
+
+  it('fails closed for any AutoMod delete error other than code 200006', async () => {
+    const harness = protectedInitializerHarness({
+      deleteError: Object.assign(new Error('Discord REST 500 code 200001'), { code: 200001 }),
+    });
+    await expect(
+      initializeBenchmarkBaseline({
+        rest: harness.rest,
+        readSnapshot: async () => structuredClone(harness.state.snapshot),
+        snapshotFingerprint: () => FP,
+        guildId: GUILD,
+        botId: BOT,
+        allowedGuildIds: [GUILD],
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+        runId: 'other-error',
+      }),
+    ).rejects.toThrow('200001');
+  });
+
   it('verifies the exact baseline fingerprint and detects drift', async () => {
     const baseline = makeBaseline();
     const state = { snapshot: baselineSnapshot() };
@@ -399,6 +542,90 @@ describe('benchmark baseline lifecycle', () => {
     expect(calls.findIndex(([, path]) => path === `/guilds/${GUILD}`)).toBeLessThan(
       calls.findIndex(([, path]) => path === `/channels/${EXTRA_CHANNEL}`),
     );
+  });
+
+  it('patches a bound bot-owned protected baseline rule and deletes generated AutoMod rules', async () => {
+    const state = { snapshot: currentSnapshot() };
+    state.snapshot.automod_rules = [
+      {
+        ...mentionSpamRule({ enabled: true }),
+        actions: [{ type: 2, metadata: { channel_id: CANARY_CHANNEL } }],
+        exempt_roles: [BOT_ROLE],
+      },
+      ...state.snapshot.automod_rules,
+    ];
+    const calls = [];
+    const rest = {
+      async request(method, path, options) {
+        calls.push([method, path, options]);
+        if (method === 'PATCH' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`)) {
+          const rule = state.snapshot.automod_rules.find((item) => item.id === PROTECTED_RULE);
+          Object.assign(rule, options.body);
+          return structuredClone(rule);
+        }
+        if (path.includes(`/channels/${EXTRA_CHANNEL}`) && method === 'DELETE')
+          state.snapshot.channels = state.snapshot.channels.filter(
+            (item) => item.id !== EXTRA_CHANNEL,
+          );
+        if (path.includes(`/channels/${EXTRA_CATEGORY}`) && method === 'DELETE')
+          state.snapshot.channels = state.snapshot.channels.filter(
+            (item) => item.id !== EXTRA_CATEGORY,
+          );
+        if (path.includes(`/roles/${EXTRA_ROLE}`) && method === 'DELETE')
+          state.snapshot.roles = state.snapshot.roles.filter((item) => item.id !== EXTRA_ROLE);
+        if (path.includes(`/auto-moderation/rules/${RULE}`))
+          state.snapshot.automod_rules = [
+            ...state.snapshot.automod_rules.filter((item) => item.id !== RULE),
+          ];
+        if (path.includes(`/messages/${MESSAGE}`)) state.snapshot.recent_messages = {};
+        if (path === `/guilds/${GUILD}`) return structuredClone(state.snapshot.guild);
+        if (path.endsWith('/onboarding')) return structuredClone(state.snapshot.onboarding);
+        if (path.endsWith('/welcome-screen')) return structuredClone(state.snapshot.welcome_screen);
+        return null;
+      },
+    };
+    const result = await restoreBenchmarkBaseline({
+      rest,
+      ...dependencies(state),
+      baseline: makeBaseline({ protectedRule: mentionSpamRule() }),
+      cleanup: {
+        publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
+        bindings: {
+          roles: { member: EXTRA_ROLE },
+          categories: { generated: EXTRA_CATEGORY },
+          channels: { generated: EXTRA_CHANNEL },
+          automod_rules: { protected: PROTECTED_RULE, generated: RULE },
+          publications: { welcome: MESSAGE },
+        },
+      },
+      reason: 'protected restore',
+    });
+    expect(result.restored).toBe(true);
+    expect(result.deleted.automod_rules).toBe(1);
+    expect(
+      calls.some(
+        ([method, path]) =>
+          method === 'DELETE' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`),
+      ),
+    ).toBe(false);
+    expect(
+      calls.some(
+        ([method, path]) => method === 'DELETE' && path.endsWith(`/auto-moderation/rules/${RULE}`),
+      ),
+    ).toBe(true);
+    const patch = calls.find(
+      ([method, path]) =>
+        method === 'PATCH' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`),
+    );
+    expect(patch?.[2]?.body).toEqual({
+      name: 'Protected mention spam',
+      event_type: 1,
+      trigger_metadata: { mention_total_limit: 5, mention_raid_protection_enabled: true },
+      actions: [{ type: 1 }],
+      enabled: false,
+      exempt_roles: [],
+      exempt_channels: [],
+    });
   });
 
   it('waits within a bounded schedule for restored Discord state to converge', async () => {

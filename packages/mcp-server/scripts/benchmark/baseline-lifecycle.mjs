@@ -114,6 +114,43 @@ async function mutate(rest, method, path, options) {
   return rest.request(method, path, requestOptions);
 }
 
+function discordErrorCode(error) {
+  const direct = error?.code ?? error?.body?.code ?? error?.data?.code;
+  if (direct !== undefined && direct !== null && /^\d+$/.test(String(direct))) {
+    return String(direct);
+  }
+  const match = String(error?.message ?? error).match(/\bcode\s+(\d+)\b/i);
+  return match?.[1] ?? null;
+}
+
+function isProtectedMentionSpamRule(rule, botId) {
+  return record(rule) && rule.trigger_type === 5 && rule.creator_id === botId;
+}
+
+function protectedRulePatchBody(rule) {
+  return {
+    name: rule.name,
+    event_type: rule.event_type,
+    trigger_metadata: cloneJson(rule.trigger_metadata ?? {}),
+    actions: [{ type: 1 }],
+    enabled: false,
+    exempt_roles: [],
+    exempt_channels: [],
+  };
+}
+
+function exactAutoModRulePatchBody(rule) {
+  return {
+    name: rule.name,
+    event_type: rule.event_type,
+    trigger_metadata: cloneJson(rule.trigger_metadata ?? {}),
+    actions: cloneJson(rule.actions ?? []),
+    enabled: rule.enabled,
+    exempt_roles: cloneJson(rule.exempt_roles ?? []),
+    exempt_channels: cloneJson(rule.exempt_channels ?? []),
+  };
+}
+
 function responseId(response, guildId, kind) {
   if (!record(response)) throw new Error(`${kind} response is malformed`);
   const id = snowflake(response.id, `${kind} response id`);
@@ -445,8 +482,12 @@ function assertNoBaselineOverlap(ids, baseline) {
     if (base.roles.has(id)) throw new Error('cleanup targets a baseline role');
   for (const id of [...ids.categories, ...ids.channels])
     if (base.channels.has(id)) throw new Error('cleanup targets a baseline channel');
-  for (const id of ids.automod)
-    if (base.automod.has(id)) throw new Error('cleanup targets a baseline AutoMod rule');
+  for (const id of ids.automod) {
+    if (!base.automod.has(id)) continue;
+    const rule = baseline.baseline_snapshot.automod_rules.find((item) => item.id === id);
+    if (!isProtectedMentionSpamRule(rule, baseline.bot_id))
+      throw new Error('cleanup targets a baseline AutoMod rule');
+  }
 }
 
 function assertCleanupInventory(ids, snapshot, baseline) {
@@ -483,11 +524,19 @@ function assertCleanupInventory(ids, snapshot, baseline) {
       throw new Error('channel binding is a category');
   }
   for (const id of ids.automod) {
-    if (
-      !automodSet.has(id) ||
-      snapshot.automod_rules.find((rule) => rule.id === id)?.guild_id !== baseline.guild_id
-    )
+    const rule = snapshot.automod_rules.find((item) => item.id === id);
+    if (!automodSet.has(id) || rule?.guild_id !== baseline.guild_id)
       throw new Error('foreign AutoMod binding');
+    if (
+      baselineIds(baseline).automod.has(id) &&
+      !isProtectedMentionSpamRule(
+        baseline.baseline_snapshot.automod_rules.find((item) => item.id === id),
+        baseline.bot_id,
+      )
+    )
+      throw new Error('cleanup targets a baseline AutoMod rule');
+    if (baselineIds(baseline).automod.has(id) && !isProtectedMentionSpamRule(rule, baseline.bot_id))
+      throw new Error('cleanup targets a baseline AutoMod rule');
   }
   const boundResources = new Set([...ids.roles, ...ids.categories, ...ids.channels]);
   const base = baselineIds(baseline);
@@ -617,10 +666,25 @@ export async function restoreBenchmarkBaseline({
     await mutate(rest, 'DELETE', `/channels/${target.channel_id}/messages/${target.message_id}`, {
       reason: auditReason,
     });
-  for (const id of ids.automod)
+  let deletedAutoModRules = 0;
+  for (const id of ids.automod) {
+    const currentRule = snapshot.automod_rules.find((item) => item.id === id);
+    const baselineRule = baseline.baseline_snapshot.automod_rules.find((item) => item.id === id);
+    if (
+      isProtectedMentionSpamRule(baselineRule, baseline.bot_id) &&
+      isProtectedMentionSpamRule(currentRule, baseline.bot_id)
+    ) {
+      await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
+        body: exactAutoModRulePatchBody(baselineRule),
+        reason: auditReason,
+      });
+      continue;
+    }
     await mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
       reason: auditReason,
     });
+    deletedAutoModRules += 1;
+  }
   const channelObjects = [...ids.channels, ...ids.categories].map((id) =>
     channelById(snapshot, id),
   );
@@ -665,7 +729,7 @@ export async function restoreBenchmarkBaseline({
     fingerprint,
     deleted: {
       messages: ids.publicationTargets.length,
-      automod_rules: ids.automod.length,
+      automod_rules: deletedAutoModRules,
       channels: channelObjects.length,
       roles: ids.roles.length,
     },
@@ -758,8 +822,21 @@ export async function initializeBenchmarkBaseline({
     }),
     'welcome disable',
   );
-  for (const rule of snapshot.automod_rules)
-    await mutate(rest, 'DELETE', `/guilds/${guildId}/auto-moderation/rules/${rule.id}`, { reason });
+  for (const rule of snapshot.automod_rules) {
+    try {
+      await mutate(rest, 'DELETE', `/guilds/${guildId}/auto-moderation/rules/${rule.id}`, {
+        reason,
+      });
+    } catch (error) {
+      if (discordErrorCode(error) !== '200006' || !isProtectedMentionSpamRule(rule, botId)) {
+        throw error;
+      }
+      await mutate(rest, 'PATCH', `/guilds/${guildId}/auto-moderation/rules/${rule.id}`, {
+        body: protectedRulePatchBody(rule),
+        reason,
+      });
+    }
+  }
   const highestBotRole = Math.max(
     ...snapshot.roles
       .filter((item) => (snapshot.bot.roles ?? []).includes(item.id))

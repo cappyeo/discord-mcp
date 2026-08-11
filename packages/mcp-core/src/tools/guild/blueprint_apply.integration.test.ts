@@ -196,7 +196,11 @@ function buildConvergedFixture() {
   const automodRules: TargetAutoModRule[] = blueprint.automod.rules.map((rule) => ({
     id: bindings.automod_rules[rule.key]!,
     guild_id: GUILD_ID,
-    ...(desiredAutoModBody(rule, bindings)! as Omit<TargetAutoModRule, 'id' | 'guild_id'>),
+    creator_id: BOT_ID,
+    ...(desiredAutoModBody(rule, bindings)! as Omit<
+      TargetAutoModRule,
+      'id' | 'guild_id' | 'creator_id'
+    >),
   }));
 
   const messages = new Map<string, TargetMessage[]>();
@@ -328,10 +332,14 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       ),
       http.post(`${API}/guilds/:guildId/auto-moderation/rules`, async ({ request }) => {
         automodCreates += 1;
-        const body = (await request.json()) as Omit<TargetAutoModRule, 'id' | 'guild_id'>;
+        const body = (await request.json()) as Omit<
+          TargetAutoModRule,
+          'id' | 'guild_id' | 'creator_id'
+        >;
         const created = {
           id: snowflake(999),
           guild_id: GUILD_ID,
+          creator_id: BOT_ID,
           ...body,
         } satisfies TargetAutoModRule;
         fixture.automodRules.push(created);

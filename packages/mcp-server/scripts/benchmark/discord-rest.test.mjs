@@ -169,6 +169,55 @@ describe('Discord benchmark REST snapshot', () => {
     );
   });
 
+  it.each([
+    ['creator identity', { creator_id: 'not-a-snowflake', trigger_type: 5 }, /creator_id/],
+    ['trigger type', { creator_id: BOT_ID, trigger_type: 0 }, /trigger_type/],
+  ])('fails closed on malformed AutoMod %s', async (_name, fields, message) => {
+    const fetchImpl = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/auto-moderation/rules')) {
+        return response([
+          {
+            id: '666000666000666000',
+            guild_id: GUILD_ID,
+            name: 'Protected rule',
+            ...fields,
+          },
+        ]);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await expect(readDiscordSnapshot(rest, { guildId: GUILD_ID, botId: BOT_ID })).rejects.toThrow(
+      message,
+    );
+  });
+
+  it('accepts AutoMod trigger type 6 in a snapshot', async () => {
+    const fetchImpl = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/auto-moderation/rules')) {
+        return response([
+          {
+            id: '666000666000666000',
+            guild_id: GUILD_ID,
+            creator_id: BOT_ID,
+            trigger_type: 6,
+          },
+        ]);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await expect(
+      readDiscordSnapshot(rest, { guildId: GUILD_ID, botId: BOT_ID }),
+    ).resolves.toMatchObject({
+      automod_rules: [expect.objectContaining({ trigger_type: 6 })],
+    });
+  });
+
   it('reads Community state and bounded publication histories with identity checks', async () => {
     const channelId = '666000666000666000';
     const messageId = '555000555000555000';

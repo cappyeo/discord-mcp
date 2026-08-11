@@ -523,3 +523,202 @@ test('treats unexpected writes, AutoMod mutation, and bot role assignment drift 
   );
   assert.equal(result.identity.bot_permissions_unchanged, false);
 });
+
+test('allows only explicitly adopted preexisting AutoMod updates', () => {
+  const adopted = {
+    id: 'adopted-rule',
+    guild_id: guildId,
+    creator_id: botId,
+    trigger_type: 5,
+    name: 'Before adoption',
+    enabled: true,
+  };
+  const foreign = {
+    id: 'foreign-rule',
+    guild_id: guildId,
+    creator_id: 'foreign-bot',
+    trigger_type: 5,
+    name: 'Foreign rule',
+    enabled: true,
+  };
+  const before = snapshot({ automod_rules: [adopted, foreign] });
+  const after = snapshot({
+    automod_rules: [
+      { ...adopted, name: 'Desired rule', enabled: false },
+      { ...foreign, name: 'Foreign rule changed', enabled: false },
+    ],
+  });
+  const result = compareSnapshots(
+    before,
+    after,
+    expected(
+      {},
+      {
+        bindings: { automod_rules: { safety: adopted.id } },
+        adopted_automod_rules: [adopted.id],
+        adopted_automod_trigger_types: { [adopted.id]: 5 },
+      },
+    ),
+  );
+
+  assert.equal(result.pass, false);
+  assert.ok(
+    result.serious_permission_failures.some(
+      (item) => item.code === 'PREEXISTING_AUTOMOD_RULE_CHANGED' && item.resource_id === foreign.id,
+    ),
+  );
+  assert.equal(
+    result.serious_permission_failures.some(
+      (item) => item.code === 'PREEXISTING_AUTOMOD_RULE_CHANGED' && item.resource_id === adopted.id,
+    ),
+    false,
+  );
+
+  const unsafeAdoption = compareSnapshots(
+    before,
+    after,
+    expected(
+      {},
+      {
+        bindings: { automod_rules: { safety: foreign.id } },
+        adopted_automod_rules: [foreign.id],
+        adopted_automod_trigger_types: { [foreign.id]: 5 },
+      },
+    ),
+  );
+  assert.equal(unsafeAdoption.pass, false);
+  assert.ok(
+    unsafeAdoption.serious_permission_failures.some(
+      (item) => item.code === 'UNSAFE_PREEXISTING_AUTOMOD_ADOPTION',
+    ),
+  );
+
+  const badTriggerBefore = snapshot({
+    automod_rules: [{ ...adopted, trigger_type: 4 }],
+  });
+  const badTrigger = compareSnapshots(
+    badTriggerBefore,
+    after,
+    expected(
+      {},
+      {
+        bindings: { automod_rules: { safety: adopted.id } },
+        adopted_automod_rules: [adopted.id],
+        adopted_automod_trigger_types: { [adopted.id]: 5 },
+      },
+    ),
+  );
+  assert.equal(badTrigger.pass, false);
+  assert.ok(
+    badTrigger.serious_permission_failures.some(
+      (item) => item.code === 'UNSAFE_PREEXISTING_AUTOMOD_ADOPTION',
+    ),
+  );
+
+  const afterBadCreator = compareSnapshots(
+    before,
+    snapshot({
+      automod_rules: [
+        { ...adopted, creator_id: 'foreign-bot', name: 'Desired rule', enabled: false },
+        foreign,
+      ],
+    }),
+    expected(
+      {},
+      {
+        bindings: { automod_rules: { safety: adopted.id } },
+        adopted_automod_rules: [adopted.id],
+        adopted_automod_trigger_types: { [adopted.id]: 5 },
+      },
+    ),
+  );
+  assert.equal(afterBadCreator.pass, false);
+  assert.ok(
+    afterBadCreator.serious_permission_failures.some(
+      (item) => item.code === 'UNSAFE_PREEXISTING_AUTOMOD_ADOPTION',
+    ),
+  );
+
+  assert.throws(
+    () =>
+      compareSnapshots(
+        before,
+        after,
+        expected(
+          { automod_rules: [adopted.id] },
+          {
+            adopted_automod_rules: [adopted.id],
+            adopted_automod_trigger_types: { [adopted.id]: 5 },
+            bindings: { automod_rules: { safety: adopted.id } },
+          },
+        ),
+      ),
+    /must not be listed as generated/,
+  );
+});
+
+test('fails closed when an expected adopted AutoMod rule is missing before the run', () => {
+  const adopted = {
+    id: 'adopted-rule',
+    guild_id: guildId,
+    creator_id: botId,
+    trigger_type: 5,
+    name: 'Adopted rule',
+    enabled: true,
+  };
+  const result = compareSnapshots(
+    snapshot(),
+    snapshot({ automod_rules: [adopted] }),
+    expected(
+      {},
+      {
+        bindings: { automod_rules: { safety: adopted.id } },
+        adopted_automod_rules: [adopted.id],
+        adopted_automod_trigger_types: { [adopted.id]: 5 },
+      },
+    ),
+  );
+
+  assert.equal(result.pass, false);
+  assert.ok(
+    result.serious_permission_failures.some(
+      (item) =>
+        item.code === 'ADOPTED_AUTOMOD_RULE_MISSING_BEFORE' &&
+        item.resource_id === adopted.id &&
+        item.snapshot === 'before',
+    ),
+  );
+});
+
+test('fails closed when an expected adopted AutoMod rule is missing after the run', () => {
+  const adopted = {
+    id: 'adopted-rule',
+    guild_id: guildId,
+    creator_id: botId,
+    trigger_type: 5,
+    name: 'Adopted rule',
+    enabled: true,
+  };
+  const result = compareSnapshots(
+    snapshot({ automod_rules: [adopted] }),
+    snapshot(),
+    expected(
+      {},
+      {
+        bindings: { automod_rules: { safety: adopted.id } },
+        adopted_automod_rules: [adopted.id],
+        adopted_automod_trigger_types: { [adopted.id]: 5 },
+      },
+    ),
+  );
+
+  assert.equal(result.pass, false);
+  assert.ok(
+    result.serious_permission_failures.some(
+      (item) =>
+        item.code === 'ADOPTED_AUTOMOD_RULE_MISSING_AFTER' &&
+        item.resource_id === adopted.id &&
+        item.snapshot === 'after',
+    ),
+  );
+});

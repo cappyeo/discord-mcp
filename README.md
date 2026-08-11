@@ -149,6 +149,10 @@ revalidate the current guild without a plan token, confirmation flag, or Discord
 overwrites, names, and descriptions never enter the trusted blueprint. See the
 [safe blueprint workflow](https://cappyeo.github.io/discord-mcp/operations/blueprints/).
 
+Community servers can contain a Discord-protected singleton AutoMod rule that cannot be deleted.
+The reconciler reuses it only when its immutable trigger is unique and `creator_id` is the exact
+caller-owned bot; foreign-owned or ambiguous rules block the plan without mutation.
+
 ## Built for production use
 
 - **Safety controls** - destructive operations require explicit confirmation; guild and category allowlists constrain the bot's blast radius server-side.
