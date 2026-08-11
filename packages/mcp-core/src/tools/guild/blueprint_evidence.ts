@@ -184,7 +184,7 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const target = { guild_id: args.guild_id, bot_id: args.expected_bot_id };
     const respond = (
       status: 'verified' | 'drifted' | 'not_found' | 'blocked',
@@ -291,8 +291,9 @@ export default defineTool({
 
     const record = publicRecord(evidence);
     try {
-      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id);
-    } catch {
+      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id, ctx.signal);
+    } catch (error) {
+      if (ctx.signal.aborted) throw error;
       return respond(
         'blocked',
         evidence.blueprint_id,
@@ -320,6 +321,7 @@ export default defineTool({
         args.expected_bot_id,
         evidence.blueprint,
         evidence.bindings,
+        ctx.signal,
       );
       const reconciled = reconcileGuildBlueprint(
         evidence.blueprint_id,
@@ -357,7 +359,8 @@ export default defineTool({
             : 'The current locked Discord target still conforms to the evidenced blueprint, but its whole-guild snapshot has changed. No guild was changed.'
           : 'Blueprint Activity Evidence is valid, but the current Discord target has drifted. No guild was changed.',
       );
-    } catch {
+    } catch (error) {
+      if (ctx.signal.aborted) throw error;
       return respond(
         'blocked',
         evidence.blueprint_id,

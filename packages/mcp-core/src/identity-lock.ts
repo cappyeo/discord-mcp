@@ -12,13 +12,14 @@ interface RawDiscordUser {
   readonly bot?: unknown;
 }
 
-const verifiedByRest = new WeakMap<REST, Map<string, Promise<DiscordBotIdentity>>>();
+const verifiedByRest = new WeakMap<REST, Map<string, DiscordBotIdentity>>();
 
 async function fetchExpectedBotIdentity(
   rest: REST,
   expectedBotId: string,
+  signal?: AbortSignal,
 ): Promise<DiscordBotIdentity> {
-  const raw = (await rest.get(Routes.user('@me'))) as RawDiscordUser;
+  const raw = (await rest.get(Routes.user('@me'), { signal })) as RawDiscordUser;
   if (typeof raw.id !== 'string' || raw.bot !== true) {
     throw new Error('Discord identity verification did not return a bot account');
   }
@@ -34,12 +35,14 @@ async function fetchExpectedBotIdentity(
 /**
  * Verify that the configured token still belongs to the caller-selected bot.
  * Successful checks are cached per REST instance so stateless HTTP MCP
- * requests do not repeat `/users/@me`. Rejected checks are removed, allowing
- * an operator to correct a transient failure in a long-lived embedding.
+ * requests do not repeat `/users/@me`. In-flight and rejected checks are not
+ * shared so one caller's cancellation cannot affect another caller or poison
+ * a long-lived embedding.
  */
 export function verifyExpectedBotIdentity(
   rest: REST,
   expectedBotId: string | undefined,
+  signal?: AbortSignal,
 ): Promise<DiscordBotIdentity | null> {
   if (expectedBotId === undefined) return Promise.resolve(null);
 
@@ -50,12 +53,10 @@ export function verifyExpectedBotIdentity(
   }
 
   const cached = byExpectedId.get(expectedBotId);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return Promise.resolve(cached);
 
-  const pending = fetchExpectedBotIdentity(rest, expectedBotId);
-  byExpectedId.set(expectedBotId, pending);
-  void pending.catch(() => {
-    if (byExpectedId?.get(expectedBotId) === pending) byExpectedId.delete(expectedBotId);
+  return fetchExpectedBotIdentity(rest, expectedBotId, signal).then((identity) => {
+    byExpectedId.set(expectedBotId, identity);
+    return identity;
   });
-  return pending;
 }

@@ -1,4 +1,4 @@
-import type { REST } from '@discordjs/rest';
+import type { REST, RequestData } from '@discordjs/rest';
 import { BrokenCircuitError, BulkheadRejectedError, type IPolicy } from 'cockatiel';
 import { BulkheadFullError, CircuitOpenError } from '../errors/server.js';
 import { classifyDiscordError, DiscordRetryableError } from './errors.js';
@@ -34,6 +34,37 @@ const VERBS = ['get', 'post', 'patch', 'put', 'delete'] as const;
 type Verb = (typeof VERBS)[number];
 
 /**
+ * Return the caller-owned request signal without changing the request data.
+ * REST methods accept the options object as their second argument; calls
+ * without options still need a fresh object so the policy signal reaches the
+ * underlying transport.
+ */
+function getCallerSignal(args: unknown[]): AbortSignal | undefined {
+  const options = args[1];
+  if (options === null || typeof options !== 'object') return undefined;
+  return (options as RequestData).signal;
+}
+
+/**
+ * Clone the REST arguments and attach the policy's cancellation signal.  A
+ * caller signal is kept alive as a cancellation source too, but neither the
+ * route nor the caller's RequestData object is ever mutated.
+ */
+function withPolicySignal(args: unknown[], policySignal: AbortSignal): unknown[] {
+  const options = args[1];
+  const requestData =
+    options !== null && typeof options === 'object' ? (options as RequestData) : undefined;
+  const callerSignal = requestData?.signal;
+  const signal =
+    callerSignal === undefined || callerSignal === policySignal
+      ? policySignal
+      : AbortSignal.any([policySignal, callerSignal]);
+  const forwarded = [...args];
+  forwarded[1] = { ...(requestData ?? {}), signal } satisfies RequestData;
+  return forwarded;
+}
+
+/**
  * Wrap a `@discordjs/rest` REST instance so every verb call passes through
  * the supplied cockatiel policy.  On a thrown error, the classifier converts
  * retryable conditions into a `DiscordRetryableError` (which the policy's
@@ -43,8 +74,9 @@ type Verb = (typeof VERBS)[number];
  *  1. The original method is `.bind(rest)`'d before reassignment so internal
  *     `this`-references (rate-limit queue manager, etc) still point at the
  *     same REST instance.
- *  2. The wrapper passes through ALL original arguments verbatim - both the
- *     route string and the optional `RequestData` object.
+ *  2. The wrapper preserves the route and all non-request arguments, while
+ *     cloning the optional `RequestData` object to merge caller and policy
+ *     cancellation signals without mutating caller-owned input.
  *  3. On retry exhaustion, cockatiel re-throws the LAST classified error.
  *     We unwrap it to surface the ORIGINAL error to callers (so the existing
  *     `formatErrorForUser` mapping in errors/format.ts still works).
@@ -67,9 +99,10 @@ export function wrapRestWithResilience(
     const original = r[verb].bind(rest) as (...args: unknown[]) => Promise<unknown>;
 
     const wrapped = (...args: unknown[]): Promise<unknown> => {
-      return policy.execute(async () => {
+      const callerSignal = getCallerSignal(args);
+      return policy.execute(async ({ signal }) => {
         try {
-          return await original(...args);
+          return await original(...withPolicySignal(args, signal));
         } catch (err) {
           const retryable = classifier(err, { method: verb });
           if (retryable !== null) {
@@ -77,7 +110,7 @@ export function wrapRestWithResilience(
           }
           throw err;
         }
-      }) as Promise<unknown>;
+      }, callerSignal) as Promise<unknown>;
     };
 
     // Re-assign with the wrapped function. We have to lie to TypeScript

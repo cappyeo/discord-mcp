@@ -36,10 +36,10 @@ export async function startStdio(
     logger.info({ otel: 'enabled' }, 'OpenTelemetry SDK started');
   }
 
-  // `retries: 0` is non-negotiable here. Plan 8 §13 risk register: cockatiel
-  // owns retry semantics from this point on; leaving the default (3) would
-  // double-retry on 5xx and stack delays on 429.
-  const baseRest = new REST({ version: '10', retries: 0 }).setToken(
+  // Cockatiel is the single retry owner: reject queued/pre-emptive 429s too,
+  // otherwise discord.js can wait past our 30s operation timeout before it
+  // gives Cockatiel a chance to honor Retry-After. Keep the SDK retry count off.
+  const baseRest = new REST({ version: '10', retries: 0, rejectOnRateLimit: () => true }).setToken(
     // Discord REST does not want the "Bot " prefix here - discord.js's REST adds it.
     config.DISCORD_TOKEN.startsWith('Bot ') ? config.DISCORD_TOKEN.slice(4) : config.DISCORD_TOKEN,
   );

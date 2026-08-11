@@ -1,6 +1,6 @@
 import type { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { desiredPublicationBody, publicationMarker } from './blueprint.desired.js';
 import type { BlueprintBindings } from './blueprint.execution.schema.js';
 import { emptyBlueprintBindings } from './blueprint.execution.schema.js';
@@ -133,6 +133,30 @@ function fakeRest(
 }
 
 describe('blueprint publication target readback', () => {
+  it('forwards one caller signal to every target read request', async () => {
+    const controller = new AbortController();
+    const base = fakeRest('200000000000000001', [], undefined);
+    const baseGet = base.get as unknown as (
+      route: string,
+      options?: { signal?: AbortSignal },
+    ) => Promise<unknown>;
+    const get = vi.fn((route: string, options?: { signal?: AbortSignal }) =>
+      baseGet.call(base, route, options),
+    );
+
+    await readBlueprintTargetSnapshot(
+      { get } as unknown as REST,
+      guildId,
+      botId,
+      blueprint,
+      undefined,
+      controller.signal,
+    );
+
+    expect(get).toHaveBeenCalled();
+    expect(get.mock.calls.every(([, options]) => options?.signal === controller.signal)).toBe(true);
+  });
+
   it('keeps a publication nonce stable for one channel and changes it for a new channel lifecycle', () => {
     const { publication, bindings, desired } = publicationFixture();
     const repeated = desiredPublicationBody(publication, blueprintId, guildId, botId, bindings)!;

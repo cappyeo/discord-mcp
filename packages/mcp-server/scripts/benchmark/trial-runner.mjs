@@ -3,7 +3,7 @@ const NEXT_ACTIONS = new Set(['done', 'resume', 'replan', 'fix_configuration']);
 const SNOWFLAKE = /^\d{17,20}$/;
 const SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
 const PLAN_RECOVERY_DELAYS_MS = Object.freeze([1_000, 3_000]);
-const APPLY_RECOVERY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000]);
+const APPLY_RECOVERY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000, 8_000, 16_000]);
 const MESSAGE_HISTORY_CHANNEL_TYPES = new Set([0, 5]);
 const REQUIRED_DEPENDENCIES = [
   'openSession',
@@ -389,7 +389,6 @@ export async function runBenchmarkTrial(input) {
   let sessionOpenCount = 0;
   let applyCalls = 0;
   let planRecoveryCount = 0;
-  let applyRecoveryCount = 0;
   let planSnapshotUnchanged = false;
   let forcedResumeObserved = false;
   let replayStatus = null;
@@ -433,6 +432,16 @@ export async function runBenchmarkTrial(input) {
     await sleep(milliseconds);
     await open();
   };
+  const createApplyRecovery = () => {
+    let recoveryCount = 0;
+    return async (error) => {
+      if (recoveryCount >= APPLY_RECOVERY_DELAYS_MS.length) return false;
+      const milliseconds = recoveryDelay(error, APPLY_RECOVERY_DELAYS_MS[recoveryCount]);
+      recoveryCount += 1;
+      await reopen(milliseconds);
+      return true;
+    };
+  };
   const callPlan = async () => {
     while (true) {
       let rawPlan;
@@ -454,14 +463,7 @@ export async function runBenchmarkTrial(input) {
       return validatePlan(rawPlan, trial);
     }
   };
-  const recoverApply = async (error) => {
-    if (applyRecoveryCount >= APPLY_RECOVERY_DELAYS_MS.length) return false;
-    const milliseconds = recoveryDelay(error, APPLY_RECOVERY_DELAYS_MS[applyRecoveryCount]);
-    applyRecoveryCount += 1;
-    await reopen(milliseconds);
-    return true;
-  };
-  const callApply = async (operationBudget) => {
+  const callApply = async (operationBudget, recoverApply) => {
     while (true) {
       let rawApply;
       applyCalls += 1;
@@ -525,9 +527,11 @@ export async function runBenchmarkTrial(input) {
     }
 
     let latestApply;
+    const mainApplyRecovery = createApplyRecovery();
     if (trial.mode === 'forced_resume') {
+      const forcedObservationRecovery = createApplyRecovery();
       while (true) {
-        latestApply = await callApply(1);
+        latestApply = await callApply(1, forcedObservationRecovery);
         rememberApply(latestApply);
         if (
           latestApply.status === 'partial' &&
@@ -538,7 +542,10 @@ export async function runBenchmarkTrial(input) {
         ) {
           break;
         }
-        if (!applyResponseNeedsRecovery(latestApply) || !(await recoverApply(latestApply.error))) {
+        if (
+          !applyResponseNeedsRecovery(latestApply) ||
+          !(await forcedObservationRecovery(latestApply.error))
+        ) {
           fail('FORCED_RESUME_NOT_OBSERVED', { terminalStatus: latestApply.status });
         }
       }
@@ -548,7 +555,7 @@ export async function runBenchmarkTrial(input) {
     }
 
     for (let iteration = 0; iteration < 8; iteration += 1) {
-      latestApply = await callApply(50);
+      latestApply = await callApply(50, mainApplyRecovery);
       rememberApply(latestApply);
       if (SUCCESS_STATUSES.has(latestApply.status)) break;
       if (
@@ -559,7 +566,7 @@ export async function runBenchmarkTrial(input) {
       ) {
         continue;
       }
-      if (applyResponseNeedsRecovery(latestApply) && (await recoverApply(latestApply.error))) {
+      if (applyResponseNeedsRecovery(latestApply) && (await mainApplyRecovery(latestApply.error))) {
         continue;
       }
       break;
@@ -578,10 +585,11 @@ export async function runBenchmarkTrial(input) {
       fail('APPLY_EVIDENCE_INVALID');
     }
 
-    let replay = await callApply(50);
+    const replayRecovery = createApplyRecovery();
+    let replay = await callApply(50, replayRecovery);
     rememberApply(replay);
-    while (applyResponseNeedsRecovery(replay) && (await recoverApply(replay.error))) {
-      replay = await callApply(50);
+    while (applyResponseNeedsRecovery(replay) && (await replayRecovery(replay.error))) {
+      replay = await callApply(50, replayRecovery);
       rememberApply(replay);
     }
     replayStatus = replay.status;

@@ -158,8 +158,9 @@ export default defineTool({
     }
 
     try {
-      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id);
-    } catch {
+      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id, ctx.signal);
+    } catch (error) {
+      if (ctx.signal.aborted) throw error;
       const identityBlocker = {
         code: 'EXPECTED_BOT_MISMATCH',
         message: 'The active Discord token did not verify as the explicitly selected bot.',
@@ -237,6 +238,8 @@ export default defineTool({
       args.guild_id,
       args.expected_bot_id,
       compiled.blueprint,
+      undefined,
+      ctx.signal,
     );
     const reconciled = reconcileGuildBlueprint(compiled.blueprint_id, compiled.blueprint, snapshot);
     const summary = summarizeBlueprintOperations(reconciled.operations);

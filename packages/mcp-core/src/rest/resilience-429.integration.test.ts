@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { server as mswServer } from '@discord-mcp/server-mocks';
 import { REST } from '@discordjs/rest';
 import { http, passthrough } from 'msw';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Config } from '../config.js';
 import { buildPolicy } from './policy.js';
 import { wrapRestWithResilience } from './resilient.js';
@@ -12,11 +12,9 @@ import { wrapRestWithResilience } from './resilient.js';
  * Integration: assert that on a Discord 429 the retry backoff honors the
  * `retry_after` body field (NOT generic exponential backoff).
  *
- * Discord's 429 JSON body includes `retry_after` in seconds; our classifier
- * converts that to ms.  `@discordjs/rest` v2.x with `retries: 0` and
- * `rejectOnRateLimit: null` (default) will throw a `DiscordAPIError` with
- * status 429 carrying the body; cockatiel then waits that duration before
- * retrying.
+ * Discord's 429 JSON body includes `retry_after` in seconds. Production REST
+ * instances reject the SDK's internal wait as a `RateLimitError`; our
+ * classifier gives its millisecond delay to Cockatiel, which owns the retry.
  */
 
 function cfg(partial: Partial<Config> = {}): Config {
@@ -54,11 +52,12 @@ let baseUrl: string;
 let requestTimestamps: number[];
 let scriptedResponses: Array<{ status: number; body: string; headers?: Record<string, string> }>;
 
-function buildRest(): REST {
+function buildRest(rejectOnRateLimit: () => boolean = () => true): REST {
   return new REST({
     version: '10',
     api: baseUrl,
     retries: 0,
+    rejectOnRateLimit,
     makeRequest: fetch,
   }).setToken('fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 }
@@ -98,6 +97,32 @@ afterEach(() => {
 });
 
 describe('resilience 429 retry-after integration (Plan 8 C.5)', () => {
+  it('hands a pre-emptive SDK bucket wait to Cockatiel before the next network call', async () => {
+    scriptedResponses = [
+      {
+        status: 200,
+        body: '{"id":"warmup"}',
+        headers: {
+          'x-ratelimit-limit': '1',
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset-after': '1',
+        },
+      },
+      { status: 200, body: '{"id":"after-cooldown"}' },
+    ];
+    const rejectOnRateLimit = vi.fn(() => true);
+    const rest = wrapRestWithResilience(buildRest(rejectOnRateLimit), buildPolicy(cfg()));
+
+    await expect(rest.get('/channels/123')).resolves.toEqual({ id: 'warmup' });
+    const start = Date.now();
+    await expect(rest.get('/channels/123')).resolves.toEqual({ id: 'after-cooldown' });
+    const elapsed = Date.now() - start;
+
+    expect(rejectOnRateLimit).toHaveBeenCalled();
+    expect(requestTimestamps).toHaveLength(2);
+    expect(elapsed).toBeGreaterThanOrEqual(900);
+  }, 10_000);
+
   it('honors Discord 429 retry_after - gap between attempts >= retry_after', async () => {
     // First response: 429 with retry_after = 1.0 second.
     // Second response: 200 OK.

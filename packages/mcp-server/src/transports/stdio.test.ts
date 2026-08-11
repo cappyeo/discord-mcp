@@ -132,6 +132,12 @@ describe('startStdio', () => {
     const client = await boot();
     try {
       expect(wrapRestWithResilience).toHaveBeenCalledTimes(1);
+      const baseRest = vi.mocked(wrapRestWithResilience).mock.calls[0]?.[0];
+      expect(baseRest).toBeDefined();
+      const rejectOnRateLimit = baseRest?.options.rejectOnRateLimit;
+      expect(rejectOnRateLimit).toEqual(expect.any(Function));
+      if (typeof rejectOnRateLimit !== 'function') throw new Error('missing rate-limit filter');
+      expect(await rejectOnRateLimit({} as never)).toBe(true);
       // Third arg is optional, so tsc cannot catch its loss - assert it here.
       expect(vi.mocked(wrapRestWithResilience).mock.calls[0]?.[2]).toEqual({
         circuitHalfOpenAfterMs: HALF_OPEN_MS,

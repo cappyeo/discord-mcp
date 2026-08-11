@@ -20,6 +20,25 @@ function noopPolicy(): IPolicy {
   } as unknown as IPolicy;
 }
 
+/** Policy fixture with a deterministic context signal and caller capture. */
+function signalPolicy(
+  signal: AbortSignal,
+  onExecute?: (callerSignal: AbortSignal | undefined) => void,
+): IPolicy {
+  return {
+    _altReturn: undefined as never,
+    onSuccess: (() => () => undefined) as never,
+    onFailure: (() => () => undefined) as never,
+    execute: async <T>(
+      fn: (ctx: { signal: AbortSignal }) => Promise<T> | T,
+      callerSignal?: AbortSignal,
+    ) => {
+      onExecute?.(callerSignal);
+      return fn({ signal });
+    },
+  } as unknown as IPolicy;
+}
+
 /** A retry policy that retries DiscordRetryableError up to 3 times with no delay. */
 function fastRetryPolicy(): IPolicy {
   // Use cockatiel's own retry with a constant zero backoff for fast tests.
@@ -62,7 +81,8 @@ function buildFakeRest(handlers: Partial<Record<string, (...args: unknown[]) => 
 describe('wrapRestWithResilience (Plan 8 C.3)', () => {
   it('proxies all 5 verbs through the policy and returns the original value', async () => {
     const { rest, calls } = buildFakeRest({});
-    const wrapped = wrapRestWithResilience(rest, noopPolicy());
+    const policySignal = new AbortController().signal;
+    const wrapped = wrapRestWithResilience(rest, signalPolicy(policySignal));
 
     const r1 = await wrapped.get('/channels/1');
     const r2 = await wrapped.post('/channels/1/messages', { body: { content: 'hi' } });
@@ -76,17 +96,123 @@ describe('wrapRestWithResilience (Plan 8 C.3)', () => {
     expect(r4).toEqual({ ok: true });
     expect(r5).toEqual({ ok: true });
     expect(calls.map((c) => c.verb)).toEqual(['get', 'post', 'patch', 'put', 'delete']);
+    expect(
+      calls.every((call) => (call.args[1] as { signal?: AbortSignal }).signal === policySignal),
+    ).toBe(true);
   });
 
-  it('preserves original args verbatim', async () => {
+  it('clones request options while preserving route and caller-owned data', async () => {
     const { rest, calls } = buildFakeRest({});
     const wrapped = wrapRestWithResilience(rest, noopPolicy());
 
-    await wrapped.post('/x', { body: { a: 1 }, files: [], reason: 'r' });
+    const requestData = { body: { a: 1 }, files: [], reason: 'r' };
+    await wrapped.post('/x', requestData);
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.verb).toBe('post');
-    expect(calls[0]?.args).toEqual(['/x', { body: { a: 1 }, files: [], reason: 'r' }]);
+    expect(calls[0]?.args[0]).toBe('/x');
+    expect(calls[0]?.args[1]).toMatchObject({ body: { a: 1 }, files: [], reason: 'r' });
+    expect(calls[0]?.args[1]).not.toBe(requestData);
+    expect(requestData).toEqual({ body: { a: 1 }, files: [], reason: 'r' });
+  });
+
+  it('merges a caller signal with the policy signal without mutating RequestData', async () => {
+    const callerController = new AbortController();
+    const policyController = new AbortController();
+    const callerSignals: Array<AbortSignal | undefined> = [];
+    const { rest, calls } = buildFakeRest({});
+    const requestData = { body: { content: 'hi' }, signal: callerController.signal };
+    const wrapped = wrapRestWithResilience(
+      rest,
+      signalPolicy(policyController.signal, (callerSignal) => callerSignals.push(callerSignal)),
+    );
+
+    await wrapped.post('/x', requestData);
+
+    const forwarded = calls[0]?.args[1] as { body: unknown; signal: AbortSignal };
+    expect(callerSignals).toEqual([callerController.signal]);
+    expect(forwarded.body).toEqual({ content: 'hi' });
+    expect(forwarded.signal).not.toBe(callerController.signal);
+    expect(forwarded.signal).not.toBe(policyController.signal);
+    expect(forwarded.signal.aborted).toBe(false);
+    expect(requestData.signal).toBe(callerController.signal);
+
+    callerController.abort();
+    expect(forwarded.signal.aborted).toBe(true);
+    expect(requestData.signal.aborted).toBe(true);
+    expect(forwarded.signal.reason).toBe(requestData.signal.reason);
+  });
+
+  it('does not let a policy cancellation complete an in-flight REST operation late', async () => {
+    const policyController = new AbortController();
+    let completed = false;
+    let aborted = false;
+    const { rest } = buildFakeRest({
+      get: (_route, options) =>
+        new Promise((_resolve, reject) => {
+          const requestSignal = (options as { signal?: AbortSignal }).signal;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const onAbort = () => {
+            aborted = true;
+            if (timer !== undefined) clearTimeout(timer);
+            reject(new DOMException('aborted', 'AbortError'));
+          };
+          if (requestSignal?.aborted) {
+            onAbort();
+            return;
+          }
+          requestSignal?.addEventListener('abort', onAbort, { once: true });
+          timer = setTimeout(() => {
+            completed = true;
+            _resolve({ ok: true });
+          }, 50);
+        }),
+    });
+    const wrapped = wrapRestWithResilience(rest, signalPolicy(policyController.signal));
+
+    const request = wrapped.get('/x');
+    await Promise.resolve();
+    policyController.abort();
+
+    await expect(request).rejects.toBeInstanceOf(DOMException);
+    expect(aborted).toBe(true);
+    expect(completed).toBe(false);
+  });
+
+  it('does not let a caller abort complete an in-flight REST operation late', async () => {
+    const callerController = new AbortController();
+    let completed = false;
+    let aborted = false;
+    const { rest } = buildFakeRest({
+      get: (_route, options) =>
+        new Promise((_resolve, reject) => {
+          const requestSignal = (options as { signal?: AbortSignal }).signal;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const onAbort = () => {
+            aborted = true;
+            if (timer !== undefined) clearTimeout(timer);
+            reject(new DOMException('aborted', 'AbortError'));
+          };
+          if (requestSignal?.aborted) {
+            onAbort();
+            return;
+          }
+          requestSignal?.addEventListener('abort', onAbort, { once: true });
+          timer = setTimeout(() => {
+            completed = true;
+            _resolve({ ok: true });
+          }, 50);
+        }),
+    });
+    const wrapped = wrapRestWithResilience(rest, noopPolicy());
+
+    const request = wrapped.get('/x', { signal: callerController.signal });
+    await Promise.resolve();
+    callerController.abort();
+
+    await expect(request).rejects.toBeInstanceOf(DOMException);
+    expect(aborted).toBe(true);
+    expect(completed).toBe(false);
   });
 
   it('retries 5xx and eventually succeeds (returns the recovered value)', async () => {

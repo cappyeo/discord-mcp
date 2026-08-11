@@ -214,7 +214,10 @@ function stateDetails(state: SmokeState): string[] {
 async function openDefaultSession(): Promise<SmokeSession> {
   const config = loadConfig();
   const logger = createLogger(config);
-  const baseRest = new REST({ version: '10', retries: 0 }).setToken(
+  // Keep Cockatiel as the single retry owner. Reject queued/pre-emptive 429s
+  // so the SDK cannot wait past our 30s operation timeout before Retry-After
+  // reaches Cockatiel; `retries: 0` prevents a second retry loop.
+  const baseRest = new REST({ version: '10', retries: 0, rejectOnRateLimit: () => true }).setToken(
     config.DISCORD_TOKEN.startsWith('Bot ') ? config.DISCORD_TOKEN.slice(4) : config.DISCORD_TOKEN,
   );
   const rest = wrapRestWithResilience(baseRest, buildPolicy(config, logger), {

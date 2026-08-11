@@ -264,6 +264,7 @@ export async function executeBlueprintOperation(
       const response = (await rest.post(Routes.guildRoles(guildId), {
         body,
         reason: auditReason,
+        signal: input.signal,
       })) as IdResponse;
       const id = requireId(response, 'Role create');
       bindings.roles[desired.key] = id;
@@ -274,6 +275,7 @@ export async function executeBlueprintOperation(
     const response = (await rest.patch(Routes.guildRole(guildId, id), {
       body,
       reason: auditReason,
+      signal: input.signal,
     })) as IdResponse;
     const responseId = requireId(response, 'Role update');
     if (responseId !== id) {
@@ -292,6 +294,7 @@ export async function executeBlueprintOperation(
       const response = (await rest.post(Routes.guildChannels(guildId), {
         body,
         reason: auditReason,
+        signal: input.signal,
       })) as IdResponse;
       assertGuild(response, guildId, 'Category create');
       const id = requireId(response, 'Category create');
@@ -303,6 +306,7 @@ export async function executeBlueprintOperation(
     const response = (await rest.patch(Routes.channel(id), {
       body,
       reason: auditReason,
+      signal: input.signal,
     })) as IdResponse;
     assertGuild(response, guildId, 'Category update');
     if (requireId(response, 'Category update') !== id) {
@@ -321,6 +325,7 @@ export async function executeBlueprintOperation(
       const response = (await rest.post(Routes.guildChannels(guildId), {
         body,
         reason: auditReason,
+        signal: input.signal,
       })) as IdResponse;
       assertGuild(response, guildId, 'Channel create');
       const id = requireId(response, 'Channel create');
@@ -332,6 +337,7 @@ export async function executeBlueprintOperation(
     const response = (await rest.patch(Routes.channel(id), {
       body,
       reason: auditReason,
+      signal: input.signal,
     })) as IdResponse;
     assertGuild(response, guildId, 'Channel update');
     if (requireId(response, 'Channel update') !== id) {
@@ -365,6 +371,7 @@ export async function executeBlueprintOperation(
     const response = await rest.patch(Routes.guildRoles(guildId), {
       body: positions,
       reason: auditReason,
+      signal: input.signal,
     });
     if (
       !Array.isArray(response) ||
@@ -403,7 +410,11 @@ export async function executeBlueprintOperation(
       }
       positions.push({ id, position: channel.position });
     }
-    await rest.patch(Routes.guildChannels(guildId), { body: positions, reason: auditReason });
+    await rest.patch(Routes.guildChannels(guildId), {
+      body: positions,
+      reason: auditReason,
+      signal: input.signal,
+    });
     return { resource_id: null };
   }
 
@@ -415,6 +426,7 @@ export async function executeBlueprintOperation(
     const response = (await rest.patch(Routes.guild(guildId), {
       body,
       reason: auditReason,
+      signal: input.signal,
     })) as IdResponse;
     if (requireId(response, 'Guild update') !== guildId) {
       throw new BlueprintExecutionError('TARGET_GUILD_MISMATCH', 'Guild update changed target.');
@@ -427,6 +439,7 @@ export async function executeBlueprintOperation(
     const response = await rest.patch(Routes.guildWelcomeScreen(guildId), {
       body,
       reason: auditReason,
+      signal: input.signal,
     });
     if (
       typeof response !== 'object' ||
@@ -450,6 +463,7 @@ export async function executeBlueprintOperation(
     const response = (await rest.put(Routes.guildOnboarding(guildId), {
       body,
       reason: auditReason,
+      signal: input.signal,
     })) as TargetOnboarding;
     if (response.guild_id !== guildId) {
       throw new BlueprintExecutionError(
@@ -473,6 +487,7 @@ export async function executeBlueprintOperation(
       const response = (await rest.post(Routes.guildAutoModerationRules(guildId), {
         body,
         reason: auditReason,
+        signal: input.signal,
       })) as IdResponse;
       assertGuild(response, guildId, 'AutoMod create');
       const id = requireId(response, 'AutoMod create');
@@ -486,6 +501,7 @@ export async function executeBlueprintOperation(
     const response = (await rest.patch(Routes.guildAutoModerationRule(guildId, id), {
       body: patchBody,
       reason: auditReason,
+      signal: input.signal,
     })) as IdResponse;
     assertGuild(response, guildId, 'AutoMod update');
     if (requireId(response, 'AutoMod update') !== id) {

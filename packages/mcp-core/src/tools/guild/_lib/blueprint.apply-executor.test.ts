@@ -108,6 +108,28 @@ const snapshot = {
 const signal = new AbortController().signal;
 
 describe('blueprint operation response validation', () => {
+  it('forwards the apply signal to the role create request', async () => {
+    const controller = new AbortController();
+    const role = blueprint.roles[0]!;
+    const currentBindings = bindings();
+    delete currentBindings.roles[role.key];
+    const post = vi.fn(async () => ({ id: '230000000000000000' }));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { post } as unknown as REST,
+        plan,
+        operation: operation('role', 'create', role.key),
+        bindings: currentBindings,
+        snapshot,
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual({ resource_id: '230000000000000000' });
+
+    expect(post).toHaveBeenCalledOnce();
+    expect(post.mock.calls[0]![1]).toMatchObject({ signal: controller.signal });
+  });
+
   it('rejects a guild-scoped create response that omits the target guild identity', async () => {
     const rest = {
       post: async () => ({ id: '230000000000000000' }),

@@ -62,7 +62,7 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const bearer = args.bearer_token;
     if (bearer === undefined || bearer === '') {
       throw new Error(
@@ -70,19 +70,24 @@ export default defineTool({
       );
     }
     // Per Discord docs, the permissions edit endpoint requires Bearer auth.
-    // Build a one-shot REST instance with the user token + Bearer prefix.
+    // Build a one-shot REST instance with the user token + Bearer prefix. It
+    // fails fast on SDK rate-limit waits and hidden retries so the MCP caller
+    // remains the only owner of an explicit retry.
     const { REST } = await import('@discordjs/rest');
     // makeRequest cast: test config (msw) and runtime fetch have slightly different
     // signatures (undici vs undici-types). Bridge via unknown - runtime semantics are identical.
     const altRest = new REST({
       version: '10',
       authPrefix: 'Bearer',
+      retries: 0,
+      rejectOnRateLimit: () => true,
+      timeout: 30_000,
       // biome-ignore lint/suspicious/noExplicitAny: REST's makeRequest signature differs across undici typings.
       makeRequest: fetch as any,
     }).setToken(bearer);
     const result = (await altRest.put(
       Routes.applicationCommandPermissions(args.application_id, args.guild_id, args.command_id),
-      { body: { permissions: args.permissions } },
+      { body: { permissions: args.permissions }, signal: ctx.signal },
     )) as RawCommandPerms;
     return dualResult({
       text: `Updated permissions on command \`${result.id}\` (${result.permissions.length} override(s)).`,

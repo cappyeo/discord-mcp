@@ -233,10 +233,10 @@ async function saveEvidence(evidence: GuildBlueprintActivityEvidence) {
   }).saveEvidence(evidence);
 }
 
-async function run(planId: string, guildId = GUILD_ID) {
+async function run(planId: string, guildId = GUILD_ID, signal = new AbortController().signal) {
   return tool().run(
     { guild_id: guildId, expected_bot_id: BOT_ID, plan_id: planId },
-    { signal: new AbortController().signal },
+    { signal },
   ) as Promise<{
     readonly structuredContent: {
       readonly status: string;
@@ -371,6 +371,20 @@ describe('guild_blueprint_evidence', () => {
     expect(JSON.stringify(result)).not.toContain('"blueprint":');
     expect(mocks.verifyIdentity).toHaveBeenCalledTimes(1);
     expect(mocks.readTarget).toHaveBeenCalledTimes(1);
+    expect(mutationVerbs).toBe(0);
+  });
+
+  it('propagates caller cancellation during the live evidence readback', async () => {
+    const fixture = evidenceFixture();
+    await saveEvidence(fixture.evidence);
+    const controller = new AbortController();
+    const cancelled = new DOMException('aborted', 'AbortError');
+    mocks.readTarget.mockImplementation(async () => {
+      controller.abort();
+      throw cancelled;
+    });
+
+    await expect(run(fixture.planId, GUILD_ID, controller.signal)).rejects.toBe(cancelled);
     expect(mutationVerbs).toBe(0);
   });
 

@@ -64,8 +64,9 @@ const AMBIGUOUS_NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EN
  *
  * Handles three classes:
  *  1. `RateLimitError` (Discord 429, surfaced by `@discordjs/rest` when
- *     `rejectOnRateLimit` matches the route - currently unused in our
- *     setup, but supported for completeness).
+ *     `rejectOnRateLimit` matches the route. Production transports enable
+ *     this for every route so Cockatiel, rather than the SDK queue, owns the
+ *     bounded Retry-After wait.
  *  2. `DiscordAPIError` with `status >= 500`. 4xx (auth, permission,
  *     not-found, validation) is non-retryable and falls through.
  *  3. `HTTPError` (low-level fetch failure with a status, e.g. transparent

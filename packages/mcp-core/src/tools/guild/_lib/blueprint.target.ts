@@ -187,6 +187,7 @@ async function readPublicationHistory(
   rest: REST,
   guildId: string,
   channelId: string,
+  signal?: AbortSignal,
 ): Promise<{ messages: TargetMessage[]; complete: boolean }> {
   const messages: TargetMessage[] = [];
   let before: string | undefined;
@@ -196,7 +197,10 @@ async function readPublicationHistory(
       limit: String(BLUEPRINT_PUBLICATION_HISTORY_PAGE_SIZE),
     });
     if (before !== undefined) query.set('before', before);
-    const page = (await rest.get(Routes.channelMessages(channelId), { query })) as TargetMessage[];
+    const page = (await rest.get(Routes.channelMessages(channelId), {
+      query,
+      signal,
+    })) as TargetMessage[];
     for (const message of page) assertTargetMessage(message, guildId, channelId);
     messages.push(...page);
     if (page.length < BLUEPRINT_PUBLICATION_HISTORY_PAGE_SIZE) {
@@ -254,13 +258,17 @@ export async function readBlueprintTargetSnapshot(
   botId: string,
   blueprint: GuildBlueprint,
   seedBindings?: BlueprintBindings,
+  signal?: AbortSignal,
 ): Promise<BlueprintTargetSnapshot> {
   const [guild, bot, roles, channels, automodRules] = (await Promise.all([
-    rest.get(Routes.guild(guildId), { query: new URLSearchParams({ with_counts: 'true' }) }),
-    rest.get(Routes.guildMember(guildId, botId)),
-    rest.get(Routes.guildRoles(guildId)),
-    rest.get(Routes.guildChannels(guildId)),
-    rest.get(Routes.guildAutoModerationRules(guildId)),
+    rest.get(Routes.guild(guildId), {
+      query: new URLSearchParams({ with_counts: 'true' }),
+      signal,
+    }),
+    rest.get(Routes.guildMember(guildId, botId), { signal }),
+    rest.get(Routes.guildRoles(guildId), { signal }),
+    rest.get(Routes.guildChannels(guildId), { signal }),
+    rest.get(Routes.guildAutoModerationRules(guildId), { signal }),
   ])) as [TargetGuild, TargetBotMember, TargetRole[], TargetChannel[], TargetAutoModRule[]];
 
   assertTargetId('Guild', guildId, guild.id);
@@ -279,15 +287,15 @@ export async function readBlueprintTargetSnapshot(
   const community = guild.features.includes('COMMUNITY');
   const [onboarding, welcomeScreen] = community
     ? ((await Promise.all([
-        rest.get(Routes.guildOnboarding(guildId)),
-        rest.get(Routes.guildWelcomeScreen(guildId)),
+        rest.get(Routes.guildOnboarding(guildId), { signal }),
+        rest.get(Routes.guildWelcomeScreen(guildId), { signal }),
       ])) as [TargetOnboarding, TargetWelcomeScreen])
     : [null, null];
   if (onboarding !== null) assertTargetId('Onboarding', guildId, onboarding.guild_id);
 
   const messageEntries = await Promise.all(
     publicationCandidateChannelIds(blueprint, channels, seedBindings).map(async (channelId) => {
-      const history = await readPublicationHistory(rest, guildId, channelId);
+      const history = await readPublicationHistory(rest, guildId, channelId, signal);
       return [channelId, history] as const;
     }),
   );
@@ -315,7 +323,9 @@ export async function readBlueprintTargetSnapshot(
         }
         let message: TargetMessage;
         try {
-          message = (await rest.get(Routes.channelMessage(channelId, messageId))) as TargetMessage;
+          message = (await rest.get(Routes.channelMessage(channelId, messageId), {
+            signal,
+          })) as TargetMessage;
         } catch (error) {
           if (statusCode(error) === 404) return;
           throw error;

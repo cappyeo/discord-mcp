@@ -19,8 +19,9 @@ describe('verifyExpectedBotIdentity', () => {
 
   it('accepts the expected bot and caches successful verification per REST instance', async () => {
     const { rest, get } = fakeRest({ id: BOT_ID, username: 'setup-bot', bot: true });
+    const signal = new AbortController().signal;
 
-    await expect(verifyExpectedBotIdentity(rest, BOT_ID)).resolves.toEqual({
+    await expect(verifyExpectedBotIdentity(rest, BOT_ID, signal)).resolves.toEqual({
       id: BOT_ID,
       username: 'setup-bot',
     });
@@ -29,6 +30,7 @@ describe('verifyExpectedBotIdentity', () => {
       username: 'setup-bot',
     });
     expect(get).toHaveBeenCalledTimes(1);
+    expect(get.mock.calls[0]![1]).toEqual({ signal });
   });
 
   it('fails closed when the token belongs to another bot', async () => {
@@ -49,5 +51,24 @@ describe('verifyExpectedBotIdentity', () => {
     await expect(verifyExpectedBotIdentity(rest, BOT_ID)).rejects.toThrow('bot account');
     await expect(verifyExpectedBotIdentity(rest, BOT_ID)).resolves.toMatchObject({ id: BOT_ID });
     expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache a caller-cancelled identity request', async () => {
+    const controller = new AbortController();
+    const cancelled = new DOMException('aborted', 'AbortError');
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(cancelled)
+      .mockResolvedValueOnce({ id: BOT_ID, username: 'bot', bot: true });
+    const rest = { get } as unknown as REST;
+
+    controller.abort();
+    await expect(verifyExpectedBotIdentity(rest, BOT_ID, controller.signal)).rejects.toBe(
+      cancelled,
+    );
+    await expect(verifyExpectedBotIdentity(rest, BOT_ID)).resolves.toMatchObject({ id: BOT_ID });
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get.mock.calls[0]![1]).toEqual({ signal: controller.signal });
   });
 });

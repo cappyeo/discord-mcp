@@ -479,8 +479,9 @@ export default defineTool({
     }
 
     try {
-      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id);
-    } catch {
+      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id, ctx.signal);
+    } catch (error) {
+      if (ctx.signal.aborted) throw error;
       return response(
         'Blueprint apply blocked by the exact bot identity lock. No guild was changed.',
         {
@@ -640,6 +641,7 @@ export default defineTool({
         args.expected_bot_id,
         plan.blueprint,
         bindings,
+        applySignal,
       );
       const reconciled = reconcileGuildBlueprint(
         plan.blueprint_id,
@@ -996,6 +998,7 @@ export default defineTool({
         args.expected_bot_id,
         plan.blueprint,
         bindings,
+        applySignal,
       );
       const readback = reconcileGuildBlueprint(
         plan.blueprint_id,

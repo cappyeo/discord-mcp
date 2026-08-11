@@ -141,6 +141,9 @@ function harness(
     applyTransportFailures = 0,
     retriableApplyResponses = 0,
     retriableVerificationResponses = 0,
+    retriableForcedObservationResponses = 0,
+    retriableMainApplyResponses = 0,
+    retriableReplayResponses = 0,
     nonRetriableApplyResponse = false,
     snapshotSettlesAfter = 1,
     auditSettlesAfter = 1,
@@ -155,8 +158,12 @@ function harness(
   let remainingApplyTransportFailures = applyTransportFailures;
   let remainingRetriableApplyResponses = retriableApplyResponses;
   let remainingRetriableVerificationResponses = retriableVerificationResponses;
+  let remainingRetriableForcedObservationResponses = retriableForcedObservationResponses;
+  let remainingRetriableMainApplyResponses = retriableMainApplyResponses;
+  let remainingRetriableReplayResponses = retriableReplayResponses;
   let nonRetriableApplyReturned = false;
   let completedApply = false;
+  let forcedPartialObserved = false;
   const openSession = async (options) => {
     const calls = [];
     const session = {
@@ -209,6 +216,47 @@ function harness(
           result.progress.completed_total = 2;
           return result;
         }
+        if (
+          mode === 'forced_resume' &&
+          !forcedPartialObserved &&
+          remainingRetriableForcedObservationResponses > 0
+        ) {
+          remainingRetriableForcedObservationResponses -= 1;
+          return applyResult('partial', 0, 1, generatedChannelId, generatedMessageId, {
+            error: {
+              operation_id: null,
+              code: 'UPSTREAM_TIMEOUT',
+              retriable: true,
+              status: null,
+            },
+          });
+        }
+        if (
+          !completedApply &&
+          (mode !== 'forced_resume' || forcedPartialObserved) &&
+          remainingRetriableMainApplyResponses > 0
+        ) {
+          remainingRetriableMainApplyResponses -= 1;
+          return applyResult('partial', 0, 1, generatedChannelId, generatedMessageId, {
+            error: {
+              operation_id: null,
+              code: 'UPSTREAM_TIMEOUT',
+              retriable: true,
+              status: null,
+            },
+          });
+        }
+        if (completedApply && remainingRetriableReplayResponses > 0) {
+          remainingRetriableReplayResponses -= 1;
+          return applyResult('partial', 0, 0, generatedChannelId, generatedMessageId, {
+            error: {
+              operation_id: null,
+              code: 'UPSTREAM_TIMEOUT',
+              retriable: true,
+              status: null,
+            },
+          });
+        }
         if (nonRetriableApplyResponse && !nonRetriableApplyReturned) {
           nonRetriableApplyReturned = true;
           return applyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
@@ -223,6 +271,7 @@ function harness(
         }
         if (mode === 'forced_resume' && firstForcedApply) {
           firstForcedApply = false;
+          forcedPartialObserved = true;
           return applyResult('partial', 1, 1, generatedChannelId, generatedMessageId);
         }
         if (mode === 'forced_resume' && failResume) throw new Error('injected resume failure');
@@ -560,6 +609,46 @@ describe('real benchmark trial orchestration', () => {
         (session) => session.options.env.MCP_BLUEPRINT_STATE_DIR === 'C:\\state\\forced_resume',
       ),
     );
+  });
+
+  it('uses an independent five-step recovery budget for every forced, main, and replay phase', async () => {
+    const test = harness('forced_resume', {
+      retriableForcedObservationResponses: 4,
+      retriableMainApplyResponses: 4,
+      retriableReplayResponses: 4,
+    });
+    const outcome = await runBenchmarkTrial(input('forced_resume', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.equal(outcome.result.forced_resume_observed, true);
+    assert.equal(outcome.result.apply_calls, 15);
+    assert.deepEqual(test.applyBudgets, [1, 1, 1, 1, 1, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]);
+    assert.deepEqual(
+      test.settleSleeps,
+      [1_000, 2_000, 4_000, 8_000, 1_000, 2_000, 4_000, 8_000, 1_000, 2_000, 4_000, 8_000],
+    );
+    assert.equal(outcome.result.replay_status, 'already_current');
+    assert.equal(outcome.result.eligible, true);
+  });
+
+  it('keeps a trial eligible when the bounded structured recovery budget is exhausted', async () => {
+    const test = harness('full', { retriableMainApplyResponses: 6 });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.eligible, true);
+    assert.equal(outcome.result.oracle_match, false);
+    assert.equal(outcome.result.terminal_status, 'partial');
+    assert.deepEqual(test.settleSleeps, [1_000, 2_000, 4_000, 8_000, 16_000]);
+    assert.deepEqual(outcome.result.last_nonterminal_apply, {
+      status: 'partial',
+      error_operation_id: null,
+      error_code: 'UPSTREAM_TIMEOUT',
+      error_retriable: true,
+      error_status: null,
+      next_action: 'resume',
+      blocker_codes: [],
+      blocker_resources: [],
+    });
   });
 
   it('retains exact partial publication cleanup targets when resume fails', async () => {
