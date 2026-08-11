@@ -101,7 +101,31 @@ describe('openMcpBenchmarkSession', () => {
       await expect(session.callTool('guild_blueprint_plan', {})).rejects.toSatisfy((error) => {
         expect(error).toBeInstanceOf(Error);
         expect(error.code).toBe('GUILD_NOT_ALLOWED');
+        expect(error.source).toBe('mcp_tool_result');
         expect(error.message).toBe('guild_blueprint_plan failed (GUILD_NOT_ALLOWED)');
+        return true;
+      });
+    } finally {
+      callTool.mockRestore();
+      await session.close();
+    }
+  });
+
+  it('does not mark a transport error as an MCP tool-result rejection', async () => {
+    const session = await openMcpBenchmarkSession({
+      cliPath: SERVER_PATH,
+      cwd: resolve(import.meta.dirname, '../..'),
+      env: {},
+    });
+    const transportError = Object.assign(new Error('transport failed'), {
+      code: 'GUILD_NOT_ALLOWED',
+    });
+    const callTool = vi.spyOn(Client.prototype, 'callTool').mockRejectedValue(transportError);
+
+    try {
+      await expect(session.callTool('guild_blueprint_plan', {})).rejects.toSatisfy((error) => {
+        expect(error).toBe(transportError);
+        expect(error.source).toBeUndefined();
         return true;
       });
     } finally {

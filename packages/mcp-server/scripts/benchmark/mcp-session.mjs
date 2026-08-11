@@ -41,9 +41,10 @@ function redact(value, secrets) {
   return secrets.reduce((text, secret) => text.split(secret).join('[REDACTED]'), String(value));
 }
 
-function sessionError(message, code = null) {
+function sessionError(message, code = null, source = null) {
   const error = new Error(message);
   if (typeof code === 'string' && code !== '') error.code = code;
+  if (typeof source === 'string' && source !== '') error.source = source;
   return error;
 }
 
@@ -105,7 +106,7 @@ export async function openMcpBenchmarkSession({
             data !== null && typeof data === 'object' && typeof data.code === 'string'
               ? data.code
               : 'MCP_TOOL_ERROR';
-          throw sessionError(`${name} failed (${code})`, code);
+          throw sessionError(`${name} failed (${code})`, code, 'mcp_tool_result');
         }
         return data;
       },

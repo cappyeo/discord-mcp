@@ -14,6 +14,9 @@ const COMMIT = 'babe8518767270733e5442643690cac13f94e473';
 const FINGERPRINTS = Object.fromEntries(
   CONTROLLED_GUILD_IDS.map((guildId, index) => [guildId, `sha256:${String(index + 1).repeat(64)}`]),
 );
+const CANARY_CHANNEL_IDS = Object.fromEntries(
+  CONTROLLED_GUILD_IDS.map((guildId, index) => [guildId, `77700077700077700${index}`]),
+);
 
 function manifest() {
   return createControlledReuseManifest({
@@ -135,8 +138,13 @@ function harness({
           fingerprint: baseline.fingerprint,
         };
       },
-      async runSafetyCases() {
+      async runSafetyCases(options) {
         calls.push(['safety']);
+        assert.equal(options.guardMessageChannelId, CANARY_CHANNEL_IDS[CONTROLLED_GUILD_IDS[0]]);
+        assert.equal(
+          options.wrongGuildMessageChannelId,
+          CANARY_CHANNEL_IDS[CONTROLLED_GUILD_IDS[1]],
+        );
         return safetyCases();
       },
       async runTrial({ trial }) {
@@ -183,7 +191,12 @@ function input(test) {
     baselines: Object.fromEntries(
       CONTROLLED_GUILD_IDS.map((guildId) => [
         guildId,
-        { guild_id: guildId, bot_id: CONTROLLED_BOT_ID, fingerprint: FINGERPRINTS[guildId] },
+        {
+          guild_id: guildId,
+          bot_id: CONTROLLED_BOT_ID,
+          fingerprint: FINGERPRINTS[guildId],
+          canary: { channel_id: CANARY_CHANNEL_IDS[guildId] },
+        },
       ]),
     ),
     request: 'Build a professional gaming Discord server',

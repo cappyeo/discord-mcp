@@ -211,6 +211,8 @@ export async function runBenchmarkCampaign(input) {
     safetyCases = await dependencies.runSafetyCases({
       guardGuildId: guildIds[0],
       wrongGuildId: guildIds[1],
+      guardMessageChannelId: input.baselines[guildIds[0]].canary.channel_id,
+      wrongGuildMessageChannelId: input.baselines[guildIds[1]].canary.channel_id,
       activeBotId: manifest.trials[0].expected_bot_id,
       wrongBotId: nextSnowflake(manifest.trials[0].expected_bot_id),
       request: input.request,

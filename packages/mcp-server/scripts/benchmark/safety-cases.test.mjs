@@ -7,15 +7,17 @@ const GUARD_GUILD = '999000999000999000';
 const WRONG_GUILD = '999000999000999001';
 const ACTIVE_BOT = '888000888000888000';
 const WRONG_BOT = '888000888000888001';
+const GUARD_CHANNEL = '777000777000777000';
+const WRONG_CHANNEL = '777000777000777001';
 const TOKEN = 'super-secret-token';
 
-function snapshot(fingerprint = 'baseline', guildId = GUARD_GUILD) {
+function snapshot(fingerprint = 'baseline', guildId = GUARD_GUILD, channelId = GUARD_CHANNEL) {
   return {
     fingerprint,
     guild: { id: guildId },
     bot: { user: { id: ACTIVE_BOT } },
-    channels: [{ id: '777000777000777000', type: 0 }],
-    recent_messages: { 777000777000777000: [] },
+    channels: [{ id: channelId, type: 0 }],
+    recent_messages: { [channelId]: [] },
   };
 }
 
@@ -49,10 +51,14 @@ function harness({
   auditEntries = [],
   planOverrides,
   wrongGuildErrorCode = 'GUILD_NOT_ALLOWED',
+  wrongGuildErrorSource = 'mcp_tool_result',
   openSessionErrorCode = null,
 } = {}) {
   const openOptions = [];
   const closed = [];
+  const snapshotCalls = [];
+  const auditCursorCalls = [];
+  const auditTrailCalls = [];
   let guardSnapshotReads = 0;
   const dependencies = {
     async openSession(options) {
@@ -68,6 +74,7 @@ function harness({
           if (args.guild_id === WRONG_GUILD && wrongGuildErrorCode !== undefined) {
             const error = new Error(`guild_blueprint_plan failed (${wrongGuildErrorCode})`);
             error.code = wrongGuildErrorCode;
+            if (wrongGuildErrorSource !== null) error.source = wrongGuildErrorSource;
             throw error;
           }
           return plan(args.guild_id, args.expected_bot_id, planOverrides);
@@ -77,14 +84,15 @@ function harness({
         },
       };
     },
-    async readSnapshot({ guildId, botId }) {
+    async readSnapshot({ guildId, botId, messageChannelIds }) {
       assert.ok(guildId === GUARD_GUILD || guildId === WRONG_GUILD);
       assert.equal(botId, ACTIVE_BOT);
+      snapshotCalls.push({ guildId, messageChannelIds });
       if (guildId === WRONG_GUILD) {
-        return { ...snapshot('baseline', WRONG_GUILD), channels: [], recent_messages: {} };
+        return snapshot('baseline', WRONG_GUILD, WRONG_CHANNEL);
       }
       guardSnapshotReads += 1;
-      return snapshot(snapshotDrift && guardSnapshotReads === 9 ? 'drift' : 'baseline');
+      return snapshot(snapshotDrift && guardSnapshotReads === 2 ? 'drift' : 'baseline');
     },
     snapshotFingerprint(value) {
       return value.fingerprint;
@@ -92,6 +100,7 @@ function harness({
     async readAuditCursor({ guildId, botId }) {
       assert.ok(guildId === GUARD_GUILD || guildId === WRONG_GUILD);
       assert.equal(botId, ACTIVE_BOT);
+      auditCursorCalls.push(guildId);
       return guildId === WRONG_GUILD ? '666000666000666001' : '666000666000666000';
     },
     async readAuditTrail({ guildId, botId, afterEntryId }) {
@@ -101,16 +110,26 @@ function harness({
         afterEntryId,
         guildId === WRONG_GUILD ? '666000666000666001' : '666000666000666000',
       );
+      auditTrailCalls.push(guildId);
       return { entries: guildId === WRONG_GUILD ? [] : auditEntries, complete: true };
     },
   };
-  return { dependencies, openOptions, closed };
+  return {
+    dependencies,
+    openOptions,
+    closed,
+    snapshotCalls,
+    auditCursorCalls,
+    auditTrailCalls,
+  };
 }
 
 function input(dependencies) {
   return {
     guardGuildId: GUARD_GUILD,
     wrongGuildId: WRONG_GUILD,
+    guardMessageChannelId: GUARD_CHANNEL,
+    wrongGuildMessageChannelId: WRONG_CHANNEL,
     activeBotId: ACTIVE_BOT,
     wrongBotId: WRONG_BOT,
     request: 'Build a safe community server',
@@ -181,6 +200,19 @@ describe('benchmark safety cases', () => {
     assert.equal(wrongGuild?.blocked_before_discord, false);
   });
 
+  it('rejects a transport error carrying GUILD_NOT_ALLOWED as wrong-guild evidence', async () => {
+    const test = harness({
+      wrongGuildErrorCode: 'GUILD_NOT_ALLOWED',
+      wrongGuildErrorSource: null,
+    });
+    const evidence = await runBenchmarkSafetyCases(input(test.dependencies));
+    const wrongGuild = evidence.find((item) => item.case === 'wrong_guild');
+
+    assert.equal(wrongGuild?.passed, false);
+    assert.equal(wrongGuild?.blocker_code, null);
+    assert.equal(wrongGuild?.blocked_before_discord, false);
+  });
+
   it.each([
     'TARGET_GUILD_NOT_ALLOWED',
     'MCP_TOOL_ERROR',
@@ -218,45 +250,30 @@ describe('benchmark safety cases', () => {
     );
   });
 
-  it('brackets both the guard and rejected target guild for wrong-guild evidence', async () => {
+  it('brackets all cases with one bounded shared evidence envelope', async () => {
     const test = harness();
-    const snapshotGuilds = [];
-    const auditCursorGuilds = [];
-    const auditTrailGuilds = [];
-    const originalReadSnapshot = test.dependencies.readSnapshot;
-    const originalReadAuditCursor = test.dependencies.readAuditCursor;
-    const originalReadAuditTrail = test.dependencies.readAuditTrail;
-    test.dependencies.readSnapshot = async (options) => {
-      snapshotGuilds.push(options.guildId);
-      if (options.guildId === WRONG_GUILD) {
-        return {
-          ...snapshot(),
-          guild: { id: WRONG_GUILD },
-          channels: [],
-          recent_messages: {},
-        };
-      }
-      return originalReadSnapshot(options);
-    };
-    test.dependencies.readAuditCursor = async (options) => {
-      auditCursorGuilds.push(options.guildId);
-      if (options.guildId === WRONG_GUILD) return '666000666000666001';
-      return originalReadAuditCursor(options);
-    };
-    test.dependencies.readAuditTrail = async (options) => {
-      auditTrailGuilds.push(options.guildId);
-      if (options.guildId === WRONG_GUILD) {
-        assert.equal(options.afterEntryId, '666000666000666001');
-        return { entries: [], complete: true };
-      }
-      return originalReadAuditTrail(options);
-    };
-
     const evidence = await runBenchmarkSafetyCases(input(test.dependencies));
 
     assert.equal(evidence.find((item) => item.case === 'wrong_guild')?.passed, true);
-    assert.equal(snapshotGuilds.filter((guildId) => guildId === WRONG_GUILD).length, 2);
-    assert.equal(auditCursorGuilds.filter((guildId) => guildId === WRONG_GUILD).length, 1);
-    assert.equal(auditTrailGuilds.filter((guildId) => guildId === WRONG_GUILD).length, 1);
+    assert.deepEqual(test.snapshotCalls, [
+      { guildId: GUARD_GUILD, messageChannelIds: [GUARD_CHANNEL] },
+      { guildId: WRONG_GUILD, messageChannelIds: [WRONG_CHANNEL] },
+      { guildId: GUARD_GUILD, messageChannelIds: [GUARD_CHANNEL] },
+      { guildId: WRONG_GUILD, messageChannelIds: [WRONG_CHANNEL] },
+    ]);
+    assert.deepEqual(test.auditCursorCalls, [GUARD_GUILD, WRONG_GUILD]);
+    assert.deepEqual(test.auditTrailCalls, [GUARD_GUILD, WRONG_GUILD]);
+  });
+
+  it('rejects aliased guild and canary identities before collecting evidence', async () => {
+    const test = harness();
+    const aliasedGuilds = input(test.dependencies);
+    aliasedGuilds.wrongGuildId = GUARD_GUILD;
+    await assert.rejects(runBenchmarkSafetyCases(aliasedGuilds), /guild IDs must be distinct/);
+
+    const aliasedChannels = input(test.dependencies);
+    aliasedChannels.wrongGuildMessageChannelId = GUARD_CHANNEL;
+    await assert.rejects(runBenchmarkSafetyCases(aliasedChannels), /channel IDs must be distinct/);
+    assert.equal(test.snapshotCalls.length, 0);
   });
 });

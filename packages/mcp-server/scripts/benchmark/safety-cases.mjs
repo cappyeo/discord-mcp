@@ -13,6 +13,8 @@ function validateInput(input) {
   for (const name of [
     'guardGuildId',
     'wrongGuildId',
+    'guardMessageChannelId',
+    'wrongGuildMessageChannelId',
     'activeBotId',
     'wrongBotId',
     'request',
@@ -34,6 +36,12 @@ function validateInput(input) {
     if (typeof input.dependencies[name] !== 'function')
       throw new TypeError(`dependencies.${name} must be a function`);
   }
+  if (input.guardGuildId === input.wrongGuildId) {
+    throw new TypeError('guard and wrong guild IDs must be distinct');
+  }
+  if (input.guardMessageChannelId === input.wrongGuildMessageChannelId) {
+    throw new TypeError('guard and wrong channel IDs must be distinct');
+  }
 }
 
 function childEnvironment(input) {
@@ -49,31 +57,14 @@ function childEnvironment(input) {
   };
 }
 
-function messageChannelIds(snapshot) {
-  if (!Array.isArray(snapshot?.channels)) return [];
-  return snapshot.channels
-    .filter((channel) => channel?.type === 0 || channel?.type === 5)
-    .map((channel) => channel.id)
-    .filter((id) => typeof id === 'string' && id !== '');
-}
-
 async function readGuildSnapshot(dependencies, guildId, botId, messageIds) {
-  const inventory = await dependencies.readSnapshot({
-    guildId,
-    botId,
-    messageChannelIds: messageIds ?? [],
-  });
-  if (!record(inventory)) throw new Error('guard snapshot is malformed');
-  const ids = messageIds === undefined ? messageChannelIds(inventory) : messageIds;
-  if (messageIds === undefined && ids.length === 0) return { snapshot: inventory, messageIds: ids };
-  if (messageIds !== undefined) return { snapshot: inventory, messageIds: ids };
   const snapshot = await dependencies.readSnapshot({
     guildId,
     botId,
-    messageChannelIds: ids,
+    messageChannelIds: messageIds,
   });
   if (!record(snapshot)) throw new Error('guard snapshot is malformed');
-  return { snapshot, messageIds: ids };
+  return { snapshot, messageIds };
 }
 
 function monitoredGuildIds(input, caseName) {
@@ -82,9 +73,15 @@ function monitoredGuildIds(input, caseName) {
     : [input.guardGuildId];
 }
 
-async function captureBefore(dependencies, guildId, botId) {
+function monitoredMessageChannelId(input, guildId) {
+  return guildId === input.guardGuildId
+    ? input.guardMessageChannelId
+    : input.wrongGuildMessageChannelId;
+}
+
+async function captureBefore(dependencies, guildId, botId, messageChannelId) {
   const auditCursor = await dependencies.readAuditCursor({ guildId, botId });
-  const snapshot = await readGuildSnapshot(dependencies, guildId, botId);
+  const snapshot = await readGuildSnapshot(dependencies, guildId, botId, [messageChannelId]);
   const fingerprint = dependencies.snapshotFingerprint(snapshot.snapshot);
   if (typeof fingerprint !== 'string' || fingerprint === '') {
     throw new Error('guard snapshot fingerprint is malformed');
@@ -121,8 +118,10 @@ function planStatus(plan) {
   return plan?.status === 'ready' || plan?.status === 'blocked' ? plan.status : 'blocked';
 }
 
-function sessionErrorCode(error) {
-  return typeof error?.code === 'string' && error.code !== '' ? error.code : null;
+function toolResultErrorCode(error) {
+  return error?.source === 'mcp_tool_result' && typeof error.code === 'string' && error.code !== ''
+    ? error.code
+    : null;
 }
 
 function readback(plan) {
@@ -200,10 +199,6 @@ async function runCase(input, caseName, dependencies) {
         ? 'GUILD_NOT_ALLOWED'
         : null;
   const evidence = emptyEvidence(caseName, input, targetGuildId, suppliedBotId);
-  const beforeStates = [];
-  for (const guildId of monitoredGuildIds(input, caseName)) {
-    beforeStates.push(await captureBefore(dependencies, guildId, input.activeBotId));
-  }
   let session = null;
   let plan = null;
   let callError = null;
@@ -246,37 +241,8 @@ async function runCase(input, caseName, dependencies) {
     }
   }
   if (closeError !== null) throw closeError;
-
-  let snapshotsUnchanged = true;
-  const entries = [];
-  for (const before of beforeStates) {
-    const after = await readGuildSnapshot(
-      dependencies,
-      before.guildId,
-      input.activeBotId,
-      before.messageIds,
-    );
-    const afterFingerprint = dependencies.snapshotFingerprint(after.snapshot);
-    if (typeof afterFingerprint !== 'string' || afterFingerprint === '') {
-      throw new Error('guard snapshot fingerprint is malformed');
-    }
-    snapshotsUnchanged &&= before.fingerprint === afterFingerprint;
-    const auditTrail = await dependencies.readAuditTrail({
-      guildId: before.guildId,
-      botId: input.activeBotId,
-      afterEntryId: before.auditCursor,
-    });
-    if (!record(auditTrail) || !Array.isArray(auditTrail.entries) || auditTrail.complete !== true) {
-      throw new Error('audit trail is malformed');
-    }
-    entries.push(...auditTrail.entries);
-  }
-
-  evidence.snapshot_unchanged = snapshotsUnchanged;
-  evidence.audit_entry_count = entries.length;
-  evidence.mutation_count = entries.length;
   evidence.plan_status = planStatus(plan);
-  evidence.blocker_code = blockerCode(plan) ?? sessionErrorCode(toolCallError);
+  evidence.blocker_code = blockerCode(plan) ?? toolResultErrorCode(toolCallError);
   evidence.blocked_before_discord =
     evidence.plan_status === 'blocked' && evidence.blocker_code === expectedBlocker;
   evidence.target_readback = readback(plan);
@@ -284,15 +250,39 @@ async function runCase(input, caseName, dependencies) {
   const expectedPublicGuildRejection =
     caseName === 'wrong_guild' &&
     plan === null &&
-    sessionErrorCode(toolCallError) === 'GUILD_NOT_ALLOWED';
-  evidence.passed =
-    (expectedPublicGuildRejection || callError === null) && evidencePass(evidence, expectedBlocker);
-  return evidence;
+    toolResultErrorCode(toolCallError) === 'GUILD_NOT_ALLOWED';
+  return {
+    evidence,
+    expectedBlocker,
+    callAccepted: expectedPublicGuildRejection || callError === null,
+  };
+}
+
+async function captureAfter(dependencies, before, botId) {
+  const after = await readGuildSnapshot(dependencies, before.guildId, botId, before.messageIds);
+  const fingerprint = dependencies.snapshotFingerprint(after.snapshot);
+  if (typeof fingerprint !== 'string' || fingerprint === '') {
+    throw new Error('guard snapshot fingerprint is malformed');
+  }
+  const auditTrail = await dependencies.readAuditTrail({
+    guildId: before.guildId,
+    botId,
+    afterEntryId: before.auditCursor,
+  });
+  if (!record(auditTrail) || !Array.isArray(auditTrail.entries) || auditTrail.complete !== true) {
+    throw new Error('audit trail is malformed');
+  }
+  return {
+    snapshotUnchanged: before.fingerprint === fingerprint,
+    entries: auditTrail.entries,
+  };
 }
 
 export async function runBenchmarkSafetyCases({
   guardGuildId,
   wrongGuildId,
+  guardMessageChannelId,
+  wrongGuildMessageChannelId,
   activeBotId,
   wrongBotId,
   request,
@@ -305,6 +295,8 @@ export async function runBenchmarkSafetyCases({
   const input = {
     guardGuildId,
     wrongGuildId,
+    guardMessageChannelId,
+    wrongGuildMessageChannelId,
     activeBotId,
     wrongBotId,
     request,
@@ -315,7 +307,38 @@ export async function runBenchmarkSafetyCases({
     dependencies,
   };
   validateInput(input);
-  const evidence = [];
-  for (const caseName of CASES) evidence.push(await runCase(input, caseName, dependencies));
-  return evidence;
+  const beforeByGuild = new Map();
+  for (const guildId of monitoredGuildIds(input, 'wrong_guild')) {
+    beforeByGuild.set(
+      guildId,
+      await captureBefore(
+        dependencies,
+        guildId,
+        input.activeBotId,
+        monitoredMessageChannelId(input, guildId),
+      ),
+    );
+  }
+
+  const outcomes = [];
+  for (const caseName of CASES) outcomes.push(await runCase(input, caseName, dependencies));
+
+  const verificationByGuild = new Map();
+  for (const [guildId, before] of beforeByGuild) {
+    verificationByGuild.set(guildId, await captureAfter(dependencies, before, input.activeBotId));
+  }
+
+  return outcomes.map(({ evidence, expectedBlocker, callAccepted }) => {
+    const verification = monitoredGuildIds(input, evidence.case).map((guildId) => {
+      const result = verificationByGuild.get(guildId);
+      if (result === undefined) throw new Error('guard verification is unavailable');
+      return result;
+    });
+    const mutationCount = verification.reduce((total, item) => total + item.entries.length, 0);
+    evidence.snapshot_unchanged = verification.every((item) => item.snapshotUnchanged);
+    evidence.audit_entry_count = mutationCount;
+    evidence.mutation_count = mutationCount;
+    evidence.passed = callAccepted && evidencePass(evidence, expectedBlocker);
+    return evidence;
+  });
 }
