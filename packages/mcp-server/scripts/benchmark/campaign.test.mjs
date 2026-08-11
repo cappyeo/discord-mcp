@@ -220,6 +220,53 @@ describe('real benchmark campaign', () => {
     });
   });
 
+  it('rejects manifests outside the exact controlled target boundary before campaign work', async () => {
+    const foreignGuildId = (BigInt(CONTROLLED_GUILD_IDS[0]) + 1n).toString();
+    const foreignBotId = (BigInt(CONTROLLED_BOT_ID) + 1n).toString();
+
+    const guildTest = harness();
+    const guildManifest = structuredClone(manifest());
+    guildManifest.trials = guildManifest.trials.map((trial) => ({
+      ...trial,
+      guild_id: trial.guild_id === CONTROLLED_GUILD_IDS[0] ? foreignGuildId : trial.guild_id,
+    }));
+    guildManifest.guild_diversity.trials_per_guild = {
+      [foreignGuildId]: 10,
+      [CONTROLLED_GUILD_IDS[1]]: 10,
+    };
+    const guildInput = input(guildTest);
+    guildInput.manifest = guildManifest;
+    await assert.rejects(runBenchmarkCampaign(guildInput), /exact controlled pool/);
+    assert.equal(guildTest.calls.length, 0);
+    assert.equal(guildTest.artifacts.size, 0);
+
+    const botTest = harness();
+    const botManifest = structuredClone(manifest());
+    botManifest.trials = botManifest.trials.map((trial) => ({
+      ...trial,
+      expected_bot_id: foreignBotId,
+    }));
+    const botInput = input(botTest);
+    botInput.manifest = botManifest;
+    await assert.rejects(runBenchmarkCampaign(botInput), /exact controlled bot/);
+    assert.equal(botTest.calls.length, 0);
+    assert.equal(botTest.artifacts.size, 0);
+
+    const distributionTest = harness();
+    const distributionManifest = structuredClone(manifest());
+    distributionManifest.trials[1].guild_id = CONTROLLED_GUILD_IDS[0];
+    distributionManifest.guild_diversity.trials_per_guild = {
+      [CONTROLLED_GUILD_IDS[0]]: 11,
+      [CONTROLLED_GUILD_IDS[1]]: 9,
+    };
+    distributionManifest.reuse_policy.max_trials_per_guild = 11;
+    const distributionInput = input(distributionTest);
+    distributionInput.manifest = distributionManifest;
+    await assert.rejects(runBenchmarkCampaign(distributionInput), /exactly 5 full and 5 forced/);
+    assert.equal(distributionTest.calls.length, 0);
+    assert.equal(distributionTest.artifacts.size, 0);
+  });
+
   it('runs safety, restores every trial, and emits a derived passing report', async () => {
     const test = harness();
     const report = await runBenchmarkCampaign(input(test));

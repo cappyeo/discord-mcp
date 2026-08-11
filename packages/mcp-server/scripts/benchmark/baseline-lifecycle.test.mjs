@@ -20,6 +20,11 @@ const MESSAGE = '777000777000999007';
 const PROTECTED_RULE = '777000777000999008';
 const FOREIGN_BOT = '666000666000666666';
 const FP = `sha256:${'a'.repeat(64)}`;
+const RESTORE_TARGET_GUARD = Object.freeze({
+  allowedGuildIds: [GUILD],
+  expectedBotId: BOT,
+  confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+});
 
 function baselineSnapshot() {
   return {
@@ -231,6 +236,49 @@ describe('benchmark baseline lifecycle', () => {
       }),
     ).rejects.toThrow('confirmation');
     expect(calls).toHaveLength(0);
+  });
+
+  it('rejects restore target guard failures before any read or REST mutation', async () => {
+    const reads = [];
+    const mutations = [];
+    const common = {
+      rest: { request: async (...args) => mutations.push(args) },
+      async readSnapshot(...args) {
+        reads.push(args);
+        return baselineSnapshot();
+      },
+      snapshotFingerprint: () => FP,
+      baseline: makeBaseline(),
+      cleanup: null,
+      reason: 'guard regression',
+    };
+
+    await expect(
+      restoreBenchmarkBaseline({
+        ...common,
+        allowedGuildIds: ['999000999000999001'],
+        expectedBotId: BOT,
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+      }),
+    ).rejects.toThrow('allowlist');
+    await expect(
+      restoreBenchmarkBaseline({
+        ...common,
+        allowedGuildIds: [GUILD],
+        expectedBotId: FOREIGN_BOT,
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+      }),
+    ).rejects.toThrow('expected bot');
+    await expect(
+      restoreBenchmarkBaseline({
+        ...common,
+        allowedGuildIds: [GUILD],
+        expectedBotId: BOT,
+        confirmation: 'no',
+      }),
+    ).rejects.toThrow('confirmation');
+    expect(reads).toHaveLength(0);
+    expect(mutations).toHaveLength(0);
   });
 
   it('initializes a non-Community disposable guild before deleting referenced resources', async () => {
@@ -577,6 +625,7 @@ describe('benchmark baseline lifecycle', () => {
       rest,
       ...dependencies(state),
       baseline: makeBaseline(),
+      ...RESTORE_TARGET_GUARD,
       cleanup: {
         publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
         bindings: {
@@ -659,6 +708,7 @@ describe('benchmark baseline lifecycle', () => {
       rest,
       ...dependencies(state),
       baseline: makeBaseline({ protectedRule: mentionSpamRule() }),
+      ...RESTORE_TARGET_GUARD,
       cleanup: {
         publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
         bindings: {
@@ -732,6 +782,7 @@ describe('benchmark baseline lifecycle', () => {
         return fingerprintCalls === 1 ? 'sha256:not-settled' : FP;
       },
       baseline: makeBaseline(),
+      ...RESTORE_TARGET_GUARD,
       cleanup: {
         bindings: {
           roles: { member: EXTRA_ROLE },
@@ -756,7 +807,13 @@ describe('benchmark baseline lifecycle', () => {
     const state = { snapshot: currentSnapshot() };
     const calls = [];
     const rest = { request: async (...args) => calls.push(args) };
-    const common = { rest, ...dependencies(state), baseline: makeBaseline(), reason: 'test' };
+    const common = {
+      rest,
+      ...dependencies(state),
+      baseline: makeBaseline(),
+      ...RESTORE_TARGET_GUARD,
+      reason: 'test',
+    };
     await expect(
       restoreBenchmarkBaseline({
         ...common,
@@ -829,6 +886,7 @@ describe('benchmark baseline lifecycle', () => {
         ...dependencies(state, { drift: true }),
         sleep: async () => undefined,
         baseline: makeBaseline(),
+        ...RESTORE_TARGET_GUARD,
         cleanup: {
           bindings: {
             roles: { member: EXTRA_ROLE },

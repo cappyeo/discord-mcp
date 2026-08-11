@@ -578,6 +578,9 @@ export async function restoreBenchmarkBaseline({
   readSnapshot,
   snapshotFingerprint,
   baseline,
+  allowedGuildIds,
+  expectedBotId,
+  confirmation,
   cleanup,
   reason,
   sleep = wait,
@@ -587,6 +590,18 @@ export async function restoreBenchmarkBaseline({
   requiredFunction(rest?.request, 'rest.request');
   requiredFunction(sleep, 'sleep');
   validateBaselineRecord(baseline);
+  validateCommon(
+    {
+      guildId: baseline.guild_id,
+      botId: baseline.bot_id,
+      allowedGuildIds,
+      confirmation,
+    },
+    'restorer',
+  );
+  if (snowflake(expectedBotId, 'expectedBotId') !== baseline.bot_id) {
+    throw new Error('restorer bot does not match the exact expected bot');
+  }
   const ids = cleanupBindings(cleanup);
   let snapshot = await readSnapshot({
     guildId: baseline.guild_id,

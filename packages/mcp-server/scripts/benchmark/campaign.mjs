@@ -50,17 +50,13 @@ export function createControlledReuseManifest({
   runId,
   commit,
   builtCli,
-  guildIds = CONTROLLED_GUILD_IDS,
-  botId = CONTROLLED_BOT_ID,
   profile = 'caller-owned-devbot',
 } = {}) {
+  const guildIds = CONTROLLED_GUILD_IDS;
+  const botId = CONTROLLED_BOT_ID;
   requiredString(runId, 'runId');
   requiredString(commit, 'commit');
-  requiredString(botId, 'botId');
   requiredString(profile, 'profile');
-  if (!Array.isArray(guildIds) || guildIds.length !== 2 || new Set(guildIds).size !== 2) {
-    throw new TypeError('guildIds must contain exactly two unique controlled guilds');
-  }
   const trials = Array.from({ length: 20 }, (_, index) => ({
     trial_id: `trial-${String(index + 1).padStart(2, '0')}`,
     mode: index < 10 ? 'full' : 'forced_resume',
@@ -90,9 +86,33 @@ export function createControlledReuseManifest({
   return assertBenchmarkManifest(manifest);
 }
 
+function assertControlledManifestTargets(manifest) {
+  const guildIds = new Set(manifest.trials.map((trial) => trial.guild_id));
+  if (
+    guildIds.size !== CONTROLLED_GUILD_IDS.length ||
+    CONTROLLED_GUILD_IDS.some((guildId) => !guildIds.has(guildId))
+  ) {
+    throw new TypeError('manifest guilds must match the exact controlled pool');
+  }
+  if (manifest.trials.some((trial) => trial.expected_bot_id !== CONTROLLED_BOT_ID)) {
+    throw new TypeError('manifest bot must match the exact controlled bot');
+  }
+  for (const guildId of CONTROLLED_GUILD_IDS) {
+    const trials = manifest.trials.filter((trial) => trial.guild_id === guildId);
+    if (
+      trials.length !== 10 ||
+      trials.filter((trial) => trial.mode === 'full').length !== 5 ||
+      trials.filter((trial) => trial.mode === 'forced_resume').length !== 5
+    ) {
+      throw new TypeError('manifest must schedule exactly 5 full and 5 forced trials per guild');
+    }
+  }
+}
+
 function validateCampaignInput(input) {
   if (!record(input)) throw new TypeError('campaign input is required');
   const manifest = assertBenchmarkManifest(input.manifest);
+  assertControlledManifestTargets(manifest);
   for (const name of ['request', 'cliPath', 'cwd', 'token']) requiredString(input[name], name);
   if (!record(input.baselines)) throw new TypeError('baselines are required');
   for (const guildId of new Set(manifest.trials.map((trial) => trial.guild_id))) {
