@@ -34,7 +34,10 @@ tradeoffs, see [Resilience](/discord-mcp/operations/resilience/).
 
 - **Type:** integer from 500 to 60000 milliseconds
 - **Default:** `10000`
-- **Use:** Caps an individual retry delay.
+- **Use:** Caps exponential backoff and the known Discord `Retry-After` that
+  may be absorbed inside one MCP request. Longer rate-limit windows surface
+  immediately so resumable callers can checkpoint and wait outside the server
+  process instead of exceeding their request deadline.
 - **Example:** `MCP_RETRY_MAX_DELAY_MS=30000`
 
 ### `MCP_RETRY_JITTER`

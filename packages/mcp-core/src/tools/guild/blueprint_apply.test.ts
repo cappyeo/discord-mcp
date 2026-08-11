@@ -1,3 +1,4 @@
+import { RateLimitError } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { TaskCancelledError } from 'cockatiel';
 import { describe, expect, it } from 'vitest';
@@ -39,6 +40,30 @@ describe('guild_blueprint_apply contract', () => {
       code: 'PUBLICATION_CHANNEL_NOT_READY',
       retriable: true,
       status: 404,
+    });
+  });
+
+  it('preserves Discord Retry-After on a resumable rate-limit response', () => {
+    const rateLimit = new RateLimitError({
+      timeToReset: 240_000,
+      limit: 5,
+      method: 'POST',
+      hash: 'guild-resource-create',
+      url: 'https://discord.com/api/v10/guilds/100000000000000001/roles',
+      route: '/guilds/:id/roles',
+      majorParameter: '100000000000000001',
+      global: false,
+      retryAfter: 240_000,
+      sublimitTimeout: 0,
+      scope: 'user',
+    });
+
+    expect(safeApplyError(rateLimit, 'role:member:create')).toEqual({
+      operation_id: 'role:member:create',
+      code: 'DISCORD_RATE_LIMITED',
+      retriable: true,
+      status: 429,
+      retry_after_ms: 240_000,
     });
   });
 

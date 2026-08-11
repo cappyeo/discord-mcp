@@ -347,6 +347,46 @@ describe('blueprint operation response validation', () => {
     }
   });
 
+  it('surfaces a long publication readback rate limit without retrying early', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+    const rateLimit = new RateLimitError({
+      timeToReset: 240_000,
+      limit: 5,
+      method: 'GET',
+      hash: 'publication-readback',
+      url: `https://discord.com/api/v10/channels/${channelId}`,
+      route: '/channels/:id',
+      majorParameter: channelId,
+      global: false,
+      retryAfter: 240_000,
+      sublimitTimeout: 0,
+      scope: 'user',
+    });
+    const get = vi.fn(async () => {
+      throw rateLimit;
+    });
+    const post = vi.fn(async () => ({
+      id: '230000000000000003',
+      channel_id: channelId,
+      author: { id: BOT_ID },
+    }));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { get, post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).rejects.toBe(rateLimit);
+    expect(get).toHaveBeenCalledOnce();
+    expect(post).toHaveBeenCalledOnce();
+  });
+
   it('cancels an in-flight publication channel readback without retrying', async () => {
     const currentBindings = bindings();
     const publication = blueprint.components_v2.publications[0]!;

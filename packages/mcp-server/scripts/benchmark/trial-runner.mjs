@@ -5,7 +5,15 @@ const SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
 const PLAN_RECOVERY_DELAYS_MS = Object.freeze([1_000, 3_000]);
 const APPLY_RECOVERY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000, 8_000, 16_000]);
 const MAIN_APPLY_OPERATION_BUDGET = 10;
+const MAX_EXTERNAL_RECOVERY_WAIT_MS = 15 * 60_000;
 const MESSAGE_HISTORY_CHANNEL_TYPES = new Set([0, 5]);
+const BINDING_KINDS = Object.freeze([
+  'roles',
+  'categories',
+  'channels',
+  'automod_rules',
+  'publications',
+]);
 const REQUIRED_DEPENDENCIES = [
   'openSession',
   'readSnapshot',
@@ -16,6 +24,7 @@ const REQUIRED_DEPENDENCIES = [
   'compareSnapshots',
   'verifyBlueprintSnapshot',
   'verifyAuditTrail',
+  'loadCheckpoint',
 ];
 
 class TrialFailure extends Error {
@@ -226,7 +235,9 @@ function validateApply(result, plan, trial) {
       error.code === '' ||
       typeof error.retriable !== 'boolean' ||
       (error.status !== null &&
-        (!Number.isInteger(error.status) || error.status < 100 || error.status > 599))
+        (!Number.isInteger(error.status) || error.status < 100 || error.status > 599)) ||
+      (error.retry_after_ms !== undefined &&
+        (!Number.isSafeInteger(error.retry_after_ms) || error.retry_after_ms < 0))
     ) {
       fail('APPLY_RESPONSE_INVALID');
     }
@@ -242,6 +253,14 @@ function validateApply(result, plan, trial) {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
       fail('APPLY_RESPONSE_INVALID');
   }
+  const bindingFailure = { code: 'APPLY_BINDINGS_INVALID', serious: true };
+  const bindingDomains = blueprintBindingDomains(plan, bindingFailure);
+  validateBlueprintBindings(result.evidence.bindings, bindingDomains, bindingFailure);
+  validatePublicationBindingLinks(result.evidence.bindings, plan, bindingFailure);
+  validateCompletedOperationIds(result.evidence.completed_operation_ids, plan, {
+    code: 'APPLY_RESPONSE_INVALID',
+    serious: false,
+  });
   if (
     (result.status === 'complete' || result.status === 'already_current') &&
     (progress.remaining !== 0 ||
@@ -331,6 +350,9 @@ function publicationTargets(blueprint, bindings, { requireComplete = true } = {}
 
 function safeFailure(error) {
   if (error instanceof TrialFailure) return error;
+  if (error?.code === 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET') {
+    return new TrialFailure('RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET');
+  }
   return new TrialFailure('TRIAL_EXECUTION_FAILED');
 }
 
@@ -341,10 +363,144 @@ function retryableSessionError(error) {
 }
 
 function recoveryDelay(error, fallback) {
-  const retryAfter = error?.retryAfterMs;
-  return Number.isInteger(retryAfter) && retryAfter >= 0 && retryAfter <= 120_000
-    ? Math.max(fallback, retryAfter)
-    : fallback;
+  const retryAfter = error?.retry_after_ms ?? error?.retryAfterMs;
+  if (!Number.isSafeInteger(retryAfter) || retryAfter < 0) return fallback;
+  if (retryAfter > MAX_EXTERNAL_RECOVERY_WAIT_MS) {
+    fail('RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET');
+  }
+  return Math.max(fallback, retryAfter);
+}
+
+function rejectValidation({ code, serious }) {
+  fail(code, { serious });
+}
+
+function blueprintBindingDomains(
+  plan,
+  failure = { code: 'CHECKPOINT_RECOVERY_REJECTED', serious: true },
+) {
+  const blueprint = plan.blueprint;
+  const collections = {
+    roles: blueprint.roles,
+    categories: blueprint.categories,
+    channels: blueprint.channels,
+    automod_rules: blueprint.automod?.rules,
+    publications: blueprint.components_v2?.publications,
+  };
+  const domains = {};
+  for (const kind of BINDING_KINDS) {
+    const resources = collections[kind];
+    if (!Array.isArray(resources)) rejectValidation(failure);
+    const keys = resources.map((resource) => resource?.key);
+    if (
+      keys.some((key) => typeof key !== 'string' || key === '') ||
+      new Set(keys).size !== keys.length
+    ) {
+      rejectValidation(failure);
+    }
+    domains[kind] = new Set(keys);
+  }
+  return domains;
+}
+
+function validateBlueprintBindings(
+  bindings,
+  domains,
+  failure = { code: 'CHECKPOINT_RECOVERY_REJECTED', serious: true },
+) {
+  if (bindings === null || typeof bindings !== 'object' || Array.isArray(bindings)) {
+    rejectValidation(failure);
+  }
+  if (JSON.stringify(Object.keys(bindings).sort()) !== JSON.stringify([...BINDING_KINDS].sort())) {
+    rejectValidation(failure);
+  }
+  const ids = new Set();
+  for (const kind of BINDING_KINDS) {
+    const values = bindings[kind];
+    if (values === null || typeof values !== 'object' || Array.isArray(values)) {
+      rejectValidation(failure);
+    }
+    for (const [key, id] of Object.entries(values)) {
+      if (!domains[kind].has(key) || typeof id !== 'string' || !SNOWFLAKE.test(id) || ids.has(id)) {
+        rejectValidation(failure);
+      }
+      ids.add(id);
+    }
+  }
+}
+
+function validatePublicationBindingLinks(
+  bindings,
+  plan,
+  failure = { code: 'CHECKPOINT_RECOVERY_REJECTED', serious: true },
+) {
+  for (const publication of plan.blueprint.components_v2.publications) {
+    if (
+      bindings.publications[publication.key] !== undefined &&
+      bindings.channels[publication.channel_key] === undefined
+    ) {
+      rejectValidation(failure);
+    }
+  }
+}
+
+function validateCompletedOperationIds(
+  operationIds,
+  plan,
+  failure = { code: 'CHECKPOINT_RECOVERY_REJECTED', serious: true },
+) {
+  if (!Array.isArray(operationIds)) rejectValidation(failure);
+  const plannedOperationIds = new Set(plan.operations.map((operation) => operation.operation_id));
+  const completedOperationIds = new Set();
+  for (const operationId of operationIds) {
+    if (
+      typeof operationId !== 'string' ||
+      !plannedOperationIds.has(operationId) ||
+      completedOperationIds.has(operationId)
+    ) {
+      rejectValidation(failure);
+    }
+    completedOperationIds.add(operationId);
+  }
+}
+
+function mergeCheckpointBindings(current, recovered, domains) {
+  validateBlueprintBindings(recovered, domains);
+  if (current === null) return structuredClone(recovered);
+  validateBlueprintBindings(current, domains);
+  const merged = {};
+  for (const kind of BINDING_KINDS) {
+    merged[kind] = { ...current[kind] };
+    for (const [key, id] of Object.entries(recovered[kind])) {
+      if (merged[kind][key] !== undefined && merged[kind][key] !== id) {
+        fail('CHECKPOINT_RECOVERY_REJECTED', { serious: true });
+      }
+      merged[kind][key] = id;
+    }
+  }
+  validateBlueprintBindings(merged, domains);
+  return merged;
+}
+
+function recoverCheckpointBindings(checkpoint, plan, trial, current, latestCheckpointVersion) {
+  const record = assertRecord(checkpoint, 'CHECKPOINT_RECOVERY_REJECTED');
+  if (
+    record.schema_version !== 'guild_blueprint_checkpoint.v1' ||
+    record.plan_id !== plan.plan_id ||
+    record.blueprint_id !== plan.blueprint_id ||
+    !Number.isSafeInteger(record.version) ||
+    record.version < 0 ||
+    record.version < latestCheckpointVersion ||
+    !['applying', 'partial', 'complete'].includes(record.status)
+  ) {
+    fail('CHECKPOINT_RECOVERY_REJECTED', { serious: true });
+  }
+  assertTarget(record.target, trial, 'CHECKPOINT_RECOVERY_REJECTED');
+  validateCompletedOperationIds(record.completed_operation_ids, plan);
+  const domains = blueprintBindingDomains(plan);
+  const merged = mergeCheckpointBindings(current, record.bindings, domains);
+  validatePublicationBindingLinks(merged, plan);
+  return merged;
 }
 
 function nonterminalApplySummary(result) {
@@ -388,7 +544,11 @@ export async function runBenchmarkTrial(input) {
   const functional = [];
   let currentSession = null;
   let sessionOpenCount = 0;
+  let sessionTerminationUncertain = false;
+  let externalRecoveryWaitMs = 0;
   let applyCalls = 0;
+  let latestCheckpointVersion = -1;
+  let lastApplyResultUnavailable = false;
   let planRecoveryCount = 0;
   let planSnapshotUnchanged = false;
   let forcedResumeObserved = false;
@@ -415,6 +575,7 @@ export async function runBenchmarkTrial(input) {
       try {
         await session.close();
       } catch {
+        sessionTerminationUncertain = true;
         throw new TrialFailure('SESSION_CLOSE_FAILED');
       }
     }
@@ -430,17 +591,34 @@ export async function runBenchmarkTrial(input) {
   };
   const reopen = async (milliseconds) => {
     await closeCurrent();
+    if (
+      !Number.isSafeInteger(milliseconds) ||
+      milliseconds < 0 ||
+      externalRecoveryWaitMs + milliseconds > MAX_EXTERNAL_RECOVERY_WAIT_MS
+    ) {
+      fail('RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET');
+    }
+    externalRecoveryWaitMs += milliseconds;
     await sleep(milliseconds);
     await open();
   };
   const createApplyRecovery = () => {
     let recoveryCount = 0;
-    return async (error) => {
-      if (recoveryCount >= APPLY_RECOVERY_DELAYS_MS.length) return false;
-      const milliseconds = recoveryDelay(error, APPLY_RECOVERY_DELAYS_MS[recoveryCount]);
-      recoveryCount += 1;
-      await reopen(milliseconds);
-      return true;
+    let highestCompletedTotal = 0;
+    return {
+      observe(result) {
+        if (result.progress.completed_total > highestCompletedTotal) {
+          highestCompletedTotal = result.progress.completed_total;
+          recoveryCount = 0;
+        }
+      },
+      async recover(error) {
+        if (recoveryCount >= APPLY_RECOVERY_DELAYS_MS.length) return false;
+        const milliseconds = recoveryDelay(error, APPLY_RECOVERY_DELAYS_MS[recoveryCount]);
+        recoveryCount += 1;
+        await reopen(milliseconds);
+        return true;
+      },
     };
   };
   const callPlan = async () => {
@@ -474,14 +652,24 @@ export async function runBenchmarkTrial(input) {
           applyArgs(input, plan, operationBudget),
         );
       } catch (error) {
-        if (!retryableSessionError(error) || !(await recoverApply(error))) throw error;
+        lastApplyResultUnavailable = true;
+        if (!retryableSessionError(error) || !(await recoverApply.recover(error))) throw error;
         continue;
       }
-      return validateApply(rawApply, plan, trial);
+      lastApplyResultUnavailable = false;
+      const result = validateApply(rawApply, plan, trial);
+      recoverApply.observe(result);
+      return result;
     }
   };
   const rememberApply = (result) => {
     cleanup.bindings = structuredClone(result.evidence.bindings);
+    if (result.progress.checkpoint_version !== null) {
+      latestCheckpointVersion = Math.max(
+        latestCheckpointVersion,
+        result.progress.checkpoint_version,
+      );
+    }
     if (!SUCCESS_STATUSES.has(result.status)) {
       lastNonterminalApply = nonterminalApplySummary(result);
     }
@@ -545,7 +733,7 @@ export async function runBenchmarkTrial(input) {
         }
         if (
           !applyResponseNeedsRecovery(latestApply) ||
-          !(await forcedObservationRecovery(latestApply.error))
+          !(await forcedObservationRecovery.recover(latestApply.error))
         ) {
           fail('FORCED_RESUME_NOT_OBSERVED', { terminalStatus: latestApply.status });
         }
@@ -555,13 +743,19 @@ export async function runBenchmarkTrial(input) {
       await open();
     }
 
-    const mainApplyIterationLimit =
-      Math.ceil(operationsPlanned / MAIN_APPLY_OPERATION_BUDGET) +
-      APPLY_RECOVERY_DELAYS_MS.length +
-      1;
+    const plannedSlices = Math.max(1, Math.ceil(operationsPlanned / MAIN_APPLY_OPERATION_BUDGET));
+    const mainApplyIterationLimit = plannedSlices * (APPLY_RECOVERY_DELAYS_MS.length + 1) + 1;
+    let highestMainCompletedTotal = latestApply?.progress.completed_total ?? 0;
+    let consecutiveMainNoProgress = 0;
     for (let iteration = 0; iteration < mainApplyIterationLimit; iteration += 1) {
       latestApply = await callApply(MAIN_APPLY_OPERATION_BUDGET, mainApplyRecovery);
       rememberApply(latestApply);
+      if (latestApply.progress.completed_total > highestMainCompletedTotal) {
+        highestMainCompletedTotal = latestApply.progress.completed_total;
+        consecutiveMainNoProgress = 0;
+      } else {
+        consecutiveMainNoProgress += 1;
+      }
       if (SUCCESS_STATUSES.has(latestApply.status)) break;
       if (
         latestApply.status === 'partial' &&
@@ -569,9 +763,13 @@ export async function runBenchmarkTrial(input) {
         latestApply.next_action === 'resume' &&
         latestApply.blockers.length === 0
       ) {
+        if (consecutiveMainNoProgress >= APPLY_RECOVERY_DELAYS_MS.length) break;
         continue;
       }
-      if (applyResponseNeedsRecovery(latestApply) && (await mainApplyRecovery(latestApply.error))) {
+      if (
+        applyResponseNeedsRecovery(latestApply) &&
+        (await mainApplyRecovery.recover(latestApply.error))
+      ) {
         continue;
       }
       break;
@@ -593,7 +791,7 @@ export async function runBenchmarkTrial(input) {
     const replayRecovery = createApplyRecovery();
     let replay = await callApply(MAIN_APPLY_OPERATION_BUDGET, replayRecovery);
     rememberApply(replay);
-    while (applyResponseNeedsRecovery(replay) && (await replayRecovery(replay.error))) {
+    while (applyResponseNeedsRecovery(replay) && (await replayRecovery.recover(replay.error))) {
       replay = await callApply(MAIN_APPLY_OPERATION_BUDGET, replayRecovery);
       rememberApply(replay);
     }
@@ -661,7 +859,8 @@ export async function runBenchmarkTrial(input) {
           guildId: trial.guild_id,
           botId: trial.expected_bot_id,
         });
-      } catch {
+      } catch (error) {
+        if (error?.code === 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET') throw error;
         snapshotOracle = undefined;
         blueprintOracle = undefined;
         continue;
@@ -699,7 +898,8 @@ export async function runBenchmarkTrial(input) {
           beforeSnapshot: before,
           snapshot: after,
         });
-      } catch {
+      } catch (error) {
+        if (error?.code === 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET') throw error;
         auditTrail = undefined;
         auditOracle = undefined;
         continue;
@@ -740,6 +940,43 @@ export async function runBenchmarkTrial(input) {
       if (!functional.some((item) => item.code === 'SESSION_CLOSE_FAILED')) {
         functional.push({ code: 'SESSION_CLOSE_FAILED' });
       }
+    }
+  }
+
+  if (
+    !sessionTerminationUncertain &&
+    plan !== undefined &&
+    applyCalls > 0 &&
+    (lastApplyResultUnavailable || cleanup.bindings === null)
+  ) {
+    try {
+      const checkpoint = await dependencies.loadCheckpoint({
+        stateDirectory: input.stateDirectory,
+        planId: plan.plan_id,
+      });
+      if (checkpoint === null) {
+        fail('CHECKPOINT_RECOVERY_REJECTED', { serious: true });
+      }
+      cleanup.bindings = recoverCheckpointBindings(
+        checkpoint,
+        plan,
+        trial,
+        cleanup.bindings,
+        latestCheckpointVersion,
+      );
+    } catch {
+      if (!serious.some((item) => item.code === 'CHECKPOINT_RECOVERY_REJECTED')) {
+        serious.push({ code: 'CHECKPOINT_RECOVERY_REJECTED' });
+      }
+    }
+  }
+
+  if (sessionTerminationUncertain) {
+    cleanup.bindings = null;
+    cleanup.message_channel_ids = [];
+    cleanup.publication_targets = [];
+    if (!serious.some((item) => item.code === 'SESSION_TERMINATION_UNCONFIRMED')) {
+      serious.push({ code: 'SESSION_TERMINATION_UNCONFIRMED' });
     }
   }
 

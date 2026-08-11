@@ -160,7 +160,7 @@ describe('openMcpBenchmarkSession', () => {
     }
   });
 
-  it('preserves bounded retry metadata from a structured MCP tool error', async () => {
+  it('preserves long retry metadata from a structured MCP tool error', async () => {
     const session = await openMcpBenchmarkSession({
       cliPath: SERVER_PATH,
       cwd: resolve(import.meta.dirname, '../..'),
@@ -171,7 +171,7 @@ describe('openMcpBenchmarkSession', () => {
       structuredContent: {
         code: 'UPSTREAM_TIMEOUT',
         retriable: true,
-        retry_after_ms: 2_500,
+        retry_after_ms: 240_000,
       },
     });
 
@@ -180,7 +180,7 @@ describe('openMcpBenchmarkSession', () => {
         expect(error.code).toBe('UPSTREAM_TIMEOUT');
         expect(error.source).toBe('mcp_tool_result');
         expect(error.retriable).toBe(true);
-        expect(error.retryAfterMs).toBe(2_500);
+        expect(error.retryAfterMs).toBe(240_000);
         return true;
       });
     } finally {

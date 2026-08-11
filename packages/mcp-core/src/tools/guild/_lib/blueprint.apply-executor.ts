@@ -123,7 +123,7 @@ function unresolved(operation: BlueprintOperation): never {
 }
 
 const PUBLICATION_RETRY_DELAYS_MS = [250, 750, 1_500] as const;
-const MAX_PUBLICATION_RETRY_DELAY_MS = 30_000;
+const MAX_PUBLICATION_RETRY_DELAY_MS = 10_000;
 
 function errorStatus(error: unknown): number | undefined {
   if (typeof error !== 'object' || error === null) return undefined;
@@ -159,12 +159,12 @@ function publicationReadbackIsRetriable(error: unknown): boolean {
   return status === 404 || status === 429 || (status !== undefined && status >= 500);
 }
 
-function publicationReadbackDelay(error: unknown, fallbackMs: number): number {
+function publicationReadbackDelay(error: unknown, fallbackMs: number): number | null {
   if (!(error instanceof RateLimitError)) return fallbackMs;
-  return Math.min(
-    Math.max(fallbackMs, Math.ceil(error.retryAfter)),
-    MAX_PUBLICATION_RETRY_DELAY_MS,
-  );
+  const delayMs = Math.max(fallbackMs, Math.ceil(error.retryAfter));
+  return Number.isSafeInteger(delayMs) && delayMs <= MAX_PUBLICATION_RETRY_DELAY_MS
+    ? delayMs
+    : null;
 }
 
 async function readPublicationChannel(
@@ -198,7 +198,9 @@ async function readPublicationChannel(
           errorStatus(error),
         );
       }
-      await waitForPublicationRetry(signal, publicationReadbackDelay(error, delayMs));
+      const retryDelayMs = publicationReadbackDelay(error, delayMs);
+      if (retryDelayMs === null) throw error;
+      await waitForPublicationRetry(signal, retryDelayMs);
     }
   }
 }

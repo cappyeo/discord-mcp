@@ -63,6 +63,7 @@ exports[`public export surface > matches the frozen snapshot 1`] = `
   "formatErrorForUser",
   "getCtx",
   "interpolate",
+  "loadAuthenticatedBlueprintCheckpoint",
   "loadConfig",
   "preconditionMiddleware",
   "redactArgs",

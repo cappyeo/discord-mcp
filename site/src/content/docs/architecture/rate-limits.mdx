@@ -22,19 +22,21 @@ tool
   → Discord
 ```
 
-`@discordjs/rest` remains the rate-limit authority. It tracks route hashes,
-queues requests behind bucket resets, and waits/retries on 429 responses.
-discord-mcp does not disable this scheduler.
+`@discordjs/rest` remains the rate-limit authority. It tracks route hashes and
+global or route-bucket reset timing. discord-mcp configures
+`rejectOnRateLimit: () => true`, so a queued or surfaced limit becomes a
+`RateLimitError` instead of sleeping invisibly inside the SDK.
 
-The server constructs REST with `{ version: "10", retries: 0 }`. In
-`@discordjs/rest`, that `retries` option controls retries for server errors and
-timeouts; it does **not** disable the rate-limit queue or its 429 recursion.
-There is no `globalRequestsPerSecond: 0` override in the runtime.
+The server also sets `retries: 0`, leaving Cockatiel as the single retry owner.
+Known delays at or below `MCP_RETRY_MAX_DELAY_MS` may be honored inline. Longer
+delays surface without another HTTP attempt; resumable blueprint apply returns
+`retry_after_ms` so its caller can close the process, wait, and resume from the
+authenticated checkpoint.
 
 <Aside type="note">
-The outer Cockatiel policy may retry a transient error that escapes the REST
-client, but `MCP_RETRY_MAX_ATTEMPTS` does not bound the time
-`@discordjs/rest` spends waiting inside its own rate-limit scheduler.
+`MCP_RETRY_MAX_ATTEMPTS` bounds inline retry count, while
+`MCP_RETRY_MAX_DELAY_MS` bounds a known rate-limit window absorbed by one MCP
+request. It is never safe to clamp a longer Discord delay and retry early.
 </Aside>
 
 ## Local protection layers
@@ -42,7 +44,7 @@ client, but `MCP_RETRY_MAX_ATTEMPTS` does not bound the time
 | Layer | Runtime scope | Saturation behavior |
 | --- | --- | --- |
 | Bulkhead | All REST calls using the policy | Rejects immediately with `BULKHEAD_FULL`; queue size is zero. |
-| Circuit breaker | One shared breaker per built policy | Fast-fails with `CIRCUIT_OPEN` while open. |
+| Circuit breaker | One shared breaker per built policy | Fast-fails upstream/network failures with `CIRCUIT_OPEN`; known rate-limit windows do not open it. |
 | Retry | Selected transient failures | `MCP_RETRY_MAX_ATTEMPTS` is extra retries; disable with `MCP_RETRY_ENABLED=false`. |
 | Timeout | Each policy attempt | Can expire while an inner REST request is waiting; no dedicated timeout code today. |
 

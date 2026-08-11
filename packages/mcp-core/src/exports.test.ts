@@ -26,6 +26,7 @@ describe('public export surface', () => {
     expect(typeof api.createLogger).toBe('function');
     expect(typeof api.buildPolicy).toBe('function');
     expect(typeof api.wrapRestWithResilience).toBe('function');
+    expect(typeof api.loadAuthenticatedBlueprintCheckpoint).toBe('function');
   });
 
   it('exports no symbol whose value is undefined', () => {

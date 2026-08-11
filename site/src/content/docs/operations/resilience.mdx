@@ -37,6 +37,12 @@ Discord rate limits. Idempotent HTTP methods can be replayed. Non-idempotent
 requests are protected from replay when the outcome is ambiguous, because a
 second POST could duplicate the action.
 
+A known Discord `Retry-After` is retried inline only when it is at most
+`MCP_RETRY_MAX_DELAY_MS`. Longer windows surface without another HTTP attempt.
+Checkpointed workflows such as `guild_blueprint_apply` return the delay as
+`retry_after_ms`, allowing the caller to stop the MCP process, wait the full
+window, and resume the same target-bound plan.
+
 <Aside type="caution">
 The timeout sits inside retry, so it applies to each attempt. The current
 classifier does not convert or explicitly retry Cockatiel timeout cancellation;
@@ -46,11 +52,12 @@ a dedicated timeout code.
 
 ## Discord rate limits
 
-Discord's REST client still owns route-bucket scheduling and 429 handling.
-discord-mcp passes `{ retries: 0 }` to its constructor, which disables that
-constructor retry count; it does **not** remove the client's queue or every
-internal rate-limit behavior. The outer policy can also retry a surfaced 429,
-subject to replay safety and its retry budget.
+Discord's REST client still tracks route buckets and computes known limit
+windows. discord-mcp passes `{ retries: 0 }` and
+`rejectOnRateLimit: () => true`, making the outer policy the single owner of
+waiting and retry. It retries a surfaced 429 only when replay is safe and the
+known delay fits the bounded inline threshold. Known rate-limit windows do not
+count as upstream failures for the shared circuit breaker.
 
 See [Rate limits](/discord-mcp/architecture/rate-limits/) for the ownership
 boundary.

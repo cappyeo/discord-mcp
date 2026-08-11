@@ -433,9 +433,9 @@ describe('Discord benchmark REST snapshot', () => {
   });
 
   it.each([
-    ['body', { retry_after: 999_999 }],
-    ['header', {}, { 'retry-after': '999999' }],
-  ])('caps huge 429 %s Retry-After delays', async (_source, body, headers) => {
+    ['body', { retry_after: 45 }],
+    ['header', {}, { 'retry-after': '45' }],
+  ])('honors the full bounded 429 %s Retry-After', async (_source, body, headers) => {
     const sleep = vi.fn(async () => undefined);
     const fetchImpl = vi
       .fn()
@@ -449,6 +449,44 @@ describe('Discord benchmark REST snapshot', () => {
     });
 
     await expect(rest.get('/users/@me')).resolves.toEqual({ id: BOT_ID, bot: true });
-    expect(sleep).toHaveBeenCalledWith(30_000);
+    expect(sleep).toHaveBeenCalledWith(45_000);
+  });
+
+  it.each([
+    ['body', { retry_after: 999_999 }],
+    ['header', {}, { 'retry-after': '999999' }],
+  ])('rejects an unaffordable 429 %s Retry-After without retrying early', async (_source, body, headers) => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchImpl = vi.fn(async () => response(body, 429, headers));
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl, sleep });
+
+    await expect(rest.get('/users/@me')).rejects.toMatchObject({
+      code: 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
+      status: 429,
+      disposition: 'deterministic',
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('bounds cumulative Retry-After waits for one observer request', async () => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchImpl = vi.fn(async () => response({ retry_after: 300 }, 429));
+    const rest = createDiscordRestClient({
+      token: TOKEN,
+      fetchImpl,
+      sleep,
+      maxAttempts: 5,
+    });
+
+    await expect(rest.get('/users/@me')).rejects.toMatchObject({
+      code: 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
+      status: 429,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(sleep).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenNthCalledWith(1, 300_000);
+    expect(sleep).toHaveBeenNthCalledWith(2, 300_000);
+    expect(sleep).toHaveBeenNthCalledWith(3, 300_000);
   });
 });

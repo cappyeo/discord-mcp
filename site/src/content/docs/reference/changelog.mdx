@@ -47,6 +47,11 @@ commit history and downloadable artifacts, see
   re-runs live Discord reconciliation without a plan token, confirmation flag,
   lock, checkpoint write, or guild mutation. Blueprint conformance and exact
   whole-guild snapshot continuity are reported separately.
+- Long Discord rate-limit windows no longer sleep inside an MCP apply request or
+  get clamped into an early retry. Apply returns the exact millisecond delay,
+  the benchmark closes the child before waiting, and resume continues from an
+  authenticated checkpoint. Cleanup bindings are accepted only when they match
+  the signed plan, exact guild/bot target, and blueprint resource domains.
 - The source registry now contains 208 tools across the same 31 categories. The
   honest >=95% real-server benchmark remains the next delivery gate; mocked
   integration coverage is not reported as that result.

@@ -49,6 +49,7 @@ const ApplyErrorSchema = z
     code: z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/),
     retriable: z.boolean(),
     status: z.number().int().min(100).max(599).nullable(),
+    retry_after_ms: z.number().int().nonnegative().optional(),
   })
   .strict();
 
@@ -69,6 +70,7 @@ interface SafeApplyError {
   readonly code: string;
   readonly retriable: boolean;
   readonly status: number | null;
+  readonly retry_after_ms?: number;
 }
 
 interface ApplyAttempt {
@@ -185,11 +187,13 @@ export function safeApplyError(error: unknown, operationId: string | null): Safe
     };
   }
   if (error instanceof RateLimitError) {
+    const retryAfterMs = Math.max(0, Math.ceil(error.retryAfter));
     return {
       operation_id: operationId,
       code: 'DISCORD_RATE_LIMITED',
       retriable: true,
       status: 429,
+      ...(Number.isSafeInteger(retryAfterMs) ? { retry_after_ms: retryAfterMs } : {}),
     };
   }
   if (error instanceof TaskCancelledError) {

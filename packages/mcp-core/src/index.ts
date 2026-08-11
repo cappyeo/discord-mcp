@@ -117,6 +117,10 @@ export {
   wrapMessages,
   wrapUntrusted,
 } from './tools/_lib/untrusted.js';
+export {
+  type AuthenticatedBlueprintCheckpointOptions,
+  loadAuthenticatedBlueprintCheckpoint,
+} from './tools/guild/_lib/blueprint.checkpoint-store.js';
 
 /**
  * Package version, derived from package.json - the single source of truth.

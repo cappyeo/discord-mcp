@@ -1,3 +1,4 @@
+import { loadAuthenticatedBlueprintCheckpoint } from '@discord-mcp/core';
 import { readAuditCursor, readAuditTrail, verifyBlueprintAuditTrail } from './audit-trail.mjs';
 import { verifyBlueprintSnapshot } from './blueprint-oracle.mjs';
 import { createDiscordRestClient, readDiscordSnapshot } from './discord-rest.mjs';
@@ -33,5 +34,11 @@ export function createTrialDependencies({
     compareSnapshots,
     verifyBlueprintSnapshot,
     verifyAuditTrail: verifyBlueprintAuditTrail,
+    loadCheckpoint: ({ stateDirectory, planId }) =>
+      loadAuthenticatedBlueprintCheckpoint({
+        stateDirectory,
+        planId,
+        signingSecret: token,
+      }),
   };
 }

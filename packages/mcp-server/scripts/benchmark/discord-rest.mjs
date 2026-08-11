@@ -2,7 +2,7 @@ const DEFAULT_API_BASE = 'https://discord.com/api/v10';
 const SNOWFLAKE = /^\d{17,20}$/;
 const MESSAGE_PAGE_SIZE = 100;
 const MESSAGE_HISTORY_CONCURRENCY = 4;
-const MAX_RETRY_DELAY_MS = 30_000;
+const MAX_RETRY_AFTER_MS = 15 * 60_000;
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 export class DiscordRestError extends Error {
@@ -17,11 +17,15 @@ export class DiscordRestError extends Error {
   }
 }
 
-function restFailure(message, { status = null, discordCode = null, method, path }) {
+function restFailure(
+  message,
+  { status = null, discordCode = null, method, path, disposition: dispositionOverride },
+) {
   const disposition =
-    status === null || status === 429 || status >= 500 || (method === 'DELETE' && status === 404)
+    dispositionOverride ??
+    (status === null || status === 429 || status >= 500 || (method === 'DELETE' && status === 404)
       ? 'ambiguous'
-      : 'deterministic';
+      : 'deterministic');
   return new DiscordRestError(message, { status, discordCode, method, path, disposition });
 }
 
@@ -106,10 +110,16 @@ function retryDelay(response, body, attempt) {
   const bodySeconds = Number(body?.retry_after);
   const headerSeconds = Number(response.headers.get('retry-after'));
   if (Number.isFinite(bodySeconds) && bodySeconds >= 0) {
-    return Math.min(bodySeconds * 1_000, MAX_RETRY_DELAY_MS);
+    const milliseconds = Math.ceil(bodySeconds * 1_000);
+    return Number.isSafeInteger(milliseconds) && milliseconds <= MAX_RETRY_AFTER_MS
+      ? milliseconds
+      : null;
   }
   if (Number.isFinite(headerSeconds) && headerSeconds >= 0) {
-    return Math.min(headerSeconds * 1_000, MAX_RETRY_DELAY_MS);
+    const milliseconds = Math.ceil(headerSeconds * 1_000);
+    return Number.isSafeInteger(milliseconds) && milliseconds <= MAX_RETRY_AFTER_MS
+      ? milliseconds
+      : null;
   }
   return Math.min(250 * 2 ** attempt, 4_000);
 }
@@ -166,6 +176,7 @@ export function createDiscordRestClient({
       throw new TypeError('Discord REST path escaped the configured API base');
     }
     let lastError;
+    let accumulatedRetryWaitMs = 0;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (signal?.aborted) throw signal.reason;
       const timeout = AbortSignal.timeout(timeoutMs);
@@ -191,7 +202,18 @@ export function createDiscordRestClient({
           (response.status === 429 || response.status >= 500) &&
           attempt + 1 < maxAttempts
         ) {
-          await sleep(retryDelay(response, body, attempt));
+          const delay = retryDelay(response, body, attempt);
+          if (delay === null || accumulatedRetryWaitMs + delay > MAX_RETRY_AFTER_MS) {
+            throw restFailure('Discord REST Retry-After exceeds the benchmark wait budget', {
+              status: 429,
+              discordCode: 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
+              method,
+              path,
+              disposition: 'deterministic',
+            });
+          }
+          accumulatedRetryWaitMs += delay;
+          await sleep(delay);
           continue;
         }
         const code = body !== null && typeof body === 'object' ? body.code : undefined;

@@ -14,7 +14,8 @@ import { wrapRestWithResilience } from './resilient.js';
  *
  * Discord's 429 JSON body includes `retry_after` in seconds. Production REST
  * instances reject the SDK's internal wait as a `RateLimitError`; our
- * classifier gives its millisecond delay to Cockatiel, which owns the retry.
+ * classifier gives its millisecond delay to Cockatiel for bounded inline
+ * waits; longer delays surface immediately for resumable caller recovery.
  */
 
 function cfg(partial: Partial<Config> = {}): Config {
@@ -33,8 +34,8 @@ function cfg(partial: Partial<Config> = {}): Config {
     OTEL_CONSOLE_EXPORTER: false,
     MCP_RETRY_ENABLED: true,
     MCP_RETRY_MAX_ATTEMPTS: 3,
-    // Set base/max delays *much smaller* than retry-after so any delay >=
-    // retry-after must come from the retry-after path, not exponential.
+    // Keep the exponential base much smaller than Retry-After. Individual
+    // tests move the max-delay threshold to select inline or surfaced 429s.
     MCP_RETRY_BASE_DELAY_MS: 50,
     MCP_RETRY_MAX_DELAY_MS: 100,
     MCP_RETRY_JITTER: 'none',
@@ -111,7 +112,10 @@ describe('resilience 429 retry-after integration (Plan 8 C.5)', () => {
       { status: 200, body: '{"id":"after-cooldown"}' },
     ];
     const rejectOnRateLimit = vi.fn(() => true);
-    const rest = wrapRestWithResilience(buildRest(rejectOnRateLimit), buildPolicy(cfg()));
+    const rest = wrapRestWithResilience(
+      buildRest(rejectOnRateLimit),
+      buildPolicy(cfg({ MCP_RETRY_MAX_DELAY_MS: 2_000 })),
+    );
 
     await expect(rest.get('/channels/123')).resolves.toEqual({ id: 'warmup' });
     const start = Date.now();
@@ -139,7 +143,10 @@ describe('resilience 429 retry-after integration (Plan 8 C.5)', () => {
       },
       { status: 200, body: '{"id":"recovered"}' },
     ];
-    const rest = wrapRestWithResilience(buildRest(), buildPolicy(cfg()));
+    const rest = wrapRestWithResilience(
+      buildRest(),
+      buildPolicy(cfg({ MCP_RETRY_MAX_DELAY_MS: 2_000 })),
+    );
 
     const start = Date.now();
     const result = (await rest.post('/channels/123/messages', {
@@ -155,4 +162,29 @@ describe('resilience 429 retry-after integration (Plan 8 C.5)', () => {
     const gap = (requestTimestamps[1] ?? 0) - (requestTimestamps[0] ?? 0);
     expect(gap).toBeGreaterThanOrEqual(900);
   }, 10000);
+
+  it('surfaces a long Retry-After after one network attempt instead of sleeping internally', async () => {
+    scriptedResponses = [
+      {
+        status: 429,
+        body: JSON.stringify({
+          code: 0,
+          message: 'You are being rate limited.',
+          retry_after: 5.0,
+          global: false,
+        }),
+        headers: { 'retry-after': '5' },
+      },
+      { status: 200, body: '{"id":"must-not-be-called"}' },
+    ];
+    const rest = wrapRestWithResilience(buildRest(), buildPolicy(cfg()));
+
+    const start = Date.now();
+    await expect(
+      rest.post('/channels/123/messages', { body: { content: 'hi' } }),
+    ).rejects.toMatchObject({ retryAfter: expect.any(Number) });
+
+    expect(requestTimestamps).toHaveLength(1);
+    expect(Date.now() - start).toBeLessThan(2_000);
+  }, 3_000);
 });

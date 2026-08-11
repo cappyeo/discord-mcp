@@ -88,6 +88,20 @@ describe('buildPolicy (Plan 8 C.1)', () => {
     expect(elapsed).toBeGreaterThanOrEqual(200);
   });
 
+  it('surfaces a long Discord Retry-After instead of sleeping inside one tool call', async () => {
+    const policy = buildPolicy(cfg({ MCP_RETRY_MAX_ATTEMPTS: 3, MCP_RETRY_MAX_DELAY_MS: 500 }));
+    const rateLimit = new DiscordRetryableError(new Error('429'), 501);
+    let attempts = 0;
+
+    await expect(
+      policy.execute(async () => {
+        attempts++;
+        throw rateLimit;
+      }),
+    ).rejects.toBe(rateLimit);
+    expect(attempts).toBe(1);
+  });
+
   it('does NOT retry non-DiscordRetryableError (raw 4xx) - bubbles immediately', async () => {
     const policy = buildPolicy(cfg({ MCP_RETRY_MAX_ATTEMPTS: 5 }));
 
@@ -297,6 +311,28 @@ describe('buildPolicy: circuit breaker (Plan 8 D.1)', () => {
 
     // The breaker is still closed: a subsequent retryable error should
     // run the inner fn (the circuit isn't open).
+    let invoked = false;
+    await expect(
+      policy.execute(async () => {
+        invoked = true;
+        throw new DiscordRetryableError(new Error('5xx'), null);
+      }),
+    ).rejects.toBeInstanceOf(DiscordRetryableError);
+    expect(invoked).toBe(true);
+  });
+
+  it('does not open the upstream circuit for known Discord rate-limit windows', async () => {
+    const policy = buildPolicy(circuitOnly({ MCP_CIRCUIT_FAILURE_THRESHOLD: 3 }));
+    const rateLimit = new DiscordRetryableError(new Error('429'), 60_000);
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        policy.execute(async () => {
+          throw rateLimit;
+        }),
+      ).rejects.toBe(rateLimit);
+    }
+
     let invoked = false;
     await expect(
       policy.execute(async () => {

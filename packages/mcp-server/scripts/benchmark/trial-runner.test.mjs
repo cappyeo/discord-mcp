@@ -126,6 +126,21 @@ function evidence() {
   };
 }
 
+function checkpoint(overrides = {}) {
+  return {
+    schema_version: 'guild_blueprint_checkpoint.v1',
+    plan_id: PLAN_ID,
+    blueprint_id: BLUEPRINT_ID,
+    target: { guild_id: GUILD_ID, bot_id: BOT_ID },
+    version: 2,
+    status: 'partial',
+    bindings: bindings(),
+    completed_operation_ids: ['channel:create:general', 'publication:welcome'],
+    last_error: null,
+    ...overrides,
+  };
+}
+
 function harness(
   mode,
   {
@@ -140,13 +155,20 @@ function harness(
     planCallFailures = 0,
     applyTransportFailures = 0,
     retriableApplyResponses = 0,
+    retriableApplyRetryAfterMs,
     retriableVerificationResponses = 0,
     retriableForcedObservationResponses = 0,
     retriableMainApplyResponses = 0,
+    progressingRetriableMainApplyResponses = 0,
+    progressingRetryAfterMs = 0,
     retriableReplayResponses = 0,
     nonRetriableApplyResponse = false,
     operationsPlanned = 2,
     nonProgressingMainApplyResponses = 0,
+    completeBindingsOverride = null,
+    completeCompletedOperationIds = null,
+    checkpointResult = null,
+    checkpointFailure = null,
     snapshotSettlesAfter = 1,
     auditSettlesAfter = 1,
   } = {},
@@ -162,6 +184,7 @@ function harness(
   let remainingRetriableVerificationResponses = retriableVerificationResponses;
   let remainingRetriableForcedObservationResponses = retriableForcedObservationResponses;
   let remainingRetriableMainApplyResponses = retriableMainApplyResponses;
+  let remainingProgressingRetriableMainApplyResponses = progressingRetriableMainApplyResponses;
   let remainingRetriableReplayResponses = retriableReplayResponses;
   let remainingNonProgressingMainApplyResponses = nonProgressingMainApplyResponses;
   let nonRetriableApplyReturned = false;
@@ -207,6 +230,9 @@ function harness(
               code: 'UPSTREAM_TIMEOUT',
               retriable: true,
               status: null,
+              ...(retriableApplyRetryAfterMs === undefined
+                ? {}
+                : { retry_after_ms: retriableApplyRetryAfterMs }),
             },
           });
         }
@@ -237,6 +263,37 @@ function harness(
               status: null,
             },
           });
+        }
+        if (
+          !completedApply &&
+          (mode !== 'forced_resume' || forcedPartialObserved) &&
+          remainingProgressingRetriableMainApplyResponses > 0
+        ) {
+          const completedTotal =
+            progressingRetriableMainApplyResponses -
+            remainingProgressingRetriableMainApplyResponses +
+            1;
+          remainingProgressingRetriableMainApplyResponses -= 1;
+          const result = applyResult(
+            'partial',
+            0,
+            Math.max(1, operationsPlanned - completedTotal),
+            generatedChannelId,
+            generatedMessageId,
+            {
+              error: {
+                operation_id: null,
+                code: 'DISCORD_RATE_LIMITED',
+                retriable: true,
+                status: 429,
+                retry_after_ms: progressingRetryAfterMs,
+              },
+            },
+          );
+          result.progress.initial_planned = operationsPlanned;
+          result.progress.completed_total = completedTotal;
+          result.progress.checkpoint_version = completedTotal;
+          return result;
         }
         if (
           !completedApply &&
@@ -300,7 +357,14 @@ function harness(
           return applyResult('already_current', 0, 0, generatedChannelId, generatedMessageId);
         }
         completedApply = true;
-        return applyResult('complete', 1, 0, generatedChannelId, generatedMessageId);
+        const completed = applyResult('complete', 1, 0, generatedChannelId, generatedMessageId);
+        if (completeBindingsOverride !== null) {
+          completed.evidence.bindings = structuredClone(completeBindingsOverride);
+        }
+        if (completeCompletedOperationIds !== null) {
+          completed.evidence.completed_operation_ids = [...completeCompletedOperationIds];
+        }
+        return completed;
       },
       async close() {
         this.closed = true;
@@ -315,11 +379,13 @@ function harness(
   let auditCall = 0;
   const snapshotRequests = [];
   const settleSleeps = [];
+  const checkpointLoads = [];
   return {
     sessions,
     applyBudgets,
     snapshotRequests,
     settleSleeps,
+    checkpointLoads,
     dependencies: {
       openSession,
       async readSnapshot({ messageChannelIds }) {
@@ -375,6 +441,11 @@ function harness(
       },
       verifyAuditTrail() {
         return { pass: true, serious_permission_failures: [], functional_failures: [] };
+      },
+      async loadCheckpoint(options) {
+        checkpointLoads.push(structuredClone(options));
+        if (checkpointFailure !== null) throw checkpointFailure;
+        return checkpointResult === null ? null : structuredClone(checkpointResult);
       },
       async sleep(milliseconds) {
         settleSleeps.push(milliseconds);
@@ -468,6 +539,33 @@ describe('real benchmark trial orchestration', () => {
     assert.ok(test.sessions.every((session) => session.closed));
   });
 
+  it('waits the exact bounded Discord Retry-After outside the MCP child', async () => {
+    const test = harness('full', {
+      retriableApplyResponses: 1,
+      retriableApplyRetryAfterMs: 240_000,
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.deepEqual(test.settleSleeps, [240_000]);
+  });
+
+  it('fails closed instead of retrying before an unaffordable Retry-After', async () => {
+    const test = harness('full', {
+      retriableApplyResponses: 1,
+      retriableApplyRetryAfterMs: 900_001,
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'error');
+    assert.deepEqual(test.settleSleeps, []);
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
+      ),
+    );
+  });
+
   it('reconnects and resumes the same plan after a retriable apply timeout', async () => {
     const test = harness('full', { retriableApplyResponses: 1 });
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
@@ -522,7 +620,78 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.restart_count, 2);
   });
 
-  it('derives a bounded apply loop from a large plan instead of a fixed call count', async () => {
+  it('recovers cleanup bindings from an authenticated checkpoint after every apply response is lost', async () => {
+    const persisted = checkpoint();
+    const test = harness('full', {
+      applyTransportFailures: 6,
+      checkpointResult: persisted,
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'error');
+    assert.equal(outcome.result.apply_calls, 6);
+    assert.deepEqual(test.settleSleeps, [1_000, 2_000, 4_000, 8_000, 16_000]);
+    assert.deepEqual(test.checkpointLoads, [
+      { stateDirectory: 'C:\\state\\full', planId: PLAN_ID },
+    ]);
+    assert.deepEqual(outcome.cleanup.bindings, persisted.bindings);
+    assert.deepEqual(outcome.cleanup.publication_targets, [
+      { channel_id: CHANNEL_ID, message_id: MESSAGE_ID },
+    ]);
+  });
+
+  it('rejects checkpoint cleanup recovered for a different target', async () => {
+    const test = harness('full', {
+      applyTransportFailures: 6,
+      checkpointResult: checkpoint({
+        target: { guild_id: '111000111000111000', bot_id: BOT_ID },
+      }),
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.cleanup.bindings, null);
+    assert.ok(
+      outcome.result.serious_permission_failures.some(
+        (failure) => failure.code === 'CHECKPOINT_RECOVERY_REJECTED',
+      ),
+    );
+  });
+
+  it('rejects a tampered checkpoint loader result without using its bindings', async () => {
+    const test = harness('full', {
+      applyTransportFailures: 6,
+      checkpointFailure: Object.assign(new Error('checkpoint auth failed'), {
+        code: 'CHECKPOINT_TAMPERED',
+      }),
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.cleanup.bindings, null);
+    assert.ok(
+      outcome.result.serious_permission_failures.some(
+        (failure) => failure.code === 'CHECKPOINT_RECOVERY_REJECTED',
+      ),
+    );
+  });
+
+  it('rejects a checkpoint binding that conflicts with the last trusted response', async () => {
+    const test = harness('forced_resume', {
+      failResume: true,
+      checkpointResult: checkpoint({
+        bindings: bindings(GENERATED_CHANNEL_ID, MESSAGE_ID),
+      }),
+    });
+    const outcome = await runBenchmarkTrial(input('forced_resume', test.dependencies));
+
+    assert.deepEqual(outcome.cleanup.bindings, bindings());
+    assert.ok(
+      outcome.result.serious_permission_failures.some(
+        (failure) => failure.code === 'CHECKPOINT_RECOVERY_REJECTED',
+      ),
+    );
+  });
+
+  it('stops after a bounded number of consecutive no-progress responses', async () => {
     const test = harness('full', {
       operationsPlanned: 46,
       nonProgressingMainApplyResponses: 20,
@@ -530,14 +699,77 @@ describe('real benchmark trial orchestration', () => {
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
 
     assert.equal(outcome.result.terminal_status, 'partial');
-    assert.equal(outcome.result.apply_calls, 11);
+    assert.equal(outcome.result.apply_calls, 5);
     assert.deepEqual(
       test.applyBudgets,
-      Array.from({ length: 11 }, () => 10),
+      Array.from({ length: 5 }, () => 10),
     );
     assert.ok(
       outcome.result.functional_failures.some(
         (failure) => failure.code === 'APPLY_DID_NOT_COMPLETE',
+      ),
+    );
+  });
+
+  it('resets the bounded recovery budget when apply makes real progress', async () => {
+    const test = harness('full', {
+      operationsPlanned: 7,
+      progressingRetriableMainApplyResponses: 6,
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.deepEqual(
+      test.settleSleeps,
+      Array.from({ length: 6 }, () => 1_000),
+    );
+    assert.equal(outcome.result.apply_calls, 8);
+  });
+
+  it('bounds cumulative external recovery waits even when every response makes progress', async () => {
+    const test = harness('full', {
+      operationsPlanned: 5,
+      progressingRetriableMainApplyResponses: 4,
+      progressingRetryAfterMs: 240_000,
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'error');
+    assert.deepEqual(test.settleSleeps, [240_000, 240_000, 240_000]);
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
+      ),
+    );
+  });
+
+  it('rejects apply bindings outside the signed blueprint domain before cleanup', async () => {
+    const test = harness('full', {
+      completeBindingsOverride: {
+        ...bindings(),
+        channels: { foreign: CHANNEL_ID },
+      },
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.cleanup.bindings, null);
+    assert.ok(
+      outcome.result.serious_permission_failures.some(
+        (failure) => failure.code === 'APPLY_BINDINGS_INVALID',
+      ),
+    );
+  });
+
+  it('rejects unknown or duplicate completed operation evidence', async () => {
+    const test = harness('full', {
+      completeCompletedOperationIds: ['channel:create:general', 'unknown:operation'],
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.cleanup.bindings, null);
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'APPLY_RESPONSE_INVALID',
       ),
     );
   });
@@ -712,7 +944,7 @@ describe('real benchmark trial orchestration', () => {
     );
   });
 
-  it('returns structured cleanup metadata when the final MCP session fails to close', async () => {
+  it('quarantines cleanup when MCP session termination cannot be confirmed', async () => {
     const test = harness('full', { closeFailure: true });
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
 
@@ -720,10 +952,13 @@ describe('real benchmark trial orchestration', () => {
     assert.ok(
       outcome.result.functional_failures.some((item) => item.code === 'SESSION_CLOSE_FAILED'),
     );
-    assert.deepEqual(outcome.cleanup.publication_targets, [
-      { channel_id: CHANNEL_ID, message_id: MESSAGE_ID },
-    ]);
-    assert.deepEqual(outcome.cleanup.bindings, bindings());
+    assert.deepEqual(outcome.cleanup.publication_targets, []);
+    assert.equal(outcome.cleanup.bindings, null);
+    assert.ok(
+      outcome.result.serious_permission_failures.some(
+        (item) => item.code === 'SESSION_TERMINATION_UNCONFIRMED',
+      ),
+    );
   });
 
   it('fails closed before apply when the read-only plan changes Discord state', async () => {

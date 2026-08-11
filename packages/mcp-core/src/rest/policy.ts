@@ -7,7 +7,6 @@ import {
   decorrelatedJitterGenerator,
   ExponentialBackoff,
   fullJitterGenerator,
-  handleType,
   handleWhen,
   type IBackoff,
   type IPolicy,
@@ -36,7 +35,7 @@ import { DiscordRetryableError } from './errors.js';
  *
  * Layout (outer → inner) when all features enabled:
  *   bulkhead(MCP_BULKHEAD_LIMIT, queueSize=0)              ← fast-reject when over limit
- *     └─ circuitBreaker(handleAll.orType(DiscordRetryableError),
+ *     └─ circuitBreaker(retryable upstream failures without Retry-After,
  *                       ConsecutiveBreaker(MCP_CIRCUIT_FAILURE_THRESHOLD),
  *                       halfOpenAfter=MCP_CIRCUIT_HALF_OPEN_AFTER_MS)
  *          └─ retry(handleType(DiscordRetryableError))    ← MCP_RETRY_ENABLED
@@ -122,8 +121,17 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   // genuine upstream failure (the breaker below must count it) that must never
   // be re-sent: the write may already have landed at Discord and only the
   // response was lost.
+  // Short 429 waits are cheap to absorb here. A longer Retry-After must escape
+  // to the tool response so an MCP call never sleeps past the client's request
+  // deadline; resumable tools can checkpoint and let the caller wait outside
+  // the server process.
   const retryPolicy = retry(
-    handleWhen((e) => e instanceof DiscordRetryableError && e.replaySafe),
+    handleWhen(
+      (e) =>
+        e instanceof DiscordRetryableError &&
+        e.replaySafe &&
+        (e.retryAfterMs === null || e.retryAfterMs <= config.MCP_RETRY_MAX_DELAY_MS),
+    ),
     {
       maxAttempts: config.MCP_RETRY_MAX_ATTEMPTS,
       backoff: customBackoff,
@@ -145,20 +153,26 @@ export function buildPolicy(config: Config, logger?: Logger): IPolicy {
   });
 
   // --- Circuit breaker (Plan 8 D.1) ---
-  // Built only when MCP_CIRCUIT_ENABLED. The breaker matches the TYPE, while
-  // retry additionally requires `replaySafe`. That gap is deliberate: an
-  // ambiguous POST failure must count toward opening the circuit without ever
-  // being re-sent. Non-retryable 4xx is not wrapped at all, so it still
-  // bubbles through WITHOUT incrementing the consecutive-failure counter. This matches Plan 8 §13: "Non-retryable Discord errors (4xx)
+  // Built only when MCP_CIRCUIT_ENABLED. Known Discord rate-limit windows do
+  // not indicate upstream unavailability and must not open the global circuit.
+  // Other retryable failures still count even when `replaySafe` is false: an
+  // ambiguous POST failure must open the circuit without ever being re-sent.
+  // Non-retryable 4xx is not wrapped, so it bubbles through WITHOUT
+  // incrementing the consecutive-failure counter. This matches Plan 8 §13: "Non-retryable Discord errors (4xx)
   // bubble through breaker WITHOUT incrementing failure count."
   // (Spec called for `handleAll.orType(DiscordRetryableError)` but that
   // would treat every error as a circuit failure - including validation
   // 4xx - which is misleading.)
   const breaker = config.MCP_CIRCUIT_ENABLED
-    ? circuitBreaker(handleType(DiscordRetryableError), {
-        halfOpenAfter: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
-        breaker: new ConsecutiveBreaker(config.MCP_CIRCUIT_FAILURE_THRESHOLD),
-      })
+    ? circuitBreaker(
+        handleWhen(
+          (error) => error instanceof DiscordRetryableError && error.retryAfterMs === null,
+        ),
+        {
+          halfOpenAfter: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
+          breaker: new ConsecutiveBreaker(config.MCP_CIRCUIT_FAILURE_THRESHOLD),
+        },
+      )
     : null;
 
   if (breaker !== null) {

@@ -215,10 +215,13 @@ async function readLock(
   return record === null ? null : { record, stat: lockStat };
 }
 
-export interface BlueprintCheckpointStoreOptions {
+export interface AuthenticatedBlueprintCheckpointOptions {
   readonly stateDirectory: string;
   readonly planId: string;
   readonly signingSecret: string;
+}
+
+interface BlueprintCheckpointStoreOptions extends AuthenticatedBlueprintCheckpointOptions {
   readonly now?: () => number;
   readonly staleLockMs?: number;
 }
@@ -714,6 +717,12 @@ export class BlueprintCheckpointStore {
       },
     };
   }
+}
+
+export async function loadAuthenticatedBlueprintCheckpoint(
+  options: AuthenticatedBlueprintCheckpointOptions,
+): Promise<BlueprintCheckpoint | null> {
+  return new BlueprintCheckpointStore(options).load();
 }
 
 function isAlreadyExists(error: unknown): boolean {

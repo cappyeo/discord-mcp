@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   BlueprintCheckpointStore,
   BlueprintCheckpointStoreError,
+  loadAuthenticatedBlueprintCheckpoint,
 } from './blueprint.checkpoint-store.js';
 import { type BlueprintCheckpoint, emptyBlueprintBindings } from './blueprint.execution.schema.js';
 
@@ -66,6 +67,61 @@ describe('BlueprintCheckpointStore', () => {
       expect(statSync(planDirectory).mode & 0o777).toBe(0o700);
       expect(statSync(join(planDirectory, 'checkpoint-v1.json')).mode & 0o777).toBe(0o600);
     }
+  });
+
+  it('loads the highest authenticated checkpoint through the narrow loader seam', async () => {
+    const stateDirectory = makeDirectory();
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+    });
+
+    await store.save(checkpoint(0));
+    await store.save(checkpoint(1));
+
+    await expect(
+      loadAuthenticatedBlueprintCheckpoint({
+        stateDirectory,
+        planId: PLAN_ID,
+        signingSecret: SIGNING_SECRET,
+      }),
+    ).resolves.toMatchObject({ version: 1 });
+  });
+
+  it('fails closed through the loader seam for a wrong secret and tampering', async () => {
+    const stateDirectory = makeDirectory();
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+    });
+    await store.save(checkpoint(0));
+
+    await expect(
+      loadAuthenticatedBlueprintCheckpoint({
+        stateDirectory,
+        planId: PLAN_ID,
+        signingSecret: 'wrong-checkpoint-signing-secret',
+      }),
+    ).rejects.toMatchObject({ code: 'CHECKPOINT_TAMPERED' });
+
+    const planDirectory = join(stateDirectory, 'a'.repeat(64));
+    const envelope = JSON.parse(
+      readFileSync(join(planDirectory, 'checkpoint-v0.json'), 'utf8'),
+    ) as { checkpoint: { version: number }; auth_tag: string };
+    envelope.checkpoint.version = 1;
+    writeFileSync(join(planDirectory, 'checkpoint-v1.json'), JSON.stringify(envelope), {
+      mode: 0o600,
+    });
+
+    await expect(
+      loadAuthenticatedBlueprintCheckpoint({
+        stateDirectory,
+        planId: PLAN_ID,
+        signingSecret: SIGNING_SECRET,
+      }),
+    ).rejects.toMatchObject({ code: 'CHECKPOINT_TAMPERED' });
   });
 
   it('fails closed when the highest checkpoint is malformed', async () => {

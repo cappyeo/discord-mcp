@@ -57,11 +57,7 @@ function toolResultError(name, data) {
   const error = sessionError(`${name} failed (${code})`, code, 'mcp_tool_result');
   if (data !== null && typeof data === 'object') {
     if (typeof data.retriable === 'boolean') error.retriable = data.retriable;
-    if (
-      Number.isInteger(data.retry_after_ms) &&
-      data.retry_after_ms >= 0 &&
-      data.retry_after_ms <= 120_000
-    ) {
+    if (Number.isSafeInteger(data.retry_after_ms) && data.retry_after_ms >= 0) {
       error.retryAfterMs = data.retry_after_ms;
     }
   }
