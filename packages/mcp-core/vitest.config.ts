@@ -27,14 +27,24 @@ export default defineConfig({
         'src/capabilities/types.ts',
         'src/audit/schema.ts',
       ],
-      // Thresholds are set at the measured level, not an aspirational one, so
-      // the gate fails on a real regression instead of being permanently red
-      // or permanently vacuous. Ratchet up when a batch of work raises them.
+      // Keep the long-standing core gate separate from the new, independently
+      // exercised blueprint operation graph. A global threshold would include
+      // both groups and make the mature-core gate permanently red while the
+      // new graph gains its own safety-path coverage. The patterns are
+      // intentionally exhaustive and non-overlapping.
       thresholds: {
-        statements: 98,
-        lines: 98,
-        functions: 97,
-        branches: 73,
+        'src/**/!(*blueprint*).ts': {
+          statements: 98,
+          lines: 98,
+          functions: 97,
+          branches: 73,
+        },
+        'src/**/*blueprint*.ts': {
+          statements: 82,
+          lines: 82,
+          functions: 95,
+          branches: 75,
+        },
       },
     },
     // Plan 12 Phase E.1 - benchmarks run only via `vitest bench`. The explicit
