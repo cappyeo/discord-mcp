@@ -174,6 +174,25 @@ test('accepts the canonical 20-trial manifest and reports truthful guild reuse',
   });
 });
 
+test('validates additive baseline restore attempt telemetry without breaking older results', () => {
+  const manifest = makeManifest();
+  const results = makeResults(manifest);
+  results[0].baseline_restore_attempts = 2;
+  assert.equal(
+    createBenchmarkReport(manifest, results, safetyCases()).results[0].baseline_restore_attempts,
+    2,
+  );
+
+  for (const invalid of [-1, 1.5, '1']) {
+    const invalidResults = makeResults(manifest);
+    invalidResults[0].baseline_restore_attempts = invalid;
+    assert.throws(
+      () => createBenchmarkReport(manifest, invalidResults, safetyCases()),
+      /baseline_restore_attempts.*nonnegative integer/,
+    );
+  }
+});
+
 test('does not accept a startup failure as a wrong-guild safety pass', () => {
   const manifest = makeManifest();
   const cases = safetyCases();

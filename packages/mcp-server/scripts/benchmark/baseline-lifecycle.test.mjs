@@ -4,6 +4,7 @@ import {
   restoreBenchmarkBaseline,
   verifyBenchmarkBaseline,
 } from './baseline-lifecycle.mjs';
+import { DiscordRestError } from './discord-rest.mjs';
 
 const GUILD = '999000999000999000';
 const BOT = '888000888000888000';
@@ -167,7 +168,12 @@ function dependencies(state, { drift = false } = {}) {
     },
     snapshotFingerprint(snapshot) {
       if (drift) return `${FP.slice(0, -1)}b`;
-      return snapshot.roles.some((role) => role.id === EXTRA_ROLE) ? 'sha256:generated' : FP;
+      const generated =
+        snapshot.roles.some((role) => role.id === EXTRA_ROLE) ||
+        snapshot.channels.some((channel) => [EXTRA_CATEGORY, EXTRA_CHANNEL].includes(channel.id)) ||
+        snapshot.automod_rules.some((rule) => rule.id === RULE) ||
+        Object.values(snapshot.recent_messages).some((messages) => messages.length > 0);
+      return generated ? 'sha256:generated' : FP;
     },
   };
 }
@@ -278,6 +284,80 @@ describe('benchmark baseline lifecycle', () => {
       }),
     ).rejects.toThrow('confirmation');
     expect(reads).toHaveLength(0);
+    expect(mutations).toHaveLength(0);
+  });
+
+  it('classifies an unavailable preflight read without authorizing readback confirmation', async () => {
+    const mutations = [];
+
+    await expect(
+      restoreBenchmarkBaseline({
+        rest: { request: async (...args) => mutations.push(args) },
+        async readSnapshot() {
+          throw new DiscordRestError('temporary snapshot transport failure', {
+            method: 'GET',
+            path: `/guilds/${GUILD}`,
+            disposition: 'ambiguous',
+          });
+        },
+        snapshotFingerprint: () => FP,
+        baseline: makeBaseline(),
+        ...RESTORE_TARGET_GUARD,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
+          publication_targets: [],
+          bindings: {
+            roles: {},
+            categories: {},
+            channels: {},
+            automod_rules: {},
+            publications: {},
+          },
+        },
+        reason: 'preflight classification regression',
+      }),
+    ).rejects.toMatchObject({
+      code: 'RESTORE_PREFLIGHT_UNAVAILABLE',
+      retryable: true,
+      preflightVerified: false,
+      readbackMayConfirm: false,
+    });
+
+    await expect(
+      restoreBenchmarkBaseline({
+        rest: { request: async (...args) => mutations.push(args) },
+        async readSnapshot() {
+          throw new DiscordRestError('Discord REST 403', {
+            status: 403,
+            method: 'GET',
+            path: `/guilds/${GUILD}`,
+            disposition: 'deterministic',
+          });
+        },
+        snapshotFingerprint: () => FP,
+        baseline: makeBaseline(),
+        ...RESTORE_TARGET_GUARD,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
+          publication_targets: [],
+          bindings: {
+            roles: {},
+            categories: {},
+            channels: {},
+            automod_rules: {},
+            publications: {},
+          },
+        },
+        reason: 'preflight deterministic regression',
+      }),
+    ).rejects.toMatchObject({
+      code: 'RESTORE_SAFETY_VIOLATION',
+      retryable: false,
+      preflightVerified: false,
+      readbackMayConfirm: false,
+    });
     expect(mutations).toHaveLength(0);
   });
 
@@ -621,12 +701,14 @@ describe('benchmark baseline lifecycle', () => {
         return null;
       },
     };
-    const result = await restoreBenchmarkBaseline({
+    const restoreInput = {
       rest,
       ...dependencies(state),
       baseline: makeBaseline(),
       ...RESTORE_TARGET_GUARD,
       cleanup: {
+        guild_id: GUILD,
+        bot_id: BOT,
         publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
         bindings: {
           roles: { member: EXTRA_ROLE },
@@ -637,7 +719,8 @@ describe('benchmark baseline lifecycle', () => {
         },
       },
       reason: 'benchmark restore',
-    });
+    };
+    const result = await restoreBenchmarkBaseline(restoreInput);
     expect(result.restored).toBe(true);
     const deletes = calls.filter(([method]) => method === 'DELETE').map(([, path]) => path);
     expect(deletes.indexOf(`/channels/${EXTRA_CHANNEL}`)).toBeLessThan(
@@ -662,6 +745,130 @@ describe('benchmark baseline lifecycle', () => {
     expect(calls.findIndex(([, path]) => path === `/guilds/${GUILD}`)).toBeLessThan(
       calls.findIndex(([, path]) => path === `/channels/${EXTRA_CHANNEL}`),
     );
+
+    const callCountBeforeWrongBaseline = calls.length;
+    await expect(
+      restoreBenchmarkBaseline({
+        ...restoreInput,
+        baseline: { ...restoreInput.baseline, fingerprint: `sha256:${'b'.repeat(64)}` },
+        retryProof: result.retryProof,
+      }),
+    ).rejects.toMatchObject({ code: 'RESTORE_SAFETY_VIOLATION' });
+    expect(calls).toHaveLength(callCountBeforeWrongBaseline);
+
+    const replay = await restoreBenchmarkBaseline({
+      ...restoreInput,
+      retryProof: result.retryProof,
+    });
+    expect(replay).toMatchObject({
+      restored: true,
+      fingerprint: FP,
+      deleted: { messages: 0, automod_rules: 0, channels: 0, roles: 0 },
+    });
+  });
+
+  it('resumes cleanup when some frozen bindings were already deleted', async () => {
+    const state = { snapshot: currentSnapshot() };
+    let failCategoryDelete = true;
+    const calls = [];
+    const rest = {
+      async request(method, path) {
+        calls.push([method, path]);
+        if (method === 'DELETE' && path.includes(`/messages/${MESSAGE}`)) {
+          state.snapshot.recent_messages = {};
+          return null;
+        }
+        if (method === 'DELETE' && path.includes(`/auto-moderation/rules/${RULE}`)) {
+          state.snapshot.automod_rules = [];
+          return null;
+        }
+        if (method === 'DELETE' && path === `/channels/${EXTRA_CHANNEL}`) {
+          state.snapshot.channels = state.snapshot.channels.filter(
+            (item) => item.id !== EXTRA_CHANNEL,
+          );
+          return null;
+        }
+        if (method === 'DELETE' && path === `/channels/${EXTRA_CATEGORY}`) {
+          if (failCategoryDelete) throw new Error('transport closed during category delete');
+          state.snapshot.channels = state.snapshot.channels.filter(
+            (item) => item.id !== EXTRA_CATEGORY,
+          );
+          return null;
+        }
+        if (method === 'DELETE' && path.endsWith(`/roles/${EXTRA_ROLE}`)) {
+          state.snapshot.roles = state.snapshot.roles.filter((item) => item.id !== EXTRA_ROLE);
+          return null;
+        }
+        if (path === `/guilds/${GUILD}`) return structuredClone(state.snapshot.guild);
+        if (path.endsWith('/onboarding')) return structuredClone(state.snapshot.onboarding);
+        if (path.endsWith('/welcome-screen')) return structuredClone(state.snapshot.welcome_screen);
+        return null;
+      },
+    };
+
+    const partialRestore = {
+      rest,
+      ...dependencies(state),
+      baseline: makeBaseline(),
+      ...RESTORE_TARGET_GUARD,
+      cleanup: {
+        guild_id: GUILD,
+        bot_id: BOT,
+        publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
+        bindings: {
+          roles: { member: EXTRA_ROLE },
+          categories: { generated: EXTRA_CATEGORY },
+          channels: { generated: EXTRA_CHANNEL },
+          automod_rules: { spam: RULE },
+          publications: { welcome: MESSAGE },
+        },
+      },
+      reason: 'partial restore resume',
+    };
+
+    await expect(
+      restoreBenchmarkBaseline({ ...partialRestore, retryProof: Object.freeze({}) }),
+    ).rejects.toMatchObject({ code: 'RESTORE_SAFETY_VIOLATION' });
+    expect(calls).toHaveLength(0);
+
+    let firstFailure;
+    try {
+      await restoreBenchmarkBaseline(partialRestore);
+    } catch (error) {
+      firstFailure = error;
+    }
+    expect(firstFailure).toMatchObject({
+      code: 'RESTORE_EXECUTION_AMBIGUOUS',
+      retryable: true,
+      preflightVerified: true,
+      retryProof: expect.any(Object),
+    });
+    expect(state.snapshot.roles.some((item) => item.id === EXTRA_ROLE)).toBe(true);
+    expect(state.snapshot.channels.some((item) => item.id === EXTRA_CATEGORY)).toBe(true);
+    expect(state.snapshot.channels.some((item) => item.id === EXTRA_CHANNEL)).toBe(false);
+    expect(state.snapshot.automod_rules).toEqual([]);
+    expect(state.snapshot.recent_messages).toEqual({});
+
+    const retryCallStart = calls.length;
+    failCategoryDelete = false;
+    const result = await restoreBenchmarkBaseline({
+      ...partialRestore,
+      retryProof: firstFailure.retryProof,
+    });
+
+    expect(result).toMatchObject({
+      restored: true,
+      fingerprint: FP,
+      deleted: { messages: 0, automod_rules: 0, channels: 1, roles: 1 },
+    });
+    const retryDeletes = calls
+      .slice(retryCallStart)
+      .filter(([method]) => method === 'DELETE')
+      .map(([, path]) => path);
+    expect(retryDeletes).toEqual([
+      `/channels/${EXTRA_CATEGORY}`,
+      `/guilds/${GUILD}/roles/${EXTRA_ROLE}`,
+    ]);
   });
 
   it('patches a bound bot-owned protected baseline rule and deletes generated AutoMod rules', async () => {
@@ -710,6 +917,8 @@ describe('benchmark baseline lifecycle', () => {
       baseline: makeBaseline({ protectedRule: mentionSpamRule() }),
       ...RESTORE_TARGET_GUARD,
       cleanup: {
+        guild_id: GUILD,
+        bot_id: BOT,
         publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
         bindings: {
           roles: { member: EXTRA_ROLE },
@@ -749,6 +958,51 @@ describe('benchmark baseline lifecycle', () => {
     });
   });
 
+  it('classifies a deterministic Discord 403 after preflight as non-retryable', async () => {
+    const state = { snapshot: currentSnapshot() };
+    const calls = [];
+    const rest = {
+      async request(method, path) {
+        calls.push([method, path]);
+        throw new DiscordRestError('Discord REST 403', {
+          status: 403,
+          method,
+          path,
+          disposition: 'deterministic',
+        });
+      },
+    };
+
+    await expect(
+      restoreBenchmarkBaseline({
+        rest,
+        ...dependencies(state),
+        baseline: makeBaseline(),
+        ...RESTORE_TARGET_GUARD,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
+          publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
+          bindings: {
+            roles: { member: EXTRA_ROLE },
+            categories: { generated: EXTRA_CATEGORY },
+            channels: { generated: EXTRA_CHANNEL },
+            automod_rules: { spam: RULE },
+            publications: { welcome: MESSAGE },
+          },
+        },
+        reason: 'deterministic REST rejection',
+      }),
+    ).rejects.toMatchObject({
+      code: 'RESTORE_EXECUTION_REJECTED',
+      retryable: false,
+      preflightVerified: true,
+      readbackMayConfirm: false,
+      retryProof: expect.any(Object),
+    });
+    expect(calls).toEqual([['PUT', `/guilds/${GUILD}/onboarding`]]);
+  });
+
   it('waits within a bounded schedule for restored Discord state to converge', async () => {
     const state = { snapshot: currentSnapshot() };
     const sleeps = [];
@@ -784,6 +1038,8 @@ describe('benchmark baseline lifecycle', () => {
       baseline: makeBaseline(),
       ...RESTORE_TARGET_GUARD,
       cleanup: {
+        guild_id: GUILD,
+        bot_id: BOT,
         bindings: {
           roles: { member: EXTRA_ROLE },
           categories: { generated: EXTRA_CATEGORY },
@@ -818,6 +1074,42 @@ describe('benchmark baseline lifecycle', () => {
       restoreBenchmarkBaseline({
         ...common,
         cleanup: {
+          guild_id: '999000999000999001',
+          bot_id: BOT,
+          publication_targets: [],
+          bindings: {
+            roles: {},
+            categories: {},
+            channels: {},
+            automod_rules: {},
+            publications: {},
+          },
+        },
+      }),
+    ).rejects.toThrow('exact baseline target');
+    await expect(
+      restoreBenchmarkBaseline({
+        ...common,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
+          publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
+          bindings: {
+            roles: {},
+            categories: {},
+            channels: {},
+            automod_rules: {},
+            publications: { welcome: MESSAGE },
+          },
+        },
+      }),
+    ).rejects.toThrow('not a cleanup channel binding');
+    await expect(
+      restoreBenchmarkBaseline({
+        ...common,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
           publication_targets: [],
           bindings: {
             roles: { a: EXTRA_ROLE, b: EXTRA_ROLE },
@@ -833,6 +1125,8 @@ describe('benchmark baseline lifecycle', () => {
       restoreBenchmarkBaseline({
         ...common,
         cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
           publication_targets: [],
           bindings: {
             roles: { a: CANARY_ROLE },
@@ -856,6 +1150,8 @@ describe('benchmark baseline lifecycle', () => {
       restoreBenchmarkBaseline({
         ...common,
         cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
           bindings: {
             roles: { a: EXTRA_ROLE },
             categories: { generated: EXTRA_CATEGORY },
@@ -880,25 +1176,53 @@ describe('benchmark baseline lifecycle', () => {
         return null;
       },
     };
+    const restoreInput = {
+      rest,
+      readSnapshot: dependencies(state).readSnapshot,
+      sleep: async () => undefined,
+      baseline: makeBaseline(),
+      ...RESTORE_TARGET_GUARD,
+      cleanup: {
+        guild_id: GUILD,
+        bot_id: BOT,
+        bindings: {
+          roles: { member: EXTRA_ROLE },
+          categories: { generated: EXTRA_CATEGORY },
+          channels: { generated: EXTRA_CHANNEL },
+          automod_rules: { spam: RULE },
+          publications: { welcome: MESSAGE },
+        },
+        publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
+      },
+      reason: 'test',
+    };
     await expect(
       restoreBenchmarkBaseline({
-        rest,
-        ...dependencies(state, { drift: true }),
-        sleep: async () => undefined,
-        baseline: makeBaseline(),
-        ...RESTORE_TARGET_GUARD,
-        cleanup: {
-          bindings: {
-            roles: { member: EXTRA_ROLE },
-            categories: { generated: EXTRA_CATEGORY },
-            channels: { generated: EXTRA_CHANNEL },
-            automod_rules: { spam: RULE },
-            publications: { welcome: MESSAGE },
-          },
-          publication_targets: [{ channel_id: EXTRA_CHANNEL, message_id: MESSAGE }],
-        },
-        reason: 'test',
+        ...restoreInput,
+        snapshotFingerprint: dependencies(state, { drift: true }).snapshotFingerprint,
       }),
-    ).rejects.toThrow('QUARANTINE');
+    ).rejects.toMatchObject({
+      code: 'RESTORE_EXECUTION_AMBIGUOUS',
+      retryable: true,
+      preflightVerified: true,
+      readbackMayConfirm: true,
+      cause: expect.objectContaining({
+        message: 'BASELINE_RESTORE_QUARANTINE_FINGERPRINT_DRIFT',
+      }),
+    });
+
+    await expect(
+      restoreBenchmarkBaseline({
+        ...restoreInput,
+        snapshotFingerprint() {
+          throw new Error('snapshot fingerprint validation failed');
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'RESTORE_SAFETY_VIOLATION',
+      retryable: false,
+      readbackMayConfirm: false,
+      cause: expect.objectContaining({ message: 'snapshot fingerprint validation failed' }),
+    });
   });
 });

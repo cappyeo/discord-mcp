@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-
+import { BenchmarkRestoreFailure } from './baseline-lifecycle.mjs';
 import {
   BenchmarkQuarantineError,
   CONTROLLED_BOT_ID,
@@ -114,13 +114,22 @@ function safetyCases() {
 function harness({
   seriousAt = null,
   restoreFailure = false,
+  restoreFailuresBeforeSuccess = 0,
+  preflightFailuresBeforeSuccess = 0,
   ambiguousRestoreFailure = false,
+  deterministicRestoreFailure = false,
+  executionRejectedRestoreFailure = false,
+  unclassifiedRestoreFailure = false,
   baselineFailure = false,
 } = {}) {
+  const failedRestoreAttempts = restoreFailure
+    ? Number.POSITIVE_INFINITY
+    : restoreFailuresBeforeSuccess;
   const artifacts = new Map();
   const states = [];
   const restores = [];
   const calls = [];
+  const restoreProof = Object.freeze({});
   return {
     artifacts,
     states,
@@ -130,7 +139,8 @@ function harness({
       async verifyBaseline({ baseline }) {
         calls.push(['verify', baseline.guild_id]);
         if (baselineFailure) throw new Error('baseline drift');
-        if (restoreFailure && restores.length > 0) throw new Error('restore drift');
+        if (restores.length > 0 && restores.length <= failedRestoreAttempts)
+          throw new Error('restore drift');
         return {
           verified: true,
           guild_id: baseline.guild_id,
@@ -156,6 +166,8 @@ function harness({
             trial.trial_id === seriousAt ? [{ code: 'GENERATED_ROLE_DANGEROUS_PERMISSION' }] : [],
           ),
           cleanup: {
+            guild_id: trial.guild_id,
+            bot_id: trial.expected_bot_id,
             bindings: {
               roles: { member: `77700077700077${trial.trial_id.slice(-2)}` },
               categories: {},
@@ -167,10 +179,25 @@ function harness({
           },
         };
       },
-      async restoreBaseline({ baseline, cleanup }) {
-        restores.push({ baseline, cleanup });
-        if (restoreFailure || ambiguousRestoreFailure) throw new Error('ambiguous restore');
-        return { restored: true, fingerprint: baseline.fingerprint };
+      async restoreBaseline({ baseline, cleanup, retryProof }) {
+        restores.push({ baseline, cleanup, retryProof });
+        if (deterministicRestoreFailure) {
+          throw new BenchmarkRestoreFailure('RESTORE_SAFETY_VIOLATION');
+        }
+        if (executionRejectedRestoreFailure) {
+          throw new BenchmarkRestoreFailure('RESTORE_EXECUTION_REJECTED', undefined, restoreProof);
+        }
+        if (unclassifiedRestoreFailure) throw new Error('unclassified restore failure');
+        if (restores.length <= preflightFailuresBeforeSuccess) {
+          throw new BenchmarkRestoreFailure('RESTORE_PREFLIGHT_UNAVAILABLE');
+        }
+        if (restores.length <= failedRestoreAttempts || ambiguousRestoreFailure) {
+          throw new BenchmarkRestoreFailure('RESTORE_EXECUTION_AMBIGUOUS', undefined, restoreProof);
+        }
+        return { restored: true, fingerprint: baseline.fingerprint, retryProof: restoreProof };
+      },
+      async sleep(milliseconds) {
+        calls.push(['sleep', milliseconds]);
       },
       createReport: createBenchmarkReport,
       async writeArtifact(path, value) {
@@ -274,6 +301,10 @@ describe('real benchmark campaign', () => {
     assert.equal(report.summary.gate_passed, true);
     assert.equal(report.summary.completed, 20);
     assert.equal(test.restores.length, 20);
+    assert.equal(
+      report.results.every((item) => item.baseline_restore_attempts === 1),
+      true,
+    );
     assert.deepEqual(test.states, ['safety', ...manifest().trials.map((trial) => trial.trial_id)]);
     assert.equal(test.artifacts.has('manifest.json'), true);
     assert.equal(test.artifacts.has('safety-cases.json'), true);
@@ -304,7 +335,62 @@ describe('real benchmark campaign', () => {
         error instanceof BenchmarkQuarantineError && error.code === 'BASELINE_RESTORE_FAILED',
     );
     assert.equal(test.calls.filter(([kind]) => kind === 'trial').length, 1);
-    assert.equal(test.artifacts.get('quarantine.json').phase, 'trial_cleanup');
+    assert.equal(test.restores.length, 6);
+    assert.deepEqual(
+      test.calls.filter(([kind]) => kind === 'sleep').map(([, milliseconds]) => milliseconds),
+      [1_000, 2_000, 4_000, 8_000, 16_000],
+    );
+    assert.deepEqual(test.artifacts.get('quarantine.json'), {
+      schema_version: 'discord-mcp.real-benchmark-quarantine.v1',
+      run_id: 'campaign-test',
+      commit: COMMIT,
+      code: 'BASELINE_RESTORE_FAILED',
+      phase: 'trial_cleanup',
+      trial_id: 'trial-01',
+      guild_id: CONTROLLED_GUILD_IDS[0],
+      restore_attempts: 6,
+      restore_failure_code: 'RESTORE_EXECUTION_AMBIGUOUS',
+      readback_failure_code: 'RESTORE_UNCLASSIFIED',
+    });
+  });
+
+  it('recovers a transient restore failure with bounded backoff and records the attempts', async () => {
+    const test = harness({ restoreFailuresBeforeSuccess: 2 });
+
+    const report = await runBenchmarkCampaign(input(test));
+
+    assert.equal(report.summary.gate_passed, true);
+    assert.equal(test.restores.length, 22);
+    assert.deepEqual(
+      test.calls.filter(([kind]) => kind === 'sleep').map(([, milliseconds]) => milliseconds),
+      [1_000, 2_000],
+    );
+    assert.equal(report.results[0].baseline_restore_attempts, 3);
+    assert.deepEqual(
+      test.restores.slice(0, 3).map((item) => item.retryProof !== null),
+      [false, true, true],
+    );
+    assert.equal(
+      report.results.slice(1).every((item) => item.baseline_restore_attempts === 1),
+      true,
+    );
+  });
+
+  it('retries preflight reads without authorizing missing cleanup resources or readback success', async () => {
+    const test = harness({ preflightFailuresBeforeSuccess: 2 });
+
+    const report = await runBenchmarkCampaign(input(test));
+
+    assert.equal(report.summary.gate_passed, true);
+    assert.equal(report.results[0].baseline_restore_attempts, 3);
+    assert.deepEqual(
+      test.restores.slice(0, 3).map((item) => item.retryProof !== null),
+      [false, false, false],
+    );
+    assert.deepEqual(
+      test.calls.filter(([kind]) => kind === 'sleep').map(([, milliseconds]) => milliseconds),
+      [1_000, 2_000],
+    );
   });
 
   it('accepts an ambiguous cleanup response only after exact baseline readback succeeds', async () => {
@@ -314,6 +400,62 @@ describe('real benchmark campaign', () => {
 
     assert.equal(report.summary.gate_passed, true);
     assert.equal(test.restores.length, 20);
+    assert.equal(test.restores[0].retryProof, null);
+  });
+
+  it('never lets exact readback mask a deterministic restore safety violation', async () => {
+    const test = harness({ deterministicRestoreFailure: true });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'BASELINE_RESTORE_FAILED',
+    );
+
+    assert.equal(test.restores.length, 1);
+    assert.equal(test.calls.filter(([kind]) => kind === 'sleep').length, 0);
+    assert.equal(test.calls.filter(([kind]) => kind === 'verify').length, 5);
+    assert.equal(
+      test.artifacts.get('quarantine.json').restore_failure_code,
+      'RESTORE_SAFETY_VIOLATION',
+    );
+    assert.equal(test.artifacts.get('quarantine.json').readback_failure_code, null);
+  });
+
+  it('never lets exact readback mask a deterministic execution rejection', async () => {
+    const test = harness({ executionRejectedRestoreFailure: true });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'BASELINE_RESTORE_FAILED',
+    );
+
+    assert.equal(test.restores.length, 1);
+    assert.equal(test.calls.filter(([kind]) => kind === 'sleep').length, 0);
+    assert.equal(test.calls.filter(([kind]) => kind === 'verify').length, 5);
+    assert.equal(
+      test.artifacts.get('quarantine.json').restore_failure_code,
+      'RESTORE_EXECUTION_REJECTED',
+    );
+    assert.equal(test.artifacts.get('quarantine.json').readback_failure_code, null);
+  });
+
+  it('fails closed on an unclassified restore error', async () => {
+    const test = harness({ unclassifiedRestoreFailure: true });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'BASELINE_RESTORE_FAILED',
+    );
+
+    assert.equal(test.restores.length, 1);
+    assert.equal(test.calls.filter(([kind]) => kind === 'sleep').length, 0);
+    assert.equal(
+      test.artifacts.get('quarantine.json').restore_failure_code,
+      'RESTORE_UNCLASSIFIED',
+    );
   });
 
   it('quarantines before safety when a controlled baseline is not exact', async () => {

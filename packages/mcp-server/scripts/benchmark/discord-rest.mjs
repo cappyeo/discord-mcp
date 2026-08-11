@@ -5,6 +5,26 @@ const MESSAGE_HISTORY_CONCURRENCY = 4;
 const MAX_RETRY_DELAY_MS = 30_000;
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
+export class DiscordRestError extends Error {
+  constructor(message, { status = null, discordCode = null, method, path, disposition }) {
+    super(message);
+    this.name = 'DiscordRestError';
+    this.status = status;
+    this.code = discordCode;
+    this.method = method;
+    this.path = path;
+    this.disposition = disposition;
+  }
+}
+
+function restFailure(message, { status = null, discordCode = null, method, path }) {
+  const disposition =
+    status === null || status === 429 || status >= 500 || (method === 'DELETE' && status === 404)
+      ? 'ambiguous'
+      : 'deterministic';
+  return new DiscordRestError(message, { status, discordCode, method, path, disposition });
+}
+
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -176,23 +196,44 @@ export function createDiscordRestClient({
         }
         const code = body !== null && typeof body === 'object' ? body.code : undefined;
         const message = body !== null && typeof body === 'object' ? body.message : undefined;
-        throw new Error(
+        throw restFailure(
           redact(
             `Discord REST ${response.status}${code === undefined ? '' : ` code ${String(code)}`}${message === undefined ? '' : `: ${String(message).slice(0, 300)}`}`,
             rawToken,
           ),
+          {
+            status: response.status,
+            discordCode: code ?? null,
+            method,
+            path,
+          },
         );
       } catch (error) {
-        if (signal?.aborted) throw signal.reason;
-        const status = /Discord REST \d{3}/.test(String(error));
-        if (status || !retry || attempt + 1 >= maxAttempts) {
-          throw new Error(redact(error instanceof Error ? error.message : error, rawToken));
+        if (signal?.aborted) {
+          throw restFailure(redact(signal.reason ?? 'Discord REST request aborted', rawToken), {
+            method,
+            path,
+          });
+        }
+        if (error instanceof DiscordRestError || !retry || attempt + 1 >= maxAttempts) {
+          if (error instanceof DiscordRestError) throw error;
+          throw restFailure(redact(error instanceof Error ? error.message : error, rawToken), {
+            method,
+            path,
+          });
         }
         lastError = error;
         await sleep(Math.min(250 * 2 ** attempt, 4_000));
       }
     }
-    throw new Error(redact(lastError instanceof Error ? lastError.message : lastError, rawToken));
+    if (lastError instanceof DiscordRestError) throw lastError;
+    throw restFailure(
+      redact(lastError instanceof Error ? lastError.message : lastError, rawToken),
+      {
+        method,
+        path,
+      },
+    );
   }
 
   async function get(path, options) {
@@ -204,10 +245,13 @@ export function createDiscordRestClient({
 
 export async function readDiscordSnapshot(
   rest,
-  { guildId, botId, messageChannelIds = [], signal } = {},
+  { guildId, botId, messageChannelIds = [], allowMissingMessageChannelIds = false, signal } = {},
 ) {
   assertSnowflake(guildId, 'guildId');
   assertSnowflake(botId, 'botId');
+  if (typeof allowMissingMessageChannelIds !== 'boolean') {
+    throw new TypeError('allowMissingMessageChannelIds must be boolean');
+  }
   const uniqueMessageChannelIds = [...new Set(messageChannelIds)];
   if (uniqueMessageChannelIds.length !== messageChannelIds.length) {
     throw new TypeError('messageChannelIds must not contain duplicates');
@@ -286,7 +330,10 @@ export async function readDiscordSnapshot(
     uniqueMessageChannelIds,
     MESSAGE_HISTORY_CONCURRENCY,
     async (channelId) => {
-      if (!channelIds.has(channelId)) throw new Error('publication channel guild mismatch');
+      if (!channelIds.has(channelId)) {
+        if (allowMissingMessageChannelIds) return [channelId, [], true];
+        throw new Error('publication channel guild mismatch');
+      }
       const messages = assertArray(
         await rest.get(`/channels/${channelId}/messages?limit=${MESSAGE_PAGE_SIZE}`, { signal }),
         'messages',

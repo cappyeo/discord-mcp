@@ -199,7 +199,7 @@ async function runCommand(options, token) {
         }),
       runSafetyCases: runBenchmarkSafetyCases,
       runTrial: runBenchmarkTrial,
-      restoreBaseline: ({ baseline, cleanup, reason }) =>
+      restoreBaseline: ({ baseline, cleanup, reason, retryProof }) =>
         restoreBenchmarkBaseline({
           rest: trialDependencies.rest,
           readSnapshot: trialDependencies.readSnapshot,
@@ -210,6 +210,7 @@ async function runCommand(options, token) {
           confirmation: `RESET_DISPOSABLE_GUILD:${baseline.guild_id}`,
           cleanup,
           reason,
+          retryProof,
         }),
       createReport: createBenchmarkReport,
       writeArtifact: store.writeArtifact,

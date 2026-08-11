@@ -448,6 +448,12 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
       if (!DIGEST_RE.test(result.baseline_fingerprint_after ?? ''))
         resultErrors.push(`${path}.baseline_fingerprint_after: must be a sha256 digest`);
       if (
+        result.baseline_restore_attempts !== undefined &&
+        !nonnegativeInteger(result.baseline_restore_attempts)
+      ) {
+        resultErrors.push(`${path}.baseline_restore_attempts: must be a nonnegative integer`);
+      }
+      if (
         validFailureArray(result.serious_permission_failures) &&
         validFailureArray(result.functional_failures) &&
         typeof result.eligible === 'boolean' &&

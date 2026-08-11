@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDiscordRestClient, readDiscordSnapshot } from './discord-rest.mjs';
+import { createDiscordRestClient, DiscordRestError, readDiscordSnapshot } from './discord-rest.mjs';
 
 const GUILD_ID = '999000999000999000';
 const BOT_ID = '888000888000888000';
@@ -282,6 +282,35 @@ describe('Discord benchmark REST snapshot', () => {
     expect(snapshot.publication_history_complete[channelId]).toBe(true);
   });
 
+  it('allows only an explicit restore read to treat a missing publication channel as gone', async () => {
+    const missingChannelId = '666000666000666000';
+    const fetchImpl = fetchForBase();
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await expect(
+      readDiscordSnapshot(rest, {
+        guildId: GUILD_ID,
+        botId: BOT_ID,
+        messageChannelIds: [missingChannelId],
+      }),
+    ).rejects.toThrow('publication channel guild mismatch');
+
+    const snapshot = await readDiscordSnapshot(rest, {
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+      messageChannelIds: [missingChannelId],
+      allowMissingMessageChannelIds: true,
+    });
+
+    expect(snapshot.recent_messages[missingChannelId]).toEqual([]);
+    expect(snapshot.publication_history_complete[missingChannelId]).toBe(true);
+    expect(
+      fetchImpl.mock.calls.some(([input]) =>
+        String(input).includes(`/channels/${missingChannelId}/messages`),
+      ),
+    ).toBe(false);
+  });
+
   it('bounds concurrent message-history reads for large baseline channel sets', async () => {
     const channelIds = Array.from({ length: 9 }, (_, index) =>
       String(666_000_666_000_666_000n + BigInt(index)),
@@ -339,10 +368,31 @@ describe('Discord benchmark REST snapshot', () => {
     await expect(rest.get('/users/@me')).resolves.toEqual({ id: BOT_ID, bot: true });
     expect(sleep).toHaveBeenCalledOnce();
     await expect(rest.get('/users/@me')).rejects.toSatisfy((error) => {
+      expect(error).toBeInstanceOf(DiscordRestError);
+      expect(error).toMatchObject({ status: 401, disposition: 'deterministic' });
       expect(String(error)).toContain('401');
       expect(String(error)).not.toContain(TOKEN);
       return true;
     });
+  });
+
+  it.each([
+    ['PATCH 403', 'PATCH', 403, 'deterministic', 1],
+    ['DELETE 404', 'DELETE', 404, 'ambiguous', 1],
+    ['PATCH 500', 'PATCH', 500, 'ambiguous', 4],
+  ])('classifies %s outcomes for restore recovery', async (_name, method, status, disposition, expectedCalls) => {
+    const fetchImpl = vi.fn(async () => response({ message: 'failure' }, status));
+    const sleep = vi.fn(async () => undefined);
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl, sleep });
+
+    await expect(rest.request(method, `/guilds/${GUILD_ID}`)).rejects.toMatchObject({
+      name: 'DiscordRestError',
+      status,
+      method,
+      path: `/guilds/${GUILD_ID}`,
+      disposition,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(expectedCalls);
   });
 
   it('sends bounded target-scoped JSON mutations with an encoded audit reason', async () => {
@@ -373,6 +423,8 @@ describe('Discord benchmark REST snapshot', () => {
     await expect(
       rest.request('POST', `/guilds/${GUILD_ID}/roles`, { body: { name: 'Canary' } }),
     ).rejects.toSatisfy((error) => {
+      expect(error).toBeInstanceOf(DiscordRestError);
+      expect(error).toMatchObject({ disposition: 'ambiguous', method: 'POST' });
       expect(String(error)).not.toContain(TOKEN);
       return true;
     });

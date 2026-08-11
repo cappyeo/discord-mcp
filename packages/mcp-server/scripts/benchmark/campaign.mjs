@@ -1,9 +1,11 @@
+import { BenchmarkRestoreFailure } from './baseline-lifecycle.mjs';
 import { assertBenchmarkManifest, BENCHMARK_SCHEMA, createBenchmarkReport } from './manifest.mjs';
 
 export const CONTROLLED_GUILD_IDS = Object.freeze(['1533989004406558851', '1533998797863256165']);
 export const CONTROLLED_BOT_ID = '1533457669384306858';
 export const DEFAULT_BENCHMARK_REQUEST =
   'Build a professional gaming Discord community with LFG, voice rooms, events, safe onboarding, moderation, and polished welcome content.';
+const RESTORE_RECOVERY_DELAYS_MS = Object.freeze([0, 1_000, 2_000, 4_000, 8_000, 16_000]);
 
 const REQUIRED_CAMPAIGN_DEPENDENCIES = [
   'verifyBaseline',
@@ -30,6 +32,23 @@ function record(value) {
 function requiredString(value, label) {
   if (typeof value !== 'string' || value.trim() === '') throw new TypeError(`${label} is required`);
   return value;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function recoveryFailureCode(error) {
+  if (error === undefined || error === null) return null;
+  if (error instanceof BenchmarkRestoreFailure) return error.code;
+  const message = error instanceof Error ? error.message : String(error);
+  const baselineCode = message.match(/\bBASELINE_[A-Z0-9_]+\b/)?.[0];
+  if (baselineCode) return baselineCode;
+  const discord = message.match(/Discord REST (\d{3})(?: code (\d+))?/);
+  if (discord) return `DISCORD_REST_${discord[1]}${discord[2] ? `_CODE_${discord[2]}` : ''}`;
+  if (/allowlist|expected bot|confirmation/i.test(message)) return 'RESTORE_TARGET_GUARD';
+  if (/response/i.test(message)) return 'RESTORE_RESPONSE_INVALID';
+  return 'RESTORE_UNCLASSIFIED';
 }
 
 function nextSnowflake(value) {
@@ -131,6 +150,9 @@ function validateCampaignInput(input) {
       throw new TypeError(`dependencies.${name} must be a function`);
     }
   }
+  if (input.dependencies.sleep !== undefined && typeof input.dependencies.sleep !== 'function') {
+    throw new TypeError('dependencies.sleep must be a function');
+  }
   return manifest;
 }
 
@@ -192,6 +214,73 @@ async function verifyBaseline(dependencies, baseline, expectedGuildId, expectedB
 
 async function progress(dependencies, event) {
   if (typeof dependencies.onProgress === 'function') await dependencies.onProgress(event);
+}
+
+async function restoreWithRecovery(dependencies, manifest, trial, baseline, cleanup) {
+  const sleep = dependencies.sleep ?? wait;
+  let retryProof = null;
+  let restoreFailure;
+  let readbackFailure;
+  for (let index = 0; index < RESTORE_RECOVERY_DELAYS_MS.length; index += 1) {
+    const delay = RESTORE_RECOVERY_DELAYS_MS[index];
+    if (delay > 0) {
+      await progress(dependencies, {
+        phase: 'trial_cleanup',
+        status: 'retrying',
+        trial_id: trial.trial_id,
+        attempt: index + 1,
+        delay_ms: delay,
+        restore_failure_code: recoveryFailureCode(restoreFailure),
+        readback_failure_code: recoveryFailureCode(readbackFailure),
+      });
+      await sleep(delay);
+    }
+    let readbackMayConfirm = false;
+    try {
+      const restored = await dependencies.restoreBaseline({
+        baseline,
+        cleanup,
+        reason: `discord-mcp benchmark restore ${manifest.run_id} ${trial.trial_id}`,
+        retryProof,
+      });
+      restoreFailure = undefined;
+      retryProof = restored?.retryProof ?? retryProof;
+      readbackMayConfirm = true;
+    } catch (error) {
+      restoreFailure = error;
+      if (!(error instanceof BenchmarkRestoreFailure) || error.retryable !== true) {
+        return {
+          after: null,
+          attempts: index + 1,
+          restoreFailureCode: recoveryFailureCode(error),
+          readbackFailureCode: null,
+        };
+      }
+      if (error.preflightVerified && error.retryProof !== null) retryProof = error.retryProof;
+      readbackMayConfirm = error.readbackMayConfirm;
+    }
+    if (readbackMayConfirm) {
+      try {
+        const after = await verifyBaseline(
+          dependencies,
+          baseline,
+          trial.guild_id,
+          trial.expected_bot_id,
+        );
+        return { after, attempts: index + 1 };
+      } catch (error) {
+        readbackFailure = error;
+      }
+    } else {
+      readbackFailure = undefined;
+    }
+  }
+  return {
+    after: null,
+    attempts: RESTORE_RECOVERY_DELAYS_MS.length,
+    restoreFailureCode: recoveryFailureCode(restoreFailure),
+    readbackFailureCode: recoveryFailureCode(readbackFailure),
+  };
 }
 
 async function verifyPoolOrQuarantine(dependencies, manifest, baselines, guildIds, phase) {
@@ -298,30 +387,28 @@ export async function runBenchmarkCampaign(input) {
     }
 
     let after;
+    let baselineRestoreAttempts = 0;
     if (cleanupHasTargets(outcome.cleanup)) {
-      try {
-        await dependencies.restoreBaseline({
-          baseline,
-          cleanup: outcome.cleanup,
-          reason: `discord-mcp benchmark restore ${manifest.run_id} ${trial.trial_id}`,
+      const recovery = await restoreWithRecovery(
+        dependencies,
+        manifest,
+        trial,
+        baseline,
+        outcome.cleanup,
+      );
+      after = recovery.after;
+      baselineRestoreAttempts = recovery.attempts;
+      if (after === null) {
+        await quarantine(dependencies, manifest, {
+          code: 'BASELINE_RESTORE_FAILED',
+          phase: 'trial_cleanup',
+          trial_id: trial.trial_id,
+          guild_id: trial.guild_id,
+          restore_attempts: recovery.attempts,
+          restore_failure_code: recovery.restoreFailureCode,
+          readback_failure_code: recovery.readbackFailureCode,
         });
-      } catch {
-        try {
-          after = await verifyBaseline(
-            dependencies,
-            baseline,
-            trial.guild_id,
-            trial.expected_bot_id,
-          );
-        } catch {
-          await quarantine(dependencies, manifest, {
-            code: 'BASELINE_RESTORE_FAILED',
-            phase: 'trial_cleanup',
-            trial_id: trial.trial_id,
-            guild_id: trial.guild_id,
-          });
-          throw new BenchmarkQuarantineError('BASELINE_RESTORE_FAILED');
-        }
+        throw new BenchmarkQuarantineError('BASELINE_RESTORE_FAILED');
       }
     }
     try {
@@ -342,6 +429,7 @@ export async function runBenchmarkCampaign(input) {
       baseline_restored_after: after.verified,
       baseline_fingerprint_before: before.fingerprint,
       baseline_fingerprint_after: after.fingerprint,
+      baseline_restore_attempts: baselineRestoreAttempts,
     };
     await dependencies.writeArtifact(`results/${trial.trial_id}.json`, result);
     results.push(result);

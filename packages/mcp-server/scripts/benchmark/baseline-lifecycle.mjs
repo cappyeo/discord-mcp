@@ -1,9 +1,88 @@
+import { DiscordRestError } from './discord-rest.mjs';
+
 const SNOWFLAKE = /^\d{17,20}$/;
 const RESET_PREFIX = 'RESET_DISPOSABLE_GUILD:';
 const CANARY_ROLE_NAME = '__discord_mcp_benchmark_canary_role__';
 const CANARY_CHANNEL_NAME = '__discord_mcp_benchmark_canary_channel__';
 const SCHEMA_VERSION = 1;
 const RESTORE_SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
+const RESTORE_RETRY_PROOFS = new WeakMap();
+const RESTORE_FAILURE_POLICIES = Object.freeze({
+  RESTORE_PREFLIGHT_UNAVAILABLE: Object.freeze({
+    retryable: true,
+    preflightVerified: false,
+    readbackMayConfirm: false,
+  }),
+  RESTORE_SAFETY_VIOLATION: Object.freeze({
+    retryable: false,
+    preflightVerified: false,
+    readbackMayConfirm: false,
+  }),
+  RESTORE_EXECUTION_AMBIGUOUS: Object.freeze({
+    retryable: true,
+    preflightVerified: true,
+    readbackMayConfirm: true,
+  }),
+  RESTORE_EXECUTION_REJECTED: Object.freeze({
+    retryable: false,
+    preflightVerified: true,
+    readbackMayConfirm: false,
+  }),
+});
+
+export class BenchmarkRestoreFailure extends Error {
+  constructor(code, cause, retryProof = null) {
+    const policy = RESTORE_FAILURE_POLICIES[code];
+    if (policy === undefined) throw new TypeError('benchmark restore failure code is invalid');
+    const message =
+      code === 'RESTORE_SAFETY_VIOLATION' && cause instanceof Error
+        ? `${code}: ${cause.message}`
+        : code;
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = 'BenchmarkRestoreFailure';
+    this.code = code;
+    this.retryable = policy.retryable;
+    this.preflightVerified = policy.preflightVerified;
+    this.readbackMayConfirm = policy.readbackMayConfirm;
+    Object.defineProperty(this, 'retryProof', {
+      value: retryProof,
+      enumerable: false,
+      writable: false,
+    });
+  }
+}
+
+function restoreFailure(code, cause, retryProof = null) {
+  return cause instanceof BenchmarkRestoreFailure
+    ? cause
+    : new BenchmarkRestoreFailure(code, cause, retryProof);
+}
+
+async function restoreExecution(operation, retryProof) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof DiscordRestError && error.disposition === 'deterministic') {
+      throw restoreFailure('RESTORE_EXECUTION_REJECTED', error, retryProof);
+    }
+    throw restoreFailure('RESTORE_EXECUTION_AMBIGUOUS', error, retryProof);
+  }
+}
+
+async function restoreObservation(operation, retryProof) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof DiscordRestError) {
+      const code =
+        error.disposition === 'ambiguous'
+          ? 'RESTORE_EXECUTION_AMBIGUOUS'
+          : 'RESTORE_EXECUTION_REJECTED';
+      throw restoreFailure(code, error, retryProof);
+    }
+    throw restoreFailure('RESTORE_SAFETY_VIOLATION', error, retryProof);
+  }
+}
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -453,9 +532,12 @@ function uniqueBoundIds(values, label) {
   return ids;
 }
 
-function cleanupBindings(cleanup) {
+function cleanupBindings(cleanup, baseline) {
   if (!record(cleanup) || !record(cleanup.bindings))
     throw new Error('cleanup bindings are required');
+  if (cleanup.guild_id !== baseline.guild_id || cleanup.bot_id !== baseline.bot_id) {
+    throw new Error('cleanup target does not match the exact baseline target');
+  }
   const bindings = cleanup.bindings;
   const roles = uniqueBoundIds(bindings.roles ?? {}, 'roles');
   const categories = uniqueBoundIds(bindings.categories ?? {}, 'categories');
@@ -479,9 +561,42 @@ function cleanupBindings(cleanup) {
     publicationValues.some((id) => !targetMessages.includes(id))
   )
     throw new Error('publication targets do not exactly match publication bindings');
+  if (publicationTargets.some((target) => !channels.includes(target.channel_id))) {
+    throw new Error('publication target channel is not a cleanup channel binding');
+  }
   const all = [...roles, ...categories, ...channels, ...automod, ...publicationValues];
   if (new Set(all).size !== all.length) throw new Error('cleanup bindings overlap');
   return { roles, categories, channels, automod, messages: publicationValues, publicationTargets };
+}
+
+function cleanupIdentity(ids, baseline) {
+  return JSON.stringify({
+    guild_id: baseline.guild_id,
+    bot_id: baseline.bot_id,
+    baseline_fingerprint: baseline.fingerprint,
+    roles: [...ids.roles].sort(),
+    categories: [...ids.categories].sort(),
+    channels: [...ids.channels].sort(),
+    automod: [...ids.automod].sort(),
+    messages: [...ids.messages].sort(),
+    publication_targets: ids.publicationTargets
+      .map((target) => `${target.channel_id}:${target.message_id}`)
+      .sort(),
+  });
+}
+
+function allowMissingFromRetryProof(retryProof, identity) {
+  if (retryProof === null) return false;
+  if (!record(retryProof) || RESTORE_RETRY_PROOFS.get(retryProof) !== identity) {
+    throw new Error('restore retry proof is missing or does not match cleanup');
+  }
+  return true;
+}
+
+function issueRestoreRetryProof(identity) {
+  const proof = Object.freeze({});
+  RESTORE_RETRY_PROOFS.set(proof, identity);
+  return proof;
 }
 
 function baselineIds(baseline) {
@@ -507,34 +622,30 @@ function assertNoBaselineOverlap(ids, baseline) {
   }
 }
 
-function assertCleanupInventory(ids, snapshot, baseline) {
+function assertCleanupInventory(ids, snapshot, baseline, allowMissingCleanupResources) {
   assertNoBaselineOverlap(ids, baseline);
-  const roleSet = new Set(snapshot.roles.map((item) => item.id));
-  const channelSet = new Set(snapshot.channels.map((item) => item.id));
-  const automodSet = new Set(snapshot.automod_rules.map((item) => item.id));
+  const base = baselineIds(baseline);
+  const highestBotRole = highestDiscordRole(
+    snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
+  );
   for (const id of ids.roles) {
     const role = roleById(snapshot, id);
-    if (
-      !roleSet.has(id) ||
-      !role ||
-      role.managed ||
-      (snapshot.bot.roles ?? []).includes(id) ||
-      id === snapshot.guild.id
-    )
+    if (!role) {
+      if (allowMissingCleanupResources) continue;
+      throw new Error('cleanup role is missing before a verified restore retry');
+    }
+    if (role.managed || (snapshot.bot.roles ?? []).includes(id) || id === snapshot.guild.id)
       throw new Error('foreign, managed, or bot-assigned role binding');
-    const highest = highestDiscordRole(
-      snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
-    );
-    if (roleAtOrAbove(role, highest)) throw new Error('cleanup role is not below the bot role');
+    if (roleAtOrAbove(role, highestBotRole))
+      throw new Error('cleanup role is not below the bot role');
   }
   for (const id of [...ids.categories, ...ids.channels]) {
     const channel = channelById(snapshot, id);
-    if (
-      !channelSet.has(id) ||
-      !channel ||
-      channel.guild_id !== baseline.guild_id ||
-      channel.id === baseline.canary.channel_id
-    )
+    if (!channel) {
+      if (allowMissingCleanupResources) continue;
+      throw new Error('cleanup channel is missing before a verified restore retry');
+    }
+    if (channel.guild_id !== baseline.guild_id || channel.id === baseline.canary.channel_id)
       throw new Error('foreign or canary channel binding');
     if (ids.categories.includes(id) && channel.type !== 4)
       throw new Error('category binding is not a category');
@@ -543,21 +654,23 @@ function assertCleanupInventory(ids, snapshot, baseline) {
   }
   for (const id of ids.automod) {
     const rule = snapshot.automod_rules.find((item) => item.id === id);
-    if (!automodSet.has(id) || rule?.guild_id !== baseline.guild_id)
-      throw new Error('foreign AutoMod binding');
+    if (!rule) {
+      if (allowMissingCleanupResources) continue;
+      throw new Error('cleanup AutoMod rule is missing before a verified restore retry');
+    }
+    if (rule.guild_id !== baseline.guild_id) throw new Error('foreign AutoMod binding');
     if (
-      baselineIds(baseline).automod.has(id) &&
+      base.automod.has(id) &&
       !isProtectedMentionSpamRule(
         baseline.baseline_snapshot.automod_rules.find((item) => item.id === id),
         baseline.bot_id,
       )
     )
       throw new Error('cleanup targets a baseline AutoMod rule');
-    if (baselineIds(baseline).automod.has(id) && !isProtectedMentionSpamRule(rule, baseline.bot_id))
+    if (base.automod.has(id) && !isProtectedMentionSpamRule(rule, baseline.bot_id))
       throw new Error('cleanup targets a baseline AutoMod rule');
   }
   const boundResources = new Set([...ids.roles, ...ids.categories, ...ids.channels]);
-  const base = baselineIds(baseline);
   const orphans = snapshot.roles
     .filter((item) => !base.roles.has(item.id) && !boundResources.has(item.id))
     .concat(
@@ -583,108 +696,150 @@ export async function restoreBenchmarkBaseline({
   confirmation,
   cleanup,
   reason,
+  retryProof = null,
   sleep = wait,
 }) {
-  requiredFunction(readSnapshot, 'readSnapshot');
-  requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
-  requiredFunction(rest?.request, 'rest.request');
-  requiredFunction(sleep, 'sleep');
-  validateBaselineRecord(baseline);
-  validateCommon(
-    {
+  let ids;
+  let cleanupIdentityKey;
+  let allowMissingCleanupResources;
+  try {
+    requiredFunction(readSnapshot, 'readSnapshot');
+    requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
+    requiredFunction(rest?.request, 'rest.request');
+    requiredFunction(sleep, 'sleep');
+    validateBaselineRecord(baseline);
+    validateCommon(
+      {
+        guildId: baseline.guild_id,
+        botId: baseline.bot_id,
+        allowedGuildIds,
+        confirmation,
+      },
+      'restorer',
+    );
+    if (snowflake(expectedBotId, 'expectedBotId') !== baseline.bot_id) {
+      throw new Error('restorer bot does not match the exact expected bot');
+    }
+    ids = cleanupBindings(cleanup, baseline);
+    cleanupIdentityKey = cleanupIdentity(ids, baseline);
+    allowMissingCleanupResources = allowMissingFromRetryProof(retryProof, cleanupIdentityKey);
+  } catch (error) {
+    throw restoreFailure('RESTORE_SAFETY_VIOLATION', error);
+  }
+  let snapshot;
+  try {
+    snapshot = await readSnapshot({
       guildId: baseline.guild_id,
       botId: baseline.bot_id,
-      allowedGuildIds,
-      confirmation,
-    },
-    'restorer',
-  );
-  if (snowflake(expectedBotId, 'expectedBotId') !== baseline.bot_id) {
-    throw new Error('restorer bot does not match the exact expected bot');
+      messageChannelIds: [
+        ...new Set([
+          baseline.canary.channel_id,
+          ...ids.publicationTargets.map((target) => target.channel_id),
+        ]),
+      ],
+      allowMissingMessageChannelIds: true,
+    });
+  } catch (error) {
+    const code =
+      error instanceof DiscordRestError && error.disposition === 'ambiguous'
+        ? 'RESTORE_PREFLIGHT_UNAVAILABLE'
+        : 'RESTORE_SAFETY_VIOLATION';
+    throw restoreFailure(code, error);
   }
-  const ids = cleanupBindings(cleanup);
-  let snapshot = await readSnapshot({
-    guildId: baseline.guild_id,
-    botId: baseline.bot_id,
-    messageChannelIds: [
-      ...new Set([
-        baseline.canary.channel_id,
-        ...ids.publicationTargets.map((target) => target.channel_id),
-      ]),
-    ],
-  });
-  verifyIdentityAndCanary(snapshot, baseline);
-  if (
-    snapshot.publication_history_complete?.[baseline.canary.channel_id] !== true ||
-    (snapshot.recent_messages?.[baseline.canary.channel_id] ?? []).length !== 0
-  ) {
-    throw new Error('BASELINE_CANARY_MESSAGE_DRIFT');
-  }
-  assertBaselineResourcesPresent(snapshot, baseline);
-  assertCleanupInventory(ids, snapshot, baseline);
-  for (const target of ids.publicationTargets) {
-    const channel = channelById(snapshot, target.channel_id);
+  let messageTargets;
+  let auditReason;
+  let routeBody;
+  try {
+    verifyIdentityAndCanary(snapshot, baseline);
     if (
-      !channel ||
-      !ids.channels.includes(target.channel_id) ||
-      ![0, 5].includes(channel.type) ||
-      baselineIds(baseline).channels.has(target.channel_id)
-    )
-      throw new Error('publication target channel is foreign or not frozen');
+      snapshot.publication_history_complete?.[baseline.canary.channel_id] !== true ||
+      (snapshot.recent_messages?.[baseline.canary.channel_id] ?? []).length !== 0
+    ) {
+      throw new Error('BASELINE_CANARY_MESSAGE_DRIFT');
+    }
+    assertBaselineResourcesPresent(snapshot, baseline);
+    assertCleanupInventory(ids, snapshot, baseline, allowMissingCleanupResources);
+    const base = baselineIds(baseline);
+    for (const target of ids.publicationTargets) {
+      const channel = channelById(snapshot, target.channel_id);
+      if (!channel) continue;
+      if (
+        !ids.channels.includes(target.channel_id) ||
+        ![0, 5].includes(channel.type) ||
+        base.channels.has(target.channel_id)
+      )
+        throw new Error('publication target channel is foreign or not frozen');
+    }
+    messageTargets = [];
+    for (const target of ids.publicationTargets) {
+      const channel = channelById(snapshot, target.channel_id);
+      if (!channel) continue;
+      if (snapshot.publication_history_complete?.[target.channel_id] !== true)
+        throw new Error('publication message history is incomplete');
+      const found = (snapshot.recent_messages?.[target.channel_id] ?? []).find(
+        (item) => item.id === target.message_id,
+      );
+      if (!found) {
+        if (allowMissingCleanupResources) continue;
+        throw new Error('publication message is missing before a verified restore retry');
+      }
+      if (
+        found.author?.id !== baseline.bot_id ||
+        (found.guild_id !== undefined && found.guild_id !== baseline.guild_id) ||
+        found.channel_id !== target.channel_id
+      )
+        throw new Error('publication message is not verified bot-authored');
+      messageTargets.push(target);
+    }
+    auditReason = mutationReason(reason, `discord-mcp benchmark restore ${baseline.guild_id}`);
+    routeBody = {
+      name: baseline.guild_fields.name,
+      description: baseline.guild_fields.description,
+      preferred_locale: baseline.guild_fields.preferred_locale,
+      verification_level: baseline.guild_fields.verification_level,
+      default_message_notifications: baseline.guild_fields.default_message_notifications,
+      explicit_content_filter: baseline.guild_fields.explicit_content_filter,
+      rules_channel_id: baseline.guild_fields.rules_channel_id,
+      public_updates_channel_id: baseline.guild_fields.public_updates_channel_id,
+      safety_alerts_channel_id: baseline.guild_fields.safety_alerts_channel_id,
+      features: baseline.guild_fields.features,
+    };
+  } catch (error) {
+    throw restoreFailure('RESTORE_SAFETY_VIOLATION', error);
   }
-  const messageTargets = [];
-  for (const target of ids.publicationTargets) {
-    const found = (snapshot.recent_messages?.[target.channel_id] ?? []).find(
-      (item) => item.id === target.message_id,
-    );
-    if (
-      !found ||
-      found.author?.id !== baseline.bot_id ||
-      (found.guild_id !== undefined && found.guild_id !== baseline.guild_id) ||
-      found.channel_id !== target.channel_id
-    )
-      throw new Error('publication message is not verified bot-authored');
-    if (snapshot.publication_history_complete?.[target.channel_id] !== true)
-      throw new Error('publication message history is incomplete');
-    messageTargets.push(target);
-  }
-  const auditReason = mutationReason(reason, `discord-mcp benchmark restore ${baseline.guild_id}`);
-  const routeBody = {
-    name: baseline.guild_fields.name,
-    description: baseline.guild_fields.description,
-    preferred_locale: baseline.guild_fields.preferred_locale,
-    verification_level: baseline.guild_fields.verification_level,
-    default_message_notifications: baseline.guild_fields.default_message_notifications,
-    explicit_content_filter: baseline.guild_fields.explicit_content_filter,
-    rules_channel_id: baseline.guild_fields.rules_channel_id,
-    public_updates_channel_id: baseline.guild_fields.public_updates_channel_id,
-    safety_alerts_channel_id: baseline.guild_fields.safety_alerts_channel_id,
-    features: baseline.guild_fields.features,
-  };
+  const activeRetryProof = issueRestoreRetryProof(cleanupIdentityKey);
+  const execute = (operation) => restoreExecution(operation, activeRetryProof);
+  const observe = (operation) => restoreObservation(operation, activeRetryProof);
   if (snapshot.onboarding !== null)
-    responseOnboarding(
-      await mutate(rest, 'PUT', `/guilds/${baseline.guild_id}/onboarding`, {
-        body: { prompts: [], default_channel_ids: [], enabled: false, mode: 0 },
+    await execute(async () =>
+      responseOnboarding(
+        await mutate(rest, 'PUT', `/guilds/${baseline.guild_id}/onboarding`, {
+          body: { prompts: [], default_channel_ids: [], enabled: false, mode: 0 },
+          reason: auditReason,
+        }),
+        baseline.guild_id,
+        'onboarding restore',
+      ),
+    );
+  if (snapshot.welcome_screen !== null)
+    await execute(async () =>
+      responseWelcome(
+        await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}/welcome-screen`, {
+          body: { enabled: false, welcome_channels: [], description: null },
+          reason: auditReason,
+        }),
+        'welcome restore',
+      ),
+    );
+  const guildResponse = await execute(async () =>
+    responseGuild(
+      await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}`, {
+        body: routeBody,
         reason: auditReason,
       }),
       baseline.guild_id,
-      'onboarding restore',
-    );
-  if (snapshot.welcome_screen !== null)
-    responseWelcome(
-      await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}/welcome-screen`, {
-        body: { enabled: false, welcome_channels: [], description: null },
-        reason: auditReason,
-      }),
-      'welcome restore',
-    );
-  const guildResponse = responseGuild(
-    await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}`, {
-      body: routeBody,
-      reason: auditReason,
-    }),
-    baseline.guild_id,
-    'guild restore',
+      'guild restore',
+    ),
   );
   if (
     guildResponse.rules_channel_id !== baseline.guild_fields.rules_channel_id ||
@@ -693,80 +848,108 @@ export async function restoreBenchmarkBaseline({
     !Array.isArray(guildResponse.features) ||
     !guildResponse.features.includes('COMMUNITY')
   ) {
-    throw new Error('guild restore response did not preserve the baseline Community routes');
+    throw restoreFailure(
+      'RESTORE_EXECUTION_AMBIGUOUS',
+      new Error('guild restore response did not preserve the baseline Community routes'),
+      activeRetryProof,
+    );
   }
   for (const target of messageTargets)
-    await mutate(rest, 'DELETE', `/channels/${target.channel_id}/messages/${target.message_id}`, {
-      reason: auditReason,
-    });
+    await execute(() =>
+      mutate(rest, 'DELETE', `/channels/${target.channel_id}/messages/${target.message_id}`, {
+        reason: auditReason,
+      }),
+    );
   let deletedAutoModRules = 0;
   for (const id of ids.automod) {
     const currentRule = snapshot.automod_rules.find((item) => item.id === id);
+    if (!currentRule) continue;
     const baselineRule = baseline.baseline_snapshot.automod_rules.find((item) => item.id === id);
     if (
       isProtectedMentionSpamRule(baselineRule, baseline.bot_id) &&
       isProtectedMentionSpamRule(currentRule, baseline.bot_id)
     ) {
-      await mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
-        body: exactAutoModRulePatchBody(baselineRule),
-        reason: auditReason,
-      });
+      await execute(() =>
+        mutate(rest, 'PATCH', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
+          body: exactAutoModRulePatchBody(baselineRule),
+          reason: auditReason,
+        }),
+      );
       continue;
     }
-    await mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
-      reason: auditReason,
-    });
+    await execute(() =>
+      mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/auto-moderation/rules/${id}`, {
+        reason: auditReason,
+      }),
+    );
     deletedAutoModRules += 1;
   }
-  const channelObjects = [...ids.channels, ...ids.categories].map((id) =>
-    channelById(snapshot, id),
-  );
+  const channelObjects = [...ids.channels, ...ids.categories]
+    .map((id) => channelById(snapshot, id))
+    .filter((channel) => channel !== undefined);
   const childFirst = channelObjects.sort((left, right) => {
     const leftCategory = left.type === 4 ? 1 : 0;
     const rightCategory = right.type === 4 ? 1 : 0;
     return leftCategory - rightCategory;
   });
   for (const channel of childFirst)
-    await mutate(rest, 'DELETE', `/channels/${channel.id}`, { reason: auditReason });
-  for (const id of ids.roles)
-    await mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/roles/${id}`, {
-      reason: auditReason,
-    });
+    await execute(() => mutate(rest, 'DELETE', `/channels/${channel.id}`, { reason: auditReason }));
+  const roleIds = ids.roles.filter((id) => roleById(snapshot, id) !== undefined);
+  for (const id of roleIds)
+    await execute(() =>
+      mutate(rest, 'DELETE', `/guilds/${baseline.guild_id}/roles/${id}`, {
+        reason: auditReason,
+      }),
+    );
   let fingerprint;
   let restored = false;
   for (let attempt = 0; attempt < RESTORE_SETTLE_DELAYS_MS.length; attempt += 1) {
     const delay = RESTORE_SETTLE_DELAYS_MS[attempt];
-    if (delay > 0) await sleep(delay);
-    snapshot = await readCanarySnapshot(
-      readSnapshot,
-      baseline.guild_id,
-      baseline.bot_id,
-      baseline.canary.channel_id,
+    if (delay > 0) await execute(() => sleep(delay));
+    snapshot = await observe(() =>
+      readCanarySnapshot(
+        readSnapshot,
+        baseline.guild_id,
+        baseline.bot_id,
+        baseline.canary.channel_id,
+      ),
     );
-    verifyIdentityAndCanary(snapshot, baseline);
+    await observe(() => verifyIdentityAndCanary(snapshot, baseline));
     let communityStateExact = true;
     try {
       assertDisabledCommunityState(snapshot, baseline.guild_id);
     } catch {
       communityStateExact = false;
     }
-    fingerprint = snapshotFingerprint(snapshot);
+    fingerprint = await observe(() => snapshotFingerprint(snapshot));
     restored = communityStateExact && fingerprint === baseline.fingerprint;
     if (restored) break;
   }
-  if (!restored) throw new Error('BASELINE_RESTORE_QUARANTINE_FINGERPRINT_DRIFT');
-  return {
+  if (!restored) {
+    throw restoreFailure(
+      'RESTORE_EXECUTION_AMBIGUOUS',
+      new Error('BASELINE_RESTORE_QUARANTINE_FINGERPRINT_DRIFT'),
+      activeRetryProof,
+    );
+  }
+  const result = {
     restored: true,
     guild_id: baseline.guild_id,
     bot_id: baseline.bot_id,
     fingerprint,
     deleted: {
-      messages: ids.publicationTargets.length,
+      messages: messageTargets.length,
       automod_rules: deletedAutoModRules,
       channels: channelObjects.length,
-      roles: ids.roles.length,
+      roles: roleIds.length,
     },
   };
+  Object.defineProperty(result, 'retryProof', {
+    value: activeRetryProof,
+    enumerable: false,
+    writable: false,
+  });
+  return result;
 }
 
 export async function initializeBenchmarkBaseline({
