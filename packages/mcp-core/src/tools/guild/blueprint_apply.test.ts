@@ -1,7 +1,9 @@
 import { container } from '@sapphire/pieces';
+import { TaskCancelledError } from 'cockatiel';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../config.js';
-import GuildBlueprintApply from './blueprint_apply.js';
+import { BlueprintExecutionError } from './_lib/blueprint.apply-executor.js';
+import GuildBlueprintApply, { safeApplyError } from './blueprint_apply.js';
 
 function tool() {
   return new GuildBlueprintApply(
@@ -11,6 +13,35 @@ function tool() {
 }
 
 describe('guild_blueprint_apply contract', () => {
+  it('classifies an upstream Cockatiel timeout as a resumable apply failure', () => {
+    expect(safeApplyError(new TaskCancelledError(), null)).toEqual({
+      operation_id: null,
+      code: 'UPSTREAM_TIMEOUT',
+      retriable: true,
+      status: null,
+    });
+    expect(safeApplyError(new TaskCancelledError(), 'op:channel:create')).toEqual({
+      operation_id: 'op:channel:create',
+      code: 'UPSTREAM_TIMEOUT',
+      retriable: true,
+      status: null,
+    });
+  });
+
+  it('keeps exhausted publication channel propagation resumable on the same plan', () => {
+    expect(
+      safeApplyError(
+        new BlueprintExecutionError('PUBLICATION_CHANNEL_NOT_READY', 'not ready', 404),
+        'publication:welcome:ensure',
+      ),
+    ).toEqual({
+      operation_id: 'publication:welcome:ensure',
+      code: 'PUBLICATION_CHANNEL_NOT_READY',
+      retriable: true,
+      status: 404,
+    });
+  });
+
   it('declares both target and destructive safety gates', () => {
     const instance = tool();
 

@@ -1,5 +1,10 @@
 import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
-import { BrokenCircuitError, BulkheadRejectedError, IsolatedCircuitError } from 'cockatiel';
+import {
+  BrokenCircuitError,
+  BulkheadRejectedError,
+  IsolatedCircuitError,
+  TaskCancelledError,
+} from 'cockatiel';
 import { describe, expect, it } from 'vitest';
 import { DryRunPreview, WritePreview } from './client.js';
 import { formatErrorForUser } from './format.js';
@@ -37,6 +42,21 @@ function apiError(status: number, code = 0, extra: Record<string, unknown> = {})
 }
 
 describe('formatErrorForUser', () => {
+  it('formats upstream timeout cancellation as a retriable server error', () => {
+    const r = formatErrorForUser(
+      new TaskCancelledError('Operation timed out after 30000ms'),
+      stdio,
+    );
+
+    expect(r.structuredContent).toMatchObject({
+      code: 'UPSTREAM_TIMEOUT',
+      retriable: true,
+      category: 'server',
+      recovery_hint: 'retry with backoff',
+    });
+    expect((r.content as Array<{ text: string }>)[0]!.text).toContain('retry with backoff');
+  });
+
   it('formats DiscordPermissionError with markdown body + structured', () => {
     const r = formatErrorForUser(
       new DiscordPermissionError(['MANAGE_MESSAGES'], ['SEND_MESSAGES'], 'channel:1'),

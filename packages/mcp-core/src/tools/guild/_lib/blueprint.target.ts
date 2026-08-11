@@ -266,7 +266,10 @@ export async function readBlueprintTargetSnapshot(
   assertTargetId('Guild', guildId, guild.id);
   assertTargetId('Bot member', botId, bot.user.id);
   for (const channel of channels) {
-    if (channel.guild_id !== undefined) assertTargetId('Channel', guildId, channel.guild_id);
+    // This is the guild-scoped channel collection. Unlike role objects (which
+    // do not carry guild_id), every channel returned here must identify the
+    // selected guild before it can participate in reconciliation.
+    assertTargetId('Channel', guildId, channel.guild_id);
   }
   for (const rule of automodRules) {
     assertTargetId('AutoMod rule', guildId, rule.guild_id);

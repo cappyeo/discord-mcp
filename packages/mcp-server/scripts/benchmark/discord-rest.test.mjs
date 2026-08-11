@@ -282,6 +282,46 @@ describe('Discord benchmark REST snapshot', () => {
     expect(snapshot.publication_history_complete[channelId]).toBe(true);
   });
 
+  it('bounds concurrent message-history reads for large baseline channel sets', async () => {
+    const channelIds = Array.from({ length: 9 }, (_, index) =>
+      String(666_000_666_000_666_000n + BigInt(index)),
+    );
+    let active = 0;
+    let maximumActive = 0;
+    const fetchImpl = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === `/api/v10/guilds/${GUILD_ID}/channels`) {
+        return response(
+          channelIds.map((id, position) => ({
+            id,
+            guild_id: GUILD_ID,
+            name: `channel-${position}`,
+            type: 0,
+            position,
+            permission_overwrites: [],
+          })),
+        );
+      }
+      if (/\/api\/v10\/channels\/\d+\/messages/.test(url.pathname)) {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active -= 1;
+        return response([]);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await readDiscordSnapshot(rest, {
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+      messageChannelIds: channelIds,
+    });
+
+    expect(maximumActive).toBe(4);
+  });
+
   it('retries bounded Discord 429 responses and redacts credentials from failures', async () => {
     const sleep = vi.fn(async () => undefined);
     const fetchImpl = vi

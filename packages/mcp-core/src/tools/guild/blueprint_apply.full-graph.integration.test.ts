@@ -329,7 +329,9 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
           const channel = target.channels.find((candidate) => candidate.id === string(position.id));
           if (channel === undefined) continue;
           channel.position = number(position.position);
-          channel.parent_id = typeof position.parent_id === 'string' ? position.parent_id : null;
+          if (Object.hasOwn(position, 'parent_id')) {
+            channel.parent_id = typeof position.parent_id === 'string' ? position.parent_id : null;
+          }
         }
         return new HttpResponse(null, { status: 204 });
       }),

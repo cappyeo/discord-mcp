@@ -319,12 +319,132 @@ describe('verifyBlueprintSnapshot', () => {
     });
   });
 
+  it('accepts Discord offsetting absolute role positions while preserving order', () => {
+    const current = snapshot();
+    current.roles.find((role) => role.id === ROLE_ID).position = 7;
+
+    const result = verifyBlueprintSnapshot({
+      blueprint: blueprint(),
+      blueprintId: BLUEPRINT_ID,
+      bindings: bindings(),
+      snapshot: current,
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+    });
+
+    expect(result.match).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
+  it('still rejects generated roles in the wrong relative order', () => {
+    const currentBlueprint = blueprint();
+    currentBlueprint.roles.push({
+      key: 'helper',
+      name: 'Helper',
+      position: 2,
+      color: 0x57f287,
+      hoist: false,
+      mentionable: false,
+      permissions: ['VIEW_CHANNEL'],
+    });
+    currentBlueprint.role_order.push('helper');
+    const currentBindings = bindings();
+    const helperId = '700000700000700001';
+    currentBindings.roles.helper = helperId;
+    const current = snapshot();
+    current.roles.find((role) => role.id === ROLE_ID).position = 6;
+    current.roles.push({
+      id: helperId,
+      name: 'Helper',
+      position: 5,
+      permissions: '1024',
+      color: 0x57f287,
+      hoist: false,
+      mentionable: false,
+      managed: false,
+    });
+
+    const result = verifyBlueprintSnapshot({
+      blueprint: currentBlueprint,
+      blueprintId: BLUEPRINT_ID,
+      bindings: currentBindings,
+      snapshot: current,
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+    });
+
+    expect(result.match).toBe(false);
+    expect(result.failures).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'ROLE_ORDER_MISMATCH' })]),
+    );
+  });
+
   it('accepts a verified publication when Discord omits the write-only nonce', () => {
     const current = snapshot();
     delete current.recent_messages[CHANNEL_ID][0].nonce;
 
     const result = verifyBlueprintSnapshot({
       blueprint: blueprint(),
+      blueprintId: BLUEPRINT_ID,
+      bindings: bindings(),
+      snapshot: current,
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+    });
+
+    expect(result.match).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
+  it('accepts Discord materializing the default container spoiler value', () => {
+    const current = snapshot();
+    current.recent_messages[CHANNEL_ID][0].components[0].spoiler = false;
+
+    const result = verifyBlueprintSnapshot({
+      blueprint: blueprint(),
+      blueprintId: BLUEPRINT_ID,
+      bindings: bindings(),
+      snapshot: current,
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+    });
+
+    expect(result.match).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
+  it('still rejects a publication whose container is changed to a spoiler', () => {
+    const current = snapshot();
+    current.recent_messages[CHANNEL_ID][0].components[0].spoiler = true;
+
+    const result = verifyBlueprintSnapshot({
+      blueprint: blueprint(),
+      blueprintId: BLUEPRINT_ID,
+      bindings: bindings(),
+      snapshot: current,
+      guildId: GUILD_ID,
+      botId: BOT_ID,
+    });
+
+    expect(result.match).toBe(false);
+    expect(result.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'PUBLICATION_COMPONENTS_MISMATCH' }),
+      ]),
+    );
+  });
+
+  it('uses Discord permission bit 44 for CREATE_EVENTS', () => {
+    const desired = blueprint();
+    desired.roles[0].permissions = ['CREATE_EVENTS', 'MANAGE_EVENTS'];
+    const current = snapshot();
+    current.roles.find((role) => role.id === ROLE_ID).permissions = (
+      (1n << 44n) |
+      (1n << 33n)
+    ).toString();
+
+    const result = verifyBlueprintSnapshot({
+      blueprint: desired,
       blueprintId: BLUEPRINT_ID,
       bindings: bindings(),
       snapshot: current,

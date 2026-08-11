@@ -435,7 +435,10 @@ export function buildBenchmarkExpectations({ blueprint, bindings, before, guildI
     ]),
   );
   const allowedOverwriteAllows = {};
-  for (const category of array(blueprint.categories, 'blueprint.categories'))
+  const blueprintCategories = array(blueprint.categories, 'blueprint.categories');
+  const blueprintChannels = array(blueprint.channels, 'blueprint.channels');
+  const categoriesByKey = new Map(blueprintCategories.map((category) => [category.key, category]));
+  for (const category of blueprintCategories)
     addOverwriteAllows(
       allowedOverwriteAllows,
       exact.result.categories[category.key],
@@ -445,16 +448,26 @@ export function buildBenchmarkExpectations({ blueprint, bindings, before, guildI
       bot,
       `blueprint.categories.${category.key}.overwrites`,
     );
-  for (const channel of array(blueprint.channels, 'blueprint.channels'))
+  for (const channel of blueprintChannels) {
+    const channelOverwrites = array(
+      channel.overwrites,
+      `blueprint.channels.${channel.key}.overwrites`,
+    );
+    const parent = categoriesByKey.get(channel.parent_key);
+    const effectiveOverwrites =
+      channelOverwrites.length > 0
+        ? channelOverwrites
+        : array(parent?.overwrites, `blueprint.categories.${channel.parent_key}.overwrites`);
     addOverwriteAllows(
       allowedOverwriteAllows,
       exact.result.channels[channel.key],
-      channel.overwrites,
+      effectiveOverwrites,
       exact.result,
       guild,
       bot,
       `blueprint.channels.${channel.key}.overwrites`,
     );
+  }
 
   const generatedChannels = [
     ...keys.categories.map((key) => exact.result.categories[key]),

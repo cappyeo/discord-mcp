@@ -48,6 +48,25 @@ function sessionError(message, code = null, source = null) {
   return error;
 }
 
+function toolResultError(name, data) {
+  const code =
+    data !== null && typeof data === 'object' && typeof data.code === 'string'
+      ? data.code
+      : 'MCP_TOOL_ERROR';
+  const error = sessionError(`${name} failed (${code})`, code, 'mcp_tool_result');
+  if (data !== null && typeof data === 'object') {
+    if (typeof data.retriable === 'boolean') error.retriable = data.retriable;
+    if (
+      Number.isInteger(data.retry_after_ms) &&
+      data.retry_after_ms >= 0 &&
+      data.retry_after_ms <= 120_000
+    ) {
+      error.retryAfterMs = data.retry_after_ms;
+    }
+  }
+  return error;
+}
+
 async function closeQuietly(client, transport) {
   try {
     await client.close();
@@ -102,11 +121,7 @@ export async function openMcpBenchmarkSession({
         const result = await client.callTool({ name, arguments: args });
         const data = result.structuredContent;
         if (result.isError === true || data === undefined || data === null) {
-          const code =
-            data !== null && typeof data === 'object' && typeof data.code === 'string'
-              ? data.code
-              : 'MCP_TOOL_ERROR';
-          throw sessionError(`${name} failed (${code})`, code, 'mcp_tool_result');
+          throw toolResultError(name, data);
         }
         return data;
       },

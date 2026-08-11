@@ -1,11 +1,26 @@
 const DEFAULT_API_BASE = 'https://discord.com/api/v10';
 const SNOWFLAKE = /^\d{17,20}$/;
 const MESSAGE_PAGE_SIZE = 100;
+const MESSAGE_HISTORY_CONCURRENCY = 4;
 const MAX_RETRY_DELAY_MS = 30_000;
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function mapBounded(values, concurrency, mapper) {
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(values[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function redact(value, secret) {
@@ -267,8 +282,10 @@ export async function readDiscordSnapshot(
   if (onboarding !== null) assertScopedId(onboarding?.guild_id, guildId, 'onboarding');
 
   const channelIds = new Set(channels.map((channel) => String(channel.id)));
-  const messageEntries = await Promise.all(
-    uniqueMessageChannelIds.map(async (channelId) => {
+  const messageEntries = await mapBounded(
+    uniqueMessageChannelIds,
+    MESSAGE_HISTORY_CONCURRENCY,
+    async (channelId) => {
       if (!channelIds.has(channelId)) throw new Error('publication channel guild mismatch');
       const messages = assertArray(
         await rest.get(`/channels/${channelId}/messages?limit=${MESSAGE_PAGE_SIZE}`, { signal }),
@@ -282,7 +299,7 @@ export async function readDiscordSnapshot(
         assertSnowflake(message?.author?.id, 'message author id');
       }
       return [channelId, messages, messages.length < MESSAGE_PAGE_SIZE];
-    }),
+    },
   );
 
   return {

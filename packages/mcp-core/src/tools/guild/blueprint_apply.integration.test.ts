@@ -251,6 +251,50 @@ function snapshotFrom(fixture: ReturnType<typeof buildConvergedFixture>): Bluepr
 }
 
 describe('guild_blueprint_apply resumable MCP journey', () => {
+  it('treats Discord materializing the default container spoiler as equivalent', () => {
+    const fixture = buildConvergedFixture();
+    for (const messages of fixture.messages.values()) {
+      for (const message of messages) {
+        const container = message.components?.[0] as Record<string, unknown>;
+        container.spoiler = false;
+      }
+    }
+
+    const result = reconcileGuildBlueprint(
+      BLUEPRINT_ID,
+      blueprint,
+      snapshotFrom(fixture),
+      fixture.bindings,
+    );
+
+    expect(result.blockers).toEqual([]);
+    expect(result.operations).toEqual([]);
+  });
+
+  it('still blocks a publication whose container is changed to a spoiler', () => {
+    const fixture = buildConvergedFixture();
+    const publication = blueprint.components_v2.publications[0]!;
+    const messageId = fixture.bindings.publications[publication.key]!;
+    const message = [...fixture.messages.values()]
+      .flat()
+      .find((candidate) => candidate.id === messageId)!;
+    const container = message.components?.[0] as Record<string, unknown>;
+    container.spoiler = true;
+
+    const result = reconcileGuildBlueprint(
+      BLUEPRINT_ID,
+      blueprint,
+      snapshotFrom(fixture),
+      fixture.bindings,
+    );
+
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'RESOURCE_CONFLICT', resource: `message:${messageId}` }),
+      ]),
+    );
+  });
+
   it('recovers from a mid-apply 500 and converges without duplicate resources', async () => {
     const fixture = buildConvergedFixture();
     const missingRule = blueprint.automod.rules.at(-1)!;

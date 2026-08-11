@@ -133,4 +133,33 @@ describe('openMcpBenchmarkSession', () => {
       await session.close();
     }
   });
+
+  it('preserves bounded retry metadata from a structured MCP tool error', async () => {
+    const session = await openMcpBenchmarkSession({
+      cliPath: SERVER_PATH,
+      cwd: resolve(import.meta.dirname, '../..'),
+      env: {},
+    });
+    const callTool = vi.spyOn(Client.prototype, 'callTool').mockResolvedValue({
+      isError: true,
+      structuredContent: {
+        code: 'UPSTREAM_TIMEOUT',
+        retriable: true,
+        retry_after_ms: 2_500,
+      },
+    });
+
+    try {
+      await expect(session.callTool('guild_blueprint_plan', {})).rejects.toSatisfy((error) => {
+        expect(error.code).toBe('UPSTREAM_TIMEOUT');
+        expect(error.source).toBe('mcp_tool_result');
+        expect(error.retriable).toBe(true);
+        expect(error.retryAfterMs).toBe(2_500);
+        return true;
+      });
+    } finally {
+      callTool.mockRestore();
+      await session.close();
+    }
+  });
 });

@@ -491,7 +491,7 @@ export function desiredPublicationBody(
   const validation = validateComponentsV2(components);
   if (!validation.valid) return null;
   const nonce = `dmc${createHash('sha256')
-    .update(`${guildId}\0${botId}\0${blueprintId}\0${publication.key}`)
+    .update(`${guildId}\0${botId}\0${channelId}\0${blueprintId}\0${publication.key}`)
     .digest('hex')
     .slice(0, 22)}`;
   return {

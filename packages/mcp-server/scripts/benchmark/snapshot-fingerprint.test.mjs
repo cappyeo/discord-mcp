@@ -68,6 +68,25 @@ describe('snapshotFingerprint', () => {
     expect(snapshotFingerprint(after)).toBe(snapshotFingerprint(before));
   });
 
+  it('ignores Discord-computed onboarding requirements but retains onboarding configuration', () => {
+    const before = snapshot();
+    before.onboarding = {
+      guild_id: before.guild.id,
+      prompts: [],
+      default_channel_ids: [],
+      enabled: false,
+      mode: 0,
+      below_requirements: false,
+    };
+    const computedChange = structuredClone(before);
+    computedChange.onboarding.below_requirements = true;
+    expect(snapshotFingerprint(computedChange)).toBe(snapshotFingerprint(before));
+
+    const configurationChange = structuredClone(before);
+    configurationChange.onboarding.enabled = true;
+    expect(snapshotFingerprint(configurationChange)).not.toBe(snapshotFingerprint(before));
+  });
+
   it('is stable across response ordering but sensitive to security state', () => {
     const before = snapshot();
     const reordered = structuredClone(before);

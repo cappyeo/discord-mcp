@@ -80,8 +80,10 @@ function fakeRest(
   exactMessage: unknown | Error | undefined,
   messagePages: readonly (readonly unknown[])[] = [recentMessages, []],
   automodRules: readonly unknown[] = [],
+  ...channelGuildIdArgument: [string | undefined]
 ): REST {
   let messagePage = 0;
+  const channelGuildId = channelGuildIdArgument.length === 0 ? guildId : channelGuildIdArgument[0];
   return {
     get: async (route: string) => {
       if (route === Routes.guild(guildId)) {
@@ -102,15 +104,19 @@ function fakeRest(
       }
       if (route === Routes.guildMember(guildId, botId)) return { user: { id: botId }, roles: [] };
       if (route === Routes.guildRoles(guildId)) return [];
-      if (route === Routes.guildChannels(guildId))
-        return [
-          targetChannel(
-            blueprint.channels.find(
-              (item) => item.key === blueprint.components_v2.publications[0]!.channel_key,
-            )!,
-            channelId,
-          ),
-        ];
+      if (route === Routes.guildChannels(guildId)) {
+        const channel = targetChannel(
+          blueprint.channels.find(
+            (item) => item.key === blueprint.components_v2.publications[0]!.channel_key,
+          )!,
+          channelId,
+        );
+        if (channelGuildId === undefined) {
+          const { guild_id: _guildId, ...withoutGuildId } = channel;
+          return [withoutGuildId];
+        }
+        return [{ ...channel, guild_id: channelGuildId }];
+      }
       if (route === Routes.guildAutoModerationRules(guildId)) return automodRules;
       if (route === Routes.channelMessages(channelId)) {
         const page = messagePages[Math.min(messagePage, messagePages.length - 1)] ?? [];
@@ -127,6 +133,59 @@ function fakeRest(
 }
 
 describe('blueprint publication target readback', () => {
+  it('keeps a publication nonce stable for one channel and changes it for a new channel lifecycle', () => {
+    const { publication, bindings, desired } = publicationFixture();
+    const repeated = desiredPublicationBody(publication, blueprintId, guildId, botId, bindings)!;
+    const replacementBindings = {
+      ...bindings,
+      channels: {
+        ...bindings.channels,
+        [publication.channel_key]: '200000000000000099',
+      },
+    };
+    const replacement = desiredPublicationBody(
+      publication,
+      blueprintId,
+      guildId,
+      botId,
+      replacementBindings,
+    )!;
+
+    expect(repeated.body.nonce).toBe(desired.body.nonce);
+    expect(replacement.body.nonce).not.toBe(desired.body.nonce);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['mismatched', '100000000000000099'],
+  ])('rejects a %s guild channel identity before publication reconciliation', async (_, channelGuildId) => {
+    await expect(
+      readBlueprintTargetSnapshot(
+        fakeRest('200000000000000001', [], undefined, [[], []], [], channelGuildId),
+        guildId,
+        botId,
+        blueprint,
+      ),
+    ).rejects.toMatchObject({ code: 'TARGET_GUILD_MISMATCH' });
+  });
+
+  it('rejects a publication message that explicitly identifies another guild', async () => {
+    const { channelId, bindings } = publicationFixture();
+    await expect(
+      readBlueprintTargetSnapshot(
+        fakeRest(channelId, [], {
+          id: bindings.publications[blueprint.components_v2.publications[0]!.key],
+          channel_id: channelId,
+          guild_id: '100000000000000099',
+        }),
+        guildId,
+        botId,
+        blueprint,
+        bindings,
+      ),
+    ).rejects.toMatchObject({ code: 'TARGET_GUILD_MISMATCH' });
+  });
+
   it('rejects an AutoMod rule whose creator_id is not a Discord snowflake', async () => {
     await expect(
       readBlueprintTargetSnapshot(

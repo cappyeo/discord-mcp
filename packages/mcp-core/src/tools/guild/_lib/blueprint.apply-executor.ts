@@ -1,4 +1,4 @@
-import type { REST } from '@discordjs/rest';
+import { RateLimitError, type REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import {
   desiredAutoModBody,
@@ -32,6 +32,7 @@ export class BlueprintExecutionError extends Error {
   public constructor(
     public readonly code: string,
     message: string,
+    public readonly status?: number,
   ) {
     super(message);
   }
@@ -119,6 +120,116 @@ function requireBody(
 
 function unresolved(operation: BlueprintOperation): never {
   return requireBody(null, operation) as never;
+}
+
+const PUBLICATION_RETRY_DELAYS_MS = [250, 750, 1_500] as const;
+const MAX_PUBLICATION_RETRY_DELAY_MS = 30_000;
+
+function errorStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const status = (error as { readonly status?: unknown }).status;
+  return typeof status === 'number' ? status : undefined;
+}
+
+async function waitForPublicationRetry(signal: AbortSignal, delayMs: number): Promise<void> {
+  if (signal.aborted) {
+    throw new BlueprintExecutionError('CANCELLED', 'Blueprint apply was cancelled by the client.');
+  }
+  await new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onAbort = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      reject(
+        new BlueprintExecutionError('CANCELLED', 'Blueprint apply was cancelled by the client.'),
+      );
+    };
+    timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+}
+
+function publicationReadbackIsRetriable(error: unknown): boolean {
+  if (error instanceof RateLimitError) return true;
+  const status = errorStatus(error);
+  return status === 404 || status === 429 || (status !== undefined && status >= 500);
+}
+
+function publicationReadbackDelay(error: unknown, fallbackMs: number): number {
+  if (!(error instanceof RateLimitError)) return fallbackMs;
+  return Math.min(
+    Math.max(fallbackMs, Math.ceil(error.retryAfter)),
+    MAX_PUBLICATION_RETRY_DELAY_MS,
+  );
+}
+
+async function readPublicationChannel(
+  rest: REST,
+  channelId: string,
+  signal: AbortSignal,
+): Promise<IdResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await rest.get(Routes.channel(channelId), { signal })) as IdResponse;
+    } catch (error) {
+      if (signal.aborted) {
+        throw new BlueprintExecutionError(
+          'CANCELLED',
+          'Blueprint apply was cancelled by the client.',
+        );
+      }
+      const retriable = publicationReadbackIsRetriable(error);
+      if (!retriable) {
+        throw new BlueprintExecutionError(
+          'PUBLICATION_CHANNEL_READBACK_FAILED',
+          'Publication channel identity could not be read back.',
+          errorStatus(error),
+        );
+      }
+      const delayMs = PUBLICATION_RETRY_DELAYS_MS[attempt];
+      if (delayMs === undefined) {
+        throw new BlueprintExecutionError(
+          'PUBLICATION_CHANNEL_NOT_READY',
+          'Publication channel identity was not available after bounded readback retries.',
+          errorStatus(error),
+        );
+      }
+      await waitForPublicationRetry(signal, publicationReadbackDelay(error, delayMs));
+    }
+  }
+}
+
+async function postPublication(
+  rest: REST,
+  channelId: string,
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<IdResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await rest.post(Routes.channelMessages(channelId), { body, signal })) as IdResponse;
+    } catch (error) {
+      if (signal.aborted) {
+        throw new BlueprintExecutionError(
+          'CANCELLED',
+          'Blueprint apply was cancelled by the client.',
+        );
+      }
+      if (errorStatus(error) !== 404) throw error;
+      if (attempt >= PUBLICATION_RETRY_DELAYS_MS.length) {
+        throw new BlueprintExecutionError(
+          'PUBLICATION_CHANNEL_NOT_READY',
+          'Discord did not make the newly created publication channel writable within the bounded retry window.',
+          404,
+        );
+      }
+      await waitForPublicationRetry(signal, PUBLICATION_RETRY_DELAYS_MS[attempt]!);
+    }
+  }
 }
 
 export interface ExecuteBlueprintOperationInput {
@@ -290,7 +401,7 @@ export async function executeBlueprintOperation(
       if (id === undefined || parentId === undefined) {
         throw new BlueprintExecutionError('PLAN_DEPENDENCY_UNRESOLVED', channel.key);
       }
-      positions.push({ id, position: channel.position, parent_id: parentId });
+      positions.push({ id, position: channel.position });
     }
     await rest.patch(Routes.guildChannels(guildId), { body: positions, reason: auditReason });
     return { resource_id: null };
@@ -396,15 +507,24 @@ export async function executeBlueprintOperation(
       bindings,
     );
     if (desired === null) return unresolved(operation);
-    const response = (await rest.post(Routes.channelMessages(desired.channel_id), {
-      body: desired.body,
-    })) as IdResponse;
-    assertGuild(response, guildId, 'Publication create');
+    const response = await postPublication(rest, desired.channel_id, desired.body, input.signal);
     if (response.channel_id !== desired.channel_id || response.author?.id !== botId) {
       throw new BlueprintExecutionError(
         'DISCORD_RESPONSE_INVALID',
         'Publication response did not match the bound bot and channel.',
       );
+    }
+    if (response.guild_id === undefined) {
+      const channel = await readPublicationChannel(rest, desired.channel_id, input.signal);
+      assertGuild(channel, guildId, 'Publication channel readback');
+      if (requireId(channel, 'Publication channel readback') !== desired.channel_id) {
+        throw new BlueprintExecutionError(
+          'DISCORD_RESPONSE_INVALID',
+          'Publication channel readback changed identity.',
+        );
+      }
+    } else {
+      assertGuild(response, guildId, 'Publication create');
     }
     const id = requireId(response, 'Publication create');
     bindings.publications[publication.key] = id;

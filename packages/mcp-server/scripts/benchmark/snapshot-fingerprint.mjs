@@ -73,6 +73,16 @@ function messageView(message) {
   return sanitizeRaw(message);
 }
 
+function onboardingView(onboarding) {
+  const view = sanitizeRaw(onboarding);
+  if (view !== null && typeof view === 'object' && !Array.isArray(view)) {
+    // Discord computes this response-only flag; it is not accepted by the
+    // Modify Guild Onboarding endpoint and can change after convergence.
+    delete view.below_requirements;
+  }
+  return view;
+}
+
 export function snapshotSecurityView(snapshot) {
   const messages = Object.fromEntries(
     Object.entries(snapshot.recent_messages ?? {})
@@ -89,7 +99,7 @@ export function snapshotSecurityView(snapshot) {
     roles: sortById(snapshot.roles ?? []).map(roleView),
     channels: sortById(snapshot.channels ?? []).map(channelView),
     automod_rules: sortById(snapshot.automod_rules ?? []).map(sanitizeRaw),
-    onboarding: sanitizeRaw(snapshot.onboarding ?? null),
+    onboarding: onboardingView(snapshot.onboarding ?? null),
     welcome_screen: sanitizeRaw(snapshot.welcome_screen ?? null),
     recent_messages: messages,
     publication_history_complete: Object.fromEntries(

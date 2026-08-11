@@ -176,6 +176,30 @@ describe('verifyBlueprintAuditTrail', () => {
     });
   });
 
+  it.each([166, 167])('accepts onboarding singleton action %i with a null target', (action) => {
+    expect(verify([entry('999000999000999008', action, null)])).toEqual({
+      pass: true,
+      serious_permission_failures: [],
+      functional_failures: [],
+      observed_count: 1,
+    });
+  });
+
+  it('still rejects foreign or malformed targets for onboarding and other actions', () => {
+    const result = verify([
+      entry('999000999000999008', 167, '111000111000111000'),
+      entry('999000999000999009', 10, null),
+    ]);
+
+    expect(result.pass).toBe(false);
+    expect(result.functional_failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'UNEXPECTED_AUDIT_ACTION_OR_TARGET', action_type: 167 }),
+        expect.objectContaining({ code: 'MALFORMED_AUDIT_TARGET', action_type: 10 }),
+      ]),
+    );
+  });
+
   it('accepts final readback prompt IDs and fails closed on an incomplete trail', () => {
     const result = verifyBlueprintAuditTrail({
       entries: [entry('999000999000999005', 164, PROMPT_ID)],

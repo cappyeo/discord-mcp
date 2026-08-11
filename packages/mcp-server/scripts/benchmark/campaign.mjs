@@ -269,6 +269,7 @@ export async function runBenchmarkCampaign(input) {
         cliPath: input.cliPath,
         cwd: input.cwd,
         token: input.token,
+        baselineMessageChannelId: baseline.canary.channel_id,
         stateDirectory,
         dependencies: input.trialDependencies,
       });

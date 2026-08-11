@@ -25,7 +25,7 @@ const PERMISSION_BITS = Object.freeze({
   VIEW_AUDIT_LOG: 1n << 7n,
   KICK_MEMBERS: 1n << 1n,
   MODERATE_MEMBERS: 1n << 40n,
-  CREATE_EVENTS: 1n << 41n,
+  CREATE_EVENTS: 1n << 44n,
   MANAGE_EVENTS: 1n << 33n,
   MANAGE_CHANNELS: 1n << 4n,
   MANAGE_ROLES: 1n << 28n,
@@ -70,6 +70,19 @@ function sorted(values) {
 
 function mapById(values) {
   return new Map((Array.isArray(values) ? values : []).map((value) => [String(value.id), value]));
+}
+
+function compareDiscordRoles(left, right) {
+  const leftPosition = Number(left?.position ?? 0);
+  const rightPosition = Number(right?.position ?? 0);
+  if (leftPosition !== rightPosition) return leftPosition - rightPosition;
+  if (String(left?.id) === String(right?.id)) return 0;
+  const leftId = String(left?.id ?? '');
+  const rightId = String(right?.id ?? '');
+  if (/^\d+$/.test(leftId) && /^\d+$/.test(rightId)) {
+    return BigInt(leftId) < BigInt(rightId) ? 1 : -1;
+  }
+  return 0;
 }
 
 function exactBindingKeys(blueprint, bindings) {
@@ -151,7 +164,6 @@ function roleFailures(blueprint, bindings, snapshot, failures) {
     const actual = roles.get(id);
     const expected = {
       name: desired.name,
-      position: desired.position,
       permissions: permissionBits(desired.permissions),
       color: desired.color,
       hoist: desired.hoist,
@@ -161,7 +173,6 @@ function roleFailures(blueprint, bindings, snapshot, failures) {
     if (
       actual === undefined ||
       actual.name !== expected.name ||
-      Number(actual.position ?? 0) !== expected.position ||
       String(actual.permissions ?? '0') !== expected.permissions ||
       Number(actual.color ?? 0) !== expected.color ||
       Boolean(actual.hoist) !== expected.hoist ||
@@ -169,6 +180,17 @@ function roleFailures(blueprint, bindings, snapshot, failures) {
       actual.managed
     ) {
       failures.push(issue('ROLE_MISMATCH', { key: desired.key, resource_id: id }));
+    }
+  }
+  const orderedRoles = (blueprint.role_order ?? [])
+    .map((key) => ({ key, role: roles.get(bindings.roles[key]) }))
+    .filter((item) => item.role !== undefined);
+  if (orderedRoles.length === (blueprint.role_order ?? []).length) {
+    const actualOrder = orderedRoles
+      .toSorted((left, right) => compareDiscordRoles(left.role, right.role))
+      .map((item) => item.key);
+    if (!same(actualOrder, blueprint.role_order)) {
+      failures.push(issue('ROLE_ORDER_MISMATCH'));
     }
   }
 }
@@ -472,6 +494,7 @@ function normalizeComponents(value, marker, stripMarker = true) {
       .filter(([key]) => key !== 'id')
       .map(([key, child]) => [key, normalizeComponents(child, marker, stripMarker)]),
   );
+  if (normalized.type === 17 && normalized.spoiler === false) delete normalized.spoiler;
   if (
     stripMarker &&
     normalized.type === 10 &&

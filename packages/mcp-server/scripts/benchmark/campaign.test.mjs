@@ -147,8 +147,9 @@ function harness({
         );
         return safetyCases();
       },
-      async runTrial({ trial }) {
+      async runTrial({ trial, baselineMessageChannelId }) {
         calls.push(['trial', trial.trial_id]);
+        assert.equal(baselineMessageChannelId, CANARY_CHANNEL_IDS[trial.guild_id]);
         return {
           result: result(
             trial,

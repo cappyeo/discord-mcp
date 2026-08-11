@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
+import { TaskCancelledError } from 'cockatiel';
 import { z } from 'zod';
 import { verifyExpectedBotIdentity } from '../../identity-lock.js';
 import { defineTool } from '../_lib/defineTool.js';
@@ -154,13 +155,16 @@ function errorStatus(error: unknown): number | null {
   return typeof status === 'number' && Number.isInteger(status) ? status : null;
 }
 
-function safeApplyError(error: unknown, operationId: string | null): SafeApplyError {
+export function safeApplyError(error: unknown, operationId: string | null): SafeApplyError {
   const status = errorStatus(error);
   if (error instanceof BlueprintExecutionError) {
     return {
       operation_id: operationId,
       code: error.code,
-      retriable: error.code === 'CANCELLED' || error.code === 'APPLY_LOCK_LOST',
+      retriable:
+        error.code === 'CANCELLED' ||
+        error.code === 'APPLY_LOCK_LOST' ||
+        error.code === 'PUBLICATION_CHANNEL_NOT_READY',
       status,
     };
   }
@@ -186,6 +190,14 @@ function safeApplyError(error: unknown, operationId: string | null): SafeApplyEr
       code: 'DISCORD_RATE_LIMITED',
       retriable: true,
       status: 429,
+    };
+  }
+  if (error instanceof TaskCancelledError) {
+    return {
+      operation_id: operationId,
+      code: 'UPSTREAM_TIMEOUT',
+      retriable: true,
+      status: null,
     };
   }
   if (error instanceof DiscordAPIError || error instanceof HTTPError) {

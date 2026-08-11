@@ -1,12 +1,10 @@
 const SUCCESS_STATUSES = new Set(['complete', 'already_current']);
-const APPLY_TERMINAL_STATUSES = new Set([
-  'complete',
-  'already_current',
-  'blocked',
-  'busy',
-  'stale',
-]);
+const NEXT_ACTIONS = new Set(['done', 'resume', 'replan', 'fix_configuration']);
+const SNOWFLAKE = /^\d{17,20}$/;
 const SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
+const PLAN_RECOVERY_DELAYS_MS = Object.freeze([1_000, 3_000]);
+const APPLY_RECOVERY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000]);
+const MESSAGE_HISTORY_CHANNEL_TYPES = new Set([0, 5]);
 const REQUIRED_DEPENDENCIES = [
   'openSession',
   'readSnapshot',
@@ -35,6 +33,19 @@ function fail(code, options) {
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function baselineMessageChannels(snapshot, requiredChannelId) {
+  const ids = new Set([requiredChannelId]);
+  for (const channel of Array.isArray(snapshot?.channels) ? snapshot.channels : []) {
+    if (
+      MESSAGE_HISTORY_CHANNEL_TYPES.has(Number(channel?.type)) &&
+      SNOWFLAKE.test(channel?.id ?? '')
+    ) {
+      ids.add(channel.id);
+    }
+  }
+  return [...ids].sort();
 }
 
 async function settleBeforeAttempt(dependencies, attempt) {
@@ -69,6 +80,7 @@ function validateInput(input) {
   for (const key of ['cliPath', 'cwd', 'token', 'stateDirectory']) {
     if (typeof input[key] !== 'string' || input[key].trim() === '') fail('TRIAL_INPUT_INVALID');
   }
+  if (!SNOWFLAKE.test(input.baselineMessageChannelId ?? '')) fail('TRIAL_INPUT_INVALID');
   const dependencies = assertRecord(input.dependencies, 'TRIAL_DEPENDENCIES_INVALID');
   for (const key of REQUIRED_DEPENDENCIES) {
     if (typeof dependencies[key] !== 'function') fail('TRIAL_DEPENDENCIES_INVALID');
@@ -182,13 +194,41 @@ function validateApply(result, plan, trial) {
   }
   if (
     !Array.isArray(result.blockers) ||
-    (result.error !== null && (result.error === null || typeof result.error !== 'object')) ||
+    !NEXT_ACTIONS.has(result.next_action) ||
     typeof result.evidence.identity_verified !== 'boolean' ||
     typeof result.evidence.guild_verified !== 'boolean' ||
     !['match', 'drift', 'not_run'].includes(result.evidence.readback) ||
     !Array.isArray(result.evidence.completed_operation_ids)
   ) {
     fail('APPLY_RESPONSE_INVALID');
+  }
+  for (const blocker of result.blockers) {
+    if (
+      blocker === null ||
+      typeof blocker !== 'object' ||
+      typeof blocker.code !== 'string' ||
+      blocker.code === '' ||
+      typeof blocker.message !== 'string' ||
+      (blocker.resource !== null && typeof blocker.resource !== 'string') ||
+      typeof blocker.recovery_hint !== 'string'
+    ) {
+      fail('APPLY_RESPONSE_INVALID');
+    }
+  }
+  if (result.error !== null) {
+    const error = result.error;
+    if (
+      typeof error !== 'object' ||
+      Array.isArray(error) ||
+      (error.operation_id !== null && typeof error.operation_id !== 'string') ||
+      typeof error.code !== 'string' ||
+      error.code === '' ||
+      typeof error.retriable !== 'boolean' ||
+      (error.status !== null &&
+        (!Number.isInteger(error.status) || error.status < 100 || error.status > 599))
+    ) {
+      fail('APPLY_RESPONSE_INVALID');
+    }
   }
   const bindingKinds = Object.keys(result.evidence.bindings).sort();
   if (
@@ -203,11 +243,13 @@ function validateApply(result, plan, trial) {
   }
   if (
     (result.status === 'complete' || result.status === 'already_current') &&
-    progress.remaining !== 0
+    (progress.remaining !== 0 ||
+      result.next_action !== 'done' ||
+      result.error !== null ||
+      result.blockers.length !== 0)
   ) {
     fail('APPLY_RESPONSE_INVALID');
   }
-  if (result.status === 'partial' && progress.remaining < 1) fail('APPLY_RESPONSE_INVALID');
   return result;
 }
 
@@ -221,8 +263,6 @@ function applyArgs(input, plan, operationBudget) {
     __confirm: true,
   };
 }
-
-const SNOWFLAKE = /^\d{17,20}$/;
 
 function publicationTargets(blueprint, bindings, { requireComplete = true } = {}) {
   const publications = blueprint?.components_v2?.publications;
@@ -288,17 +328,41 @@ function publicationTargets(blueprint, bindings, { requireComplete = true } = {}
   });
 }
 
-function readableMessageChannelIds(snapshot) {
-  return (Array.isArray(snapshot?.channels) ? snapshot.channels : [])
-    .filter((channel) => channel?.type === 0 || channel?.type === 5)
-    .map((channel) => String(channel.id))
-    .filter((id) => id !== '')
-    .sort();
-}
-
 function safeFailure(error) {
   if (error instanceof TrialFailure) return error;
   return new TrialFailure('TRIAL_EXECUTION_FAILED');
+}
+
+function retryableSessionError(error) {
+  if (error instanceof TrialFailure) return false;
+  if (error?.source === 'mcp_tool_result') return error.retriable === true;
+  return true;
+}
+
+function recoveryDelay(error, fallback) {
+  const retryAfter = error?.retryAfterMs;
+  return Number.isInteger(retryAfter) && retryAfter >= 0 && retryAfter <= 120_000
+    ? Math.max(fallback, retryAfter)
+    : fallback;
+}
+
+function nonterminalApplySummary(result) {
+  return {
+    status: result.status,
+    error_operation_id: result.error?.operation_id ?? null,
+    error_code: result.error?.code ?? null,
+    error_retriable: result.error?.retriable ?? null,
+    error_status: result.error?.status ?? null,
+    next_action: result.next_action,
+    blocker_codes: result.blockers.map((blocker) => blocker.code),
+    blocker_resources: result.blockers.map((blocker) => blocker.resource),
+  };
+}
+
+function applyResponseNeedsRecovery(result) {
+  if (result.next_action !== 'resume' || result.blockers.length > 0) return false;
+  if (result.status === 'busy') return result.error === null || result.error.retriable === true;
+  return ['partial', 'blocked'].includes(result.status) && result.error?.retriable === true;
 }
 
 function emptyCleanup(input) {
@@ -324,6 +388,8 @@ export async function runBenchmarkTrial(input) {
   let currentSession = null;
   let sessionOpenCount = 0;
   let applyCalls = 0;
+  let planRecoveryCount = 0;
+  let applyRecoveryCount = 0;
   let planSnapshotUnchanged = false;
   let forcedResumeObserved = false;
   let replayStatus = null;
@@ -336,9 +402,11 @@ export async function runBenchmarkTrial(input) {
   let blueprintOracleMatch = false;
   let auditOraclePass = false;
   let terminalStatus = 'error';
+  let lastNonterminalApply = null;
   let plan;
   let before;
-  let baselineMessageChannelIds = [];
+  let baselineMessageChannelIds = [input.baselineMessageChannelId];
+  const sleep = dependencies.sleep ?? wait;
 
   const closeCurrent = async () => {
     const session = currentSession;
@@ -360,21 +428,79 @@ export async function runBenchmarkTrial(input) {
     sessionOpenCount += 1;
     return currentSession;
   };
+  const reopen = async (milliseconds) => {
+    await closeCurrent();
+    await sleep(milliseconds);
+    await open();
+  };
+  const callPlan = async () => {
+    while (true) {
+      let rawPlan;
+      try {
+        rawPlan = await currentSession.callTool('guild_blueprint_plan', {
+          guild_id: trial.guild_id,
+          expected_bot_id: trial.expected_bot_id,
+          request: input.request,
+        });
+      } catch (error) {
+        if (!retryableSessionError(error) || planRecoveryCount >= PLAN_RECOVERY_DELAYS_MS.length) {
+          throw error;
+        }
+        const milliseconds = recoveryDelay(error, PLAN_RECOVERY_DELAYS_MS[planRecoveryCount]);
+        planRecoveryCount += 1;
+        await reopen(milliseconds);
+        continue;
+      }
+      return validatePlan(rawPlan, trial);
+    }
+  };
+  const recoverApply = async (error) => {
+    if (applyRecoveryCount >= APPLY_RECOVERY_DELAYS_MS.length) return false;
+    const milliseconds = recoveryDelay(error, APPLY_RECOVERY_DELAYS_MS[applyRecoveryCount]);
+    applyRecoveryCount += 1;
+    await reopen(milliseconds);
+    return true;
+  };
+  const callApply = async (operationBudget) => {
+    while (true) {
+      let rawApply;
+      applyCalls += 1;
+      try {
+        rawApply = await currentSession.callTool(
+          'guild_blueprint_apply',
+          applyArgs(input, plan, operationBudget),
+        );
+      } catch (error) {
+        if (!retryableSessionError(error) || !(await recoverApply(error))) throw error;
+        continue;
+      }
+      return validateApply(rawApply, plan, trial);
+    }
+  };
+  const rememberApply = (result) => {
+    cleanup.bindings = structuredClone(result.evidence.bindings);
+    if (!SUCCESS_STATUSES.has(result.status)) {
+      lastNonterminalApply = nonterminalApplySummary(result);
+    }
+  };
 
   try {
     const auditCursor = await dependencies.readAuditCursor({
       guildId: trial.guild_id,
       botId: trial.expected_bot_id,
     });
-    const inventory = await dependencies.readSnapshot({
+    const discoverySnapshot = await dependencies.readSnapshot({
       guildId: trial.guild_id,
       botId: trial.expected_bot_id,
-      messageChannelIds: [],
+      messageChannelIds: baselineMessageChannelIds,
     });
-    baselineMessageChannelIds = readableMessageChannelIds(inventory);
+    baselineMessageChannelIds = baselineMessageChannels(
+      discoverySnapshot,
+      input.baselineMessageChannelId,
+    );
     before =
-      baselineMessageChannelIds.length === 0
-        ? inventory
+      baselineMessageChannelIds.length === 1
+        ? discoverySnapshot
         : await dependencies.readSnapshot({
             guildId: trial.guild_id,
             botId: trial.expected_bot_id,
@@ -382,15 +508,8 @@ export async function runBenchmarkTrial(input) {
           });
     const beforeFingerprint = dependencies.snapshotFingerprint(before);
 
-    const session = await open();
-    plan = validatePlan(
-      await session.callTool('guild_blueprint_plan', {
-        guild_id: trial.guild_id,
-        expected_bot_id: trial.expected_bot_id,
-        request: input.request,
-      }),
-      trial,
-    );
+    await open();
+    plan = await callPlan();
     operationsPlanned = plan.operations.length;
     cleanup.blueprint_id = plan.blueprint_id;
     cleanup.plan_id = plan.plan_id;
@@ -407,39 +526,47 @@ export async function runBenchmarkTrial(input) {
 
     let latestApply;
     if (trial.mode === 'forced_resume') {
-      latestApply = validateApply(
-        await session.callTool('guild_blueprint_apply', applyArgs(input, plan, 1)),
-        plan,
-        trial,
-      );
-      applyCalls += 1;
-      if (
-        latestApply.status !== 'partial' ||
-        latestApply.progress.attempted_this_call !== 1 ||
-        latestApply.progress.remaining < 1
-      ) {
-        fail('FORCED_RESUME_NOT_OBSERVED');
+      while (true) {
+        latestApply = await callApply(1);
+        rememberApply(latestApply);
+        if (
+          latestApply.status === 'partial' &&
+          latestApply.error === null &&
+          latestApply.progress.attempted_this_call === 1 &&
+          latestApply.attempts[0]?.status === 'completed' &&
+          latestApply.progress.remaining >= 1
+        ) {
+          break;
+        }
+        if (!applyResponseNeedsRecovery(latestApply) || !(await recoverApply(latestApply.error))) {
+          fail('FORCED_RESUME_NOT_OBSERVED', { terminalStatus: latestApply.status });
+        }
       }
       forcedResumeObserved = true;
-      cleanup.bindings = structuredClone(latestApply.evidence.bindings);
       await closeCurrent();
       await open();
     }
 
     for (let iteration = 0; iteration < 8; iteration += 1) {
-      if (latestApply !== undefined && latestApply.status !== 'partial') break;
-      latestApply = validateApply(
-        await currentSession.callTool('guild_blueprint_apply', applyArgs(input, plan, 50)),
-        plan,
-        trial,
-      );
-      applyCalls += 1;
-      cleanup.bindings = structuredClone(latestApply.evidence.bindings);
-      if (APPLY_TERMINAL_STATUSES.has(latestApply.status)) break;
+      latestApply = await callApply(50);
+      rememberApply(latestApply);
+      if (SUCCESS_STATUSES.has(latestApply.status)) break;
+      if (
+        latestApply.status === 'partial' &&
+        latestApply.error === null &&
+        latestApply.next_action === 'resume' &&
+        latestApply.blockers.length === 0
+      ) {
+        continue;
+      }
+      if (applyResponseNeedsRecovery(latestApply) && (await recoverApply(latestApply.error))) {
+        continue;
+      }
+      break;
     }
     if (latestApply === undefined) fail('APPLY_RESPONSE_INVALID');
-    terminalStatus = latestApply.status;
-    if (latestApply.status !== 'complete') {
+    terminalStatus = SUCCESS_STATUSES.has(latestApply.status) ? 'complete' : latestApply.status;
+    if (!SUCCESS_STATUSES.has(latestApply.status)) {
       fail('APPLY_DID_NOT_COMPLETE', { terminalStatus: latestApply.status });
     }
     if (
@@ -451,11 +578,12 @@ export async function runBenchmarkTrial(input) {
       fail('APPLY_EVIDENCE_INVALID');
     }
 
-    const replay = validateApply(
-      await currentSession.callTool('guild_blueprint_apply', applyArgs(input, plan, 50)),
-      plan,
-      trial,
-    );
+    let replay = await callApply(50);
+    rememberApply(replay);
+    while (applyResponseNeedsRecovery(replay) && (await recoverApply(replay.error))) {
+      replay = await callApply(50);
+      rememberApply(replay);
+    }
     replayStatus = replay.status;
     if (
       replay.status !== 'already_current' ||
@@ -663,6 +791,7 @@ export async function runBenchmarkTrial(input) {
       audit_entry_count: auditEntryCount,
       audit_trail_complete: auditTrailComplete,
       verified_counts: verifiedCounts,
+      last_nonterminal_apply: lastNonterminalApply,
     },
     cleanup,
   };

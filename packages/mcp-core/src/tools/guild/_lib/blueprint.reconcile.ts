@@ -356,11 +356,13 @@ function containsMarker(value: unknown, marker: string): boolean {
 function normalizePublicationComponents(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalizePublicationComponents);
   if (value === null || typeof value !== 'object') return value;
-  return Object.fromEntries(
+  const normalized = Object.fromEntries(
     Object.entries(value)
       .filter(([key, item]) => key !== 'id' || typeof item !== 'number')
       .map(([key, item]) => [key, normalizePublicationComponents(item)]),
   );
+  if (normalized.type === 17 && normalized.spoiler === false) delete normalized.spoiler;
+  return normalized;
 }
 
 function publicationMatches(

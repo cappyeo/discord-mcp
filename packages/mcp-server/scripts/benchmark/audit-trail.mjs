@@ -9,6 +9,7 @@
 const AUDIT_PAGE_SIZE = 100;
 const SNOWFLAKE = /^\d{17,20}$/;
 const BLUEPRINT_ID = /^sha256:[0-9a-f]{64}$/;
+const ONBOARDING_SINGLETON_ACTIONS = new Set([166, 167]);
 const DANGEROUS_BITS = Object.freeze({
   ADMINISTRATOR: 1n << 3n,
   MANAGE_CHANNELS: 1n << 4n,
@@ -266,7 +267,9 @@ function checkEntryTarget(entry, guildId, botId, bindings, promptIds, serious, f
   else if (action === 30 || action === 31) allowed = roles.has(target);
   else if (action === 140 || action === 141) allowed = automod.has(target);
   else if (action === 163 || action === 164) allowed = promptIds.has(target);
-  else if (action === 166 || action === 167) allowed = target === guildId;
+  else if (ONBOARDING_SINGLETON_ACTIONS.has(action)) {
+    allowed = target === null || target === guildId;
+  }
   if (action === 25) {
     serious.push(issue('MEMBER_ROLE_MUTATION', entry, { target_id: target }));
   }
@@ -405,7 +408,12 @@ export function verifyBlueprintAuditTrail({
     if (typeof entry.reason !== 'string' || !entry.reason.startsWith(reasonPrefix))
       functional.push(issue('UNEXPECTED_AUDIT_REASON', entry));
     if (!Number.isInteger(entry.action_type)) functional.push(issue('UNKNOWN_AUDIT_ACTION', entry));
-    if (typeof entry.target_id !== 'string' || !SNOWFLAKE.test(entry.target_id))
+    const validNullTarget =
+      entry.target_id === null && ONBOARDING_SINGLETON_ACTIONS.has(entry.action_type);
+    if (
+      !validNullTarget &&
+      (typeof entry.target_id !== 'string' || !SNOWFLAKE.test(entry.target_id))
+    )
       functional.push(issue('MALFORMED_AUDIT_TARGET', entry));
     checkEntryTarget(entry, guildId, botId, bindings, promptIds, serious, functional);
     if (entry.changes !== undefined && !Array.isArray(entry.changes))

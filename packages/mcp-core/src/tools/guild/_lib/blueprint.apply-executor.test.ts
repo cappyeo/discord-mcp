@@ -1,4 +1,4 @@
-import type { REST } from '@discordjs/rest';
+import { RateLimitError, type REST } from '@discordjs/rest';
 import { describe, expect, it, vi } from 'vitest';
 import { executeBlueprintOperation } from './blueprint.apply-executor.js';
 import {
@@ -174,6 +174,314 @@ describe('blueprint operation response validation', () => {
       }),
     ).resolves.toEqual({ resource_id: null });
     expect(patch).toHaveBeenCalledOnce();
+  });
+
+  it('reorders channels without batching multiple parent moves', async () => {
+    const patch = vi.fn(async () => undefined);
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { patch } as unknown as REST,
+        plan,
+        operation: operation('channel_order', 'reorder', 'managed_channels'),
+        bindings: bindings(),
+        snapshot,
+        signal,
+      }),
+    ).resolves.toEqual({ resource_id: null });
+    expect(patch).toHaveBeenCalledOnce();
+    const options = patch.mock.calls[0]![1] as { body: Array<Record<string, unknown>> };
+    expect(options.body).toHaveLength(blueprint.categories.length + blueprint.channels.length);
+    expect(options.body.every((item) => !Object.hasOwn(item, 'parent_id'))).toBe(true);
+  });
+
+  it('binds a publication response with optional guild_id through channel readback', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+    const messageId = '230000000000000000';
+    const get = vi.fn(async () => ({ id: channelId, guild_id: GUILD_ID }));
+    const post = vi.fn(async () => ({
+      id: messageId,
+      channel_id: channelId,
+      author: { id: BOT_ID },
+    }));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { get, post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).resolves.toEqual({ resource_id: messageId });
+    expect(get).toHaveBeenCalledOnce();
+    expect(currentBindings.publications[publication.key]).toBe(messageId);
+  });
+
+  it('distinguishes a publication channel readback failure from the message write', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+
+    await expect(
+      executeBlueprintOperation({
+        rest: {
+          get: async () => {
+            throw Object.assign(new Error('Forbidden'), { status: 403 });
+          },
+          post: async () => ({
+            id: '230000000000000000',
+            channel_id: channelId,
+            author: { id: BOT_ID },
+          }),
+        } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).rejects.toMatchObject({ code: 'PUBLICATION_CHANNEL_READBACK_FAILED' });
+  });
+
+  it('retries a transient publication channel readback without reposting the message', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+    const messageId = '230000000000000001';
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Unknown Channel'), { status: 404 }))
+      .mockResolvedValueOnce({ id: channelId, guild_id: GUILD_ID });
+    const post = vi.fn(async () => ({
+      id: messageId,
+      channel_id: channelId,
+      author: { id: BOT_ID },
+    }));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { get, post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).resolves.toEqual({ resource_id: messageId });
+    expect(post).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a REST rate limit during publication channel readback', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+    const messageId = '230000000000000002';
+    const rateLimit = new RateLimitError({
+      timeToReset: 1_000,
+      limit: 5,
+      method: 'GET',
+      hash: 'publication-readback',
+      url: `https://discord.com/api/v10/channels/${channelId}`,
+      route: '/channels/:id',
+      majorParameter: channelId,
+      global: false,
+      retryAfter: 1_000,
+      sublimitTimeout: 0,
+      scope: 'user',
+    });
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(rateLimit)
+      .mockResolvedValueOnce({ id: channelId, guild_id: GUILD_ID });
+    const post = vi.fn(async () => ({
+      id: messageId,
+      channel_id: channelId,
+      author: { id: BOT_ID },
+    }));
+
+    vi.useFakeTimers();
+    try {
+      const execution = executeBlueprintOperation({
+        rest: { get, post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(get).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(execution).resolves.toEqual({ resource_id: messageId });
+      expect(post).toHaveBeenCalledOnce();
+      expect(get).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels an in-flight publication channel readback without retrying', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+    const controller = new AbortController();
+    const get = vi.fn(async (_route: string, options: { signal?: AbortSignal }) => {
+      expect(options.signal).toBe(controller.signal);
+      controller.abort();
+      throw new DOMException('Aborted', 'AbortError');
+    });
+
+    await expect(
+      executeBlueprintOperation({
+        rest: {
+          get,
+          post: async () => ({
+            id: '230000000000000003',
+            channel_id: channelId,
+            author: { id: BOT_ID },
+          }),
+        } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: 'CANCELLED' });
+    expect(get).toHaveBeenCalledOnce();
+  });
+
+  it('retries a publication 404 with the same nonce-bearing body', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = currentBindings.channels[publication.channel_key]!;
+    const messageId = '230000000000000001';
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Unknown Channel'), { status: 404 }))
+      .mockResolvedValueOnce({
+        id: messageId,
+        channel_id: channelId,
+        author: { id: BOT_ID },
+      });
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { post, get: async () => ({ id: channelId, guild_id: GUILD_ID }) } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).resolves.toEqual({ resource_id: messageId });
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[0]![0]).toBe(post.mock.calls[1]![0]);
+    expect(post.mock.calls[0]![1]).toEqual(post.mock.calls[1]![1]);
+    expect((post.mock.calls[0]![1] as { body: Record<string, unknown> }).body.nonce).toEqual(
+      expect.stringMatching(/^dmc[a-f0-9]{22}$/),
+    );
+    expect((post.mock.calls[0]![1] as { body: Record<string, unknown> }).body.enforce_nonce).toBe(
+      true,
+    );
+  });
+
+  it('bounds publication 404 retries and returns a resumable channel-readiness error', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const post = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('Unknown Channel'), { status: 404 }));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).rejects.toMatchObject({ code: 'PUBLICATION_CHANNEL_NOT_READY', status: 404 });
+    expect(post).toHaveBeenCalledTimes(4);
+    expect(post.mock.calls[0]![1]).toEqual(post.mock.calls[1]![1]);
+    expect(post.mock.calls[1]![1]).toEqual(post.mock.calls[2]![1]);
+    expect(post.mock.calls[2]![1]).toEqual(post.mock.calls[3]![1]);
+  });
+
+  it('does not retry a non-404 publication error', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const post = vi.fn().mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
+
+    await expect(
+      executeBlueprintOperation({
+        rest: { post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', publication.key),
+        bindings: currentBindings,
+        snapshot,
+        signal,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(post).toHaveBeenCalledOnce();
+  });
+
+  it('stops publication retries when the apply signal is cancelled', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const controller = new AbortController();
+    const post = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('Unknown Channel'), { status: 404 }));
+
+    const pending = executeBlueprintOperation({
+      rest: { post } as unknown as REST,
+      plan,
+      operation: operation('publication', 'send', publication.key),
+      bindings: currentBindings,
+      snapshot,
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: 'CANCELLED' });
+    expect(post).toHaveBeenCalledOnce();
+  });
+
+  it('cancels an in-flight publication POST without retrying', async () => {
+    const currentBindings = bindings();
+    const publication = blueprint.components_v2.publications[0]!;
+    const controller = new AbortController();
+    const post = vi.fn(
+      async (_route: string, options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          expect(options.signal).toBe(controller.signal);
+          options.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            { once: true },
+          );
+        }),
+    );
+
+    const pending = executeBlueprintOperation({
+      rest: { post } as unknown as REST,
+      plan,
+      operation: operation('publication', 'send', publication.key),
+      bindings: currentBindings,
+      snapshot,
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: 'CANCELLED' });
+    expect(post).toHaveBeenCalledOnce();
   });
 
   it('rejects a Welcome Screen response that differs from the approved payload', async () => {

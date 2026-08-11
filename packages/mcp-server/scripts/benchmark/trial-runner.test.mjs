@@ -58,7 +58,14 @@ function bindings(channelId = CHANNEL_ID, messageId = MESSAGE_ID) {
   };
 }
 
-function applyResult(status, attempted, remaining, channelId = CHANNEL_ID, messageId = MESSAGE_ID) {
+function applyResult(
+  status,
+  attempted,
+  remaining,
+  channelId = CHANNEL_ID,
+  messageId = MESSAGE_ID,
+  overrides = {},
+) {
   const operationIds = ['channel:create:general', 'publication:welcome'];
   return {
     status,
@@ -69,9 +76,15 @@ function applyResult(status, attempted, remaining, channelId = CHANNEL_ID, messa
       initial_planned: 2,
       planned_this_call: attempted,
       attempted_this_call: attempted,
-      completed_total: status === 'partial' ? 1 : 2,
+      completed_total:
+        status === 'partial' ? 1 : status === 'complete' || status === 'already_current' ? 2 : 0,
       remaining,
-      checkpoint_version: status === 'already_current' ? 2 : 1,
+      checkpoint_version:
+        status === 'blocked' || status === 'busy' || status === 'stale'
+          ? null
+          : status === 'already_current'
+            ? 2
+            : 1,
     },
     attempts: Array.from({ length: attempted }, (_, index) => ({
       operation_id: operationIds[index],
@@ -92,6 +105,13 @@ function applyResult(status, attempted, remaining, channelId = CHANNEL_ID, messa
           ? { evidence_id: `sha256:${'d'.repeat(64)}` }
           : null,
     },
+    next_action:
+      status === 'complete' || status === 'already_current'
+        ? 'done'
+        : status === 'stale'
+          ? 'replan'
+          : 'resume',
+    ...overrides,
   };
 }
 
@@ -117,6 +137,11 @@ function harness(
     generatedMessageId = MESSAGE_ID,
     failResume = false,
     closeFailure = false,
+    planCallFailures = 0,
+    applyTransportFailures = 0,
+    retriableApplyResponses = 0,
+    retriableVerificationResponses = 0,
+    nonRetriableApplyResponse = false,
     snapshotSettlesAfter = 1,
     auditSettlesAfter = 1,
   } = {},
@@ -126,6 +151,12 @@ function harness(
   const sessions = [];
   const applyBudgets = [];
   let firstForcedApply = true;
+  let remainingPlanFailures = planCallFailures;
+  let remainingApplyTransportFailures = applyTransportFailures;
+  let remainingRetriableApplyResponses = retriableApplyResponses;
+  let remainingRetriableVerificationResponses = retriableVerificationResponses;
+  let nonRetriableApplyReturned = false;
+  let completedApply = false;
   const openSession = async (options) => {
     const calls = [];
     const session = {
@@ -135,18 +166,70 @@ function harness(
       closed: false,
       async callTool(name, args) {
         calls.push({ name, args });
-        if (name === 'guild_blueprint_plan') return plan();
+        if (name === 'guild_blueprint_plan') {
+          if (remainingPlanFailures > 0) {
+            remainingPlanFailures -= 1;
+            throw Object.assign(new Error('guild_blueprint_plan failed (UPSTREAM_TIMEOUT)'), {
+              code: 'UPSTREAM_TIMEOUT',
+              source: 'mcp_tool_result',
+              retriable: true,
+            });
+          }
+          return plan();
+        }
         if (name === 'guild_blueprint_evidence') return evidenceResult;
         assert.equal(name, 'guild_blueprint_apply');
         applyBudgets.push(args.operation_budget);
+        if (remainingApplyTransportFailures > 0) {
+          remainingApplyTransportFailures -= 1;
+          completedApply = true;
+          throw new Error('transport disconnected after apply dispatch');
+        }
+        if (remainingRetriableApplyResponses > 0) {
+          remainingRetriableApplyResponses -= 1;
+          return applyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
+            error: {
+              operation_id: null,
+              code: 'UPSTREAM_TIMEOUT',
+              retriable: true,
+              status: null,
+            },
+          });
+        }
+        if (remainingRetriableVerificationResponses > 0) {
+          remainingRetriableVerificationResponses -= 1;
+          const result = applyResult('partial', 0, 0, generatedChannelId, generatedMessageId, {
+            error: {
+              operation_id: null,
+              code: 'UPSTREAM_TIMEOUT',
+              retriable: true,
+              status: null,
+            },
+          });
+          result.progress.completed_total = 2;
+          return result;
+        }
+        if (nonRetriableApplyResponse && !nonRetriableApplyReturned) {
+          nonRetriableApplyReturned = true;
+          return applyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
+            error: {
+              operation_id: null,
+              code: 'DISCORD_PERMISSION_DENIED',
+              retriable: false,
+              status: 403,
+            },
+            next_action: 'fix_configuration',
+          });
+        }
         if (mode === 'forced_resume' && firstForcedApply) {
           firstForcedApply = false;
           return applyResult('partial', 1, 1, generatedChannelId, generatedMessageId);
         }
         if (mode === 'forced_resume' && failResume) throw new Error('injected resume failure');
-        if (calls.filter((call) => call.name === 'guild_blueprint_apply').length > 1) {
+        if (completedApply) {
           return applyResult('already_current', 0, 0, generatedChannelId, generatedMessageId);
         }
+        completedApply = true;
         return applyResult('complete', 1, 0, generatedChannelId, generatedMessageId);
       },
       async close() {
@@ -172,24 +255,12 @@ function harness(
       async readSnapshot({ messageChannelIds }) {
         snapshotCall += 1;
         snapshotRequests.push([...messageChannelIds]);
-        if (baselineChannel) {
-          if (snapshotCall === 1) {
-            return {
-              fingerprint: 'inventory',
-              channels: readableBaselineChannelIds.map((id) => ({ id, type: 0 })),
-              messageChannelIds,
-            };
-          }
-          return {
-            fingerprint:
-              snapshotCall === 2 ? 'baseline' : snapshotCall === 3 ? planFingerprint : 'final',
-            channels: readableBaselineChannelIds.map((id) => ({ id, type: 0 })),
-            messageChannelIds,
-          };
-        }
         return {
           fingerprint:
             snapshotCall === 1 ? 'baseline' : snapshotCall === 2 ? planFingerprint : 'final',
+          ...(baselineChannel
+            ? { channels: readableBaselineChannelIds.map((id) => ({ id, type: 0 })) }
+            : {}),
           messageChannelIds,
         };
       },
@@ -250,6 +321,7 @@ function input(mode, dependencies) {
     cwd: 'C:\\repo',
     token: 'discord-token-never-reported',
     stateDirectory: `C:\\state\\${mode}`,
+    baselineMessageChannelId: BASELINE_CHANNEL_ID,
     dependencies,
   };
 }
@@ -269,13 +341,21 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(test.sessions.length, 2);
     assert.ok(test.sessions.every((session) => session.closed));
     assert.deepEqual(outcome.cleanup.bindings, bindings());
-    assert.deepEqual(outcome.cleanup.message_channel_ids, [CHANNEL_ID]);
+    assert.deepEqual(outcome.cleanup.message_channel_ids, [BASELINE_CHANNEL_ID, CHANNEL_ID]);
     assert.deepEqual(outcome.cleanup.publication_targets, [
       { channel_id: CHANNEL_ID, message_id: MESSAGE_ID },
     ]);
     assert.equal(Object.hasOwn(outcome.cleanup, 'blueprint'), false);
     assert.equal(Object.hasOwn(outcome.cleanup, 'plan_token'), false);
     assert.doesNotMatch(JSON.stringify(outcome), /opaque-plan-token|discord-token-never-reported/);
+    assert.deepEqual(test.snapshotRequests.slice(0, 2), [
+      [BASELINE_CHANNEL_ID],
+      [BASELINE_CHANNEL_ID],
+    ]);
+    assert.equal(
+      test.snapshotRequests.some((ids) => ids.length === 0),
+      false,
+    );
   });
 
   it('reads baseline and generated publication channels in the final snapshot', async () => {
@@ -305,6 +385,90 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.oracle_match, true);
     assert.equal(outcome.result.audit_entry_count, 1);
     assert.deepEqual(test.settleSleeps, [250, 250]);
+  });
+
+  it('restarts and retries a retriable read-only plan error with bounded backoff', async () => {
+    const test = harness('full', { planCallFailures: 1 });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.equal(outcome.result.restart_count, 2);
+    assert.deepEqual(test.settleSleeps, [1_000]);
+    assert.equal(test.sessions.length, 3);
+    assert.ok(test.sessions.every((session) => session.closed));
+  });
+
+  it('reconnects and resumes the same plan after a retriable apply timeout', async () => {
+    const test = harness('full', { retriableApplyResponses: 1 });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.deepEqual(test.applyBudgets, [50, 50, 50]);
+    assert.deepEqual(test.settleSleeps, [1_000]);
+    assert.equal(outcome.result.restart_count, 2);
+    assert.deepEqual(outcome.result.last_nonterminal_apply, {
+      status: 'blocked',
+      error_operation_id: null,
+      error_code: 'UPSTREAM_TIMEOUT',
+      error_retriable: true,
+      error_status: null,
+      next_action: 'resume',
+      blocker_codes: [],
+      blocker_resources: [],
+    });
+    const applyCalls = test.sessions.flatMap((session) =>
+      session.calls.filter((call) => call.name === 'guild_blueprint_apply'),
+    );
+    assert.ok(applyCalls.every((call) => call.args.plan_token === plan().plan_token));
+    assert.ok(applyCalls.every((call) => call.args.approval_id === APPROVAL_ID));
+  });
+
+  it('reconnects when final verification times out after every mutation completed', async () => {
+    const test = harness('full', { retriableVerificationResponses: 1 });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.deepEqual(test.applyBudgets, [50, 50, 50]);
+    assert.deepEqual(test.settleSleeps, [1_000]);
+    assert.deepEqual(outcome.result.last_nonterminal_apply, {
+      status: 'partial',
+      error_operation_id: null,
+      error_code: 'UPSTREAM_TIMEOUT',
+      error_retriable: true,
+      error_status: null,
+      next_action: 'resume',
+      blocker_codes: [],
+      blocker_resources: [],
+    });
+  });
+
+  it('reconnects and reconciles after an ambiguous apply transport failure', async () => {
+    const test = harness('full', { applyTransportFailures: 1 });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, true);
+    assert.deepEqual(test.applyBudgets, [50, 50, 50]);
+    assert.deepEqual(test.settleSleeps, [1_000]);
+    assert.equal(outcome.result.restart_count, 2);
+  });
+
+  it('does not retry a non-retriable apply blocker and preserves safe diagnostics', async () => {
+    const test = harness('full', { nonRetriableApplyResponse: true });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'blocked');
+    assert.deepEqual(test.applyBudgets, [50]);
+    assert.deepEqual(test.settleSleeps, []);
+    assert.deepEqual(outcome.result.last_nonterminal_apply, {
+      status: 'blocked',
+      error_operation_id: null,
+      error_code: 'DISCORD_PERMISSION_DENIED',
+      error_retriable: false,
+      error_status: 403,
+      next_action: 'fix_configuration',
+      blocker_codes: [],
+      blocker_resources: [],
+    });
   });
 
   it('cannot pass when an independent oracle returns false with empty failure arrays', async () => {
@@ -406,7 +570,7 @@ describe('real benchmark trial orchestration', () => {
     assert.deepEqual(outcome.cleanup.publication_targets, [
       { channel_id: CHANNEL_ID, message_id: MESSAGE_ID },
     ]);
-    assert.deepEqual(outcome.cleanup.message_channel_ids, [CHANNEL_ID]);
+    assert.deepEqual(outcome.cleanup.message_channel_ids, [BASELINE_CHANNEL_ID, CHANNEL_ID]);
     assert.ok(
       outcome.result.functional_failures.some((item) => item.code === 'TRIAL_EXECUTION_FAILED'),
     );
@@ -444,6 +608,38 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(test.applyBudgets.length, 0);
     assert.equal(test.sessions.length, 1);
     assert.equal(test.sessions[0].closed, true);
+  });
+
+  it('detects a planning message side effect in any existing text channel', async () => {
+    const test = harness('full');
+    const snapshotRequests = [];
+    let snapshotCall = 0;
+    test.dependencies.readSnapshot = async ({ messageChannelIds }) => {
+      snapshotCall += 1;
+      snapshotRequests.push([...messageChannelIds]);
+      return {
+        fingerprint: snapshotCall < 3 ? 'baseline' : 'mutated',
+        channels: [
+          { id: BASELINE_CHANNEL_ID, type: 0 },
+          { id: GENERATED_CHANNEL_ID, type: 0 },
+        ],
+        messageChannelIds,
+      };
+    };
+
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'error');
+    assert.equal(outcome.result.oracle_match, false);
+    assert.deepEqual(outcome.result.serious_permission_failures, [
+      { code: 'PLAN_MUTATED_DISCORD' },
+    ]);
+    assert.deepEqual(snapshotRequests.slice(0, 3), [
+      [BASELINE_CHANNEL_ID],
+      [GENERATED_CHANNEL_ID, BASELINE_CHANNEL_ID],
+      [GENERATED_CHANNEL_ID, BASELINE_CHANNEL_ID],
+    ]);
+    assert.equal(test.applyBudgets.length, 0);
   });
 
   it('fails closed when restart-safe Activity Evidence is not verified', async () => {

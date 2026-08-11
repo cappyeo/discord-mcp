@@ -1,6 +1,6 @@
 import { DiscordAPIError, HTTPError, RateLimitError } from '@discordjs/rest';
 import type { CallToolResult } from '@modelcontextprotocol/server';
-import { BrokenCircuitError, BulkheadRejectedError } from 'cockatiel';
+import { BrokenCircuitError, BulkheadRejectedError, TaskCancelledError } from 'cockatiel';
 import { DryRunPreview, WritePreview } from './client.js';
 import {
   BulkheadFullError,
@@ -231,6 +231,22 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
         `discord-mcp opened the local circuit breaker because Discord REST has been failing repeatedly.\n\n` +
         `**Recovery**: wait and retry`,
       structured: {},
+    });
+  }
+
+  if (e instanceof TaskCancelledError) {
+    const structured: Record<string, unknown> = {};
+    if (ctx.sentryEventId !== undefined) structured.trace_id = ctx.sentryEventId;
+    return makeError({
+      code: 'UPSTREAM_TIMEOUT',
+      retriable: true,
+      category: 'server',
+      recoveryHint: 'retry with backoff',
+      text:
+        `**Upstream Timeout**\n\n` +
+        `The upstream request for \`${ctx.toolName}\` exceeded its timeout.\n\n` +
+        '**Recovery**: retry with backoff.',
+      structured,
     });
   }
 

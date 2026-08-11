@@ -159,6 +159,22 @@ test('builds independent JSON expectations for permissions, overwrites, bindings
   assert.doesNotThrow(() => JSON.stringify(expected));
 });
 
+test('allows a child channel to materialize its parent category overwrites', () => {
+  const inherited = blueprint();
+  inherited.channels[0].overwrites = [];
+  const expected = buildBenchmarkExpectations({
+    blueprint: inherited,
+    bindings: bindings(),
+    before: before(),
+    guildId,
+    botId,
+  });
+
+  assert.equal(expected.allowed_overwrite_allows[`${ids.channel}:0:${guildId}`], '1024');
+  assert.equal(expected.allowed_overwrite_allows[`${ids.channel}:1:${botId}`], '2048');
+  assert.equal(expected.allowed_overwrite_allows[`${ids.channel}:0:${ids.member}`], '64');
+});
+
 test('fails closed for unknown permission, reference, binding, duplicate, and preexisting IDs', () => {
   const unknownPermission = blueprint();
   unknownPermission.roles[0].permissions = ['NOT_A_PERMISSION'];
