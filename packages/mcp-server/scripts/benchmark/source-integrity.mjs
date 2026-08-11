@@ -78,8 +78,13 @@ function parseStatus(output, allowedPrefixes) {
     }
 
     const path = normalizeSlash(rawPath);
-    rejectUnsafePath(path, 'untracked path');
-    if (!allowedPrefixes.some((prefix) => path.startsWith(prefix))) {
+    const validationPath = path.endsWith('/') ? path.slice(0, -1) : path;
+    rejectUnsafePath(validationPath, 'untracked path');
+    if (
+      !allowedPrefixes.some(
+        (prefix) => validationPath === prefix.slice(0, -1) || validationPath.startsWith(prefix),
+      )
+    ) {
       throw new Error(`untracked path is outside allowed prefixes: ${path}`);
     }
     allowedUntracked.push(path);

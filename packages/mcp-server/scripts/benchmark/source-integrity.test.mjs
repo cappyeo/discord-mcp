@@ -82,6 +82,20 @@ describe('assertBenchmarkSourceIntegrity', () => {
     });
   });
 
+  it('allows an untracked nested repository directory below docs/', async () => {
+    const nested = join(repository.cwd, 'docs', 'nested-repository');
+    await mkdir(nested, { recursive: true });
+    await git(nested, ['init', '--quiet']);
+    await writeFile(join(nested, 'README.md'), 'nested\n');
+
+    await expect(
+      assertBenchmarkSourceIntegrity({ cwd: repository.cwd, expectedCommit: repository.commit }),
+    ).resolves.toEqual({
+      commit: repository.commit,
+      allowed_untracked: ['docs/nested-repository/'],
+    });
+  });
+
   it('rejects unrelated untracked files', async () => {
     await writeFile(join(repository.cwd, 'scratch.txt'), 'not allowed\n');
     await expect(
