@@ -2,8 +2,8 @@ import { type Resource, resourceFromAttributes } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import type { Config } from '../config.js';
 
-// Static - the public tool registry currently contains 204 tools.
-const PLAN8_TOOL_COUNT = '204';
+// Static - the public tool registry currently contains 205 tools.
+const PLAN8_TOOL_COUNT = '205';
 
 // Inlined since these come from `/incubating` in semconv 1.34 and we'd
 // rather not couple to an unstable subpath.

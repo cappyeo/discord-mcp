@@ -5,14 +5,16 @@ sidebar:
   order: 5
 ---
 
-discord-mcp v0.18.1 is the current public release. v1.0.0 commits to API stability
+discord-mcp v0.18.1 is the current public release. The current source tree contains
+205 tools. v1.0.0 commits to API stability
 for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
 below is ticked. Re-evaluate the evidence before each release; unchecked items are
 real gates, not aspirational release notes.
 
 ## Current source evidence (public release: v0.18.1)
 
-- 204 MCP tools across 31 categories.
+- The current source tree exposes 205 MCP tools across 31 categories; the public
+  v0.18.1 packages expose 204.
 - More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
   and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
   remaining OTel parent-child integration seam.
@@ -126,14 +128,14 @@ removal or rename fails CI instead of reaching a consumer.
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
-- [x] Tool surface (204 tools) frozen - `src/tools/registry.invariants.test.ts`
+- [x] Tool surface (205 tools) frozen - `src/tools/registry.invariants.test.ts`
       also asserts destructive-iff-confirm-gated and complete annotations
 
 ## v1.0.0 commitment
 
 - **Semver**: breaking changes require a major bump (v2.0.0).
 - **API stability**: `@discord-mcp/core` exports stable for 6+ months.
-- **Tool surface**: 204 tools maintained; new tools = minor version.
+- **Tool surface**: 205 tools maintained; new tools = minor version.
 - **CLI flags**: `discord-mcp serve|doctor|init|migrate` flag set frozen.
 - **Config**: env var names + defaults frozen (additions allowed; renames
   forbidden).

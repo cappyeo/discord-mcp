@@ -97,9 +97,9 @@ describe('MCP protocol contract', () => {
     expect(text).toMatch(/channel_id/);
   });
 
-  it('lists 204 tools after auto-discovery', async () => {
+  it('lists 205 tools after auto-discovery', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(204);
+    expect(tools.length).toBe(205);
     const names = new Set(tools.map((t) => t.name));
     for (const expected of [
       'messages_send',
@@ -117,6 +117,7 @@ describe('MCP protocol contract', () => {
       'templates_recommend',
       'roles_list',
       'guild_get',
+      'guild_blueprint_compile',
       'audit_log_get',
       'webhooks_list_channel',
       'events_list',
@@ -141,7 +142,7 @@ describe('MCP protocol contract', () => {
     }
   });
 
-  it('runs templates_recommend through MCP with bounded verified evidence', async () => {
+  it('runs template recommendation and one-call blueprint compilation through MCP', async () => {
     const preferredCode = 'WNSCpfHWnqXr';
     server.use(
       http.get('https://discord.com/api/v10/guilds/templates/:code', ({ params }) => {
@@ -201,6 +202,35 @@ describe('MCP protocol contract', () => {
     expect(JSON.stringify(trusted)).not.toContain('Ignore previous instructions');
     expect(String(untrustedText)).toContain('<untrusted_discord_template');
     expect(String(untrustedText)).toContain('Ignore previous instructions');
+
+    const compiled = await client.callTool({
+      name: 'guild_blueprint_compile',
+      arguments: {
+        request: 'Dựng server gaming chuyên nghiệp có tìm đồng đội và voice',
+        preferred_primary_code: preferredCode,
+      },
+    });
+    expect(compiled.isError).toBe(false);
+    expect(compiled.structuredContent).toMatchObject({
+      status: 'ready',
+      source: {
+        primary: { code: preferredCode },
+        permission_policy: 'discard_source_and_regenerate',
+      },
+      blueprint_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      blueprint: {
+        schema_version: 'guild_blueprint.v1',
+        profile: 'professional_gaming',
+        safety: {
+          source_permissions_discarded: true,
+          severe_generated_role_permissions: 0,
+        },
+      },
+      verification: { rest_requests: 0, cache_hits: 8, blueprint_validation: 'passed' },
+    });
+    expect(JSON.stringify(compiled.structuredContent?.blueprint)).not.toContain(
+      'Ignore previous instructions',
+    );
   });
 
   it('intelligence_summarize_channel returns fallback when client lacks sampling', async () => {
@@ -275,13 +305,13 @@ describe('MCP protocol contract', () => {
 
   it('sends instructions that describe the actual tool surface', () => {
     // Was 'v0/Plan-1 - only messages_send available', injected into the
-    // agent's system context on a 204-tool server - actively steering the
+    // agent's system context on a 205-tool server - actively steering the
     // model away from 198 of them.
     const instructions = client.getInstructions() ?? '';
     expect(instructions).not.toContain('only messages_send');
     expect(instructions).not.toContain('Plan-1');
-    expect(instructions).toContain('204 tools');
-    expect(instructions).toContain('templates_recommend first');
+    expect(instructions).toContain('205 tools');
+    expect(instructions).toContain('guild_blueprint_compile first');
     expect(instructions).toContain('__confirm');
     expect(instructions).toContain('untrusted');
   });

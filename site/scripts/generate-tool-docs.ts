@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index - 204 + 31 + 1
+ * tool, one index per category, and a top-level tools index - 205 + 31 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -100,7 +100,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 204 tools. Headings are bold-asterisk markdown - capture body text up to
+ * 205 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -541,6 +541,33 @@ export function buildOutputExample(tool: ToolMetadata): Record<string, unknown> 
       unknown_permission_bits: '0',
       warnings: [],
       confidence: 'complete',
+    },
+    guild_blueprint_compile: {
+      status: 'no_match',
+      request: 'zzzz qqqq no such intent',
+      source: {
+        catalog_version: 'example',
+        primary: null,
+        inspirations: [],
+        permission_policy: 'discard_source_and_regenerate',
+      },
+      blueprint_id: null,
+      blueprint: null,
+      verification: {
+        catalog_records: 4_970,
+        metadata_candidates: 0,
+        candidates_inspected: 0,
+        rest_requests: 0,
+        cache_hits: 0,
+        rest_verified: 0,
+        rest_failed: 0,
+        safety_rejected: 0,
+        blueprint_validation: 'not_run',
+        blueprint_bytes: 0,
+      },
+      warnings: [
+        'A verified primary template is required before compiling a deployable blueprint.',
+      ],
     },
     intelligence_summarize_channel: {
       summary: 'The team shipped the release and assigned one follow-up.',

@@ -13,12 +13,12 @@
 
 <p align="center">
   <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
-  204 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
+  205 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
 </p>
 
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
-  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 204 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 205 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
@@ -133,15 +133,13 @@ the current OAuth boundary.
 
 Explore the complete, generated [tool reference](https://cappyeo.github.io/discord-mcp/tools/) and practical [recipes](https://cappyeo.github.io/discord-mcp/recipes/).
 
-For a server-architecture request, call `templates_recommend` with one natural-language
-request. It returns one verified primary template and 0–3 complementary inspirations after
-bounded live verification. The tool is always strict and read-only: template permissions are
-never copied. Templates explicitly marked dirty, malformed, unverified, or NSFW are rejected;
-an unknown dirty state is retained with medium confidence. Risky source permission signals are
-surfaced and penalized, while all source permissions and overwrites are discarded and regenerated.
-Third-party names and descriptions remain fenced as untrusted text.
-Generate onboarding, AutoMod, Components V2, and Activity Evidence later with Discord MCP
-tools; this recommendation surface does not build a server.
+For a server-architecture request, call `guild_blueprint_compile` with one natural-language
+request. It selects one verified primary template plus 0–3 bounded inspirations, converts their
+verified structural signals into capability modules, and returns a complete symbolic blueprint
+with regenerated permissions, onboarding, AutoMod, and Components V2 content. It does not claim
+to copy a source layout literally: source IDs, permissions, overwrites, names, and descriptions
+never enter the trusted blueprint. Use `templates_recommend` when you only need the verified
+source portfolio.
 
 ## Built for production use
 
@@ -200,7 +198,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.18.1**; this source tree's core exports, CLI surface, environment schema, and 204-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.18.1**; this source tree's core exports, CLI surface, environment schema, and 205-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

@@ -25,7 +25,7 @@ const LIVE_CONCURRENCY = 2;
 const LIVE_CACHE_TTL_MS = 5 * 60_000;
 const LIVE_CACHE_MAX_ENTRIES = 256;
 
-const RecommendationCapabilitySchema = z.enum(RECOMMENDATION_CAPABILITIES);
+export const RecommendationCapabilitySchema = z.enum(RECOMMENDATION_CAPABILITIES);
 const RecommendationStatusSchema = z.enum(['ready', 'partial', 'no_match']);
 const StructuralDimensionSchema = z.enum([
   'categories',
@@ -45,7 +45,7 @@ const ScoreBreakdownSchema = z.object({
   total: z.number().min(0).max(100),
 });
 
-const RecommendationCandidateSchema = z.object({
+export const RecommendationCandidateSchema = z.object({
   code: TemplateCode,
   use_url: z.string().url(),
   score: z.number().min(0).max(100),
@@ -66,7 +66,7 @@ const RecommendationCandidateSchema = z.object({
   score_breakdown: ScoreBreakdownSchema,
 });
 
-const VerificationSchema = z.object({
+export const RecommendationVerificationSchema = z.object({
   catalog_records: z.number().int().nonnegative(),
   metadata_candidates: z.number().int().min(0).max(METADATA_CANDIDATE_LIMIT),
   metadata_capped: z.boolean(),
@@ -81,7 +81,9 @@ const VerificationSchema = z.object({
 });
 
 const CompositionPlanSchema = z.object({
-  primary: z.object({ code: TemplateCode, role: z.literal('authoritative_structure') }).nullable(),
+  primary: z
+    .object({ code: TemplateCode, role: z.literal('primary_structural_reference') })
+    .nullable(),
   inspirations: z.array(
     z.object({
       code: TemplateCode,
@@ -98,6 +100,18 @@ const CompositionPlanSchema = z.object({
     z.enum(['onboarding', 'automod', 'components_v2', 'activity_evidence']),
   ),
 });
+
+const RecommendationOutputShape = {
+  status: RecommendationStatusSchema,
+  request: z.string(),
+  catalog_version: z.string(),
+  intent: z.object({ capabilities: z.array(RecommendationCapabilitySchema) }),
+  primary: RecommendationCandidateSchema.nullable(),
+  inspirations: z.array(RecommendationCandidateSchema).max(3),
+  composition_plan: CompositionPlanSchema,
+  verification: RecommendationVerificationSchema,
+  untrusted_text: z.string(),
+} as const;
 
 interface LiveInspection {
   readonly evidence: TemplateLiveEvidence;
@@ -546,6 +560,188 @@ function emptyCompositionPlan() {
   };
 }
 
+export async function recommendTemplates(
+  args: { readonly request: string; readonly preferred_primary_code?: string | undefined },
+  signal: AbortSignal,
+) {
+  const catalog = getBundledTemplateCatalog();
+  const retrieval = retrieveMetadataCandidates(catalog.snapshot.records, args.request, {
+    limit: METADATA_CANDIDATE_LIMIT + 1,
+  });
+  const preferredRecord =
+    args.preferred_primary_code === undefined
+      ? undefined
+      : catalog.getByCode(args.preferred_primary_code);
+  const preferredRetrieval =
+    preferredRecord === undefined
+      ? undefined
+      : retrieveMetadataCandidates([preferredRecord], args.request, { limit: 1 });
+  const preferredCandidate = preferredRetrieval?.candidates[0];
+  let metadataCandidates = retrieval.candidates.slice(0, METADATA_CANDIDATE_LIMIT);
+  if (
+    preferredCandidate !== undefined &&
+    !metadataCandidates.some(
+      (candidate) => candidate.record.code === preferredCandidate.record.code,
+    )
+  ) {
+    metadataCandidates = [preferredCandidate, ...metadataCandidates].slice(
+      0,
+      METADATA_CANDIDATE_LIMIT,
+    );
+  }
+  const baseVerification = {
+    catalog_records: catalog.snapshot.counts.total,
+    metadata_candidates: metadataCandidates.length,
+    metadata_capped: retrieval.candidates.length > METADATA_CANDIDATE_LIMIT,
+    preferred_primary_considered: preferredCandidate !== undefined,
+  };
+  if (metadataCandidates.length === 0) {
+    return {
+      text: 'No catalog template met the minimum relevance threshold. No Discord REST request was made and no guild was changed.',
+      data: {
+        status: 'no_match',
+        request: args.request,
+        catalog_version: catalog.snapshot.version,
+        intent: { capabilities: [...retrieval.requested_capabilities] },
+        primary: null,
+        inspirations: [],
+        composition_plan: emptyCompositionPlan(),
+        verification: {
+          ...baseVerification,
+          candidates_inspected: 0,
+          rest_requests: 0,
+          cache_hits: 0,
+          rest_verified: 0,
+          rest_failed: 0,
+          safety_rejected: 0,
+          preferred_primary_selected: false,
+        },
+        untrusted_text: wrapUntrusted('[]', 'template'),
+      },
+    };
+  }
+
+  const preferredCode = preferredCandidate?.record.code;
+  const inspectionCandidates = liveInspectionCandidates(
+    metadataCandidates,
+    retrieval.requested_capabilities,
+    preferredCode,
+  );
+  const outcomes = await inspectCandidates(container.rest, inspectionCandidates, signal);
+  const evidence = outcomes.flatMap((outcome) =>
+    outcome.inspection === undefined ? [] : [outcome.inspection.evidence],
+  );
+  const portfolio = selectTemplatePortfolio(inspectionCandidates, evidence, {
+    ...(preferredCode === null || preferredCode === undefined
+      ? {}
+      : { preferred_primary_code: preferredCode }),
+    requested_capabilities: retrieval.requested_capabilities,
+  });
+  const selectedPrimary = portfolio.primary;
+  const primaryCapabilities =
+    selectedPrimary === null
+      ? []
+      : selectedPrimary.effective_capabilities.filter((capability) =>
+          retrieval.requested_capabilities.includes(capability),
+        );
+  const coveredCapabilities = new Set(primaryCapabilities);
+  const coveredDimensions = new Set(
+    selectedPrimary === null ? [] : structuralDimensions(selectedPrimary),
+  );
+  const inspirationOutputs = portfolio.inspirations.map((candidate) => {
+    const contributes = candidate.effective_capabilities.filter(
+      (capability) =>
+        retrieval.requested_capabilities.includes(capability) &&
+        !coveredCapabilities.has(capability),
+    );
+    for (const capability of contributes) coveredCapabilities.add(capability);
+    const dimensions = structuralDimensions(candidate).filter(
+      (dimension) => !coveredDimensions.has(dimension),
+    );
+    for (const dimension of dimensions) coveredDimensions.add(dimension);
+    return candidateOutput(candidate, contributes, dimensions);
+  });
+  const primaryOutput =
+    selectedPrimary === null
+      ? null
+      : candidateOutput(
+          selectedPrimary,
+          primaryCapabilities,
+          structuralDimensions(selectedPrimary),
+        );
+  const failed = outcomes.filter((outcome) => outcome.inspection === undefined).length;
+  const status =
+    primaryOutput !== null
+      ? ('ready' as const)
+      : failed > 0
+        ? ('partial' as const)
+        : ('no_match' as const);
+  const selectedCodes = new Set([
+    ...(primaryOutput === null ? [] : [primaryOutput.code]),
+    ...inspirationOutputs.map((candidate) => candidate.code),
+  ]);
+  const untrustedRecords = outcomes.flatMap((outcome) => {
+    const code = outcome.candidate.record.code;
+    if (code === null || !selectedCodes.has(code) || outcome.inspection === undefined) return [];
+    return [
+      {
+        code,
+        catalog_name: outcome.candidate.record.name,
+        catalog_description: outcome.candidate.record.description?.slice(0, 512) ?? null,
+        ...outcome.inspection.untrusted,
+      },
+    ];
+  });
+  const compositionPlan = {
+    ...emptyCompositionPlan(),
+    primary:
+      primaryOutput === null
+        ? null
+        : { code: primaryOutput.code, role: 'primary_structural_reference' as const },
+    inspirations: inspirationOutputs.map((candidate) => ({
+      code: candidate.code,
+      role: 'bounded_inspiration' as const,
+      contributes: candidate.contributes,
+      structural_contributions: candidate.structural_contributions,
+    })),
+  };
+  return {
+    text:
+      primaryOutput === null
+        ? `Template recommendation is ${status}: ${outcomes.length} candidate(s) were inspected, but none produced a complete safe primary. No guild was changed.`
+        : `Recommended verified primary template \`${primaryOutput.code}\` with ${inspirationOutputs.length} bounded inspiration template(s). Permissions must be regenerated by discord-mcp; no guild was changed.`,
+    data: {
+      status,
+      request: args.request,
+      catalog_version: catalog.snapshot.version,
+      intent: { capabilities: [...retrieval.requested_capabilities] },
+      primary: primaryOutput,
+      inspirations: inspirationOutputs,
+      composition_plan: compositionPlan,
+      verification: {
+        ...baseVerification,
+        candidates_inspected: outcomes.length,
+        rest_requests: outcomes.filter((outcome) => !outcome.cache_hit).length,
+        cache_hits: outcomes.filter((outcome) => outcome.cache_hit).length,
+        rest_verified: outcomes.filter(
+          (outcome) =>
+            outcome.inspection?.evidence.verified === true &&
+            outcome.inspection.evidence.code_match,
+        ).length,
+        rest_failed: failed,
+        safety_rejected: portfolio.rejected.length - failed,
+        preferred_primary_selected:
+          preferredCode !== null &&
+          preferredCode !== undefined &&
+          primaryOutput?.code === preferredCode,
+      },
+      untrusted_text: wrapUntrusted(JSON.stringify(untrustedRecords), 'template'),
+    },
+  };
+}
+
+export type TemplateRecommendationData = Awaited<ReturnType<typeof recommendTemplates>>['data'];
+
 export default defineTool({
   name: 'templates_recommend',
   category: 'templates',
@@ -569,17 +765,7 @@ export default defineTool({
       'Optional public template code to prefer only when it matches the request and passes every live safety gate',
     ),
   },
-  outputSchema: {
-    status: RecommendationStatusSchema,
-    request: z.string(),
-    catalog_version: z.string(),
-    intent: z.object({ capabilities: z.array(RecommendationCapabilitySchema) }),
-    primary: RecommendationCandidateSchema.nullable(),
-    inspirations: z.array(RecommendationCandidateSchema).max(3),
-    composition_plan: CompositionPlanSchema,
-    verification: VerificationSchema,
-    untrusted_text: z.string(),
-  },
+  outputSchema: RecommendationOutputShape,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,
@@ -587,180 +773,6 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args, ctx) => {
-    const catalog = getBundledTemplateCatalog();
-    const retrieval = retrieveMetadataCandidates(catalog.snapshot.records, args.request, {
-      limit: METADATA_CANDIDATE_LIMIT + 1,
-    });
-    const preferredRecord =
-      args.preferred_primary_code === undefined
-        ? undefined
-        : catalog.getByCode(args.preferred_primary_code);
-    const preferredRetrieval =
-      preferredRecord === undefined
-        ? undefined
-        : retrieveMetadataCandidates([preferredRecord], args.request, { limit: 1 });
-    const preferredCandidate = preferredRetrieval?.candidates[0];
-    let metadataCandidates = retrieval.candidates.slice(0, METADATA_CANDIDATE_LIMIT);
-    if (
-      preferredCandidate !== undefined &&
-      !metadataCandidates.some(
-        (candidate) => candidate.record.code === preferredCandidate.record.code,
-      )
-    ) {
-      metadataCandidates = [preferredCandidate, ...metadataCandidates].slice(
-        0,
-        METADATA_CANDIDATE_LIMIT,
-      );
-    }
-    const baseVerification = {
-      catalog_records: catalog.snapshot.counts.total,
-      metadata_candidates: metadataCandidates.length,
-      metadata_capped: retrieval.candidates.length > METADATA_CANDIDATE_LIMIT,
-      preferred_primary_considered: preferredCandidate !== undefined,
-    };
-    if (metadataCandidates.length === 0) {
-      return dualResult({
-        text: 'No catalog template met the minimum relevance threshold. No Discord REST request was made and no guild was changed.',
-        data: {
-          status: 'no_match' as const,
-          request: args.request,
-          catalog_version: catalog.snapshot.version,
-          intent: { capabilities: [...retrieval.requested_capabilities] },
-          primary: null,
-          inspirations: [],
-          composition_plan: emptyCompositionPlan(),
-          verification: {
-            ...baseVerification,
-            candidates_inspected: 0,
-            rest_requests: 0,
-            cache_hits: 0,
-            rest_verified: 0,
-            rest_failed: 0,
-            safety_rejected: 0,
-            preferred_primary_selected: false,
-          },
-          untrusted_text: wrapUntrusted('[]', 'template'),
-        },
-      });
-    }
-
-    const preferredCode = preferredCandidate?.record.code;
-    const inspectionCandidates = liveInspectionCandidates(
-      metadataCandidates,
-      retrieval.requested_capabilities,
-      preferredCode,
-    );
-    const outcomes = await inspectCandidates(container.rest, inspectionCandidates, ctx.signal);
-    const evidence = outcomes.flatMap((outcome) =>
-      outcome.inspection === undefined ? [] : [outcome.inspection.evidence],
-    );
-    const portfolio = selectTemplatePortfolio(inspectionCandidates, evidence, {
-      ...(preferredCode === null || preferredCode === undefined
-        ? {}
-        : { preferred_primary_code: preferredCode }),
-      requested_capabilities: retrieval.requested_capabilities,
-    });
-    const selectedPrimary = portfolio.primary;
-    const primaryCapabilities =
-      selectedPrimary === null
-        ? []
-        : selectedPrimary.effective_capabilities.filter((capability) =>
-            retrieval.requested_capabilities.includes(capability),
-          );
-    const coveredCapabilities = new Set(primaryCapabilities);
-    const coveredDimensions = new Set(
-      selectedPrimary === null ? [] : structuralDimensions(selectedPrimary),
-    );
-    const inspirationOutputs = portfolio.inspirations.map((candidate) => {
-      const contributes = candidate.effective_capabilities.filter(
-        (capability) =>
-          retrieval.requested_capabilities.includes(capability) &&
-          !coveredCapabilities.has(capability),
-      );
-      for (const capability of contributes) coveredCapabilities.add(capability);
-      const dimensions = structuralDimensions(candidate).filter(
-        (dimension) => !coveredDimensions.has(dimension),
-      );
-      for (const dimension of dimensions) coveredDimensions.add(dimension);
-      return candidateOutput(candidate, contributes, dimensions);
-    });
-    const primaryOutput =
-      selectedPrimary === null
-        ? null
-        : candidateOutput(
-            selectedPrimary,
-            primaryCapabilities,
-            structuralDimensions(selectedPrimary),
-          );
-    const failed = outcomes.filter((outcome) => outcome.inspection === undefined).length;
-    const status =
-      primaryOutput !== null
-        ? ('ready' as const)
-        : failed > 0
-          ? ('partial' as const)
-          : ('no_match' as const);
-    const selectedCodes = new Set([
-      ...(primaryOutput === null ? [] : [primaryOutput.code]),
-      ...inspirationOutputs.map((candidate) => candidate.code),
-    ]);
-    const untrustedRecords = outcomes.flatMap((outcome) => {
-      const code = outcome.candidate.record.code;
-      if (code === null || !selectedCodes.has(code) || outcome.inspection === undefined) return [];
-      return [
-        {
-          code,
-          catalog_name: outcome.candidate.record.name,
-          catalog_description: outcome.candidate.record.description?.slice(0, 512) ?? null,
-          ...outcome.inspection.untrusted,
-        },
-      ];
-    });
-    const compositionPlan = {
-      ...emptyCompositionPlan(),
-      primary:
-        primaryOutput === null
-          ? null
-          : { code: primaryOutput.code, role: 'authoritative_structure' as const },
-      inspirations: inspirationOutputs.map((candidate) => ({
-        code: candidate.code,
-        role: 'bounded_inspiration' as const,
-        contributes: candidate.contributes,
-        structural_contributions: candidate.structural_contributions,
-      })),
-    };
-    return dualResult({
-      text:
-        primaryOutput === null
-          ? `Template recommendation is ${status}: ${outcomes.length} candidate(s) were inspected, but none produced a complete safe primary. No guild was changed.`
-          : `Recommended verified primary template \`${primaryOutput.code}\` with ${inspirationOutputs.length} bounded inspiration template(s). Permissions must be regenerated by discord-mcp; no guild was changed.`,
-      data: {
-        status,
-        request: args.request,
-        catalog_version: catalog.snapshot.version,
-        intent: { capabilities: [...retrieval.requested_capabilities] },
-        primary: primaryOutput,
-        inspirations: inspirationOutputs,
-        composition_plan: compositionPlan,
-        verification: {
-          ...baseVerification,
-          candidates_inspected: outcomes.length,
-          rest_requests: outcomes.filter((outcome) => !outcome.cache_hit).length,
-          cache_hits: outcomes.filter((outcome) => outcome.cache_hit).length,
-          rest_verified: outcomes.filter(
-            (outcome) =>
-              outcome.inspection?.evidence.verified === true &&
-              outcome.inspection.evidence.code_match,
-          ).length,
-          rest_failed: failed,
-          safety_rejected: portfolio.rejected.length - failed,
-          preferred_primary_selected:
-            preferredCode !== null &&
-            preferredCode !== undefined &&
-            primaryOutput?.code === preferredCode,
-        },
-        untrusted_text: wrapUntrusted(JSON.stringify(untrustedRecords), 'template'),
-      },
-    });
-  },
+  handler: async (args, ctx) =>
+    dualResult<TemplateRecommendationData>(await recommendTemplates(args, ctx.signal)),
 });
