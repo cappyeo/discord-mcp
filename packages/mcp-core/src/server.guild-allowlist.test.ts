@@ -61,15 +61,15 @@ afterEach(async () => {
 });
 
 describe('ALLOWED_GUILDS server boundary', () => {
-  it('preserves the full 207-tool compatibility surface when unset', async () => {
+  it('preserves the full 208-tool compatibility surface when unset', async () => {
     const { client } = await connect();
-    expect((await client.listTools()).tools).toHaveLength(207);
+    expect((await client.listTools()).tools).toHaveLength(208);
   });
 
-  it('hides unprovable routes and advertises the remaining 185 tools', async () => {
+  it('hides unprovable routes and advertises the remaining 186 tools', async () => {
     const { client } = await connect({ ALLOWED_GUILDS: ALLOWED });
     const names = (await client.listTools()).tools.map((tool) => tool.name);
-    expect(names).toHaveLength(185);
+    expect(names).toHaveLength(186);
     expect(names).not.toContain('interactions_create_response');
     expect(names).not.toContain('commands_create_global');
     expect(names).not.toContain('users_create_dm');

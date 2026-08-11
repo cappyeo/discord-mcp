@@ -6,20 +6,23 @@ sidebar:
 ---
 
 discord-mcp v0.18.1 is the current public release. The current source tree contains
-207 tools. v1.0.0 commits to API stability
+208 tools. v1.0.0 commits to API stability
 for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
 below is ticked. Re-evaluate the evidence before each release; unchecked items are
 real gates, not aspirational release notes.
 
 ## Current source evidence (public release: v0.18.1)
 
-- The current source tree exposes 207 MCP tools across 31 categories; the public
-  v0.18.1 packages expose 204.
+- The current source tree exposes 208 MCP tools across 31 categories; the public
+  v0.18.1 packages expose 203.
 - More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
   and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
   remaining OTel parent-child integration seam.
-- Coverage gates run in CI for `@discord-mcp/core`: 98% statements and lines,
-  97% functions, and 73% branches.
+- Coverage gates run in CI for `@discord-mcp/core`: the mature non-blueprint
+  core remains at 98% statements/lines, 97% functions, and 73% branches; the
+  integration-heavy blueprint graph is independently gated at 82%
+  statements/lines, 95% functions, and 75% branches. No production file is
+  excluded from those two non-overlapping groups.
 - 6 reproducible performance benches cover message send, MCP pipeline, gateway
   debounce, REST policy, progressive tool discovery, and stateless HTTP server
   construction.
@@ -128,14 +131,14 @@ removal or rename fails CI instead of reaching a consumer.
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
-- [x] Tool surface (207 tools) frozen - `src/tools/registry.invariants.test.ts`
+- [x] Tool surface (208 tools) frozen - `src/tools/registry.invariants.test.ts`
       also asserts destructive-iff-confirm-gated and complete annotations
 
 ## v1.0.0 commitment
 
 - **Semver**: breaking changes require a major bump (v2.0.0).
 - **API stability**: `@discord-mcp/core` exports stable for 6+ months.
-- **Tool surface**: 207 tools maintained; new tools = minor version.
+- **Tool surface**: 208 tools maintained; new tools = minor version.
 - **CLI flags**: `discord-mcp serve|doctor|init|migrate` flag set frozen.
 - **Config**: env var names + defaults frozen (additions allowed; renames
   forbidden).

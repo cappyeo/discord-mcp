@@ -5,7 +5,7 @@ import type { ToolMiddleware } from './compose.js';
  * Category allowlist - the `MCP_CATEGORIES` least-privilege control.
  *
  * Enforced here rather than as a per-tool precondition: attaching
- * `preconditions: ['category_enabled']` to 207 tool files would put the gate
+ * `preconditions: ['category_enabled']` to 208 tool files would put the gate
  * in the hands of whoever writes the next tool, and a tool that forgets it is
  * silently exempt. One middleware in the chain covers every tool that exists
  * and every tool anyone adds.

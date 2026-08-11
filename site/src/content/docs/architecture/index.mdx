@@ -42,7 +42,7 @@ graph TD
   tool, precondition, and resource stores.
 - **Middleware chain** applies telemetry, default guild, validation, category
   gate, preconditions, and audit before execution.
-- **Tool piece** implements one of the 207 tools, using Discord REST, MCP
+- **Tool piece** implements one of the 208 tools, using Discord REST, MCP
   sampling back to the client for intelligence, or caller-invoked external
   inspiration discovery.
 - **REST adapter** wraps `@discordjs/rest` in Cockatiel bulkhead,
@@ -64,7 +64,7 @@ explicit: adding a tool also requires adding it to `server.ts`.
 packages/
   mcp-core/                # Tools, middleware, resilience policy
     src/
-      tools/               # 207 tool definitions
+      tools/               # 208 tool definitions
       middleware/          # 6 stages + compose
       preconditions/       # ConfirmRequired, CategoryEnabled
       pieces/              # Tool and Precondition base classes
@@ -133,6 +133,6 @@ basic TypeScript. We do not re-explain MCP itself - see
 ## Related
 
 - [Get started](/discord-mcp/start/) - install and run the server.
-- [Tools](/discord-mcp/tools/) - auto-generated reference for all 207 tools.
+- [Tools](/discord-mcp/tools/) - auto-generated reference for all 208 tools.
 - [Recipes](/discord-mcp/recipes/) - multi-tool workflows that exercise these subsystems.
 - [Operations](/discord-mcp/operations/) - production-running concerns: telemetry, resilience, audit, client matrix.

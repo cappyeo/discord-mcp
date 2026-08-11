@@ -50,9 +50,9 @@ describe('progressive tool surface', () => {
     ]);
   });
 
-  it('keeps the full 207-tool surface as the compatibility default', async () => {
+  it('keeps the full 208-tool surface as the compatibility default', async () => {
     const { tools } = await fullClient.listTools();
-    expect(tools).toHaveLength(207);
+    expect(tools).toHaveLength(208);
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 
@@ -261,12 +261,37 @@ describe('progressive tool surface', () => {
           dispatcher: 'mcp_tools_read',
         }),
       ]),
-      categories: expect.arrayContaining([{ name: 'guild', tool_count: 19 }]),
+      categories: expect.arrayContaining([{ name: 'guild', tool_count: 20 }]),
     });
 
     const read = await progressiveClient.callTool({
       name: 'mcp_tools_read',
       arguments: { tool: 'guild_blueprint_plan', args: {} },
+    });
+    expect(read.isError).toBe(true);
+    expect(read.structuredContent).toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('discovers restart-safe Activity Evidence verification through mcp_tools_read', async () => {
+    const search = await progressiveClient.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'verify blueprint Activity Evidence after restart', limit: 20 },
+    });
+    expect(search.isError).toBe(false);
+    expect(search.structuredContent).toMatchObject({
+      matches: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'guild_blueprint_evidence',
+          category: 'guild',
+          dispatcher: 'mcp_tools_read',
+        }),
+      ]),
+      categories: expect.arrayContaining([{ name: 'guild', tool_count: 20 }]),
+    });
+
+    const read = await progressiveClient.callTool({
+      name: 'mcp_tools_read',
+      arguments: { tool: 'guild_blueprint_evidence', args: {} },
     });
     expect(read.isError).toBe(true);
     expect(read.structuredContent).toMatchObject({ code: 'VALIDATION_FAILED' });

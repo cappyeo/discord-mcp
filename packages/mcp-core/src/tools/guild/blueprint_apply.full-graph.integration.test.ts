@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { server as mockServer } from '@discord-mcp/server-mocks';
@@ -466,6 +466,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
       expect(first.structuredContent).toMatchObject({
         status: 'partial',
         error: { code: 'DISCORD_API_ERROR', retriable: true, status: 500 },
+        evidence: { activity: null },
         next_action: 'resume',
       });
       expect(creates.roles).toBe(blueprint.roles.length);
@@ -483,9 +484,32 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
       expect(resumed.structuredContent).toMatchObject({
         status: 'complete',
         progress: { remaining: 0 },
-        evidence: { readback: 'match', checkpoint_persisted: true },
+        evidence: {
+          readback: 'match',
+          checkpoint_persisted: true,
+          activity: {
+            schema_version: 'guild_blueprint_activity_evidence.v1',
+            verified_counts: {
+              identity: 2,
+              roles: blueprint.roles.length,
+              categories: blueprint.categories.length,
+              channels: blueprint.channels.length,
+              automod: blueprint.automod.rules.length,
+              components_v2: blueprint.components_v2.publications.length,
+            },
+            safety: {
+              source_permissions_applied: false,
+              dangerous_generated_permissions: 0,
+              bot_permission_grants: 0,
+              discord_managed_role_mutations: 0,
+            },
+          },
+        },
         next_action: 'done',
       });
+      const resumedEvidence = object(object(resumed.structuredContent).evidence);
+      const activityEvidenceId = string(object(resumedEvidence.activity).evidence_id);
+      expect(activityEvidenceId).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(creates.automod).toBe(blueprint.automod.rules.length);
       expect(creates.publications).toBe(blueprint.components_v2.publications.length);
       expect(target.roles).toHaveLength(2 + blueprint.roles.length);
@@ -498,6 +522,7 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
       const replay = await client.callTool({ name: 'guild_blueprint_apply', arguments: args });
       expect(replay.structuredContent).toMatchObject({
         status: 'already_current',
+        evidence: { activity: { evidence_id: activityEvidenceId } },
         next_action: 'done',
       });
       expect(creates).toEqual({
@@ -513,6 +538,90 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
         channelOrder: 1,
       });
       expect(mutations.get('automod:create')).toBe(blueprint.automod.rules.length + 1);
+
+      await client.close();
+      client = undefined;
+      const restartedRest = new REST({ version: '10', retries: 0, makeRequest: fetch }).setToken(
+        TOKEN,
+      );
+      const [restartedClientTransport, restartedServerTransport] =
+        InMemoryTransport.createLinkedPair();
+      const restarted = await buildServer({
+        rest: restartedRest,
+        logger: createLogger(config),
+        config,
+      });
+      client = new Client(
+        { name: 'blueprint-evidence-restart-test', version: '0.0.0' },
+        { capabilities: {} },
+      );
+      await Promise.all([
+        restarted.server.connect(restartedServerTransport),
+        client.connect(restartedClientTransport),
+      ]);
+
+      const afterRestart = await client.callTool({
+        name: 'guild_blueprint_evidence',
+        arguments: {
+          guild_id: GUILD_ID,
+          expected_bot_id: BOT_ID,
+          plan_id: encoded.plan_id,
+        },
+      });
+      expect(afterRestart.structuredContent).toMatchObject({
+        status: 'verified',
+        plan_id: encoded.plan_id,
+        blueprint_id: BLUEPRINT_ID,
+        evidence_id: activityEvidenceId,
+        verification: {
+          identity_verified: true,
+          guild_verified: true,
+          readback: 'match',
+          snapshot_unchanged: true,
+          remaining_operations: [],
+          blockers: [],
+        },
+      });
+      expect(creates).toEqual({
+        roles: blueprint.roles.length,
+        categories: blueprint.categories.length,
+        channels: blueprint.channels.length,
+        automod: blueprint.automod.rules.length,
+        publications: blueprint.components_v2.publications.length,
+        guild: 1,
+        welcome: 1,
+        onboarding: 1,
+        roleOrder: 1,
+        channelOrder: 1,
+      });
+
+      await writeFile(
+        join(stateDirectory, encoded.plan_id.slice('sha256:'.length), 'activity-evidence.json'),
+        '{"schema_version":"tampered"}\n',
+        'utf8',
+      );
+      const tamperedReplay = await client.callTool({
+        name: 'guild_blueprint_apply',
+        arguments: args,
+      });
+      expect(tamperedReplay.structuredContent).toMatchObject({
+        status: 'partial',
+        error: { code: 'EVIDENCE_MALFORMED', retriable: false },
+        evidence: { activity: null },
+        next_action: 'fix_configuration',
+      });
+      expect(creates).toEqual({
+        roles: blueprint.roles.length,
+        categories: blueprint.categories.length,
+        channels: blueprint.channels.length,
+        automod: blueprint.automod.rules.length,
+        publications: blueprint.components_v2.publications.length,
+        guild: 1,
+        welcome: 1,
+        onboarding: 1,
+        roleOrder: 1,
+        channelOrder: 1,
+      });
     } finally {
       await client?.close();
       await rm(stateDirectory, { recursive: true, force: true });

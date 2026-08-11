@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index - 207 + 31 + 1
+ * tool, one index per category, and a top-level tools index - 208 + 31 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -100,7 +100,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 207 tools. Headings are bold-asterisk markdown - capture body text up to
+ * 208 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -606,9 +606,102 @@ export function buildOutputExample(tool: ToolMetadata): Record<string, unknown> 
           publications: { welcome: '123456789012345684' },
         },
         completed_operation_ids: ['roles:create:member', 'publications:send:welcome'],
+        activity: {
+          schema_version: 'guild_blueprint_activity_evidence.v1',
+          evidence_id: `sha256:${'5'.repeat(64)}`,
+          recorded_at: '2026-08-11T04:00:00.000Z',
+          verified_counts: {
+            identity: 2,
+            roles: 1,
+            categories: 1,
+            channels: 1,
+            ordering: 2,
+            guild: 1,
+            welcome_screen: 1,
+            onboarding: 1,
+            automod: 1,
+            components_v2: 1,
+          },
+          safety: {
+            source_permissions_applied: false,
+            dangerous_generated_permissions: 0,
+            bot_permission_grants: 0,
+            discord_managed_role_mutations: 0,
+          },
+        },
       },
       next_action: 'done',
       warnings: [],
+    },
+    guild_blueprint_evidence: {
+      status: 'verified',
+      plan_id: `sha256:${'1'.repeat(64)}`,
+      blueprint_id: `sha256:${'2'.repeat(64)}`,
+      evidence_id: `sha256:${'5'.repeat(64)}`,
+      target: {
+        guild_id: '123456789012345678',
+        bot_id: '123456789012345679',
+      },
+      record: {
+        schema_version: 'guild_blueprint_activity_evidence.v1',
+        recorded_at: '2026-08-11T04:00:00.000Z',
+        final_snapshot_id: `sha256:${'4'.repeat(64)}`,
+        checkpoint_version: 13,
+        initial_operation_count: 12,
+        completed_operation_ids: ['roles:create:member', 'publications:send:welcome'],
+        bindings: {
+          roles: { member: '123456789012345680' },
+          categories: { welcome: '123456789012345681' },
+          channels: { rules: '123456789012345682' },
+          automod_rules: { mention_spam: '123456789012345683' },
+          publications: { welcome: '123456789012345684' },
+        },
+        verified_counts: {
+          identity: 2,
+          roles: 1,
+          categories: 1,
+          channels: 1,
+          ordering: 2,
+          guild: 1,
+          welcome_screen: 1,
+          onboarding: 1,
+          automod: 1,
+          components_v2: 1,
+        },
+        safety: {
+          source_permissions_applied: false,
+          dangerous_generated_permissions: 0,
+          bot_permission_grants: 0,
+          discord_managed_role_mutations: 0,
+        },
+      },
+      verification: {
+        identity_verified: true,
+        guild_verified: true,
+        readback: 'match',
+        snapshot_unchanged: true,
+        current_snapshot: {
+          snapshot_id: `sha256:${'4'.repeat(64)}`,
+          guild: {
+            id: '123456789012345678',
+            name: 'Gaming Community',
+            features: ['COMMUNITY'],
+          },
+          bot_id: '123456789012345679',
+          resources: {
+            roles: 4,
+            categories: 1,
+            channels: 3,
+            automod_rules: 1,
+            recent_messages: 3,
+          },
+          onboarding_enabled: true,
+          welcome_screen_configured: true,
+        },
+        remaining_operations: [],
+        blockers: [],
+        warnings: [],
+      },
     },
     guild_blueprint_plan: {
       status: 'no_match',

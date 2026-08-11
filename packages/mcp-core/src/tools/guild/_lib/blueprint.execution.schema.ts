@@ -123,6 +123,7 @@ export type BlueprintExecutionPhase = z.infer<typeof BlueprintExecutionPhaseSche
 export type BlueprintOperation = z.infer<typeof BlueprintOperationSchema>;
 export type BlueprintBlocker = z.infer<typeof BlueprintBlockerSchema>;
 export type BlueprintBindings = z.infer<typeof BlueprintBindingsSchema>;
+export type BlueprintPlanTarget = z.infer<typeof BlueprintPlanTargetSchema>;
 export type GuildBlueprintPlanPayload = z.infer<typeof GuildBlueprintPlanPayloadSchema>;
 export type BlueprintPlanSummary = z.infer<typeof BlueprintPlanSummarySchema>;
 export type BlueprintCheckpoint = z.infer<typeof BlueprintCheckpointSchema>;

@@ -13,12 +13,12 @@
 
 <p align="center">
   <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
-  207 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
+  208 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
 </p>
 
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
-  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 207 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 208 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
@@ -140,7 +140,10 @@ V2 content, then returns a target-bound dry-run. Review its operations and `appr
 then pass the unchanged `plan_token` to `guild_blueprint_apply` with `__confirm:true`. Apply is
 locally checkpointed after every successful step, reconciled at each call or resume, independently
 read back at completion, and never deletes an existing resource. A completed approval is
-single-use: later drift requires a fresh plan.
+single-use: later drift requires a fresh plan. A terminal result persists authenticated Activity
+Evidence and returns its ID plus per-domain verification counts. Later—even after a restart—call
+`guild_blueprint_evidence` with only the same `guild_id`, `expected_bot_id`, and `plan_id` to
+revalidate the current guild without a plan token, confirmation flag, or Discord mutation.
 `guild_blueprint_compile` remains the lower-level read-only compiler, while
 `templates_recommend` returns only the verified source portfolio. Source IDs, permissions,
 overwrites, names, and descriptions never enter the trusted blueprint. See the
@@ -203,7 +206,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. The current public release is **v0.18.1**; this source tree's core exports, CLI surface, environment schema, and 207-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. The current public release is **v0.18.1**; this source tree's core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests. See the [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/) and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

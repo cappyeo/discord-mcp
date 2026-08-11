@@ -9,7 +9,7 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
-## Unreleased - Compile safe guild blueprints
+## Unreleased - AI Discord Architect foundation
 
 - Added `templates_recommend`: submit one natural-language request to receive one
   verified primary template and 0–3 bounded inspirations after live verification.
@@ -34,8 +34,17 @@ commit history and downloadable artifacts, see
   lock, target-bound dry-run, authenticated approval token, locally checkpointed
   resume, fail-closed reconciliation, and independent final Discord readback.
   Completed approvals cannot repair later drift; a fresh plan is required.
-- Structured per-domain Activity Evidence and the real-server benchmark remain
-  the next delivery phase.
+- Successful terminal apply now persists completion-only, authenticated Activity
+  Evidence and returns its ID plus per-domain counts and enforced safety
+  invariants. Partial or drifted results cannot claim terminal evidence.
+- Added read-only `guild_blueprint_evidence`. With the explicit guild, bot, and
+  plan IDs it reloads evidence after restart, verifies the caller and bot, and
+  re-runs live Discord reconciliation without a plan token, confirmation flag,
+  lock, checkpoint write, or guild mutation. Blueprint conformance and exact
+  whole-guild snapshot continuity are reported separately.
+- The source registry now contains 208 tools across the same 31 categories. The
+  honest >=95% real-server benchmark remains the next delivery gate; mocked
+  integration coverage is not reported as that result.
 
 ## v0.18.1 - Correct Hubdustry reference metadata
 

@@ -7,6 +7,13 @@ import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, UserId } from '../_lib/snowflake.js';
 import {
+  buildGuildBlueprintActivityEvidence,
+  type GuildBlueprintActivityEvidence,
+  GuildBlueprintActivityEvidenceError,
+  GuildBlueprintSafetyEvidenceSchema,
+  GuildBlueprintVerifiedCountsSchema,
+} from './_lib/blueprint.activity-evidence.js';
+import {
   BlueprintExecutionError,
   executeBlueprintOperation,
 } from './_lib/blueprint.apply-executor.js';
@@ -25,7 +32,10 @@ import {
   type GuildBlueprintPlanPayload,
 } from './_lib/blueprint.execution.schema.js';
 import { BlueprintPlanTokenError, decodeBlueprintPlan } from './_lib/blueprint.plan-token.js';
-import { reconcileGuildBlueprint } from './_lib/blueprint.reconcile.js';
+import {
+  type BlueprintReconcileResult,
+  reconcileGuildBlueprint,
+} from './_lib/blueprint.reconcile.js';
 import { resolveBlueprintStateDirectory } from './_lib/blueprint.state-path.js';
 import { readBlueprintTargetSnapshot } from './_lib/blueprint.target.js';
 import { blueprintSigningSecret } from './_lib/blueprint.trust.js';
@@ -97,9 +107,26 @@ interface ApplyData {
     readonly checkpoint_persisted: boolean;
     readonly bindings: BlueprintBindings;
     readonly completed_operation_ids: readonly string[];
+    readonly activity: {
+      readonly schema_version: 'guild_blueprint_activity_evidence.v1';
+      readonly evidence_id: string;
+      readonly recorded_at: string;
+      readonly verified_counts: GuildBlueprintActivityEvidence['verified_counts'];
+      readonly safety: GuildBlueprintActivityEvidence['safety'];
+    } | null;
   };
   readonly next_action: NextAction;
   readonly warnings: readonly string[];
+}
+
+function activitySummary(evidence: GuildBlueprintActivityEvidence) {
+  return {
+    schema_version: evidence.schema_version,
+    evidence_id: evidence.evidence_id,
+    recorded_at: evidence.recorded_at,
+    verified_counts: evidence.verified_counts,
+    safety: evidence.safety,
+  };
 }
 
 function cloneBindings(bindings: BlueprintBindings): BlueprintBindings {
@@ -141,7 +168,15 @@ function safeApplyError(error: unknown, operationId: string | null): SafeApplyEr
     return {
       operation_id: operationId,
       code: error.code,
-      retriable: error.code === 'CHECKPOINT_IO',
+      retriable: error.code === 'CHECKPOINT_IO' || error.code === 'EVIDENCE_IO',
+      status: null,
+    };
+  }
+  if (error instanceof GuildBlueprintActivityEvidenceError) {
+    return {
+      operation_id: operationId,
+      code: 'ACTIVITY_EVIDENCE_INVALID',
+      retriable: false,
       status: null,
     };
   }
@@ -189,6 +224,30 @@ function checkpoint(
   };
 }
 
+async function persistTerminalActivityEvidence(
+  store: BlueprintCheckpointStore,
+  planId: string,
+  plan: GuildBlueprintPlanPayload,
+  terminalCheckpoint: BlueprintCheckpoint,
+  finalReconciliation: Pick<
+    BlueprintReconcileResult,
+    'snapshot_id' | 'bindings' | 'operations' | 'blockers'
+  >,
+): Promise<GuildBlueprintActivityEvidence> {
+  const existing = await store.loadEvidence();
+  if (existing !== null) return existing;
+  const evidence = buildGuildBlueprintActivityEvidence({
+    plan_id: planId,
+    plan,
+    checkpoint: terminalCheckpoint,
+    final_target: plan.target,
+    final_reconciliation: finalReconciliation,
+    recorded_at: new Date().toISOString(),
+  });
+  await store.saveEvidence(evidence);
+  return evidence;
+}
+
 function response(text: string, data: ApplyData) {
   return dualResult({ text, data });
 }
@@ -205,7 +264,7 @@ export default defineTool({
     '',
     '**Resume**: A partial result is safe to call again with the same inputs. Discord readback plus a local append-only checkpoint prevents duplicate roles, channels, AutoMod rules, and Components V2 publications.',
     '',
-    '**Returns**: Bounded progress, safe error codes, remaining work, bindings, and final Discord readback evidence. The plan token is never echoed.',
+    '**Returns**: Bounded progress, safe error codes, remaining work, bindings, and final Discord readback evidence. A successful terminal result also persists and returns the ID plus per-domain summary of authenticated Activity Evidence. The plan token is never echoed.',
   ].join('\n'),
   preconditions: ['explicit_guild_required', 'confirm_required'] as const,
   inputSchema: {
@@ -255,6 +314,16 @@ export default defineTool({
         checkpoint_persisted: z.boolean(),
         bindings: BlueprintBindingsSchema,
         completed_operation_ids: z.array(z.string()).max(256),
+        activity: z
+          .object({
+            schema_version: z.literal('guild_blueprint_activity_evidence.v1'),
+            evidence_id: Digest,
+            recorded_at: z.string().datetime({ offset: true }),
+            verified_counts: GuildBlueprintVerifiedCountsSchema,
+            safety: GuildBlueprintSafetyEvidenceSchema,
+          })
+          .strict()
+          .nullable(),
       })
       .strict(),
     next_action: z.enum(['done', 'resume', 'replan', 'fix_configuration']),
@@ -285,6 +354,7 @@ export default defineTool({
       checkpoint_persisted: false,
       bindings: emptyBlueprintBindings(),
       completed_operation_ids: [],
+      activity: null,
     };
 
     let decoded: ReturnType<typeof decodeBlueprintPlan>;
@@ -682,11 +752,11 @@ export default defineTool({
       }
 
       if (reconciled.operations.length === 0) {
-        if (latestCheckpoint !== null && latestCheckpoint.status !== 'complete') {
+        if (latestCheckpoint === null || latestCheckpoint.status !== 'complete') {
           const completed = checkpoint(
             decoded.plan_id,
             plan,
-            latestCheckpoint.version + 1,
+            (latestCheckpoint?.version ?? -1) + 1,
             'complete',
             bindings,
             completedOperationIds,
@@ -696,6 +766,13 @@ export default defineTool({
           latestCheckpoint = completed;
           checkpointPersisted = true;
         }
+        const activityEvidence = await persistTerminalActivityEvidence(
+          store,
+          decoded.plan_id,
+          plan,
+          latestCheckpoint,
+          reconciled,
+        );
         return response('The locked Discord target already matches this blueprint.', {
           status: 'already_current',
           plan_id: decoded.plan_id,
@@ -706,7 +783,7 @@ export default defineTool({
             planned_this_call: 0,
             completed_total: completedOperationIds.length,
             remaining: 0,
-            checkpoint_version: latestCheckpoint?.version ?? null,
+            checkpoint_version: latestCheckpoint.version,
           },
           attempts,
           blockers: [],
@@ -720,6 +797,7 @@ export default defineTool({
             checkpoint_persisted: checkpointPersisted,
             bindings,
             completed_operation_ids: completedOperationIds,
+            activity: activitySummary(activityEvidence),
           },
           next_action: 'done',
           warnings: reconciled.warnings,
@@ -929,6 +1007,13 @@ export default defineTool({
       checkpointPersisted = true;
 
       if (complete) {
+        const activityEvidence = await persistTerminalActivityEvidence(
+          store,
+          decoded.plan_id,
+          plan,
+          latestCheckpoint,
+          readback,
+        );
         return response(
           'Blueprint apply completed and Discord readback matches the approved blueprint.',
           {
@@ -956,6 +1041,7 @@ export default defineTool({
               checkpoint_persisted: checkpointPersisted,
               bindings,
               completed_operation_ids: completedOperationIds,
+              activity: activitySummary(activityEvidence),
             },
             next_action: 'done',
             warnings: [...reconciled.warnings, ...readback.warnings],
@@ -990,6 +1076,7 @@ export default defineTool({
             checkpoint_persisted: checkpointPersisted,
             bindings,
             completed_operation_ids: completedOperationIds,
+            activity: null,
           },
           next_action: readback.blockers.length > 0 ? 'replan' : 'resume',
           warnings: [...reconciled.warnings, ...readback.warnings],
@@ -1024,8 +1111,15 @@ export default defineTool({
           checkpoint_persisted: checkpointPersisted,
           bindings,
           completed_operation_ids: completedOperationIds,
+          activity: null,
         },
-        next_action: safeError.retriable ? 'resume' : 'replan',
+        next_action: safeError.retriable
+          ? 'resume'
+          : error instanceof GuildBlueprintActivityEvidenceError ||
+              (error instanceof BlueprintCheckpointStoreError &&
+                (error.code === 'INVALID_EVIDENCE' || error.code.startsWith('EVIDENCE_')))
+            ? 'fix_configuration'
+            : 'replan',
         warnings: [],
       });
     } finally {

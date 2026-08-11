@@ -9,7 +9,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 discord-mcp's confirmation contract is a **mechanical two-key guard** for
 selected high-risk operations. A tool that declares the `confirm_required`
-precondition - **31 of the 207 tools**, listed
+precondition - **31 of the 208 tools**, listed
 [below](#which-tools-require-it) - does not fire unless **both** of these
 hold at the same time:
 
@@ -164,7 +164,7 @@ There is **no automatic rule**. `confirm_required` is attached explicitly,
 per tool, in each tool's own `defineTool({ preconditions: ['confirm_required'] })`
 call. A tool is gated if and only if it names the precondition itself.
 
-The current source registry has exactly **31 tools** out of 207 - every irreversible
+The current source registry has exactly **31 tools** out of 208 - every irreversible
 delete, plus ban / kick / prune / leave-guild and the two command
 bulk-overwrites (which replace a guild's entire command set in one call):
 

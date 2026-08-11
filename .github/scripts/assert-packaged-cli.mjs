@@ -319,6 +319,18 @@ try {
     assert.equal(exact.structuredContent?.matches?.[0]?.name, 'channels_get');
     assert.equal(exact.structuredContent?.matches?.[0]?.dispatcher, 'mcp_tools_read');
 
+    const activityEvidence = await client.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'guild_blueprint_evidence', limit: 8 },
+    });
+    assert.equal(activityEvidence.isError, false);
+    assert.equal(activityEvidence.structuredContent?.matches?.length, 1);
+    assert.equal(
+      activityEvidence.structuredContent?.matches?.[0]?.name,
+      'guild_blueprint_evidence',
+    );
+    assert.equal(activityEvidence.structuredContent?.matches?.[0]?.dispatcher, 'mcp_tools_read');
+
     const browse = await client.callTool({
       name: 'mcp_tools_search',
       arguments: { query: 'channels', limit: 8 },

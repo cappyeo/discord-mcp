@@ -10,7 +10,7 @@ than one isolated Discord operation. A small model needs only the natural-langua
 request and the explicit bot and guild IDs; discord-mcp owns template selection,
 safe compilation, live reconciliation, and operation ordering.
 
-## The two-call contract
+## The two-call write contract
 
 1. Call `guild_blueprint_plan` with `request`, `guild_id`, and
    `expected_bot_id`. This is a read-only target-bound dry-run.
@@ -21,6 +21,11 @@ safe compilation, live reconciliation, and operation ordering.
    `operation_budget` from 1 through 50.
 4. If apply returns `partial` or `busy`, retry the same apply call. If it returns
    `stale` or `blocked` with `next_action: replan`, create and review a new plan.
+5. A terminal `complete` or `already_current` result contains
+   `evidence.activity.evidence_id`. At any later time, call
+   `guild_blueprint_evidence` with the same `guild_id`, `expected_bot_id`, and
+   `plan_id` for read-only revalidation. It does not accept `plan_token`,
+   `__confirm`, or a Discord token argument.
 
 The token is authenticated to the active caller deployment. Treat it as private
 workflow state: it contains the compressed blueprint and is authenticated, not
@@ -73,29 +78,53 @@ rules channels keep this verification both fast and complete.
 
 ## Local state and credential rotation
 
-Checkpoints default to the platform user-state directory. Set
+Checkpoints and Activity Evidence default to the platform user-state directory. Set
 `MCP_BLUEPRINT_STATE_DIR` to a persistent private directory for containers or
-tests. The files contain target IDs and bindings, not the bot token or plan
-token; their integrity is authenticated with the active profile secret.
+tests. Checkpoints contain target IDs and bindings; the completion-only evidence
+sidecar also retains the trusted blueprint so it can be revalidated after a
+restart. These files never contain the bot token or plan token, but the trusted
+blueprint can include server names and Components V2 content, so keep the state
+directory private. File integrity is authenticated with the active caller secret.
 
-Rotating `DISCORD_TOKEN` invalidates pending plan tokens and checkpoints by
-design. Finish or intentionally abandon pending work, rotate the credential,
-restart the MCP process once, and create a fresh plan. For HTTP deployments,
-rotating `DISCORD_MCP_ACCESS_TOKEN` also invalidates HTTP-minted plans because
-the bearer credential defines that deployment's caller principal.
+Rotating `DISCORD_TOKEN` invalidates pending plan tokens, checkpoints, and saved
+Activity Evidence by design. Finish or intentionally abandon pending work,
+rotate the credential, restart the MCP process once, and create a fresh plan.
+For HTTP deployments, rotating `DISCORD_MCP_ACCESS_TOKEN` also invalidates
+HTTP-minted state because the bearer credential defines that deployment's caller
+principal. Old sidecars are not migrated across caller boundaries; a fresh
+plan/apply creates fresh evidence.
 
 One stdio process/profile is one trusted caller boundary. One HTTP bearer token
 is likewise one caller principal: do not give the same endpoint credential and
 bot to mutually untrusted users. Use separate deployments, access tokens, bot
 profiles, and state directories instead.
 
-## Evidence returned today
+## Activity Evidence
 
-The final response includes the verified bot/guild target, before-and-after
-snapshot digests, exact bindings, completed operation IDs, checkpoint status,
-and an independent Discord readback result. This is the foundation for the
-structured per-domain Activity Evidence record tracked as the next product
-milestone.
+A successful final readback persists one immutable, authenticated
+`activity-evidence.json` sidecar for the plan. Apply returns only its ID,
+timestamp, per-domain verified counts, and enforced safety invariants; it never
+returns the stored full blueprint or a credential. Partial, stale, busy,
+blocked, and drifted apply results always return `activity: null`.
+
+`guild_blueprint_evidence` validates the caller boundary and local HMAC before
+any Discord request, verifies the exact bot, reads the current guild, and runs
+the same pure reconciler without acquiring an apply lock or writing state. Its
+statuses are:
+
+- `verified`: the current Discord state still conforms to the evidenced
+  blueprint;
+- `drifted`: safe operations or blockers remain against the blueprint;
+- `not_found`: no completion evidence exists for that plan in this caller
+  profile; and
+- `blocked`: the caller, target, local proof, identity, or Discord readback
+  cannot be verified safely.
+
+`verification.snapshot_unchanged` separately reports whether the whole-guild
+snapshot digest is identical to the completion snapshot. It can be `false`
+while status remains `verified` when unrelated additive state changed but every
+blueprint requirement still matches. The tool never repairs drift; create a
+fresh preview and approval before any later mutation.
 
 See [Access and scope](/discord-mcp/reference/config/access/) for the required
 identity and guild locks, and [Confirmation model](/discord-mcp/architecture/confirmation/)

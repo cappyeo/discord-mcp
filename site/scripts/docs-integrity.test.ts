@@ -97,7 +97,7 @@ describe('connection-mode guide', () => {
 
     expect(guide).toContain('Gateway is not a transport');
     expect(guide).toContain('4 visible tools');
-    expect(guide).toContain('up to 207 visible tools');
+    expect(guide).toContain('up to 208 visible tools');
     expect(guide).toContain('Guided `setup` defaults to `progressive`');
     expect(guide).toContain('Raw `serve` and legacy `init` default to `full`');
     expect(guide).toContain('HTTP does not support Gateway subscriptions');

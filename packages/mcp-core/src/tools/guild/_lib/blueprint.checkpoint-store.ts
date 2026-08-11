@@ -1,6 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import {
   chmod,
+  copyFile,
   link,
   mkdir,
   open,
@@ -13,6 +15,11 @@ import {
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
+  assertGuildBlueprintActivityEvidence,
+  type GuildBlueprintActivityEvidence,
+  GuildBlueprintActivityEvidenceSchema,
+} from './blueprint.activity-evidence.js';
+import {
   type BlueprintCheckpoint,
   BlueprintCheckpointSchema,
 } from './blueprint.execution.schema.js';
@@ -21,8 +28,10 @@ import { canonicalJson } from './blueprint.validation.js';
 const PLAN_ID_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CHECKPOINT_FILE_PATTERN = /^checkpoint-v(\d+)\.json$/;
 const LOCK_FILE_NAME = 'apply.lock';
+const ACTIVITY_EVIDENCE_FILE_NAME = 'activity-evidence.json';
 const DEFAULT_STALE_LOCK_MS = 5 * 60 * 1_000;
 const MAX_LOCK_BYTES = 4_096;
+const MAX_ACTIVITY_EVIDENCE_BYTES = 1_048_576;
 
 const LockRecordSchema = z
   .object({
@@ -44,6 +53,14 @@ const CheckpointEnvelopeSchema = z
   })
   .strict();
 
+const ActivityEvidenceEnvelopeSchema = z
+  .object({
+    schema_version: z.literal('guild_blueprint_activity_evidence_envelope.v1'),
+    evidence: GuildBlueprintActivityEvidenceSchema,
+    auth_tag: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+
 export type BlueprintCheckpointLock = {
   readonly acquired: true;
   heartbeat(): Promise<boolean>;
@@ -61,6 +78,11 @@ export class BlueprintCheckpointStoreError extends Error {
     | 'CHECKPOINT_MALFORMED'
     | 'CHECKPOINT_TAMPERED'
     | 'CHECKPOINT_VERSION_CONFLICT'
+    | 'INVALID_EVIDENCE'
+    | 'EVIDENCE_MALFORMED'
+    | 'EVIDENCE_TAMPERED'
+    | 'EVIDENCE_CONFLICT'
+    | 'EVIDENCE_IO'
     | 'LOCK_MALFORMED'
     | 'CHECKPOINT_IO';
 
@@ -87,6 +109,15 @@ function assertPlanId(planId: string): void {
 function checkpointAuthTag(checkpoint: BlueprintCheckpoint, signingSecret: string): string {
   return createHmac('sha256', signingSecret)
     .update(`discord-mcp-blueprint-checkpoint.v1\0${canonicalJson(checkpoint)}`)
+    .digest('hex');
+}
+
+function activityEvidenceAuthTag(
+  evidence: GuildBlueprintActivityEvidence,
+  signingSecret: string,
+): string {
+  return createHmac('sha256', signingSecret)
+    .update(`discord-mcp-blueprint-activity-evidence.v1\0${canonicalJson(evidence)}`)
     .digest('hex');
 }
 
@@ -192,13 +223,15 @@ export interface BlueprintCheckpointStoreOptions {
 
 /**
  * Local, append-only checkpoint state for one blueprint plan.
- * The plan itself is deliberately not persisted here.
+ * The plan token is never persisted; terminal Activity Evidence retains only
+ * the trusted blueprint required for later read-only verification.
  */
 export class BlueprintCheckpointStore {
   readonly #stateDirectory: string;
   readonly #planId: string;
   readonly #planDirectory: string;
   readonly #lockPath: string;
+  readonly #activityEvidencePath: string;
   readonly #signingSecret: string;
   readonly #now: () => number;
   readonly #staleLockMs: number;
@@ -222,6 +255,7 @@ export class BlueprintCheckpointStore {
     this.#planId = options.planId;
     this.#planDirectory = join(options.stateDirectory, options.planId.slice('sha256:'.length));
     this.#lockPath = join(this.#planDirectory, LOCK_FILE_NAME);
+    this.#activityEvidencePath = join(this.#planDirectory, ACTIVITY_EVIDENCE_FILE_NAME);
     this.#signingSecret = options.signingSecret;
     this.#now = options.now ?? Date.now;
     this.#staleLockMs = options.staleLockMs ?? DEFAULT_STALE_LOCK_MS;
@@ -366,6 +400,172 @@ export class BlueprintCheckpointStore {
     } catch (error) {
       if (error instanceof BlueprintCheckpointStoreError) throw error;
       throw new BlueprintCheckpointStoreError('CHECKPOINT_IO', 'Unable to write checkpoint', {
+        cause: error,
+      });
+    } finally {
+      if (tempHandle !== undefined) await tempHandle.close().catch(() => undefined);
+      await unlink(temporary).catch(() => undefined);
+    }
+  }
+
+  async loadEvidence(): Promise<GuildBlueprintActivityEvidence | null> {
+    let evidenceStat: Awaited<ReturnType<typeof stat>>;
+    try {
+      evidenceStat = await stat(this.#activityEvidencePath);
+    } catch (error) {
+      if (isMissing(error)) return null;
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_IO',
+        'Activity Evidence metadata could not be read.',
+        { cause: error },
+      );
+    }
+    if (evidenceStat.size > MAX_ACTIVITY_EVIDENCE_BYTES) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_MALFORMED',
+        'Activity Evidence exceeds the maximum supported size.',
+      );
+    }
+    let text: string;
+    try {
+      text = await readFile(this.#activityEvidencePath, 'utf8');
+    } catch (error) {
+      if (isMissing(error)) return null;
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_IO',
+        'Activity Evidence could not be read.',
+        { cause: error },
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (error) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_MALFORMED',
+        'Activity Evidence is not valid JSON.',
+        { cause: error },
+      );
+    }
+    const envelope = ActivityEvidenceEnvelopeSchema.safeParse(raw);
+    if (!envelope.success) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_MALFORMED',
+        'Activity Evidence failed envelope validation.',
+      );
+    }
+    const expectedTag = activityEvidenceAuthTag(envelope.data.evidence, this.#signingSecret);
+    if (!equalHex(envelope.data.auth_tag, expectedTag)) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_TAMPERED',
+        'Activity Evidence authentication failed.',
+      );
+    }
+    try {
+      assertGuildBlueprintActivityEvidence(envelope.data.evidence);
+    } catch (error) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_MALFORMED',
+        'Activity Evidence failed digest or blueprint validation.',
+        { cause: error },
+      );
+    }
+    if (envelope.data.evidence.plan_id !== this.#planId) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_MALFORMED',
+        'Activity Evidence belongs to a different plan.',
+      );
+    }
+    return envelope.data.evidence;
+  }
+
+  async saveEvidence(evidence: GuildBlueprintActivityEvidence): Promise<void> {
+    const parsed = GuildBlueprintActivityEvidenceSchema.safeParse(evidence);
+    if (!parsed.success || parsed.data.plan_id !== this.#planId) {
+      throw new BlueprintCheckpointStoreError(
+        'INVALID_EVIDENCE',
+        'Activity Evidence does not match this plan or schema.',
+      );
+    }
+    try {
+      assertGuildBlueprintActivityEvidence(parsed.data);
+    } catch (error) {
+      throw new BlueprintCheckpointStoreError(
+        'INVALID_EVIDENCE',
+        'Activity Evidence failed digest or blueprint validation.',
+        { cause: error },
+      );
+    }
+
+    try {
+      await this.#ensureDirectory();
+    } catch (error) {
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_IO',
+        'Unable to prepare the Activity Evidence directory.',
+        { cause: error },
+      );
+    }
+    const existing = await this.loadEvidence();
+    if (existing !== null) {
+      if (canonicalJson(existing) === canonicalJson(parsed.data)) return;
+      throw new BlueprintCheckpointStoreError(
+        'EVIDENCE_CONFLICT',
+        'A different immutable Activity Evidence record already exists for this plan.',
+      );
+    }
+
+    const filename = ACTIVITY_EVIDENCE_FILE_NAME;
+    const temporary = join(
+      this.#planDirectory,
+      `.${filename}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`,
+    );
+    const payload = `${JSON.stringify({
+      schema_version: 'guild_blueprint_activity_evidence_envelope.v1',
+      evidence: parsed.data,
+      auth_tag: activityEvidenceAuthTag(parsed.data, this.#signingSecret),
+    })}\n`;
+    let tempHandle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      tempHandle = await open(temporary, 'wx', 0o600);
+      await tempHandle.writeFile(payload, 'utf8');
+      await tempHandle.sync();
+      await tempHandle.close();
+      tempHandle = undefined;
+      await chmodSecure(temporary, 0o600);
+      try {
+        await link(temporary, this.#activityEvidencePath);
+      } catch (error) {
+        if (!isAlreadyExists(error) && !isLinkUnsupported(error)) throw error;
+        if (isAlreadyExists(error)) {
+          const concurrent = await this.loadEvidence();
+          if (concurrent !== null && canonicalJson(concurrent) === canonicalJson(parsed.data))
+            return;
+          throw new BlueprintCheckpointStoreError(
+            'EVIDENCE_CONFLICT',
+            'A different immutable Activity Evidence record already exists for this plan.',
+            { cause: error },
+          );
+        }
+        try {
+          await copyFile(temporary, this.#activityEvidencePath, fsConstants.COPYFILE_EXCL);
+        } catch (copyError) {
+          if (!isAlreadyExists(copyError)) throw copyError;
+          const concurrent = await this.loadEvidence();
+          if (concurrent !== null && canonicalJson(concurrent) === canonicalJson(parsed.data))
+            return;
+          throw new BlueprintCheckpointStoreError(
+            'EVIDENCE_CONFLICT',
+            'A different immutable Activity Evidence record already exists for this plan.',
+            { cause: copyError },
+          );
+        }
+      }
+      await chmodSecure(this.#activityEvidencePath, 0o600);
+      await fsyncDirectory(this.#planDirectory);
+    } catch (error) {
+      if (error instanceof BlueprintCheckpointStoreError) throw error;
+      throw new BlueprintCheckpointStoreError('EVIDENCE_IO', 'Unable to write Activity Evidence.', {
         cause: error,
       });
     } finally {

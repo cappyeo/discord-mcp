@@ -115,6 +115,7 @@ import EventsModify from './tools/events/modify.js';
 import GuildBeginPrune from './tools/guild/begin_prune.js';
 import GuildBlueprintApply from './tools/guild/blueprint_apply.js';
 import GuildBlueprintCompile from './tools/guild/blueprint_compile.js';
+import GuildBlueprintEvidence from './tools/guild/blueprint_evidence.js';
 import GuildBlueprintPlan from './tools/guild/blueprint_plan.js';
 import GuildDeleteIntegration from './tools/guild/delete_integration.js';
 import GuildGet from './tools/guild/get.js';
@@ -316,7 +317,7 @@ function getToolCategories(toolStore: ToolStore): ReadonlyMap<string, string> {
   return categories;
 }
 
-/** Compile one tool contract on first use instead of all 207 at HTTP startup. */
+/** Compile one tool contract on first use instead of all 208 at HTTP startup. */
 function compileToolContracts(tool: Tool): ToolContractVariants {
   const cached = compiledToolContracts.get(tool);
   if (cached !== undefined) return cached;
@@ -791,6 +792,10 @@ async function createSharedToolStore(): Promise<ToolStore> {
   await toolStore.loadPiece({
     name: 'guild_blueprint_apply',
     piece: GuildBlueprintApply as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'guild_blueprint_evidence',
+    piece: GuildBlueprintEvidence as unknown as ConcreteTool,
   });
   await toolStore.loadPiece({
     name: 'guild_modify',
@@ -1387,7 +1392,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
           'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
         ]
       : [
-          'Discord MCP server: 207 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
+          'Discord MCP server: 208 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
           'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
           'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
           'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls.',

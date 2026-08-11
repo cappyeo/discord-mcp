@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { server as mockServer } from '@discord-mcp/server-mocks';
@@ -458,6 +458,62 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       expect(publicationCreates).toBe(1);
       expect(roleCreates).toBe(0);
       expect(channelCreates).toBe(0);
+
+      const noOpPreview = reconcileGuildBlueprint(BLUEPRINT_ID, blueprint, snapshotFrom(fixture));
+      expect(noOpPreview.operations).toEqual([]);
+      expect(noOpPreview.blockers).toEqual([]);
+      const noOpPlan = encodeBlueprintPlan(
+        {
+          ...planPayload,
+          initial_snapshot_id: noOpPreview.snapshot_id,
+          initial_bindings: noOpPreview.bindings,
+          initial_operations: noOpPreview.operations,
+        },
+        SIGNING_TOKEN,
+      );
+      const noOpArgs = {
+        ...args,
+        plan_token: noOpPlan.plan_token,
+        approval_id: noOpPlan.approval_id,
+      };
+      const evidencePath = join(
+        stateDirectory,
+        noOpPlan.plan_id.slice('sha256:'.length),
+        'activity-evidence.json',
+      );
+      await mkdir(evidencePath, { recursive: true });
+
+      const evidenceIo = await client.callTool({
+        name: 'guild_blueprint_apply',
+        arguments: noOpArgs,
+      });
+      expect(evidenceIo.structuredContent).toMatchObject({
+        status: 'partial',
+        error: { code: 'EVIDENCE_IO', retriable: true },
+        evidence: { activity: null, checkpoint_persisted: true },
+        next_action: 'resume',
+      });
+      expect(automodCreates).toBe(1);
+      expect(publicationCreates).toBe(1);
+
+      await rm(evidencePath, { recursive: true, force: true });
+      const recoveredNoOp = await client.callTool({
+        name: 'guild_blueprint_apply',
+        arguments: noOpArgs,
+      });
+      expect(recoveredNoOp.structuredContent).toMatchObject({
+        status: 'already_current',
+        progress: { remaining: 0 },
+        evidence: {
+          readback: 'match',
+          activity: {
+            schema_version: 'guild_blueprint_activity_evidence.v1',
+          },
+        },
+        next_action: 'done',
+      });
+      expect(automodCreates).toBe(1);
+      expect(publicationCreates).toBe(1);
 
       const third = await client.callTool({ name: 'guild_blueprint_apply', arguments: args });
       expect(third.structuredContent).toMatchObject({ status: 'already_current' });

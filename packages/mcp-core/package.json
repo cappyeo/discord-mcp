@@ -3,7 +3,7 @@
   "version": "0.18.1",
   "private": false,
   "type": "module",
-  "description": "Production-grade Discord MCP server core - 207 tools, OTel-instrumented, cockatiel-resilient.",
+  "description": "Production-grade Discord MCP server core - 208 tools, OTel-instrumented, cockatiel-resilient.",
   "keywords": [
     "mcp",
     "model-context-protocol",
