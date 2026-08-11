@@ -145,6 +145,8 @@ function harness(
     retriableMainApplyResponses = 0,
     retriableReplayResponses = 0,
     nonRetriableApplyResponse = false,
+    operationsPlanned = 2,
+    nonProgressingMainApplyResponses = 0,
     snapshotSettlesAfter = 1,
     auditSettlesAfter = 1,
   } = {},
@@ -161,6 +163,7 @@ function harness(
   let remainingRetriableForcedObservationResponses = retriableForcedObservationResponses;
   let remainingRetriableMainApplyResponses = retriableMainApplyResponses;
   let remainingRetriableReplayResponses = retriableReplayResponses;
+  let remainingNonProgressingMainApplyResponses = nonProgressingMainApplyResponses;
   let nonRetriableApplyReturned = false;
   let completedApply = false;
   let forcedPartialObserved = false;
@@ -182,7 +185,11 @@ function harness(
               retriable: true,
             });
           }
-          return plan();
+          const fixturePlan = plan();
+          fixturePlan.operations = Array.from({ length: operationsPlanned }, (_, index) => ({
+            operation_id: fixturePlan.operations[index]?.operation_id ?? `fixture:${index}`,
+          }));
+          return fixturePlan;
         }
         if (name === 'guild_blueprint_evidence') return evidenceResult;
         assert.equal(name, 'guild_blueprint_apply');
@@ -268,6 +275,20 @@ function harness(
             },
             next_action: 'fix_configuration',
           });
+        }
+        if (!completedApply && remainingNonProgressingMainApplyResponses > 0) {
+          remainingNonProgressingMainApplyResponses -= 1;
+          const stalled = applyResult('partial', 0, operationsPlanned);
+          return {
+            ...stalled,
+            progress: {
+              ...stalled.progress,
+              initial_planned: operationsPlanned,
+              completed_total: 0,
+              checkpoint_version: 0,
+            },
+            evidence: { ...stalled.evidence, completed_operation_ids: [] },
+          };
         }
         if (mode === 'forced_resume' && firstForcedApply) {
           firstForcedApply = false;
@@ -386,7 +407,7 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.replay_status, 'already_current');
     assert.equal(outcome.result.evidence_status, 'verified');
     assert.equal(outcome.result.restart_count, 1);
-    assert.deepEqual(test.applyBudgets, [50, 50]);
+    assert.deepEqual(test.applyBudgets, [10, 10]);
     assert.equal(test.sessions.length, 2);
     assert.ok(test.sessions.every((session) => session.closed));
     assert.deepEqual(outcome.cleanup.bindings, bindings());
@@ -452,7 +473,7 @@ describe('real benchmark trial orchestration', () => {
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
 
     assert.equal(outcome.result.oracle_match, true);
-    assert.deepEqual(test.applyBudgets, [50, 50, 50]);
+    assert.deepEqual(test.applyBudgets, [10, 10, 10]);
     assert.deepEqual(test.settleSleeps, [1_000]);
     assert.equal(outcome.result.restart_count, 2);
     assert.deepEqual(outcome.result.last_nonterminal_apply, {
@@ -477,7 +498,7 @@ describe('real benchmark trial orchestration', () => {
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
 
     assert.equal(outcome.result.oracle_match, true);
-    assert.deepEqual(test.applyBudgets, [50, 50, 50]);
+    assert.deepEqual(test.applyBudgets, [10, 10, 10]);
     assert.deepEqual(test.settleSleeps, [1_000]);
     assert.deepEqual(outcome.result.last_nonterminal_apply, {
       status: 'partial',
@@ -496,9 +517,29 @@ describe('real benchmark trial orchestration', () => {
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
 
     assert.equal(outcome.result.oracle_match, true);
-    assert.deepEqual(test.applyBudgets, [50, 50, 50]);
+    assert.deepEqual(test.applyBudgets, [10, 10, 10]);
     assert.deepEqual(test.settleSleeps, [1_000]);
     assert.equal(outcome.result.restart_count, 2);
+  });
+
+  it('derives a bounded apply loop from a large plan instead of a fixed call count', async () => {
+    const test = harness('full', {
+      operationsPlanned: 46,
+      nonProgressingMainApplyResponses: 20,
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'partial');
+    assert.equal(outcome.result.apply_calls, 11);
+    assert.deepEqual(
+      test.applyBudgets,
+      Array.from({ length: 11 }, () => 10),
+    );
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'APPLY_DID_NOT_COMPLETE',
+      ),
+    );
   });
 
   it('does not retry a non-retriable apply blocker and preserves safe diagnostics', async () => {
@@ -506,7 +547,7 @@ describe('real benchmark trial orchestration', () => {
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
 
     assert.equal(outcome.result.terminal_status, 'blocked');
-    assert.deepEqual(test.applyBudgets, [50]);
+    assert.deepEqual(test.applyBudgets, [10]);
     assert.deepEqual(test.settleSleeps, []);
     assert.deepEqual(outcome.result.last_nonterminal_apply, {
       status: 'blocked',
@@ -601,7 +642,7 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.terminal_status, 'complete');
     assert.equal(outcome.result.forced_resume_observed, true);
     assert.equal(outcome.result.restart_count, 2);
-    assert.deepEqual(test.applyBudgets, [1, 50, 50]);
+    assert.deepEqual(test.applyBudgets, [1, 10, 10]);
     assert.equal(test.sessions.length, 3);
     assert.ok(test.sessions.every((session) => session.closed));
     assert.ok(
@@ -622,7 +663,7 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.oracle_match, true);
     assert.equal(outcome.result.forced_resume_observed, true);
     assert.equal(outcome.result.apply_calls, 15);
-    assert.deepEqual(test.applyBudgets, [1, 1, 1, 1, 1, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]);
+    assert.deepEqual(test.applyBudgets, [1, 1, 1, 1, 1, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]);
     assert.deepEqual(
       test.settleSleeps,
       [1_000, 2_000, 4_000, 8_000, 1_000, 2_000, 4_000, 8_000, 1_000, 2_000, 4_000, 8_000],

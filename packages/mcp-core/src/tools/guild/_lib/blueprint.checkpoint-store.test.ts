@@ -171,8 +171,11 @@ describe('BlueprintCheckpointStore', () => {
     writeFileSync(lockPath, JSON.stringify({ ...record, created_at_ms: 0, pid: 2_147_483_647 }), {
       mode: 0o600,
     });
-    // mtime is also checked, so advance the injected clock beyond the five-minute threshold.
-    now += 6 * 60_000;
+    // A dead owner gets a short grace period, then can be resumed within the
+    // benchmark's bounded 31-second recovery schedule.
+    now += 14_000;
+    await expect(stale.tryAcquireLock()).resolves.toEqual({ acquired: false, reason: 'busy' });
+    now += 2_000;
     const reclaimed = await stale.tryAcquireLock();
     expect(reclaimed.acquired).toBe(true);
     if (reclaimed.acquired) await reclaimed.release();

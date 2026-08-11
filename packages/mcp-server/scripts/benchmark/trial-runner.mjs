@@ -4,6 +4,7 @@ const SNOWFLAKE = /^\d{17,20}$/;
 const SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
 const PLAN_RECOVERY_DELAYS_MS = Object.freeze([1_000, 3_000]);
 const APPLY_RECOVERY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000, 8_000, 16_000]);
+const MAIN_APPLY_OPERATION_BUDGET = 10;
 const MESSAGE_HISTORY_CHANNEL_TYPES = new Set([0, 5]);
 const REQUIRED_DEPENDENCIES = [
   'openSession',
@@ -554,8 +555,12 @@ export async function runBenchmarkTrial(input) {
       await open();
     }
 
-    for (let iteration = 0; iteration < 8; iteration += 1) {
-      latestApply = await callApply(50, mainApplyRecovery);
+    const mainApplyIterationLimit =
+      Math.ceil(operationsPlanned / MAIN_APPLY_OPERATION_BUDGET) +
+      APPLY_RECOVERY_DELAYS_MS.length +
+      1;
+    for (let iteration = 0; iteration < mainApplyIterationLimit; iteration += 1) {
+      latestApply = await callApply(MAIN_APPLY_OPERATION_BUDGET, mainApplyRecovery);
       rememberApply(latestApply);
       if (SUCCESS_STATUSES.has(latestApply.status)) break;
       if (
@@ -586,10 +591,10 @@ export async function runBenchmarkTrial(input) {
     }
 
     const replayRecovery = createApplyRecovery();
-    let replay = await callApply(50, replayRecovery);
+    let replay = await callApply(MAIN_APPLY_OPERATION_BUDGET, replayRecovery);
     rememberApply(replay);
     while (applyResponseNeedsRecovery(replay) && (await replayRecovery(replay.error))) {
-      replay = await callApply(50, replayRecovery);
+      replay = await callApply(MAIN_APPLY_OPERATION_BUDGET, replayRecovery);
       rememberApply(replay);
     }
     replayStatus = replay.status;

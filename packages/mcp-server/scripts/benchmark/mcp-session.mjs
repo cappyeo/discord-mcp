@@ -6,6 +6,7 @@ const NORTH_STAR_TOOLS = [
   'guild_blueprint_apply',
   'guild_blueprint_evidence',
 ];
+const TOOL_REQUEST_TIMEOUT_MS = 180_000;
 const ALLOWED_CHILD_ENV = new Set([
   'ALLOWED_GUILDS',
   'DISCORD_EXPECTED_BOT_ID',
@@ -118,7 +119,10 @@ export async function openMcpBenchmarkSession({
       pid,
       toolNames,
       async callTool(name, args) {
-        const result = await client.callTool({ name, arguments: args });
+        const result = await client.callTool(
+          { name, arguments: args },
+          { timeout: TOOL_REQUEST_TIMEOUT_MS },
+        );
         const data = result.structuredContent;
         if (result.isError === true || data === undefined || data === null) {
           throw toolResultError(name, data);

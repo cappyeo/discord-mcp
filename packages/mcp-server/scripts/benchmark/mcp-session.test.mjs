@@ -32,6 +32,32 @@ describe('openMcpBenchmarkSession', () => {
     }
   });
 
+  it('uses an explicit bounded timeout for long-running tool calls', async () => {
+    const session = await openMcpBenchmarkSession({
+      cliPath: SERVER_PATH,
+      cwd: resolve(import.meta.dirname, '../..'),
+      env: {},
+    });
+    const callTool = vi.spyOn(Client.prototype, 'callTool').mockResolvedValue({
+      isError: false,
+      structuredContent: { status: 'fixture' },
+    });
+
+    try {
+      await session.callTool('guild_blueprint_apply', { operation_budget: 10 });
+      expect(callTool).toHaveBeenCalledWith(
+        {
+          name: 'guild_blueprint_apply',
+          arguments: { operation_budget: 10 },
+        },
+        { timeout: 180_000 },
+      );
+    } finally {
+      callTool.mockRestore();
+      await session.close();
+    }
+  });
+
   it('creates a fresh process after an explicit restart boundary', async () => {
     const options = {
       cliPath: SERVER_PATH,

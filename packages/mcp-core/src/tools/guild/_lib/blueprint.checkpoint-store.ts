@@ -29,7 +29,9 @@ const PLAN_ID_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CHECKPOINT_FILE_PATTERN = /^checkpoint-v(\d+)\.json$/;
 const LOCK_FILE_NAME = 'apply.lock';
 const ACTIVITY_EVIDENCE_FILE_NAME = 'activity-evidence.json';
-const DEFAULT_STALE_LOCK_MS = 5 * 60 * 1_000;
+// A dead local owner is safe to reclaim after a short termination grace. Live
+// owners remain protected by the PID check regardless of lock age.
+const DEFAULT_STALE_LOCK_MS = 15_000;
 const MAX_LOCK_BYTES = 4_096;
 const MAX_ACTIVITY_EVIDENCE_BYTES = 1_048_576;
 
