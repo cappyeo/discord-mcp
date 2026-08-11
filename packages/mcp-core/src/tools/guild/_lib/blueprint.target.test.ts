@@ -1,0 +1,308 @@
+import type { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v10';
+import { describe, expect, it } from 'vitest';
+import { desiredPublicationBody, publicationMarker } from './blueprint.desired.js';
+import type { BlueprintBindings } from './blueprint.execution.schema.js';
+import { emptyBlueprintBindings } from './blueprint.execution.schema.js';
+import { compileGuildBlueprint } from './blueprint.js';
+import { reconcileGuildBlueprint } from './blueprint.reconcile.js';
+import type { GuildBlueprint } from './blueprint.schema.js';
+import { channelType, readBlueprintTargetSnapshot } from './blueprint.target.js';
+
+const guildId = '100000000000000001';
+const botId = '100000000000000002';
+const blueprintId = `sha256:${'a'.repeat(64)}`;
+
+const blueprint = compileGuildBlueprint({
+  request: 'Build a professional gaming community',
+  requested_capabilities: ['gaming', 'lfg', 'voice'],
+  primary: {
+    code: 'primary',
+    effective_capabilities: ['gaming', 'lfg', 'voice'],
+    blueprint: {
+      channel_count: 10,
+      category_count: 2,
+      text_channel_count: 6,
+      voice_channel_count: 3,
+      forum_channel_count: 0,
+      stage_channel_count: 0,
+      other_channel_count: 0,
+      nsfw_channel_count: 0,
+      permission_overwrite_count: 4,
+      role_count: 4,
+      privileged_role_count: 0,
+      risky_permission_signals: [],
+    },
+  },
+  inspirations: [],
+});
+
+function publicationFixture() {
+  const publication = blueprint.components_v2.publications[0]!;
+  const channel = blueprint.channels.find((item) => item.key === publication.channel_key)!;
+  const channelId = '200000000000000001';
+  const messageId = '300000000000000001';
+  const channelBindings = Object.fromEntries(
+    blueprint.channels.map((item, index) => [
+      item.key,
+      `200000000000000${String(index + 1).padStart(3, '0')}`,
+    ]),
+  );
+  channelBindings[channel.key] = channelId;
+  const bindings: BlueprintBindings = {
+    ...emptyBlueprintBindings(),
+    channels: channelBindings,
+    publications: { [publication.key]: messageId },
+  };
+  const desired = desiredPublicationBody(publication, blueprintId, guildId, botId, bindings)!;
+  return { publication, channelId, messageId, bindings, desired };
+}
+
+function targetChannel(blueprintChannel: GuildBlueprint['channels'][number], id: string) {
+  return {
+    id,
+    guild_id: guildId,
+    name: blueprintChannel.name,
+    type: channelType(blueprintChannel.type),
+    position: blueprintChannel.position,
+    parent_id: null,
+    topic: null,
+    nsfw: false,
+    rate_limit_per_user: 0,
+    permission_overwrites: [],
+    available_tags: [],
+  };
+}
+
+function fakeRest(
+  channelId: string,
+  recentMessages: unknown[],
+  exactMessage: unknown | Error | undefined,
+  messagePages: readonly (readonly unknown[])[] = [recentMessages, []],
+): REST {
+  let messagePage = 0;
+  return {
+    get: async (route: string) => {
+      if (route === Routes.guild(guildId)) {
+        return {
+          id: guildId,
+          name: 'Test',
+          owner_id: '100000000000000003',
+          description: null,
+          preferred_locale: 'en-US',
+          features: [],
+          verification_level: 0,
+          default_message_notifications: 0,
+          explicit_content_filter: 0,
+          rules_channel_id: null,
+          public_updates_channel_id: null,
+          safety_alerts_channel_id: null,
+        };
+      }
+      if (route === Routes.guildMember(guildId, botId)) return { user: { id: botId }, roles: [] };
+      if (route === Routes.guildRoles(guildId)) return [];
+      if (route === Routes.guildChannels(guildId))
+        return [
+          targetChannel(
+            blueprint.channels.find(
+              (item) => item.key === blueprint.components_v2.publications[0]!.channel_key,
+            )!,
+            channelId,
+          ),
+        ];
+      if (route === Routes.guildAutoModerationRules(guildId)) return [];
+      if (route === Routes.channelMessages(channelId)) {
+        const page = messagePages[Math.min(messagePage, messagePages.length - 1)] ?? [];
+        messagePage += 1;
+        return page;
+      }
+      if (route === Routes.channelMessage(channelId, '300000000000000001')) {
+        if (exactMessage instanceof Error) throw exactMessage;
+        return exactMessage;
+      }
+      throw new Error(`Unexpected route ${route}`);
+    },
+  } as unknown as REST;
+}
+
+describe('blueprint publication target readback', () => {
+  it('fetches a checkpoint-bound message by exact id when it is outside recent history', async () => {
+    const { publication, channelId, messageId, bindings, desired } = publicationFixture();
+    const recent = Array.from({ length: 100 }, (_, index) => ({
+      id: `399999999999999${String(index).padStart(3, '0')}`,
+      channel_id: channelId,
+      guild_id: guildId,
+      author: { id: botId },
+      components: [],
+    }));
+    const exact = {
+      id: messageId,
+      channel_id: channelId,
+      guild_id: guildId,
+      author: { id: botId },
+      flags: desired.body.flags,
+      nonce: desired.body.nonce,
+      mention_everyone: false,
+      mentions: [],
+      mention_roles: [],
+      components: desired.body.components,
+    };
+    const snapshot = await readBlueprintTargetSnapshot(
+      fakeRest(channelId, recent, exact),
+      guildId,
+      botId,
+      blueprint,
+      bindings,
+    );
+
+    expect(snapshot.recent_messages[channelId]).toHaveLength(101);
+    const result = reconcileGuildBlueprint(blueprintId, blueprint, snapshot, bindings);
+    expect(result.bindings.publications[publication.key]).toBe(messageId);
+    expect(
+      result.operations.some(
+        (operation) => operation.key === publication.key && operation.action === 'send',
+      ),
+    ).toBe(false);
+  });
+
+  it('treats an exact-message 404 as a safe replacement opportunity', async () => {
+    const { publication, channelId, bindings } = publicationFixture();
+    const snapshot = await readBlueprintTargetSnapshot(
+      fakeRest(channelId, [], Object.assign(new Error('not found'), { status: 404 })),
+      guildId,
+      botId,
+      blueprint,
+      bindings,
+    );
+    const result = reconcileGuildBlueprint(blueprintId, blueprint, snapshot, bindings);
+
+    expect(result.blockers).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'RESOURCE_CONFLICT' })]),
+    );
+    expect(result.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'send', resource: 'publication', key: publication.key }),
+      ]),
+    );
+  });
+
+  it('blocks changed content that retains its marker without scheduling a duplicate', async () => {
+    const { publication, channelId, bindings, desired } = publicationFixture();
+    const marker = publicationMarker(blueprintId, publication.key);
+    const altered = {
+      id: bindings.publications[publication.key],
+      channel_id: channelId,
+      guild_id: guildId,
+      author: { id: botId },
+      flags: desired.body.flags,
+      nonce: desired.body.nonce,
+      mention_everyone: false,
+      mentions: [],
+      mention_roles: [],
+      components: [{ type: 10, content: `externally edited\n${marker}` }],
+    };
+    const snapshot = await readBlueprintTargetSnapshot(
+      fakeRest(channelId, [], altered),
+      guildId,
+      botId,
+      blueprint,
+      bindings,
+    );
+    const result = reconcileGuildBlueprint(blueprintId, blueprint, snapshot, bindings);
+
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'RESOURCE_CONFLICT',
+          resource: `message:${bindings.publications[publication.key]}`,
+        }),
+      ]),
+    );
+    expect(
+      result.operations.some(
+        (operation) => operation.key === publication.key && operation.action === 'send',
+      ),
+    ).toBe(false);
+  });
+
+  it('paginates past the newest 100 messages to adopt an exact managed publication', async () => {
+    const { publication, channelId, bindings, desired } = publicationFixture();
+    const unbound = { ...bindings, publications: {} };
+    const newest = Array.from({ length: 100 }, (_, index) => ({
+      id: `399999999999999${String(index).padStart(3, '0')}`,
+      channel_id: channelId,
+      guild_id: guildId,
+      author: { id: botId },
+      components: [],
+    }));
+    const managed = {
+      id: '300000000000000001',
+      channel_id: channelId,
+      guild_id: guildId,
+      author: { id: botId },
+      flags: desired.body.flags,
+      nonce: desired.body.nonce,
+      mention_everyone: false,
+      mentions: [],
+      mention_roles: [],
+      components: desired.body.components,
+    };
+    const snapshot = await readBlueprintTargetSnapshot(
+      fakeRest(channelId, newest, undefined, [newest, [managed]]),
+      guildId,
+      botId,
+      blueprint,
+      unbound,
+    );
+    const result = reconcileGuildBlueprint(blueprintId, blueprint, snapshot, unbound);
+
+    expect(snapshot.recent_messages[channelId]).toHaveLength(101);
+    expect(snapshot.publication_history_complete[channelId]).toBe(true);
+    expect(result.blockers).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ resource: `message:${managed.id}` })]),
+    );
+    expect(result.bindings.publications[publication.key]).toBe(managed.id);
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: publication.key,
+          resource: 'publication',
+          action: 'send',
+        }),
+      ]),
+    );
+  });
+
+  it('fails closed at the bounded history cap without scheduling a duplicate publication', async () => {
+    const { publication, channelId, bindings } = publicationFixture();
+    const unbound = { ...bindings, publications: {} };
+    const pages = Array.from({ length: 10 }, (_, page) =>
+      Array.from({ length: 100 }, (_, index) => ({
+        id: `${400000000000000000n - BigInt(page * 100 + index)}`,
+        channel_id: channelId,
+        guild_id: guildId,
+        author: { id: botId },
+        components: [],
+      })),
+    );
+    const snapshot = await readBlueprintTargetSnapshot(
+      fakeRest(channelId, [], undefined, pages),
+      guildId,
+      botId,
+      blueprint,
+      unbound,
+    );
+    const result = reconcileGuildBlueprint(blueprintId, blueprint, snapshot, unbound);
+
+    expect(snapshot.recent_messages[channelId]).toHaveLength(1_000);
+    expect(snapshot.publication_history_complete[channelId]).toBe(false);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PUBLICATION_HISTORY_INCOMPLETE' })]),
+    );
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: publication.key, resource: 'publication', action: 'send' }),
+      ]),
+    );
+  });
+});

@@ -30,8 +30,12 @@ commit history and downloadable artifacts, see
   Onboarding's 7/5 rule, AutoMod semantics and caps, and every Components V2 tree
   without writing to Discord. Components V2 channel placeholders are explicitly
   marked for target-guild resolution and revalidation before send.
-- Target-guild locking, dry-run, resumable apply/reconciliation, and real Activity
-  Evidence remain the next delivery phase.
+- Added `guild_blueprint_plan` and `guild_blueprint_apply`: an explicit bot/guild
+  lock, target-bound dry-run, authenticated approval token, locally checkpointed
+  resume, fail-closed reconciliation, and independent final Discord readback.
+  Completed approvals cannot repair later drift; a fresh plan is required.
+- Structured per-domain Activity Evidence and the real-server benchmark remain
+  the next delivery phase.
 
 ## v0.18.1 - Correct Hubdustry reference metadata
 

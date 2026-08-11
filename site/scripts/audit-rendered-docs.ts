@@ -74,12 +74,12 @@ const routes: RouteAudit[] = [
   {
     name: 'homepage',
     path: '/',
-    expectedText: ['Discord tools for AI clients', 'Get started', '205 tools'],
+    expectedText: ['Discord tools for AI clients', 'Get started', '207 tools'],
   },
   {
     name: 'first-time entry journey',
     path: '/',
-    expectedText: ['Discord tools for AI clients', 'Get started', '205 tools'],
+    expectedText: ['Discord tools for AI clients', 'Get started', '207 tools'],
     verify: async (page) => {
       const getStarted = page.getByRole('link', { name: 'Get started', exact: true });
       await requireCount(getStarted, 1, 'primary first-time entry');

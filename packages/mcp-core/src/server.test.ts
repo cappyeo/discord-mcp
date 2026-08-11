@@ -52,6 +52,7 @@ describe('buildServer', () => {
     expect(registeredTools).toContain('messages_send');
     expect(registeredPreconditions).toContain('category_enabled');
     expect(registeredPreconditions).toContain('confirm_required');
+    expect(registeredPreconditions).toContain('explicit_guild_required');
   });
 
   it('keeps concurrent tool calls bound to their server runtime', async () => {

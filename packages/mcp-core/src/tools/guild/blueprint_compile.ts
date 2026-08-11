@@ -1,13 +1,10 @@
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
-import { TemplateBlueprintSchema, TemplateCode } from '../templates/_lib/template.js';
-import { RecommendationCandidateSchema, recommendTemplates } from '../templates/recommend.js';
-import {
-  blueprintFingerprint,
-  compileGuildBlueprint,
-  GuildBlueprintSchema,
-} from './_lib/blueprint.js';
+import { TemplateCode } from '../templates/_lib/template.js';
+import { RecommendationCandidateSchema } from '../templates/recommend.js';
+import { GuildBlueprintSchema } from './_lib/blueprint.js';
+import { compileBlueprintRequest } from './_lib/blueprint.request.js';
 
 const VerificationSchema = z.object({
   catalog_records: z.number().int().nonnegative(),
@@ -70,8 +67,8 @@ export default defineTool({
   },
   idempotent: true,
   handler: async (args, ctx) => {
-    const recommendation = await recommendTemplates(args, ctx.signal);
-    const data = recommendation.data;
+    const compiled = await compileBlueprintRequest(args, ctx.signal);
+    const data = compiled.recommendation;
     if (data.primary === null) {
       return dualResult({
         text: `Guild blueprint is ${data.status}: no verified primary template was available, so no speculative blueprint was emitted and no guild was changed.`,
@@ -105,30 +102,8 @@ export default defineTool({
       });
     }
 
-    const primaryBlueprint = TemplateBlueprintSchema.parse(data.primary.blueprint);
-    const inspirationSources = data.inspirations.map((candidate) => ({
-      code: candidate.code,
-      blueprint: TemplateBlueprintSchema.parse(candidate.blueprint),
-      effective_capabilities: candidate.effective_capabilities,
-    }));
-    const blueprint = compileGuildBlueprint({
-      request: data.request,
-      requested_capabilities: data.intent.capabilities,
-      primary: {
-        code: data.primary.code,
-        blueprint: primaryBlueprint,
-        effective_capabilities: data.primary.effective_capabilities,
-      },
-      inspirations: inspirationSources,
-    });
-    const serialized = JSON.stringify(blueprint);
-    const blueprintBytes = Buffer.byteLength(serialized, 'utf8');
-    const risks = [
-      ...new Set([
-        ...data.primary.quality.risky_permission_signals,
-        ...data.inspirations.flatMap((candidate) => candidate.quality.risky_permission_signals),
-      ]),
-    ].sort();
+    const blueprint = compiled.blueprint!;
+    const blueprintId = compiled.blueprint_id!;
     const warnings = [
       'This is a read-only desired-state blueprint; no Discord guild was changed.',
       'If the target guild is not already a Community guild, enabling Community requires an explicitly authorized Administrator-capable bot.',
@@ -138,13 +113,13 @@ export default defineTool({
         'The primary template has medium confidence because Discord did not expose a clean dirty-state signal.',
       );
     }
-    if (risks.length > 0) {
+    if (compiled.source_permission_risks.length > 0) {
       warnings.push(
-        `Source templates exposed ${risks.length} risky permission class(es); every source permission and overwrite was discarded.`,
+        `Source templates exposed ${compiled.source_permission_risks.length} risky permission class(es); every source permission and overwrite was discarded.`,
       );
     }
     return dualResult({
-      text: `Compiled blueprint \`${blueprintFingerprint(blueprint)}\` from one verified primary and ${data.inspirations.length} bounded inspiration(s): ${blueprint.channels.length} channels, ${blueprint.roles.length} roles, ${blueprint.automod.rules.length} AutoMod rules, and ${blueprint.components_v2.publications.length} Components V2 publications. No guild was changed.`,
+      text: `Compiled blueprint \`${blueprintId}\` from one verified primary and ${data.inspirations.length} bounded inspiration(s): ${blueprint.channels.length} channels, ${blueprint.roles.length} roles, ${blueprint.automod.rules.length} AutoMod rules, and ${blueprint.components_v2.publications.length} Components V2 publications. No guild was changed.`,
       data: {
         status: 'ready' as const,
         request: data.request,
@@ -154,7 +129,7 @@ export default defineTool({
           inspirations: data.inspirations,
           permission_policy: 'discard_source_and_regenerate' as const,
         },
-        blueprint_id: blueprintFingerprint(blueprint),
+        blueprint_id: blueprintId,
         blueprint,
         verification: {
           catalog_records: data.verification.catalog_records,
@@ -166,7 +141,7 @@ export default defineTool({
           rest_failed: data.verification.rest_failed,
           safety_rejected: data.verification.safety_rejected,
           blueprint_validation: 'passed' as const,
-          blueprint_bytes: blueprintBytes,
+          blueprint_bytes: compiled.blueprint_bytes,
         },
         warnings,
       },

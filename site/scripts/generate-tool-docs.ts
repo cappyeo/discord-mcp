@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index - 205 + 31 + 1
+ * tool, one index per category, and a top-level tools index - 207 + 31 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -100,7 +100,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 205 tools. Headings are bold-asterisk markdown - capture body text up to
+ * 207 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -336,6 +336,9 @@ function jsonSchemaExample(name: string, schema: JsonSchema): unknown {
   const format = typeof schema.format === 'string' ? schema.format : '';
   const pattern = typeof schema.pattern === 'string' ? schema.pattern : '';
   const description = typeof schema.description === 'string' ? schema.description : '';
+  if (pattern.includes('sha256:') && pattern.includes('{64}')) {
+    return `sha256:${'0'.repeat(64)}`;
+  }
   if (lowerName.endsWith('_id') || lowerName === 'id' || pattern.includes('17,20')) {
     return '123456789012345678';
   }
@@ -568,6 +571,75 @@ export function buildOutputExample(tool: ToolMetadata): Record<string, unknown> 
       warnings: [
         'A verified primary template is required before compiling a deployable blueprint.',
       ],
+    },
+    guild_blueprint_apply: {
+      status: 'complete',
+      plan_id: `sha256:${'1'.repeat(64)}`,
+      blueprint_id: `sha256:${'2'.repeat(64)}`,
+      target: {
+        guild_id: '123456789012345678',
+        bot_id: '123456789012345679',
+      },
+      progress: {
+        initial_planned: 12,
+        planned_this_call: 12,
+        attempted_this_call: 12,
+        completed_total: 12,
+        remaining: 0,
+        checkpoint_version: 13,
+      },
+      attempts: [],
+      blockers: [],
+      error: null,
+      evidence: {
+        identity_verified: true,
+        guild_verified: true,
+        readback: 'match',
+        snapshot_id_before: `sha256:${'3'.repeat(64)}`,
+        snapshot_id_after: `sha256:${'4'.repeat(64)}`,
+        checkpoint_persisted: true,
+        bindings: {
+          roles: { member: '123456789012345680' },
+          categories: { welcome: '123456789012345681' },
+          channels: { rules: '123456789012345682' },
+          automod_rules: { mention_spam: '123456789012345683' },
+          publications: { welcome: '123456789012345684' },
+        },
+        completed_operation_ids: ['roles:create:member', 'publications:send:welcome'],
+      },
+      next_action: 'done',
+      warnings: [],
+    },
+    guild_blueprint_plan: {
+      status: 'no_match',
+      request: 'Build a professional gaming community',
+      source: {
+        catalog_version: 'example',
+        primary: null,
+        inspirations: [],
+        permission_policy: 'discard_source_and_regenerate',
+      },
+      target: null,
+      blueprint_id: null,
+      blueprint: null,
+      snapshot_id: null,
+      plan_id: null,
+      approval_id: null,
+      plan_token: null,
+      summary: null,
+      operations: [],
+      bot_permissions: null,
+      blockers: [],
+      warnings: ['A verified primary template is required before target planning.'],
+      verification: {
+        catalog_records: 4_970,
+        candidates_inspected: 8,
+        template_rest_requests: 8,
+        template_cache_hits: 0,
+        templates_verified: 0,
+        blueprint_validation: 'not_run',
+        target_readback: 'not_run',
+      },
     },
     intelligence_summarize_channel: {
       summary: 'The team shipped the release and assigned one follow-up.',

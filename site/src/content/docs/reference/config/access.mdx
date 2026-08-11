@@ -81,6 +81,22 @@ does not affect tools without a top-level `guild_id` input.
 When `ALLOWED_GUILDS` is also set, the default guild must appear in that
 allowlist or startup fails.
 
+## Blueprint checkpoint state
+
+### `MCP_BLUEPRINT_STATE_DIR`
+
+- **Type:** non-empty directory path
+- **Default:** the platform-specific local user-state directory
+- **Use:** Stores authenticated append-only checkpoints and apply locks for `guild_blueprint_apply`.
+- **Example:** `MCP_BLUEPRINT_STATE_DIR=/var/lib/discord-mcp/blueprints`
+
+Use a private persistent directory when running in a container. The checkpoint
+contains Discord target IDs and resolved bindings, but never the bot token or
+`plan_token`. A Discord bot-token rotation invalidates pending checkpoints, and
+an HTTP access-token rotation invalidates plans created through that HTTP caller
+boundary. Create a fresh `guild_blueprint_plan` after either rotation. See
+[Safe guild blueprints](/discord-mcp/operations/blueprints/).
+
 ## Guild boundary
 
 ### `ALLOWED_GUILDS`
@@ -130,7 +146,7 @@ startup with the valid list instead of silently disabling a tool surface. The
 - **Use:** Controls how much of the already-authorized catalog is advertised to the model.
 - **Example:** `MCP_TOOL_SURFACE=progressive`
 
-`full` advertises the existing 205-tool catalog for maximum client
+`full` advertises the existing 207-tool catalog for maximum client
 compatibility. `progressive` advertises only `mcp_tools_search` plus
 `mcp_tools_read`, `mcp_tools_write`, and `mcp_tools_destructive`: the model
 searches for a compact match. A single match already carries its contract; for

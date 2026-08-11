@@ -159,6 +159,14 @@ describe('renderSchemaTable', () => {
 });
 
 describe('buildSchemaExample', () => {
+  it('prefers digest patterns over the generic _id Snowflake heuristic', () => {
+    const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+
+    expect(buildSchemaExample({ approval_id: digest })).toEqual({
+      approval_id: `sha256:${'0'.repeat(64)}`,
+    });
+  });
+
   it('builds a schema-valid example from required fields and skips optionals', () => {
     const fields = {
       channel_id: z.string().regex(/^\d{17,20}$/),

@@ -1,6 +1,6 @@
 ---
 title: From quadslab
-description: Migrate from @quadslab.io/discord-mcp's ~138-tool surface onto discord-mcp's 205-tool catalog.
+description: Migrate from @quadslab.io/discord-mcp's ~138-tool surface onto discord-mcp's 207-tool catalog.
 sidebar:
   order: 2
 ---
@@ -33,7 +33,7 @@ discord-mcp equivalents.
 - **Components V2 first-class** - dedicated `components_v2_send` and
   `components_v2_edit` tools validate `flags = 32768` layouts. See the
   [Components V2 announcement recipe](/discord-mcp/recipes/components-v2-announcement/).
-- **Explicit confirmation on selected high-risk tools** - the 30 tools
+- **Explicit confirmation on selected high-risk tools** - the 31 tools
   registered with `confirm_required` require `__confirm: true` and
   `MCP_DRY_RUN=false`. Other writes can execute immediately, so inspect each
   tool's confirmation badge rather than inferring safety from “destructive.”
@@ -185,7 +185,7 @@ report's `unmapped` list. Reasons grouped by category:
 ## See also
 
 - [Adapter authoring guide](/discord-mcp/migrate/authoring/)
-- [discord-mcp tools (205)](/discord-mcp/tools/)
+- [discord-mcp tools (207)](/discord-mcp/tools/)
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate)
 - [Architecture: gateway](/discord-mcp/architecture/gateway/) - for the
   resource subscription overlap.

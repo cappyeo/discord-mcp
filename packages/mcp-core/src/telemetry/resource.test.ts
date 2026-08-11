@@ -21,7 +21,7 @@ describe('buildResource', () => {
     const config = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
     const attrs = buildResource(config).attributes;
     expect(attrs['mcp.transport']).toBe('stdio');
-    expect(attrs['mcp.tool_count']).toBe('205');
+    expect(attrs['mcp.tool_count']).toBe('207');
   });
 
   it('honours OTEL_SERVICE_NAME / _VERSION overrides', () => {

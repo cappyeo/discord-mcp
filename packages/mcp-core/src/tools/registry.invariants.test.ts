@@ -1,5 +1,5 @@
 /**
- * Registry-wide invariants over all 205 tools.
+ * Registry-wide invariants over all 207 tools.
  *
  * These are the checks that per-tool test files structurally cannot make: a
  * tool that forgets its confirm gate, mislabels itself as read-only, or
@@ -34,7 +34,11 @@ interface ToolMeta {
 const TOOLS_DIR = fileURLToPath(new URL('.', import.meta.url));
 
 /** Preconditions the server actually registers (server.ts preconditionStore). */
-const IMPLEMENTED_PRECONDITIONS = new Set(['confirm_required', 'category_enabled']);
+const IMPLEMENTED_PRECONDITIONS = new Set([
+  'confirm_required',
+  'category_enabled',
+  'explicit_guild_required',
+]);
 
 let tools: ToolMeta[] = [];
 
@@ -65,7 +69,7 @@ beforeAll(async () => {
 
 describe('tool registry invariants', () => {
   it('discovers the full advertised tool surface', () => {
-    expect(tools.length).toBe(205);
+    expect(tools.length).toBe(207);
     expect(new Set(tools.map((t) => t.name)).size).toBe(tools.length);
     expect(new Set(tools.map((t) => t.category)).size).toBe(31);
   });

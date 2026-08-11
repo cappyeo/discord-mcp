@@ -50,9 +50,9 @@ describe('progressive tool surface', () => {
     ]);
   });
 
-  it('keeps the full 205-tool surface as the compatibility default', async () => {
+  it('keeps the full 207-tool surface as the compatibility default', async () => {
     const { tools } = await fullClient.listTools();
-    expect(tools).toHaveLength(205);
+    expect(tools).toHaveLength(207);
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 
@@ -83,7 +83,7 @@ describe('progressive tool surface', () => {
       Buffer.byteLength(JSON.stringify(fullTools)) * 0.1,
     );
     expect(progressiveClient.getInstructions()).toContain('Progressive tool surface');
-    expect(progressiveClient.getInstructions()).toContain('guild_blueprint_compile first');
+    expect(progressiveClient.getInstructions()).toContain('guild_blueprint_plan first');
   });
 
   it('returns a direct contract for a single match and exact authorized schemas on demand', async () => {
@@ -247,26 +247,26 @@ describe('progressive tool surface', () => {
     expect(read.structuredContent).toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
-  it('discovers the one-call guild blueprint compiler through mcp_tools_read', async () => {
+  it('discovers the target-bound guild blueprint planner through mcp_tools_read', async () => {
     const search = await progressiveClient.callTool({
       name: 'mcp_tools_search',
-      arguments: { query: 'compile a professional gaming guild blueprint', limit: 20 },
+      arguments: { query: 'build a professional gaming guild with a safe preview', limit: 20 },
     });
     expect(search.isError).toBe(false);
     expect(search.structuredContent).toMatchObject({
       matches: expect.arrayContaining([
         expect.objectContaining({
-          name: 'guild_blueprint_compile',
+          name: 'guild_blueprint_plan',
           category: 'guild',
           dispatcher: 'mcp_tools_read',
         }),
       ]),
-      categories: expect.arrayContaining([{ name: 'guild', tool_count: 17 }]),
+      categories: expect.arrayContaining([{ name: 'guild', tool_count: 19 }]),
     });
 
     const read = await progressiveClient.callTool({
       name: 'mcp_tools_read',
-      arguments: { tool: 'guild_blueprint_compile', args: {} },
+      arguments: { tool: 'guild_blueprint_plan', args: {} },
     });
     expect(read.isError).toBe(true);
     expect(read.structuredContent).toMatchObject({ code: 'VALIDATION_FAILED' });

@@ -1,0 +1,102 @@
+---
+title: Safe guild blueprints
+description: Plan, approve, resume, and verify a complete Discord server build with one caller-owned bot.
+sidebar:
+  order: 3
+---
+
+Use the blueprint workflow when the request describes a complete server rather
+than one isolated Discord operation. A small model needs only the natural-language
+request and the explicit bot and guild IDs; discord-mcp owns template selection,
+safe compilation, live reconciliation, and operation ordering.
+
+## The two-call contract
+
+1. Call `guild_blueprint_plan` with `request`, `guild_id`, and
+   `expected_bot_id`. This is a read-only target-bound dry-run.
+2. Present its source evidence, blockers, operation summary, risks, and
+   `approval_id` for review.
+3. After approval, call `guild_blueprint_apply` with the unchanged `plan_token`,
+   the same IDs and `approval_id`, `__confirm:true`, and an optional
+   `operation_budget` from 1 through 50.
+4. If apply returns `partial` or `busy`, retry the same apply call. If it returns
+   `stale` or `blocked` with `next_action: replan`, create and review a new plan.
+
+The token is authenticated to the active caller deployment. Treat it as private
+workflow state: it contains the compressed blueprint and is authenticated, not
+encrypted. discord-mcp redacts credential-shaped `*_token` arguments from audit
+events and never writes the plan token into its checkpoint.
+
+## What plan proves
+
+The planner selects one live-verified primary template and zero through three
+bounded inspirations, then discards all source IDs, names, descriptions,
+permissions, and overwrites. The trusted compiler regenerates the desired guild
+settings, roles, channel overwrites, ordering, Welcome Screen, Onboarding,
+AutoMod rules, and Components V2 publications.
+
+Before returning an apply token, plan verifies:
+
+- the active Discord credential matches `DISCORD_EXPECTED_BOT_ID`;
+- the explicit guild is in `ALLOWED_GUILDS`;
+- the live bot permissions and role hierarchy can perform every planned step;
+- existing same-name resources are exact, unique safe matches;
+- no bound resource has drifted; and
+- the preview is bound to a digest of the live Discord target.
+
+Plan never mutates Discord and never writes local checkpoint state.
+
+## Apply, resume, and single-use approval
+
+Apply acquires both a guild-wide lock and a plan lock, then re-reads and
+reconciles Discord at the start of every call or resume. It saves an
+authenticated append-only local checkpoint after every successful operation
+and performs an independent final readback. If the process or Discord fails,
+the next call adopts only exact Discord matches and continues from verified
+state; it does not blindly replay the previous request.
+
+The first apply must still match the snapshot shown by plan. Once a checkpoint
+is complete, that approval is terminal. Repeating it while Discord still matches
+returns `already_current`; repeating it after external drift returns
+`PLAN_ALREADY_CONSUMED` and performs no mutation. Repairing later drift always
+requires a new preview and approval.
+
+The executor never deletes resources, grants new permissions to its own bot, or
+guesses through duplicate or mismatched resources. Community, Welcome Screen,
+and Onboarding are full-replacement Discord surfaces, so they remain explicitly
+confirmed high-risk operations.
+
+Components V2 publications use a deterministic marker plus Discord nonce. The
+readback paginates through a bounded message history and fails closed if it
+cannot prove that an older managed copy is absent. Dedicated announcement and
+rules channels keep this verification both fast and complete.
+
+## Local state and credential rotation
+
+Checkpoints default to the platform user-state directory. Set
+`MCP_BLUEPRINT_STATE_DIR` to a persistent private directory for containers or
+tests. The files contain target IDs and bindings, not the bot token or plan
+token; their integrity is authenticated with the active profile secret.
+
+Rotating `DISCORD_TOKEN` invalidates pending plan tokens and checkpoints by
+design. Finish or intentionally abandon pending work, rotate the credential,
+restart the MCP process once, and create a fresh plan. For HTTP deployments,
+rotating `DISCORD_MCP_ACCESS_TOKEN` also invalidates HTTP-minted plans because
+the bearer credential defines that deployment's caller principal.
+
+One stdio process/profile is one trusted caller boundary. One HTTP bearer token
+is likewise one caller principal: do not give the same endpoint credential and
+bot to mutually untrusted users. Use separate deployments, access tokens, bot
+profiles, and state directories instead.
+
+## Evidence returned today
+
+The final response includes the verified bot/guild target, before-and-after
+snapshot digests, exact bindings, completed operation IDs, checkpoint status,
+and an independent Discord readback result. This is the foundation for the
+structured per-domain Activity Evidence record tracked as the next product
+milestone.
+
+See [Access and scope](/discord-mcp/reference/config/access/) for the required
+identity and guild locks, and [Confirmation model](/discord-mcp/architecture/confirmation/)
+for the server-side `__confirm` boundary.

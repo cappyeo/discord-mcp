@@ -64,6 +64,11 @@ const ConfigSchema = z.object({
   // tool before it reaches Discord, including non-destructive writes.
   MCP_WRITE_MODE: z.enum(['allow', 'preview']).default('allow'),
 
+  // Durable local checkpoints for resumable guild blueprint execution. The
+  // default is the platform user-state directory; callers may override it for
+  // containers/tests without introducing a cloud database.
+  MCP_BLUEPRINT_STATE_DIR: z.string().trim().min(1).optional(),
+
   // --- OpenTelemetry (Plan 8 Phase A) ---
   // Master switch. When false, mcp-server skips SDK boot entirely (default behavior).
   OTEL_ENABLED: boolish(false),

@@ -97,9 +97,9 @@ describe('MCP protocol contract', () => {
     expect(text).toMatch(/channel_id/);
   });
 
-  it('lists 205 tools after auto-discovery', async () => {
+  it('lists 207 tools after auto-discovery', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(205);
+    expect(tools.length).toBe(207);
     const names = new Set(tools.map((t) => t.name));
     for (const expected of [
       'messages_send',
@@ -118,6 +118,8 @@ describe('MCP protocol contract', () => {
       'roles_list',
       'guild_get',
       'guild_blueprint_compile',
+      'guild_blueprint_plan',
+      'guild_blueprint_apply',
       'audit_log_get',
       'webhooks_list_channel',
       'events_list',
@@ -305,13 +307,13 @@ describe('MCP protocol contract', () => {
 
   it('sends instructions that describe the actual tool surface', () => {
     // Was 'v0/Plan-1 - only messages_send available', injected into the
-    // agent's system context on a 205-tool server - actively steering the
+    // agent's system context on a 207-tool server - actively steering the
     // model away from 198 of them.
     const instructions = client.getInstructions() ?? '';
     expect(instructions).not.toContain('only messages_send');
     expect(instructions).not.toContain('Plan-1');
-    expect(instructions).toContain('205 tools');
-    expect(instructions).toContain('guild_blueprint_compile first');
+    expect(instructions).toContain('207 tools');
+    expect(instructions).toContain('guild_blueprint_plan first');
     expect(instructions).toContain('__confirm');
     expect(instructions).toContain('untrusted');
   });

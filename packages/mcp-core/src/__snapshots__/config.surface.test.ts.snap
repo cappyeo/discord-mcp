@@ -12,6 +12,7 @@ exports[`config surface > declares the frozen set of schema keys, optional ones 
   "MCP_AUDIT_ENABLED",
   "MCP_AUDIT_FILE",
   "MCP_AUDIT_SINK",
+  "MCP_BLUEPRINT_STATE_DIR",
   "MCP_BULKHEAD_LIMIT",
   "MCP_CATEGORIES",
   "MCP_CIRCUIT_ENABLED",

@@ -1,0 +1,335 @@
+import { container } from '@sapphire/pieces';
+import { z } from 'zod';
+import { verifyExpectedBotIdentity } from '../../identity-lock.js';
+import { defineTool } from '../_lib/defineTool.js';
+import { dualResult } from '../_lib/response.js';
+import { GuildId, UserId } from '../_lib/snowflake.js';
+import { TemplateCode } from '../templates/_lib/template.js';
+import { RecommendationCandidateSchema } from '../templates/recommend.js';
+import { blueprintBoundaryBlockers } from './_lib/blueprint.boundary.js';
+import {
+  BlueprintBlockerSchema,
+  BlueprintOperationSchema,
+  BlueprintPlanSummarySchema,
+  BlueprintPlanTargetSchema,
+  GuildBlueprintPlanPayloadSchema,
+} from './_lib/blueprint.execution.schema.js';
+import { GuildBlueprintSchema } from './_lib/blueprint.js';
+import { encodeBlueprintPlan } from './_lib/blueprint.plan-token.js';
+import {
+  reconcileGuildBlueprint,
+  summarizeBlueprintOperations,
+} from './_lib/blueprint.reconcile.js';
+import { compileBlueprintRequest } from './_lib/blueprint.request.js';
+import { readBlueprintTargetSnapshot } from './_lib/blueprint.target.js';
+import { blueprintSigningSecret, blueprintTrustBoundary } from './_lib/blueprint.trust.js';
+
+const BotPermissionsSchema = z
+  .object({
+    administrator: z.boolean(),
+    missing: z.array(z.string()),
+    top_role_id: z.string().nullable(),
+    top_role_position: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const PlanVerificationSchema = z
+  .object({
+    catalog_records: z.number().int().nonnegative(),
+    candidates_inspected: z.number().int().nonnegative(),
+    template_rest_requests: z.number().int().nonnegative(),
+    template_cache_hits: z.number().int().nonnegative(),
+    templates_verified: z.number().int().nonnegative(),
+    blueprint_validation: z.enum(['not_run', 'passed']),
+    target_readback: z.enum(['not_run', 'passed']),
+  })
+  .strict();
+
+function emptyVerification() {
+  return {
+    catalog_records: 0,
+    candidates_inspected: 0,
+    template_rest_requests: 0,
+    template_cache_hits: 0,
+    templates_verified: 0,
+    blueprint_validation: 'not_run' as const,
+    target_readback: 'not_run' as const,
+  };
+}
+
+export default defineTool({
+  name: 'guild_blueprint_plan',
+  category: 'guild',
+  description: [
+    '**Purpose**: Turn one natural-language server request into a target-bound, read-only Discord execution preview. It compiles a safe blueprint, verifies the exact caller-owned bot and allowlisted guild, reads live state, blocks ambiguous resources or missing permissions, and returns a compact plan token for `guild_blueprint_apply`.',
+    '',
+    '**When to use**: Use this instead of manually chaining template, role, channel, onboarding, AutoMod, and Components V2 tools. The caller supplies only the desired server description plus the explicit target bot/guild IDs.',
+    '',
+    '**Safety**: This tool makes no Discord mutation and writes no checkpoint. `DISCORD_EXPECTED_BOT_ID`, `ALLOWED_GUILDS`, and an explicit `guild_id` are mandatory. Existing unrelated resources are preserved; duplicate or mismatched unbound resources block the plan. The opaque token is authenticated to this bot profile; the displayed approval ID is not standalone authorization.',
+    '',
+    '**Returns**: Verified source evidence, the complete blueprint, exact bot/guild binding, dry-run operations and risks, blockers, and a compressed `plan_token` accepted by the confirmed resumable apply tool.',
+  ].join('\n'),
+  preconditions: ['explicit_guild_required'],
+  inputSchema: {
+    guild_id: GuildId.describe('Explicit target guild; defaults are never accepted for this tool'),
+    expected_bot_id: UserId.describe('Exact caller-owned bot ID locked by the selected profile'),
+    request: z
+      .string()
+      .trim()
+      .min(3)
+      .max(500)
+      .describe('Natural-language description of the Discord server to build'),
+    preferred_primary_code: TemplateCode.optional().describe(
+      'Optional public template code to prefer only when relevant and live-verified safe',
+    ),
+  },
+  outputSchema: {
+    status: z.enum(['ready', 'already_current', 'blocked', 'no_match']),
+    request: z.string(),
+    source: z
+      .object({
+        catalog_version: z.string(),
+        primary: RecommendationCandidateSchema.nullable(),
+        inspirations: z.array(RecommendationCandidateSchema).max(3),
+        permission_policy: z.literal('discard_source_and_regenerate'),
+      })
+      .nullable(),
+    target: BlueprintPlanTargetSchema.nullable(),
+    blueprint_id: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .nullable(),
+    blueprint: GuildBlueprintSchema.nullable(),
+    snapshot_id: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .nullable(),
+    plan_id: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .nullable(),
+    approval_id: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .nullable(),
+    plan_token: z.string().max(65_536).nullable(),
+    summary: BlueprintPlanSummarySchema.nullable(),
+    operations: z.array(BlueprintOperationSchema).max(128),
+    bot_permissions: BotPermissionsSchema.nullable(),
+    blockers: z.array(BlueprintBlockerSchema),
+    warnings: z.array(z.string()),
+    verification: PlanVerificationSchema,
+  },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  idempotent: true,
+  handler: async (args, ctx) => {
+    const staticBlockers = blueprintBoundaryBlockers(
+      container.config,
+      args.guild_id,
+      args.expected_bot_id,
+    );
+    if (staticBlockers.length > 0) {
+      return dualResult({
+        text: `Blueprint plan blocked before Discord access: ${staticBlockers.map((item) => item.code).join(', ')}. No guild was changed.`,
+        data: {
+          status: 'blocked' as const,
+          request: args.request,
+          source: null,
+          target: null,
+          blueprint_id: null,
+          blueprint: null,
+          snapshot_id: null,
+          plan_id: null,
+          approval_id: null,
+          plan_token: null,
+          summary: null,
+          operations: [],
+          bot_permissions: null,
+          blockers: staticBlockers,
+          warnings: [],
+          verification: emptyVerification(),
+        },
+      });
+    }
+
+    try {
+      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id);
+    } catch {
+      const identityBlocker = {
+        code: 'EXPECTED_BOT_MISMATCH',
+        message: 'The active Discord token did not verify as the explicitly selected bot.',
+        resource: `bot:${args.expected_bot_id}`,
+        recovery_hint: 'Select the correct caller-owned bot profile and restart before retrying.',
+      };
+      return dualResult({
+        text: 'Blueprint plan blocked by the exact bot identity lock. No guild was read or changed.',
+        data: {
+          status: 'blocked' as const,
+          request: args.request,
+          source: null,
+          target: null,
+          blueprint_id: null,
+          blueprint: null,
+          snapshot_id: null,
+          plan_id: null,
+          approval_id: null,
+          plan_token: null,
+          summary: null,
+          operations: [],
+          bot_permissions: null,
+          blockers: [identityBlocker],
+          warnings: [],
+          verification: emptyVerification(),
+        },
+      });
+    }
+
+    const compiled = await compileBlueprintRequest(args, ctx.signal);
+    const recommendation = compiled.recommendation;
+    const source = {
+      catalog_version: recommendation.catalog_version,
+      primary: recommendation.primary,
+      inspirations: recommendation.inspirations,
+      permission_policy: 'discard_source_and_regenerate' as const,
+    };
+    const verificationBase = {
+      catalog_records: recommendation.verification.catalog_records,
+      candidates_inspected: recommendation.verification.candidates_inspected,
+      template_rest_requests: recommendation.verification.rest_requests,
+      template_cache_hits: recommendation.verification.cache_hits,
+      templates_verified: recommendation.verification.rest_verified,
+    };
+    if (compiled.blueprint === null || compiled.blueprint_id === null) {
+      return dualResult({
+        text: `Blueprint plan is ${recommendation.status}: no verified primary template was available, so no target guild inventory was read and no plan was emitted.`,
+        data: {
+          status: 'no_match' as const,
+          request: args.request,
+          source,
+          target: null,
+          blueprint_id: null,
+          blueprint: null,
+          snapshot_id: null,
+          plan_id: null,
+          approval_id: null,
+          plan_token: null,
+          summary: null,
+          operations: [],
+          bot_permissions: null,
+          blockers: [],
+          warnings: ['A verified primary template is required before target planning.'],
+          verification: {
+            ...verificationBase,
+            blueprint_validation: 'not_run' as const,
+            target_readback: 'not_run' as const,
+          },
+        },
+      });
+    }
+
+    const snapshot = await readBlueprintTargetSnapshot(
+      container.rest,
+      args.guild_id,
+      args.expected_bot_id,
+      compiled.blueprint,
+    );
+    const reconciled = reconcileGuildBlueprint(compiled.blueprint_id, compiled.blueprint, snapshot);
+    const summary = summarizeBlueprintOperations(reconciled.operations);
+    const warnings = [
+      'No Discord resource was changed; this is an exact target-bound dry-run.',
+      'Keep the profile-authenticated plan token inside the same trusted caller session; it still requires the exact bot/guild locks and explicit confirmation.',
+      ...reconciled.warnings,
+    ];
+    if (compiled.source_permission_risks.length > 0) {
+      warnings.push(
+        `Source templates exposed ${compiled.source_permission_risks.length} risky permission class(es); all source permissions and overwrites were discarded.`,
+      );
+    }
+    const target = { guild_id: args.guild_id, bot_id: args.expected_bot_id };
+    if (reconciled.blockers.length > 0) {
+      return dualResult({
+        text: `Blueprint dry-run found ${reconciled.blockers.length} blocker(s) and scheduled no apply token. No guild was changed.`,
+        data: {
+          status: 'blocked' as const,
+          request: args.request,
+          source,
+          target,
+          blueprint_id: compiled.blueprint_id,
+          blueprint: compiled.blueprint,
+          snapshot_id: reconciled.snapshot_id,
+          plan_id: null,
+          approval_id: null,
+          plan_token: null,
+          summary,
+          operations: reconciled.operations,
+          bot_permissions: reconciled.bot_permissions,
+          blockers: reconciled.blockers,
+          warnings,
+          verification: {
+            ...verificationBase,
+            blueprint_validation: 'passed' as const,
+            target_readback: 'passed' as const,
+          },
+        },
+      });
+    }
+
+    const payload = GuildBlueprintPlanPayloadSchema.parse({
+      schema_version: 'guild_blueprint_plan.v1',
+      policy_version: 'safe-reconcile.v1',
+      target,
+      blueprint_id: compiled.blueprint_id,
+      blueprint: compiled.blueprint,
+      initial_snapshot_id: reconciled.snapshot_id,
+      initial_bindings: reconciled.bindings,
+      initial_operations: reconciled.operations,
+      policy: {
+        deletions: false,
+        ambiguous_matches: 'block',
+        unbound_drift: 'block',
+        auto_grant_bot_permissions: false,
+        managed_roles: 'immutable',
+        publication_idempotency: 'marker_and_discord_nonce',
+      },
+    });
+    const trustBoundary = blueprintTrustBoundary();
+    const encoded = encodeBlueprintPlan(
+      payload,
+      blueprintSigningSecret(container.config, trustBoundary),
+    );
+    const status = reconciled.operations.length === 0 ? 'already_current' : 'ready';
+    return dualResult({
+      text:
+        status === 'already_current'
+          ? `Blueprint ${compiled.blueprint_id} already matches the locked target; no Discord mutation is needed.`
+          : `Blueprint dry-run is ready for bot ${args.expected_bot_id} in guild ${args.guild_id}: ${summary.total_operations} operation(s), including ${summary.high_risk_operations} explicitly confirmed high-risk replacement(s). No guild was changed.`,
+      data: {
+        status,
+        request: args.request,
+        source,
+        target,
+        blueprint_id: compiled.blueprint_id,
+        blueprint: compiled.blueprint,
+        snapshot_id: reconciled.snapshot_id,
+        plan_id: encoded.plan_id,
+        approval_id: encoded.approval_id,
+        plan_token: encoded.plan_token,
+        summary,
+        operations: reconciled.operations,
+        bot_permissions: reconciled.bot_permissions,
+        blockers: [],
+        warnings,
+        verification: {
+          ...verificationBase,
+          blueprint_validation: 'passed' as const,
+          target_readback: 'passed' as const,
+        },
+      },
+    });
+  },
+});

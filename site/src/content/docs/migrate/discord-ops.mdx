@@ -70,7 +70,7 @@ boundary.
 `moderation` (7), `messaging` (5), `channels` (7), `webhooks` (6), and
 `full` (49). Profiles reduce schema overhead by hiding tools from the client.
 
-**discord-mcp**: Ships 205 tools and filters the advertised registry server-side
+**discord-mcp**: Ships 207 tools and filters the advertised registry server-side
 with `MCP_CATEGORIES`; the optional `inspiration` category is the only
 third-party discovery surface.
 Profile-variant names like `messages_lite` and `messages_full` collapse onto
@@ -85,7 +85,7 @@ the same discord-mcp tool with `confidence: medium`.
 **discord-ops**: `DISCORD_OPS_DRY_RUN=1` short-circuits destructive calls
 before they hit the Discord REST API.
 
-**discord-mcp**: `MCP_DRY_RUN=true` protects only the 30 tools registered with
+**discord-mcp**: `MCP_DRY_RUN=true` protects only the 31 tools registered with
 `confirm_required`. Ordinary writes-including many send, edit, and create
 tools-can still execute on the first call.
 
@@ -221,7 +221,7 @@ The low-confidence entries you should always re-read:
 ## See also
 
 - [Adapter authoring guide](/discord-mcp/migrate/authoring/)
-- [discord-mcp tools (205)](/discord-mcp/tools/)
+- [discord-mcp tools (207)](/discord-mcp/tools/)
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate)
 - [Operations: audit](/discord-mcp/operations/audit/) - dry-run audit-log shape.
 - [Architecture: pipeline](/discord-mcp/architecture/pipeline/) - replaces
