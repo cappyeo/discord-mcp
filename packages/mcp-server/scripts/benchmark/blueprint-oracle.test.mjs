@@ -316,6 +316,7 @@ describe('verifyBlueprintSnapshot', () => {
       automod_rules: 1,
       publications: 1,
       onboarding_prompts: 1,
+      onboarding_options: 1,
     });
   });
 

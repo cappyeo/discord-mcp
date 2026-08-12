@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { recordProgressiveDiscoveryEvidence } from './telemetry/performance-evidence.js';
 
 export const PROGRESSIVE_SEARCH_TOOL_NAME = 'mcp_tools_search';
+export const PROGRESSIVE_ARCHITECT_TOOL_NAME = 'build_discord_server';
 export const PROGRESSIVE_READ_TOOL_NAME = 'mcp_tools_read';
 export const PROGRESSIVE_WRITE_TOOL_NAME = 'mcp_tools_write';
 export const PROGRESSIVE_DESTRUCTIVE_TOOL_NAME = 'mcp_tools_destructive';
@@ -86,6 +87,7 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
   name: PROGRESSIVE_SEARCH_TOOL_NAME,
   description: [
     'Search the Discord tool catalog available to this caller.',
+    "In this Discord integration, an unqualified request to build, design, or create a gaming or community server means a Discord guild, not a VPS or game-hosting machine, unless the user explicitly says otherwise; search with the user's request before asking which server type they mean.",
     'A single result includes its contract. For multiple compact results, search the selected exact tool name before dispatching.',
     'Set detail:"full" only when several full contracts are necessary. Omit both query and category to list categories.',
     'Search results never expand MCP_CATEGORIES permissions.',
@@ -244,7 +246,22 @@ const SERVER_ARCHITECTURE_SIGNALS = new Set([
 ]);
 
 const SCOPED_RESOURCE_INTENT =
-  /\b(?:add|build|create|design|make|schedule|set up|setup|update)\b(?:\s+[a-z0-9]+){0,8}\s+\b(?:automod(?:\s+rule)?|channel|channels|emoji|emojis|event|events|invite|invites|message|messages|onboarding|role|roles|thread|threads|webhook|webhooks)\b(?:\s+[a-z0-9]+){0,8}\s+\b(?:for|in|inside|on|to)\s+(?:(?:a|an|my|our|the|this)\s+)?(?:(?:discord)\s+)?(?:community|guild|server)\b/;
+  /\b(?:add|build|create|design|dung|make|schedule|set up|setup|tao|them|lap|cap nhat|update)\b(?:\s+[a-z0-9]+){0,8}\s+\b(?:automod(?:\s+rule)?|channel|channels|emoji|emojis|event|events|invite|invites|kenh|message|messages|onboarding|role|roles|su kien|thread|threads|vai tro|webhook|webhooks)\b(?:\s+[a-z0-9]+){0,8}\s+\b(?:cho|for|in|inside|o|on|to|trong)\s+(?:(?:a|an|my|our|the|this|mot)\s+)?(?:(?:discord)\s+)?(?:community|guild|server)\b/;
+
+const SCOPED_RESOURCE_TOOL_HINTS = [
+  { pattern: /\b(?:event|events|su kien)\b/, toolName: 'events_create' },
+  { pattern: /\b(?:channel|channels|kenh)\b/, toolName: 'channels_create_guild_channel' },
+  { pattern: /\b(?:role|roles|vai tro)\b/, toolName: 'roles_create' },
+] as const;
+
+function scopedResourceToolBoost(tool: SearchableTool, query: string): number {
+  if (!SCOPED_RESOURCE_INTENT.test(query)) return 0;
+  return SCOPED_RESOURCE_TOOL_HINTS.some(
+    ({ pattern, toolName }) => pattern.test(query) && tool.tool.name === toolName,
+  )
+    ? 220
+    : 0;
+}
 
 function isServerArchitectureIntent(query: string, terms: readonly string[]): boolean {
   const termSet = new Set(terms);
@@ -254,7 +271,7 @@ function isServerArchitectureIntent(query: string, terms: readonly string[]): bo
   // "Create a gaming event in my server" is not permission to redesign the server.
   if (SCOPED_RESOURCE_INTENT.test(query)) return false;
   const hasStrongVerb =
-    ['architect', 'build', 'design', 'dung', 'make', 'redesign', 'setup'].some((term) =>
+    ['architect', 'build', 'design', 'dung', 'make', 'redesign', 'setup', 'tao'].some((term) =>
       termSet.has(term),
     ) || query.includes('set up');
   if (hasStrongVerb) return true;
@@ -281,6 +298,7 @@ function scoreTool(tool: SearchableTool, query: string, terms: readonly string[]
   if (tool.tool.name === 'guild_blueprint_plan' && isServerArchitectureIntent(query, terms)) {
     score += 300;
   }
+  score += scopedResourceToolBoost(tool, query);
   const hasDeleteIntent = ['cancel', 'delete', 'remove'].some((term) => termSet.has(term));
   const hasCreateIntent =
     !hasDeleteIntent &&

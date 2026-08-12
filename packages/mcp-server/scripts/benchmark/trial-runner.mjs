@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const SUCCESS_STATUSES = new Set(['complete', 'already_current']);
 const NEXT_ACTIONS = new Set(['done', 'resume', 'replan', 'fix_configuration']);
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -74,6 +76,296 @@ function assertRecord(value, code) {
 function assertTarget(value, trial, code) {
   assertRecord(value, code);
   if (value.guild_id !== trial.guild_id || value.bot_id !== trial.expected_bot_id) fail(code);
+}
+
+function digest(value) {
+  return typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value);
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(',')}}`;
+}
+
+function activityEvidenceBody(plan, activity) {
+  return {
+    schema_version: activity.schema_version,
+    recorded_at: activity.recorded_at,
+    plan_id: plan.plan_id,
+    blueprint_id: plan.blueprint_id,
+    target: plan.target,
+    blueprint: plan.blueprint,
+    initial_operation_count: activity.initial_operation_count ?? plan.operations.length,
+    plan_invariants: activity.plan_invariants,
+    observed: activity.observed,
+  };
+}
+
+export function activityEvidenceDigest(plan, activity) {
+  return `sha256:${createHash('sha256')
+    .update(canonicalJson(activityEvidenceBody(plan, activity)))
+    .digest('hex')}`;
+}
+
+function validTimestamp(value) {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+    !Number.isNaN(Date.parse(value))
+  );
+}
+
+function templateCandidateEvidence(candidate, catalogVersion) {
+  assertRecord(candidate, 'TEMPLATE_EVIDENCE_INVALID');
+  const code = candidate.code;
+  if (
+    typeof code !== 'string' ||
+    !/^[a-zA-Z0-9_-]{1,100}$/.test(code) ||
+    candidate.use_url !== `https://discord.new/${code}` ||
+    candidate.quality?.verified !== true ||
+    candidate.quality?.code_match !== true ||
+    candidate.quality?.permission_handling !== 'discarded_and_regenerated' ||
+    !digest(candidate.provenance?.evidence_digest) ||
+    !validTimestamp(candidate.provenance?.fetched_at)
+  ) {
+    fail('TEMPLATE_EVIDENCE_INVALID');
+  }
+  const sourceGuild = candidate.provenance.source_guild;
+  if (
+    !assertRecord(sourceGuild, 'TEMPLATE_EVIDENCE_INVALID') ||
+    typeof sourceGuild.id !== 'string' ||
+    !SNOWFLAKE.test(sourceGuild.id) ||
+    (sourceGuild.snapshot_id !== null && typeof sourceGuild.snapshot_id !== 'string') ||
+    (sourceGuild.icon_hash !== null && typeof sourceGuild.icon_hash !== 'string') ||
+    (sourceGuild.preferred_locale !== null && typeof sourceGuild.preferred_locale !== 'string')
+  ) {
+    fail('TEMPLATE_EVIDENCE_INVALID');
+  }
+  return {
+    code,
+    catalog_version: catalogVersion,
+    fetched_at: candidate.provenance.fetched_at,
+    use_url: candidate.use_url,
+    verified: true,
+    code_match: true,
+    permission_handling: 'discarded_and_regenerated',
+    evidence_digest: candidate.provenance.evidence_digest,
+    source_guild: {
+      id: sourceGuild.id,
+      snapshot_id: sourceGuild.snapshot_id,
+      icon_hash: sourceGuild.icon_hash,
+      preferred_locale: sourceGuild.preferred_locale,
+    },
+  };
+}
+
+function validateTemplateSource(source) {
+  assertRecord(source, 'TEMPLATE_EVIDENCE_INVALID');
+  if (
+    typeof source.catalog_version !== 'string' ||
+    source.catalog_version.trim() === '' ||
+    source.permission_policy !== 'discard_source_and_regenerate'
+  )
+    fail('TEMPLATE_EVIDENCE_INVALID');
+  const primary = templateCandidateEvidence(source.primary, source.catalog_version);
+  if (!Array.isArray(source.inspirations) || source.inspirations.length > 3)
+    fail('TEMPLATE_EVIDENCE_INVALID');
+  const inspirations = source.inspirations.map((candidate) =>
+    templateCandidateEvidence(candidate, source.catalog_version),
+  );
+  const codes = [primary.code, ...inspirations.map((candidate) => candidate.code)];
+  if (new Set(codes).size !== codes.length) fail('TEMPLATE_EVIDENCE_INVALID');
+  return { primary, inspirations };
+}
+
+function expectedActivityCounts(blueprint) {
+  assertRecord(blueprint, 'ACTIVITY_EVIDENCE_INVALID');
+  const prompts = Array.isArray(blueprint.onboarding?.prompts)
+    ? blueprint.onboarding.prompts
+    : null;
+  if (
+    !Array.isArray(blueprint.roles) ||
+    !Array.isArray(blueprint.categories) ||
+    !Array.isArray(blueprint.channels) ||
+    !Array.isArray(blueprint.automod?.rules) ||
+    !Array.isArray(blueprint.components_v2?.publications) ||
+    prompts === null
+  ) {
+    fail('ACTIVITY_EVIDENCE_INVALID');
+  }
+  return {
+    identity: 2,
+    roles: blueprint.roles.length,
+    categories: blueprint.categories.length,
+    channels: blueprint.channels.length,
+    ordering: 2,
+    guild: 1,
+    welcome_screen: 1,
+    onboarding:
+      1 + prompts.length + prompts.reduce((total, prompt) => total + prompt.options.length, 0),
+    automod: blueprint.automod.rules.length,
+    components_v2: blueprint.components_v2.publications.length,
+  };
+}
+
+function blueprintCounts(blueprint) {
+  assertRecord(blueprint, 'ACTIVITY_EVIDENCE_INVALID');
+  const prompts = Array.isArray(blueprint.onboarding?.prompts)
+    ? blueprint.onboarding.prompts
+    : null;
+  if (
+    !Array.isArray(blueprint.roles) ||
+    !Array.isArray(blueprint.categories) ||
+    !Array.isArray(blueprint.channels) ||
+    !Array.isArray(blueprint.automod?.rules) ||
+    !Array.isArray(blueprint.components_v2?.publications) ||
+    prompts === null
+  ) {
+    fail('ACTIVITY_EVIDENCE_INVALID');
+  }
+  return {
+    roles: blueprint.roles.length,
+    categories: blueprint.categories.length,
+    channels: blueprint.channels.length,
+    automod_rules: blueprint.automod.rules.length,
+    publications: blueprint.components_v2.publications.length,
+    onboarding_prompts: prompts.length,
+    onboarding_options: prompts.reduce((total, prompt) => total + prompt.options.length, 0),
+  };
+}
+
+function validateActivityRecord(activity, plan, code, { requireEvidenceId = true } = {}) {
+  assertRecord(activity, code);
+  if (
+    activity.schema_version !== 'guild_blueprint_activity_evidence.v1' ||
+    (requireEvidenceId && !digest(activity.evidence_id)) ||
+    !validTimestamp(activity.recorded_at) ||
+    (activity.initial_operation_count !== undefined &&
+      (!Number.isInteger(activity.initial_operation_count) ||
+        activity.initial_operation_count !== plan.operations.length)) ||
+    !assertRecord(activity.plan_invariants, code) ||
+    !assertRecord(activity.observed, code)
+  ) {
+    fail(code);
+  }
+  const expectedCounts = expectedActivityCounts(plan.blueprint);
+  if (JSON.stringify(activity.plan_invariants.expected_counts) !== JSON.stringify(expectedCounts))
+    fail(code);
+  const safetyPolicy = activity.plan_invariants.safety_policy;
+  if (
+    !assertRecord(safetyPolicy, code) ||
+    safetyPolicy.source_permissions_applied !== false ||
+    safetyPolicy.dangerous_generated_permissions !== 0 ||
+    safetyPolicy.bot_permission_grants !== 0 ||
+    safetyPolicy.discord_managed_role_mutations !== 0
+  ) {
+    fail(code);
+  }
+  const observed = activity.observed;
+  if (
+    !digest(observed.initial_snapshot_id) ||
+    observed.initial_snapshot_id !== plan.snapshot_id ||
+    !digest(observed.final_snapshot_id) ||
+    !Number.isInteger(observed.checkpoint_version) ||
+    observed.checkpoint_version < 0 ||
+    !Array.isArray(observed.completed_operation_ids) ||
+    new Set(observed.completed_operation_ids).size !== observed.completed_operation_ids.length ||
+    observed.completed_operation_ids.length !== plan.operations.length ||
+    observed.completed_operation_ids.some(
+      (operationId) => !plan.operations.some((operation) => operation.operation_id === operationId),
+    ) ||
+    observed.blueprint_readback_match !== true
+  ) {
+    fail(code);
+  }
+  validateBlueprintBindings(observed.bindings, blueprintBindingDomains(plan), {
+    code,
+    serious: true,
+  });
+  validatePublicationBindingLinks(observed.bindings, plan, { code, serious: true });
+  if (requireEvidenceId && activity.evidence_id !== activityEvidenceDigest(plan, activity)) {
+    fail(code);
+  }
+  return activity;
+}
+
+function activityEvidenceSummary(result, plan, trial) {
+  assertRecord(result, 'ACTIVITY_EVIDENCE_INVALID');
+  if (
+    result.status !== 'verified' ||
+    result.plan_id !== plan.plan_id ||
+    result.blueprint_id !== plan.blueprint_id ||
+    result.target?.guild_id !== trial.guild_id ||
+    result.target?.bot_id !== trial.expected_bot_id ||
+    !digest(result.evidence_id) ||
+    !assertRecord(result.record, 'ACTIVITY_EVIDENCE_INVALID') ||
+    !assertRecord(result.verification, 'ACTIVITY_EVIDENCE_INVALID')
+  ) {
+    fail('ACTIVITY_EVIDENCE_INVALID');
+  }
+  validateActivityRecord(result.record, plan, 'ACTIVITY_EVIDENCE_INVALID', {
+    requireEvidenceId: false,
+  });
+  if (result.evidence_id !== activityEvidenceDigest(plan, result.record)) {
+    fail('ACTIVITY_EVIDENCE_INVALID');
+  }
+  const verification = result.verification;
+  if (
+    verification.identity_verified !== true ||
+    verification.guild_verified !== true ||
+    verification.readback !== 'match' ||
+    typeof verification.snapshot_unchanged !== 'boolean' ||
+    !assertRecord(verification.current_snapshot, 'ACTIVITY_EVIDENCE_INVALID') ||
+    !digest(verification.current_snapshot.snapshot_id) ||
+    verification.current_snapshot.guild?.id !== trial.guild_id ||
+    verification.current_snapshot.bot_id !== trial.expected_bot_id ||
+    !Array.isArray(verification.remaining_operations) ||
+    verification.remaining_operations.length !== 0 ||
+    !Array.isArray(verification.blockers) ||
+    verification.blockers.length !== 0 ||
+    (verification.snapshot_unchanged === true &&
+      verification.current_snapshot.snapshot_id !== result.record.observed.final_snapshot_id)
+  ) {
+    fail('ACTIVITY_EVIDENCE_INVALID');
+  }
+  return {
+    schema_version: result.record.schema_version,
+    evidence_id: result.evidence_id,
+    recorded_at: result.record.recorded_at,
+    digest_verified: true,
+    plan_id: result.plan_id,
+    blueprint_id: result.blueprint_id,
+    target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
+    initial_snapshot_id: result.record.observed.initial_snapshot_id,
+    final_snapshot_id: result.record.observed.final_snapshot_id,
+    current_snapshot_id: result.verification.current_snapshot.snapshot_id,
+    initial_operation_count: result.record.initial_operation_count ?? plan.operations.length,
+    checkpoint_version: result.record.observed.checkpoint_version,
+    completed_operation_count: result.record.observed.completed_operation_ids.length,
+    blueprint_readback_match: true,
+    identity_verified: true,
+    guild_verified: true,
+    readback: 'match',
+    snapshot_unchanged: verification.snapshot_unchanged,
+    evidence_body: {
+      schema_version: result.record.schema_version,
+      recorded_at: result.record.recorded_at,
+      plan_id: result.plan_id,
+      blueprint_id: plan.blueprint_id,
+      target: plan.target,
+      blueprint: plan.blueprint,
+      initial_operation_count: result.record.initial_operation_count ?? plan.operations.length,
+      plan_invariants: result.record.plan_invariants,
+      observed: result.record.observed,
+    },
+    expected_counts: result.record.plan_invariants.expected_counts,
+    blueprint_counts: blueprintCounts(plan.blueprint),
+    safety_policy: result.record.plan_invariants.safety_policy,
+  };
 }
 
 function validateInput(input) {
@@ -170,6 +462,7 @@ function validatePlan(plan, trial) {
   assertTarget(plan.target, trial, 'PLAN_TARGET_MISMATCH');
   if (
     !/^sha256:[a-f0-9]{64}$/.test(plan.blueprint_id ?? '') ||
+    !/^sha256:[a-f0-9]{64}$/.test(plan.snapshot_id ?? '') ||
     !/^sha256:[a-f0-9]{64}$/.test(plan.plan_id ?? '') ||
     !/^sha256:[a-f0-9]{64}$/.test(plan.approval_id ?? '') ||
     typeof plan.plan_token !== 'string' ||
@@ -181,6 +474,7 @@ function validatePlan(plan, trial) {
   ) {
     fail('PLAN_RESPONSE_INVALID');
   }
+  validateTemplateSource(plan.source);
   const operationIds = new Set();
   for (const operation of plan.operations) {
     if (
@@ -615,6 +909,8 @@ export async function runBenchmarkTrial(input) {
   let auditOraclePass = false;
   let terminalStatus = 'error';
   let lastNonterminalApply = null;
+  let templateEvidence = null;
+  let activityEvidence = null;
   let plan;
   let before;
   let baselineMessageChannelIds = [input.baselineMessageChannelId];
@@ -697,6 +993,7 @@ export async function runBenchmarkTrial(input) {
         continue;
       }
       const validated = validatePlan(rawPlan, trial);
+      templateEvidence = validateTemplateSource(validated.source);
       progressiveDiscoverySucceeded = true;
       return validated;
     }
@@ -855,6 +1152,7 @@ export async function runBenchmarkTrial(input) {
     ) {
       fail('APPLY_EVIDENCE_INVALID');
     }
+    validateActivityRecord(latestApply.evidence.activity, plan, 'APPLY_EVIDENCE_INVALID');
 
     const replayRecovery = createApplyRecovery();
     let replay = await callApply(MAIN_APPLY_OPERATION_BUDGET, replayRecovery);
@@ -888,16 +1186,11 @@ export async function runBenchmarkTrial(input) {
       plan_id: plan.plan_id,
     });
     evidenceStatus = evidence?.status ?? null;
-    const evidenceVerified =
-      evidence?.status === 'verified' &&
-      evidence?.plan_id === plan.plan_id &&
-      evidence?.blueprint_id === plan.blueprint_id &&
-      evidence?.target?.guild_id === trial.guild_id &&
-      evidence?.target?.bot_id === trial.expected_bot_id &&
-      evidence?.verification?.identity_verified === true &&
-      evidence?.verification?.guild_verified === true &&
-      evidence?.verification?.readback === 'match';
-    if (!evidenceVerified) functional.push({ code: 'ACTIVITY_EVIDENCE_NOT_VERIFIED' });
+    if (evidenceStatus === 'verified') {
+      activityEvidence = activityEvidenceSummary(evidence, plan, trial);
+    } else {
+      functional.push({ code: 'ACTIVITY_EVIDENCE_NOT_VERIFIED' });
+    }
 
     const finalBindings = structuredClone(cleanup.bindings);
     cleanup.publication_targets = publicationTargets(plan.blueprint, finalBindings);
@@ -1098,6 +1391,8 @@ export async function runBenchmarkTrial(input) {
       trial_id: trial.trial_id,
       mode: trial.mode,
       guild_id: trial.guild_id,
+      plan_id: plan?.plan_id ?? null,
+      blueprint_id: plan?.blueprint_id ?? null,
       eligible: true,
       terminal_status: terminalStatus,
       oracle_match: oracleMatch,
@@ -1119,6 +1414,8 @@ export async function runBenchmarkTrial(input) {
       audit_trail_complete: auditTrailComplete,
       verified_counts: verifiedCounts,
       last_nonterminal_apply: lastNonterminalApply,
+      template_evidence: templateEvidence,
+      activity_evidence: activityEvidence,
     },
     cleanup,
   };

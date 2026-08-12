@@ -76,11 +76,14 @@ $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only
-`mcp_tools_search` plus read, write, and destructive dispatchers, then loads
-compact tool matches on demand. A single match already includes its schema;
-for multiple matches, search the selected tool's exact name before dispatch,
-or use `detail: "full"` when several contracts are needed together. The result
-chooses the dispatcher whose annotations match the selected tool's risk.
+the direct read-only `build_discord_server` architecture front door when
+authorized, its direct `guild_blueprint_apply` and `guild_blueprint_evidence`
+completion steps, plus `mcp_tools_search` and read, write, and destructive
+dispatchers. Other tools load as compact matches on demand. A single match
+already includes its schema; for multiple matches, search the selected tool's
+exact name before dispatch, or use `detail: "full"` when several contracts are
+needed together. The result chooses the dispatcher whose annotations match the
+selected tool's risk.
 `MCP_CATEGORIES` remains the authorization boundary; progressive mode does not
 bypass confirmation, dry-run, audit, or other middleware.
 
@@ -133,7 +136,11 @@ the current OAuth boundary.
 
 Explore the complete, generated [tool reference](https://cappyeo.github.io/discord-mcp/tools/) and practical [recipes](https://cappyeo.github.io/discord-mcp/recipes/).
 
-For a server-architecture request, call `guild_blueprint_plan` with one natural-language request.
+For a server-architecture request, call the directly advertised
+`build_discord_server` front door when `MCP_TOOL_SURFACE=progressive`; on the `full` surface,
+call its canonical name, `guild_blueprint_plan`, with one natural-language request.
+The progressive alias and canonical tool use the same safety-checked planner and return the same
+target-bound dry-run contract.
 Request-only target resolution requires the selected caller profile to lock one
 `DISCORD_EXPECTED_BOT_ID` and an `ALLOWED_GUILDS` boundary. The planner uses
 `DISCORD_DEFAULT_GUILD_ID` only when that default is itself allowlisted; otherwise it resolves

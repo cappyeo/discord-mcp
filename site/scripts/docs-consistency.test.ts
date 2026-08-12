@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from '../../packages/mcp-core/node_modules/zod/index.js';
 import {
+  PROGRESSIVE_ARCHITECT_TOOL_NAME,
   PROGRESSIVE_DESTRUCTIVE_TOOL_NAME,
   PROGRESSIVE_READ_TOOL_NAME,
   PROGRESSIVE_SEARCH_TOOL_NAME,
@@ -369,10 +370,14 @@ describe('handwritten docs do not regress to known stale contracts', () => {
       PROGRESSIVE_READ_TOOL_NAME,
       PROGRESSIVE_WRITE_TOOL_NAME,
       PROGRESSIVE_DESTRUCTIVE_TOOL_NAME,
+      PROGRESSIVE_ARCHITECT_TOOL_NAME,
+      'guild_blueprint_apply',
+      'guild_blueprint_evidence',
     ];
 
     expect(clientSetup).toContain(`**${progressiveNames.length} visible tools**`);
     for (const name of progressiveNames) expect(clientSetup).toContain(`\`${name}\``);
+    expect(clientSetup).toContain('one-request entrypoint');
 
     const tools = await loadAllTools();
     expect(clientSetup).toContain(`**up to ${tools.length} visible direct tools**`);

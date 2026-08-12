@@ -117,6 +117,7 @@ describe('guild_blueprint_plan public MCP journey', () => {
       DISCORD_TOKEN: TOKEN,
       DISCORD_EXPECTED_BOT_ID: BOT_ID,
       ALLOWED_GUILDS: GUILD_ID,
+      MCP_TOOL_SURFACE: 'progressive',
       LOG_LEVEL: 'fatal',
       MCP_AUDIT_ENABLED: 'false',
     });
@@ -130,7 +131,7 @@ describe('guild_blueprint_plan public MCP journey', () => {
     await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
     try {
       const result = await client.callTool({
-        name: 'guild_blueprint_plan',
+        name: 'build_discord_server',
         arguments: {
           request: 'Dựng cho tôi một server gaming chuyên nghiệp có tìm đồng đội và voice',
           preferred_primary_code: TEMPLATE_CODE,
@@ -177,6 +178,7 @@ describe('guild_blueprint_plan public MCP journey', () => {
       DISCORD_TOKEN: TOKEN,
       DISCORD_EXPECTED_BOT_ID: BOT_ID,
       ALLOWED_GUILDS: GUILD_ID,
+      MCP_TOOL_SURFACE: 'progressive',
       LOG_LEVEL: 'fatal',
       MCP_AUDIT_ENABLED: 'false',
     });
@@ -190,7 +192,7 @@ describe('guild_blueprint_plan public MCP journey', () => {
     await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
     try {
       const result = await client.callTool({
-        name: 'guild_blueprint_plan',
+        name: 'build_discord_server',
         arguments: {
           guild_id: GUILD_ID,
           expected_bot_id: '100002088458902099',
@@ -224,6 +226,7 @@ describe('guild_blueprint_plan public MCP journey', () => {
       DISCORD_TOKEN: TOKEN,
       DISCORD_EXPECTED_BOT_ID: BOT_ID,
       ALLOWED_GUILDS: `${GUILD_ID},${OTHER_GUILD_ID}`,
+      MCP_TOOL_SURFACE: 'progressive',
       LOG_LEVEL: 'fatal',
       MCP_AUDIT_ENABLED: 'false',
     });
@@ -237,7 +240,7 @@ describe('guild_blueprint_plan public MCP journey', () => {
     await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
     try {
       const result = await client.callTool({
-        name: 'guild_blueprint_plan',
+        name: 'build_discord_server',
         arguments: { request: 'Build a gaming server' },
       });
       expect(result.isError).toBe(true);

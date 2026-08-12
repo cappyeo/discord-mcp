@@ -150,11 +150,15 @@ startup with the valid list instead of silently disabling a tool surface. The
 - **Example:** `MCP_TOOL_SURFACE=progressive`
 
 `full` advertises the existing 208-tool catalog for maximum client
-compatibility. `progressive` advertises only `mcp_tools_search` plus
-`mcp_tools_read`, `mcp_tools_write`, and `mcp_tools_destructive`: the model
-searches for a compact match. A single match already carries its contract; for
-multiple matches, it searches the selected exact tool name before using the
-dispatcher named by that result. Set `detail: "full"` on `mcp_tools_search`
+compatibility. `progressive` advertises the direct read-only
+`build_discord_server` architecture front door plus `guild_blueprint_apply` and
+`guild_blueprint_evidence` when guild architecture is authorized, together with
+`mcp_tools_search`, `mcp_tools_read`, `mcp_tools_write`, and
+`mcp_tools_destructive`. The front door is a compact alias of canonical
+`guild_blueprint_plan`; the other two direct tools complete and independently verify an approved
+plan. The model searches for compact matches for other tools. A single match already carries its
+contract; for multiple matches, it searches the selected exact tool name before using the dispatcher
+named by that result. Set `detail: "full"` on `mcp_tools_search`
 only when several full contracts are necessary in one response. The dispatchers
 expose accurate host approval annotations and reject a tool sent through the
 wrong risk route. This substantially reduces both the initial `tools/list`

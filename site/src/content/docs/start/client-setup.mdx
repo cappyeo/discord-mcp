@@ -152,10 +152,14 @@ contract into its context at once. Check the saved choice with
 
 ### `progressive` (recommended)
 
-The client should show **4 visible tools**: `mcp_tools_search`, `mcp_tools_read`,
-`mcp_tools_write`, and `mcp_tools_destructive`. This is the expected working state, not a
-partial installation. The client searches for an exact Discord tool, then invokes it through
-the risk-matched dispatcher.
+The client should show **7 visible tools** when guild architecture is authorized:
+`mcp_tools_search`, `mcp_tools_read`, `mcp_tools_write`, `mcp_tools_destructive`, and the direct
+architecture lifecycle `build_discord_server`, `guild_blueprint_apply`, and
+`guild_blueprint_evidence`. The read-only front door is the progressive alias of canonical
+`guild_blueprint_plan` and the one-request entrypoint for server architecture; the next two tools
+apply/resume an explicitly approved plan and verify its Activity Evidence. Other Discord tools
+remain searchable under their canonical names and are invoked through the risk-matched dispatcher.
+Without guild architecture authorization, the surface has 4 visible tools for search and dispatch.
 
 The individual Discord tool names are intentionally absent from `tools/list` in this mode.
 [Run your first Discord tools](/discord-mcp/start/quickstart/) demonstrates the complete

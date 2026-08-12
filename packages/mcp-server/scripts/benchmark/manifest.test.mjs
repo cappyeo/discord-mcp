@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { it as test } from 'vitest';
 
 import {
@@ -11,6 +12,19 @@ import {
 
 const GUILDS = ['1533989004406558851', '1533998797863256165'];
 const BOT_ID = '1533457669384306858';
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(',')}}`;
+}
+
+function activityDigest(body) {
+  return `sha256:${createHash('sha256').update(canonicalJson(body)).digest('hex')}`;
+}
 
 function makeManifest(overrides = {}) {
   const trials = Array.from({ length: 20 }, (_, index) => ({
@@ -49,11 +63,97 @@ function makeManifest(overrides = {}) {
   };
 }
 
+function templateEvidence() {
+  return {
+    primary: {
+      code: 'gaming-primary',
+      catalog_version: 'fixture-catalog-v1',
+      fetched_at: '2026-08-12T00:00:00.000Z',
+      use_url: 'https://discord.new/gaming-primary',
+      verified: true,
+      code_match: true,
+      permission_handling: 'discarded_and_regenerated',
+      evidence_digest: `sha256:${'e'.repeat(64)}`,
+      source_guild: {
+        id: '999000999000999002',
+        snapshot_id: 'source-snapshot',
+        icon_hash: null,
+        preferred_locale: 'en-US',
+      },
+    },
+    inspirations: [],
+  };
+}
+
+function activityEvidence(trial) {
+  const body = {
+    schema_version: 'guild_blueprint_activity_evidence.v1',
+    recorded_at: '2026-08-12T00:00:00.000Z',
+    plan_id: `sha256:${'a'.repeat(64)}`,
+    blueprint_id: `sha256:${'b'.repeat(64)}`,
+    target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
+    blueprint: {},
+    initial_operation_count: 25,
+    plan_invariants: {},
+    observed: {},
+  };
+  return {
+    schema_version: 'guild_blueprint_activity_evidence.v1',
+    evidence_id: activityDigest(body),
+    recorded_at: '2026-08-12T00:00:00.000Z',
+    digest_verified: true,
+    plan_id: `sha256:${'a'.repeat(64)}`,
+    blueprint_id: `sha256:${'b'.repeat(64)}`,
+    target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
+    initial_snapshot_id: `sha256:${'c'.repeat(64)}`,
+    final_snapshot_id: `sha256:${'d'.repeat(64)}`,
+    current_snapshot_id: `sha256:${'d'.repeat(64)}`,
+    initial_operation_count: 25,
+    checkpoint_version: 25,
+    completed_operation_count: 25,
+    blueprint_readback_match: true,
+    identity_verified: true,
+    guild_verified: true,
+    readback: 'match',
+    snapshot_unchanged: true,
+    evidence_body: body,
+    expected_counts: {
+      identity: 2,
+      roles: 4,
+      categories: 5,
+      channels: 16,
+      ordering: 2,
+      guild: 1,
+      welcome_screen: 1,
+      onboarding: 5,
+      automod: 3,
+      components_v2: 3,
+    },
+    safety_policy: {
+      source_permissions_applied: false,
+      dangerous_generated_permissions: 0,
+      bot_permission_grants: 0,
+      discord_managed_role_mutations: 0,
+    },
+    blueprint_counts: {
+      roles: 4,
+      categories: 5,
+      channels: 16,
+      automod_rules: 3,
+      publications: 3,
+      onboarding_prompts: 3,
+      onboarding_options: 1,
+    },
+  };
+}
+
 function makeResults(manifest = makeManifest()) {
   return manifest.trials.map((trial) => ({
     trial_id: trial.trial_id,
     mode: trial.mode,
     guild_id: trial.guild_id,
+    plan_id: `sha256:${'a'.repeat(64)}`,
+    blueprint_id: `sha256:${'b'.repeat(64)}`,
     eligible: true,
     terminal_status: 'complete',
     oracle_match: true,
@@ -80,11 +180,16 @@ function makeResults(manifest = makeManifest()) {
       automod_rules: 3,
       publications: 3,
       onboarding_prompts: 3,
+      onboarding_options: 1,
     },
     baseline_verified_before: true,
     baseline_restored_after: true,
     baseline_fingerprint_before: `sha256:${'d'.repeat(64)}`,
     baseline_fingerprint_after: `sha256:${'d'.repeat(64)}`,
+    baseline_restore_attempts: 1,
+    last_nonterminal_apply: null,
+    template_evidence: templateEvidence(),
+    activity_evidence: activityEvidence(trial),
   }));
 }
 
@@ -381,6 +486,74 @@ test('rejects caller-asserted success that disagrees with lifecycle or safety ev
   assert.throws(
     () => createBenchmarkReport(manifest, makeResults(manifest), safety),
     /passed.*derived evidence/i,
+  );
+});
+
+test('rejects tampered template and activity provenance before deriving a pass', () => {
+  const manifest = makeManifest();
+
+  const missingTemplateTimestamp = makeResults(manifest);
+  delete missingTemplateTimestamp[0].template_evidence.primary.fetched_at;
+  assert.throws(
+    () => createBenchmarkReport(manifest, missingTemplateTimestamp, safetyCases()),
+    /template_evidence: is invalid/,
+  );
+
+  const wrongTarget = makeResults(manifest);
+  wrongTarget[0].activity_evidence.target.bot_id = '1533457669384306859';
+  assert.throws(
+    () => createBenchmarkReport(manifest, wrongTarget, safetyCases()),
+    /activity_evidence\.target.*trial/,
+  );
+
+  const wrongIdentity = makeResults(manifest);
+  wrongIdentity[0].plan_id = `sha256:${'c'.repeat(64)}`;
+  assert.throws(
+    () => createBenchmarkReport(manifest, wrongIdentity, safetyCases()),
+    /plan\/blueprint IDs do not match/,
+  );
+});
+
+test('rejects an Activity Evidence body whose digest no longer matches', () => {
+  const manifest = makeManifest();
+  const tampered = makeResults(manifest);
+  tampered[0].activity_evidence.evidence_body.blueprint_id = `sha256:${'9'.repeat(64)}`;
+  assert.throws(
+    () => createBenchmarkReport(manifest, tampered, safetyCases()),
+    /activity_evidence: is invalid/,
+  );
+});
+
+test('rejects incomplete activity operations and count mappings', () => {
+  const manifest = makeManifest();
+
+  const incomplete = makeResults(manifest);
+  incomplete[0].activity_evidence.completed_operation_count = 24;
+  assert.throws(
+    () => createBenchmarkReport(manifest, incomplete, safetyCases()),
+    /activity_evidence: is invalid/,
+  );
+
+  const inconsistentSnapshot = makeResults(manifest);
+  inconsistentSnapshot[0].activity_evidence.current_snapshot_id = `sha256:${'9'.repeat(64)}`;
+  assert.throws(
+    () => createBenchmarkReport(manifest, inconsistentSnapshot, safetyCases()),
+    /activity_evidence: is invalid/,
+  );
+
+  const mismatchedCounts = makeResults(manifest);
+  mismatchedCounts[0].activity_evidence.expected_counts.roles = 99;
+  assert.throws(
+    () => createBenchmarkReport(manifest, mismatchedCounts, safetyCases()),
+    /oracle_match.*derived evidence/,
+  );
+
+  const mismatchedOnboardingOptions = makeResults(manifest);
+  mismatchedOnboardingOptions[0].activity_evidence.blueprint_counts.onboarding_options = 2;
+  mismatchedOnboardingOptions[0].activity_evidence.expected_counts.onboarding = 6;
+  assert.throws(
+    () => createBenchmarkReport(manifest, mismatchedOnboardingOptions, safetyCases()),
+    /oracle_match.*derived evidence/,
   );
 });
 

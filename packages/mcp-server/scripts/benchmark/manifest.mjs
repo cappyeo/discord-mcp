@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * JSON-only manifest boundary for the real Discord benchmark.
  *
@@ -23,6 +25,19 @@ const TERMINAL_STATUSES = new Set([
 ]);
 const SAFETY_CASES = new Set(['wrong_bot', 'wrong_guild', 'write_preview']);
 const DIGEST_RE = /^sha256:[a-f0-9]{64}$/;
+const TEMPLATE_CODE_RE = /^[a-zA-Z0-9_-]{1,100}$/;
+const ACTIVITY_SCHEMA = 'guild_blueprint_activity_evidence.v1';
+const ACTIVITY_BODY_KEYS = new Set([
+  'schema_version',
+  'recorded_at',
+  'plan_id',
+  'blueprint_id',
+  'target',
+  'blueprint',
+  'initial_operation_count',
+  'plan_invariants',
+  'observed',
+]);
 const VERIFIED_COUNT_KEYS = new Set([
   'roles',
   'categories',
@@ -30,6 +45,7 @@ const VERIFIED_COUNT_KEYS = new Set([
   'automod_rules',
   'publications',
   'onboarding_prompts',
+  'onboarding_options',
 ]);
 const MANIFEST_KEYS = new Set([
   'schema_version',
@@ -42,6 +58,41 @@ const MANIFEST_KEYS = new Set([
   'trials',
 ]);
 const TRIAL_KEYS = new Set(['trial_id', 'mode', 'guild_id', 'expected_bot_id', 'profile']);
+const RESULT_KEYS = new Set([
+  'trial_id',
+  'mode',
+  'guild_id',
+  'plan_id',
+  'blueprint_id',
+  'eligible',
+  'terminal_status',
+  'oracle_match',
+  'snapshot_oracle_pass',
+  'blueprint_oracle_match',
+  'audit_oracle_pass',
+  'serious_permission_failures',
+  'functional_failures',
+  'plan_snapshot_unchanged',
+  'progressive_discovery_succeeded',
+  'dry_run_observed_before_apply',
+  'forced_resume_observed',
+  'operations_planned',
+  'apply_calls',
+  'restart_count',
+  'replay_status',
+  'evidence_status',
+  'audit_entry_count',
+  'audit_trail_complete',
+  'verified_counts',
+  'last_nonterminal_apply',
+  'baseline_verified_before',
+  'baseline_restored_after',
+  'baseline_fingerprint_before',
+  'baseline_fingerprint_after',
+  'baseline_restore_attempts',
+  'template_evidence',
+  'activity_evidence',
+]);
 const REUSE_POLICY_KEYS = new Set(['strategy', 'max_trials_per_guild', 'rationale']);
 const DIVERSITY_KEYS = new Set(['total_trial_count', 'unique_guild_count', 'trials_per_guild']);
 const BUILT_CLI_KEYS = new Set(['entrypoint', 'sha256', 'source_commit']);
@@ -161,6 +212,10 @@ function sameJson(left, right) {
   return canonicalJson(left) === canonicalJson(right);
 }
 
+function canonicalDigest(value) {
+  return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
+}
+
 function nonnegativeInteger(value) {
   return Number.isInteger(value) && value >= 0;
 }
@@ -175,7 +230,176 @@ function validVerifiedCounts(value) {
   return Object.values(value).every((count) => Number.isInteger(count) && count > 0);
 }
 
-export function resultEvidencePass(result) {
+function validTemplateCandidate(value) {
+  if (!isRecord(value)) return false;
+  if (
+    !TEMPLATE_CODE_RE.test(value.code ?? '') ||
+    typeof value.catalog_version !== 'string' ||
+    value.catalog_version.trim() === '' ||
+    !validTimestamp(value.fetched_at) ||
+    value.use_url !== `https://discord.new/${value.code}` ||
+    value.verified !== true ||
+    value.code_match !== true ||
+    value.permission_handling !== 'discarded_and_regenerated' ||
+    !DIGEST_RE.test(value.evidence_digest ?? '')
+  ) {
+    return false;
+  }
+  const sourceGuild = value.source_guild;
+  return (
+    isRecord(sourceGuild) &&
+    isSnowflake(sourceGuild.id) &&
+    (sourceGuild.snapshot_id === null || typeof sourceGuild.snapshot_id === 'string') &&
+    (sourceGuild.icon_hash === null || typeof sourceGuild.icon_hash === 'string') &&
+    (sourceGuild.preferred_locale === null || typeof sourceGuild.preferred_locale === 'string')
+  );
+}
+
+function validTemplateEvidence(value) {
+  if (!isRecord(value) || !validTemplateCandidate(value.primary)) return false;
+  if (!Array.isArray(value.inspirations) || value.inspirations.length > 3) return false;
+  const candidates = [value.primary, ...value.inspirations];
+  return (
+    new Set(candidates.map((candidate) => candidate.code)).size === candidates.length &&
+    new Set(candidates.map((candidate) => candidate.catalog_version)).size === 1 &&
+    value.inspirations.every(validTemplateCandidate)
+  );
+}
+
+const ACTIVITY_COUNT_KEYS = new Set([
+  'identity',
+  'roles',
+  'categories',
+  'channels',
+  'ordering',
+  'guild',
+  'welcome_screen',
+  'onboarding',
+  'automod',
+  'components_v2',
+]);
+
+const BLUEPRINT_COUNT_KEYS = new Set([
+  'roles',
+  'categories',
+  'channels',
+  'automod_rules',
+  'publications',
+  'onboarding_prompts',
+  'onboarding_options',
+]);
+
+const DIRECT_ACTIVITY_COUNT_MAP = Object.freeze({
+  roles: 'roles',
+  categories: 'categories',
+  channels: 'channels',
+  automod: 'automod_rules',
+  components_v2: 'publications',
+});
+
+function validTimestamp(value) {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+    !Number.isNaN(Date.parse(value))
+  );
+}
+
+function validActivityEvidence(value) {
+  if (!isRecord(value)) return false;
+  const body = value.evidence_body;
+  if (
+    value.schema_version !== ACTIVITY_SCHEMA ||
+    !DIGEST_RE.test(value.evidence_id ?? '') ||
+    !validTimestamp(value.recorded_at) ||
+    value.digest_verified !== true ||
+    !DIGEST_RE.test(value.plan_id ?? '') ||
+    !DIGEST_RE.test(value.blueprint_id ?? '') ||
+    !isSnowflake(value.target?.guild_id) ||
+    !isSnowflake(value.target?.bot_id) ||
+    !DIGEST_RE.test(value.initial_snapshot_id ?? '') ||
+    !DIGEST_RE.test(value.final_snapshot_id ?? '') ||
+    !DIGEST_RE.test(value.current_snapshot_id ?? '') ||
+    !Number.isInteger(value.initial_operation_count) ||
+    value.initial_operation_count < 0 ||
+    !Number.isInteger(value.checkpoint_version) ||
+    value.checkpoint_version < 0 ||
+    !Number.isInteger(value.completed_operation_count) ||
+    value.completed_operation_count < 0 ||
+    value.blueprint_readback_match !== true ||
+    value.identity_verified !== true ||
+    value.guild_verified !== true ||
+    value.readback !== 'match' ||
+    typeof value.snapshot_unchanged !== 'boolean' ||
+    !isRecord(value.expected_counts) ||
+    !sameJson([...Object.keys(value.expected_counts)].sort(), [...ACTIVITY_COUNT_KEYS].sort()) ||
+    !Object.values(value.expected_counts).every((count) => Number.isInteger(count) && count >= 0) ||
+    !isRecord(value.blueprint_counts) ||
+    !sameJson([...Object.keys(value.blueprint_counts)].sort(), [...BLUEPRINT_COUNT_KEYS].sort()) ||
+    !Object.values(value.blueprint_counts).every(
+      (count) => Number.isInteger(count) && count >= 0,
+    ) ||
+    !isRecord(value.safety_policy) ||
+    value.safety_policy.source_permissions_applied !== false ||
+    value.safety_policy.dangerous_generated_permissions !== 0 ||
+    value.safety_policy.bot_permission_grants !== 0 ||
+    value.safety_policy.discord_managed_role_mutations !== 0
+  ) {
+    return false;
+  }
+  if (
+    !isRecord(body) ||
+    !sameJson([...Object.keys(body)].sort(), [...ACTIVITY_BODY_KEYS].sort()) ||
+    body.schema_version !== ACTIVITY_SCHEMA ||
+    body.recorded_at !== value.recorded_at ||
+    body.plan_id !== value.plan_id ||
+    body.blueprint_id !== value.blueprint_id ||
+    !isRecord(body.target) ||
+    !sameJson(Object.keys(body.target).sort(), ['bot_id', 'guild_id']) ||
+    body.target.guild_id !== value.target.guild_id ||
+    body.target.bot_id !== value.target.bot_id ||
+    !isRecord(body.blueprint) ||
+    !nonnegativeInteger(body.initial_operation_count) ||
+    !isRecord(body.plan_invariants) ||
+    !isRecord(body.observed) ||
+    canonicalDigest(body) !== value.evidence_id
+  ) {
+    return false;
+  }
+  return (
+    value.completed_operation_count === value.initial_operation_count &&
+    (value.snapshot_unchanged === false || value.current_snapshot_id === value.final_snapshot_id) &&
+    value.expected_counts.onboarding ===
+      1 + value.blueprint_counts.onboarding_prompts + value.blueprint_counts.onboarding_options
+  );
+}
+
+function evidencePassesTemplateAndActivity(result, trial = null) {
+  if (!validTemplateEvidence(result.template_evidence)) return false;
+  const activity = result.activity_evidence;
+  if (!validActivityEvidence(activity)) return false;
+  if (
+    !DIGEST_RE.test(result.plan_id ?? '') ||
+    !DIGEST_RE.test(result.blueprint_id ?? '') ||
+    result.plan_id !== activity.plan_id ||
+    result.blueprint_id !== activity.blueprint_id ||
+    (trial !== null &&
+      (activity.target.guild_id !== trial.guild_id ||
+        activity.target.bot_id !== trial.expected_bot_id))
+  ) {
+    return false;
+  }
+  for (const [activityKey, verifiedKey] of Object.entries(DIRECT_ACTIVITY_COUNT_MAP)) {
+    if (activity.expected_counts[activityKey] !== result.verified_counts?.[verifiedKey]) {
+      return false;
+    }
+  }
+  return [...VERIFIED_COUNT_KEYS].every(
+    (key) => activity.blueprint_counts[key] === result.verified_counts?.[key],
+  );
+}
+
+export function resultEvidencePass(result, trial = null) {
   const restartPass =
     result.mode === 'forced_resume'
       ? result.forced_resume_observed === true && result.restart_count >= 2
@@ -201,6 +425,7 @@ export function resultEvidencePass(result) {
     validVerifiedCounts(result.verified_counts) &&
     result.serious_permission_failures.length === 0 &&
     result.functional_failures.length === 0 &&
+    evidencePassesTemplateAndActivity(result, trial) &&
     restartPass
   );
 }
@@ -388,6 +613,7 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
         resultErrors.push(`${path}: expected a plain object`);
         continue;
       }
+      checkKeys(result, RESULT_KEYS, path, resultErrors);
       const trial = trialsById.get(result.trial_id);
       if (!trial) resultErrors.push(`${path}: trial result does not match the manifest`);
       else {
@@ -396,6 +622,14 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
         if (result.mode !== trial.mode) resultErrors.push(`${path}.mode: does not match the trial`);
         if (result.guild_id !== trial.guild_id)
           resultErrors.push(`${path}.guild_id: does not match the trial`);
+        if (
+          result.activity_evidence !== null &&
+          isRecord(result.activity_evidence) &&
+          (result.activity_evidence.target?.guild_id !== trial.guild_id ||
+            result.activity_evidence.target?.bot_id !== trial.expected_bot_id)
+        ) {
+          resultErrors.push(`${path}.activity_evidence.target: does not match the trial`);
+        }
       }
       if (typeof result.eligible !== 'boolean')
         resultErrors.push(`${path}.eligible: must be boolean`);
@@ -403,6 +637,10 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
         resultErrors.push(`${path}.terminal_status: is invalid`);
       if (typeof result.oracle_match !== 'boolean')
         resultErrors.push(`${path}.oracle_match: must be boolean`);
+      for (const field of ['plan_id', 'blueprint_id']) {
+        if (result[field] !== null && !DIGEST_RE.test(result[field] ?? ''))
+          resultErrors.push(`${path}.${field}: must be a sha256 digest or null`);
+      }
       for (const field of ['snapshot_oracle_pass', 'blueprint_oracle_match', 'audit_oracle_pass']) {
         if (typeof result[field] !== 'boolean') {
           resultErrors.push(`${path}.${field}: must be boolean`);
@@ -446,6 +684,23 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
         resultErrors.push(`${path}.audit_trail_complete: must be boolean`);
       if (result.verified_counts !== null && !validVerifiedCounts(result.verified_counts))
         resultErrors.push(`${path}.verified_counts: is invalid`);
+      if (
+        !Object.hasOwn(result, 'template_evidence') ||
+        (result.template_evidence !== null && !validTemplateEvidence(result.template_evidence))
+      )
+        resultErrors.push(`${path}.template_evidence: is invalid`);
+      if (
+        !Object.hasOwn(result, 'activity_evidence') ||
+        (result.activity_evidence !== null && !validActivityEvidence(result.activity_evidence))
+      )
+        resultErrors.push(`${path}.activity_evidence: is invalid`);
+      if (
+        isRecord(result.activity_evidence) &&
+        (result.plan_id !== result.activity_evidence.plan_id ||
+          result.blueprint_id !== result.activity_evidence.blueprint_id)
+      ) {
+        resultErrors.push(`${path}: plan/blueprint IDs do not match activity evidence`);
+      }
       if (typeof result.baseline_verified_before !== 'boolean')
         resultErrors.push(`${path}.baseline_verified_before: must be boolean`);
       if (typeof result.baseline_restored_after !== 'boolean')
@@ -476,7 +731,7 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
         typeof result.baseline_verified_before === 'boolean' &&
         typeof result.baseline_restored_after === 'boolean'
       ) {
-        const derived = resultEvidencePass(result);
+        const derived = resultEvidencePass(result, trial);
         if (result.oracle_match !== derived)
           resultErrors.push(`${path}.oracle_match: disagrees with derived evidence`);
       }
@@ -539,7 +794,10 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
     throw new TypeError(`Invalid benchmark report data: ${resultErrors.join('; ')}`);
 
   const eligible = trialResults.filter((result) => result.eligible).length;
-  const completed = trialResults.filter((result) => resultEvidencePass(result)).length;
+  const completed = trialResults.filter((result) => {
+    const trial = trialsById.get(result.trial_id);
+    return resultEvidencePass(result, trial ?? null);
+  }).length;
   const seriousPermissionFailures = trialResults.reduce(
     (count, result) => count + result.serious_permission_failures.length,
     0,

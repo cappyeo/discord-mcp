@@ -599,6 +599,10 @@ export function verifyBlueprintSnapshot({
       automod_rules: expectedKeys.automod_rules.length,
       publications: expectedKeys.publications.length,
       onboarding_prompts: (blueprint.onboarding?.prompts ?? []).length,
+      onboarding_options: (blueprint.onboarding?.prompts ?? []).reduce(
+        (total, prompt) => total + prompt.options.length,
+        0,
+      ),
     },
   };
 }

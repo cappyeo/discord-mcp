@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { publicationTargets, runBenchmarkTrial } from './trial-runner.mjs';
+import { activityEvidenceDigest, publicationTargets, runBenchmarkTrial } from './trial-runner.mjs';
 
 const GUILD_ID = '999000999000999000';
 const BOT_ID = '888000888000888000';
@@ -12,6 +12,8 @@ const GENERATED_MESSAGE_ID = '665000665000665000';
 const PLAN_ID = `sha256:${'a'.repeat(64)}`;
 const BLUEPRINT_ID = `sha256:${'b'.repeat(64)}`;
 const APPROVAL_ID = `sha256:${'c'.repeat(64)}`;
+const SNAPSHOT_ID = `sha256:${'e'.repeat(64)}`;
+const TEMPLATE_DIGEST = `sha256:${'f'.repeat(64)}`;
 
 function trial(mode = 'full') {
   return {
@@ -28,11 +30,38 @@ function plan() {
     status: 'ready',
     target: { guild_id: GUILD_ID, bot_id: BOT_ID },
     blueprint_id: BLUEPRINT_ID,
+    snapshot_id: SNAPSHOT_ID,
+    source: {
+      catalog_version: 'fixture-catalog-v1',
+      primary: {
+        code: 'gaming-primary',
+        catalog_version: 'fixture-catalog-v1',
+        use_url: 'https://discord.new/gaming-primary',
+        quality: {
+          verified: true,
+          code_match: true,
+          permission_handling: 'discarded_and_regenerated',
+        },
+        provenance: {
+          evidence_digest: TEMPLATE_DIGEST,
+          fetched_at: '2026-08-12T00:00:00.000Z',
+          source_guild: {
+            id: '999000999000999002',
+            snapshot_id: 'source-snapshot',
+            icon_hash: null,
+            preferred_locale: 'en-US',
+          },
+        },
+      },
+      inspirations: [],
+      permission_policy: 'discard_source_and_regenerate',
+    },
     blueprint: {
-      roles: [],
-      categories: [],
+      roles: [{ key: 'member' }],
+      categories: [{ key: 'community' }],
       channels: [{ key: 'general' }],
-      automod: { rules: [] },
+      onboarding: { prompts: [{ key: 'platform', options: [{ key: 'pc' }] }] },
+      automod: { rules: [{ key: 'spam' }] },
       components_v2: {
         publications: [{ key: 'welcome', channel_key: 'general' }],
       },
@@ -51,12 +80,68 @@ function plan() {
 
 function bindings(channelId = CHANNEL_ID, messageId = MESSAGE_ID) {
   return {
-    roles: {},
-    categories: {},
+    roles: { member: '771000771000771000' },
+    categories: { community: '772000772000772000' },
     channels: { general: channelId },
-    automod_rules: {},
+    automod_rules: { spam: '773000773000773000' },
     publications: { welcome: messageId },
   };
+}
+
+function activity(
+  channelId = CHANNEL_ID,
+  messageId = MESSAGE_ID,
+  activityBindings = bindings(channelId, messageId),
+  completedOperationIds = ['channel:create:general', 'publication:welcome'],
+  initialOperationCount = completedOperationIds.length,
+) {
+  const record = {
+    schema_version: 'guild_blueprint_activity_evidence.v1',
+    recorded_at: '2026-08-12T00:00:00.000Z',
+    initial_operation_count: initialOperationCount,
+    plan_invariants: {
+      expected_counts: {
+        identity: 2,
+        roles: 1,
+        categories: 1,
+        channels: 1,
+        ordering: 2,
+        guild: 1,
+        welcome_screen: 1,
+        onboarding: 3,
+        automod: 1,
+        components_v2: 1,
+      },
+      blueprint_counts: {
+        roles: 1,
+        categories: 1,
+        channels: 1,
+        automod_rules: 1,
+        publications: 1,
+        onboarding_prompts: 1,
+        onboarding_options: 1,
+      },
+      safety_policy: {
+        source_permissions_applied: false,
+        dangerous_generated_permissions: 0,
+        bot_permission_grants: 0,
+        discord_managed_role_mutations: 0,
+      },
+    },
+    observed: {
+      initial_snapshot_id: SNAPSHOT_ID,
+      final_snapshot_id: SNAPSHOT_ID,
+      checkpoint_version: 1,
+      completed_operation_ids: completedOperationIds,
+      bindings: activityBindings,
+      blueprint_readback_match: true,
+    },
+  };
+  const digestPlan = plan();
+  digestPlan.operations = Array.from({ length: initialOperationCount }, (_, index) => ({
+    operation_id: `fixture:${index}`,
+  }));
+  return { ...record, evidence_id: activityEvidenceDigest(digestPlan, record) };
 }
 
 function applyResult(
@@ -103,7 +188,12 @@ function applyResult(
       completed_operation_ids: operationIds.slice(0, status === 'partial' ? 1 : 2),
       activity:
         status === 'complete' || status === 'already_current'
-          ? { evidence_id: `sha256:${'d'.repeat(64)}` }
+          ? activity(
+              channelId,
+              messageId,
+              overrides.completeBindingsOverride ?? bindings(channelId, messageId),
+              overrides.completeCompletedOperationIds ?? operationIds,
+            )
           : null,
     },
     next_action:
@@ -117,13 +207,31 @@ function applyResult(
 }
 
 function evidence() {
+  const record = activity();
   return {
     status: 'verified',
     plan_id: PLAN_ID,
     blueprint_id: BLUEPRINT_ID,
     target: { guild_id: GUILD_ID, bot_id: BOT_ID },
-    evidence_id: `sha256:${'d'.repeat(64)}`,
-    verification: { identity_verified: true, guild_verified: true, readback: 'match' },
+    evidence_id: activityEvidenceDigest(plan(), record),
+    record,
+    verification: {
+      identity_verified: true,
+      guild_verified: true,
+      readback: 'match',
+      snapshot_unchanged: true,
+      current_snapshot: {
+        snapshot_id: SNAPSHOT_ID,
+        guild: { id: GUILD_ID, name: 'fixture', features: [] },
+        bot_id: BOT_ID,
+        resources: { roles: 0, categories: 0, channels: 1, automod_rules: 0, recent_messages: 0 },
+        onboarding_enabled: false,
+        welcome_screen_configured: false,
+      },
+      remaining_operations: [],
+      blockers: [],
+      warnings: [],
+    },
   };
 }
 
@@ -168,6 +276,7 @@ function harness(
     nonProgressingMainApplyResponses = 0,
     completeBindingsOverride = null,
     completeCompletedOperationIds = null,
+    activityRecordOverride = null,
     checkpointResult = null,
     checkpointFailure = null,
     snapshotSettlesAfter = 1,
@@ -179,6 +288,29 @@ function harness(
     baselineChannelIds.length > 0 ? baselineChannelIds : baselineChannel ? [CHANNEL_ID] : [];
   const sessions = [];
   const applyBudgets = [];
+  const fixtureApplyResult = (...args) => {
+    const result = applyResult(...args);
+    if (result.status === 'complete' || result.status === 'already_current') {
+      const operationIds = Array.from({ length: operationsPlanned }, (_, index) =>
+        index === 0
+          ? 'channel:create:general'
+          : index === 1
+            ? 'publication:welcome'
+            : `fixture:${index}`,
+      );
+      result.evidence.activity = activity(
+        args[3],
+        args[4],
+        result.evidence.bindings,
+        operationIds,
+        operationsPlanned,
+      );
+      if (activityRecordOverride !== null) {
+        Object.assign(result.evidence.activity, activityRecordOverride);
+      }
+    }
+    return result;
+  };
   let firstForcedApply = true;
   let remainingPlanFailures = planCallFailures;
   let remainingApplyTransportFailures = applyTransportFailures;
@@ -261,7 +393,22 @@ function harness(
             return fixturePlan;
           }
           assert.equal(args.tool, 'guild_blueprint_evidence');
-          return evidenceResult;
+          const finalEvidence = structuredClone(evidenceResult);
+          if (finalEvidence.record?.observed !== undefined) {
+            const operationIds = Array.from({ length: operationsPlanned }, (_, index) =>
+              index === 0
+                ? 'channel:create:general'
+                : index === 1
+                  ? 'publication:welcome'
+                  : `fixture:${index}`,
+            );
+            finalEvidence.record.initial_operation_count = operationsPlanned;
+            finalEvidence.record.observed.completed_operation_ids = operationIds;
+            const evidencePlan = plan();
+            evidencePlan.operations = operationIds.map((operation_id) => ({ operation_id }));
+            finalEvidence.evidence_id = activityEvidenceDigest(evidencePlan, finalEvidence.record);
+          }
+          return finalEvidence;
         }
         assert.equal(name, 'mcp_tools_destructive');
         assert.equal(args.tool, 'guild_blueprint_apply');
@@ -274,7 +421,7 @@ function harness(
         }
         if (remainingRetriableApplyResponses > 0) {
           remainingRetriableApplyResponses -= 1;
-          return applyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
+          return fixtureApplyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
             error: {
               operation_id: null,
               code: 'UPSTREAM_TIMEOUT',
@@ -288,14 +435,21 @@ function harness(
         }
         if (remainingRetriableVerificationResponses > 0) {
           remainingRetriableVerificationResponses -= 1;
-          const result = applyResult('partial', 0, 0, generatedChannelId, generatedMessageId, {
-            error: {
-              operation_id: null,
-              code: 'UPSTREAM_TIMEOUT',
-              retriable: true,
-              status: null,
+          const result = fixtureApplyResult(
+            'partial',
+            0,
+            0,
+            generatedChannelId,
+            generatedMessageId,
+            {
+              error: {
+                operation_id: null,
+                code: 'UPSTREAM_TIMEOUT',
+                retriable: true,
+                status: null,
+              },
             },
-          });
+          );
           result.progress.completed_total = 2;
           return result;
         }
@@ -305,7 +459,7 @@ function harness(
           remainingRetriableForcedObservationResponses > 0
         ) {
           remainingRetriableForcedObservationResponses -= 1;
-          return applyResult('partial', 0, 1, generatedChannelId, generatedMessageId, {
+          return fixtureApplyResult('partial', 0, 1, generatedChannelId, generatedMessageId, {
             error: {
               operation_id: null,
               code: 'UPSTREAM_TIMEOUT',
@@ -324,7 +478,7 @@ function harness(
             remainingProgressingRetriableMainApplyResponses +
             1;
           remainingProgressingRetriableMainApplyResponses -= 1;
-          const result = applyResult(
+          const result = fixtureApplyResult(
             'partial',
             0,
             Math.max(1, operationsPlanned - completedTotal),
@@ -351,7 +505,7 @@ function harness(
           remainingRetriableMainApplyResponses > 0
         ) {
           remainingRetriableMainApplyResponses -= 1;
-          return applyResult('partial', 0, 1, generatedChannelId, generatedMessageId, {
+          return fixtureApplyResult('partial', 0, 1, generatedChannelId, generatedMessageId, {
             error: {
               operation_id: null,
               code: 'UPSTREAM_TIMEOUT',
@@ -362,7 +516,7 @@ function harness(
         }
         if (completedApply && remainingRetriableReplayResponses > 0) {
           remainingRetriableReplayResponses -= 1;
-          return applyResult('partial', 0, 0, generatedChannelId, generatedMessageId, {
+          return fixtureApplyResult('partial', 0, 0, generatedChannelId, generatedMessageId, {
             error: {
               operation_id: null,
               code: 'UPSTREAM_TIMEOUT',
@@ -373,7 +527,7 @@ function harness(
         }
         if (nonRetriableApplyResponse && !nonRetriableApplyReturned) {
           nonRetriableApplyReturned = true;
-          return applyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
+          return fixtureApplyResult('blocked', 0, 2, generatedChannelId, generatedMessageId, {
             error: {
               operation_id: null,
               code: 'DISCORD_PERMISSION_DENIED',
@@ -385,7 +539,7 @@ function harness(
         }
         if (!completedApply && remainingNonProgressingMainApplyResponses > 0) {
           remainingNonProgressingMainApplyResponses -= 1;
-          const stalled = applyResult('partial', 0, operationsPlanned);
+          const stalled = fixtureApplyResult('partial', 0, operationsPlanned);
           return {
             ...stalled,
             progress: {
@@ -400,14 +554,26 @@ function harness(
         if (mode === 'forced_resume' && firstForcedApply) {
           firstForcedApply = false;
           forcedPartialObserved = true;
-          return applyResult('partial', 1, 1, generatedChannelId, generatedMessageId);
+          return fixtureApplyResult('partial', 1, 1, generatedChannelId, generatedMessageId);
         }
         if (mode === 'forced_resume' && failResume) throw new Error('injected resume failure');
         if (completedApply) {
-          return applyResult('already_current', 0, 0, generatedChannelId, generatedMessageId);
+          return fixtureApplyResult(
+            'already_current',
+            0,
+            0,
+            generatedChannelId,
+            generatedMessageId,
+          );
         }
         completedApply = true;
-        const completed = applyResult('complete', 1, 0, generatedChannelId, generatedMessageId);
+        const completed = fixtureApplyResult(
+          'complete',
+          1,
+          0,
+          generatedChannelId,
+          generatedMessageId,
+        );
         if (completeBindingsOverride !== null) {
           completed.evidence.bindings = structuredClone(completeBindingsOverride);
         }
@@ -486,6 +652,7 @@ function harness(
             automod_rules: 1,
             publications: 1,
             onboarding_prompts: 1,
+            onboarding_options: 1,
           },
         };
       },
@@ -542,6 +709,33 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.dry_run_observed_before_apply, true);
     assert.equal(outcome.result.replay_status, 'already_current');
     assert.equal(outcome.result.evidence_status, 'verified');
+    assert.equal(outcome.result.plan_id, PLAN_ID);
+    assert.equal(outcome.result.blueprint_id, BLUEPRINT_ID);
+    assert.deepEqual(outcome.result.template_evidence.primary, {
+      code: 'gaming-primary',
+      catalog_version: 'fixture-catalog-v1',
+      fetched_at: '2026-08-12T00:00:00.000Z',
+      use_url: 'https://discord.new/gaming-primary',
+      verified: true,
+      code_match: true,
+      permission_handling: 'discarded_and_regenerated',
+      evidence_digest: TEMPLATE_DIGEST,
+      source_guild: {
+        id: '999000999000999002',
+        snapshot_id: 'source-snapshot',
+        icon_hash: null,
+        preferred_locale: 'en-US',
+      },
+    });
+    assert.deepEqual(outcome.result.activity_evidence.blueprint_counts, {
+      roles: 1,
+      categories: 1,
+      channels: 1,
+      automod_rules: 1,
+      publications: 1,
+      onboarding_prompts: 1,
+      onboarding_options: 1,
+    });
     assert.equal(outcome.result.restart_count, 1);
     assert.deepEqual(test.applyBudgets, [10, 10]);
     assert.equal(test.sessions.length, 2);
@@ -567,6 +761,34 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(
       test.snapshotRequests.some((ids) => ids.length === 0),
       false,
+    );
+  });
+
+  it('rejects malformed Activity Evidence timestamps before accepting a trial', async () => {
+    const test = harness('full', { activityRecordOverride: { recorded_at: 'not-a-timestamp' } });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, false);
+    assert.ok(
+      outcome.result.functional_failures.some((failure) =>
+        failure.code.endsWith('EVIDENCE_INVALID'),
+      ),
+      JSON.stringify(outcome.result.functional_failures),
+    );
+  });
+
+  it('rejects a form-valid but body-mismatched Activity Evidence digest', async () => {
+    const test = harness('full', {
+      activityRecordOverride: { evidence_id: `sha256:${'9'.repeat(64)}` },
+    });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.oracle_match, false);
+    assert.ok(
+      outcome.result.functional_failures.some((failure) =>
+        failure.code.endsWith('EVIDENCE_INVALID'),
+      ),
+      JSON.stringify(outcome.result.functional_failures),
     );
   });
 
@@ -887,6 +1109,7 @@ describe('real benchmark trial orchestration', () => {
             automod_rules: 1,
             publications: 1,
             onboarding_prompts: 1,
+            onboarding_options: 1,
           },
         });
       },

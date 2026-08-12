@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'vitest';
 import { BenchmarkRestoreFailure } from './baseline-lifecycle.mjs';
 import {
@@ -19,6 +20,19 @@ const CANARY_CHANNEL_IDS = Object.fromEntries(
   CONTROLLED_GUILD_IDS.map((guildId, index) => [guildId, `77700077700077700${index}`]),
 );
 
+function canonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(',')}}`;
+}
+
+function activityDigest(body) {
+  return `sha256:${createHash('sha256').update(canonicalJson(body)).digest('hex')}`;
+}
+
 function manifest() {
   return createControlledReuseManifest({
     runId: 'campaign-test',
@@ -32,10 +46,23 @@ function manifest() {
 }
 
 function result(trial, serious = []) {
+  const evidenceBody = {
+    schema_version: 'guild_blueprint_activity_evidence.v1',
+    recorded_at: '2026-08-12T00:00:00.000Z',
+    plan_id: `sha256:${'a'.repeat(64)}`,
+    blueprint_id: `sha256:${'b'.repeat(64)}`,
+    target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
+    blueprint: {},
+    initial_operation_count: 25,
+    plan_invariants: {},
+    observed: {},
+  };
   return {
     trial_id: trial.trial_id,
     mode: trial.mode,
     guild_id: trial.guild_id,
+    plan_id: `sha256:${'a'.repeat(64)}`,
+    blueprint_id: `sha256:${'b'.repeat(64)}`,
     eligible: true,
     terminal_status: 'complete',
     oracle_match: serious.length === 0,
@@ -62,6 +89,75 @@ function result(trial, serious = []) {
       automod_rules: 3,
       publications: 3,
       onboarding_prompts: 3,
+      onboarding_options: 1,
+    },
+    last_nonterminal_apply: null,
+    template_evidence: {
+      primary: {
+        code: 'gaming-primary',
+        catalog_version: 'fixture-catalog-v1',
+        fetched_at: '2026-08-12T00:00:00.000Z',
+        use_url: 'https://discord.new/gaming-primary',
+        verified: true,
+        code_match: true,
+        permission_handling: 'discarded_and_regenerated',
+        evidence_digest: `sha256:${'e'.repeat(64)}`,
+        source_guild: {
+          id: '999000999000999002',
+          snapshot_id: 'source-snapshot',
+          icon_hash: null,
+          preferred_locale: 'en-US',
+        },
+      },
+      inspirations: [],
+    },
+    activity_evidence: {
+      schema_version: 'guild_blueprint_activity_evidence.v1',
+      evidence_id: activityDigest(evidenceBody),
+      recorded_at: '2026-08-12T00:00:00.000Z',
+      digest_verified: true,
+      plan_id: `sha256:${'a'.repeat(64)}`,
+      blueprint_id: `sha256:${'b'.repeat(64)}`,
+      target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
+      initial_snapshot_id: `sha256:${'c'.repeat(64)}`,
+      final_snapshot_id: `sha256:${'d'.repeat(64)}`,
+      current_snapshot_id: `sha256:${'d'.repeat(64)}`,
+      initial_operation_count: 25,
+      checkpoint_version: 25,
+      completed_operation_count: 25,
+      blueprint_readback_match: true,
+      identity_verified: true,
+      guild_verified: true,
+      readback: 'match',
+      snapshot_unchanged: true,
+      evidence_body: evidenceBody,
+      expected_counts: {
+        identity: 2,
+        roles: 4,
+        categories: 5,
+        channels: 16,
+        ordering: 2,
+        guild: 1,
+        welcome_screen: 1,
+        onboarding: 5,
+        automod: 3,
+        components_v2: 3,
+      },
+      safety_policy: {
+        source_permissions_applied: false,
+        dangerous_generated_permissions: 0,
+        bot_permission_grants: 0,
+        discord_managed_role_mutations: 0,
+      },
+      blueprint_counts: {
+        roles: 4,
+        categories: 5,
+        channels: 16,
+        automod_rules: 3,
+        publications: 3,
+        onboarding_prompts: 3,
+        onboarding_options: 1,
+      },
     },
   };
 }

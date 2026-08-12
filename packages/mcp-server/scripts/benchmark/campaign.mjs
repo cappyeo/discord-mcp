@@ -179,6 +179,8 @@ function failedTrialResult(trial) {
     trial_id: trial.trial_id,
     mode: trial.mode,
     guild_id: trial.guild_id,
+    plan_id: null,
+    blueprint_id: null,
     eligible: true,
     terminal_status: 'error',
     oracle_match: false,
@@ -199,6 +201,9 @@ function failedTrialResult(trial) {
     audit_entry_count: 0,
     audit_trail_complete: false,
     verified_counts: null,
+    last_nonterminal_apply: null,
+    template_evidence: null,
+    activity_evidence: null,
   };
 }
 
@@ -629,7 +634,12 @@ export async function runBenchmarkCampaign(input) {
     }
 
     const completedTrials = results.length;
-    const passingTrials = results.filter(resultEvidencePass).length;
+    const passingTrials = results.filter((result) => {
+      const trialDefinition = manifest.trials.find(
+        (candidate) => candidate.trial_id === result.trial_id,
+      );
+      return resultEvidencePass(result, trialDefinition ?? null);
+    }).length;
     const remainingTrials = manifest.trials.length - completedTrials;
     if (passingTrials + remainingTrials < REQUIRED_PASSING_TRIALS) {
       await quarantine(dependencies, manifest, {

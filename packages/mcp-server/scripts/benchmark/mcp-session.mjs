@@ -12,6 +12,7 @@ const TOOL_REQUEST_TIMEOUT_MS = 180_000;
 const ALLOWED_CHILD_ENV = new Set([
   'ALLOWED_GUILDS',
   'DISCORD_EXPECTED_BOT_ID',
+  'DISCORD_DEFAULT_GUILD_ID',
   'DISCORD_TOKEN',
   'GATEWAY',
   'MCP_AUDIT_ENABLED',
@@ -116,6 +117,7 @@ export async function openMcpBenchmarkSession({
     return {
       pid,
       toolNames,
+      instructions: client.getInstructions?.() ?? null,
       async callTool(name, args) {
         const result = await client.callTool(
           { name, arguments: args },

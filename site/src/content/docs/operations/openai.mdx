@@ -122,8 +122,11 @@ MCP_TOOL_SURFACE = "progressive"
 ALLOWED_GUILDS = "111122223333444455"
 ```
 
-The model will see `mcp_tools_search` plus `mcp_tools_read`, `mcp_tools_write`,
-and `mcp_tools_destructive`. Each search match names the exact dispatcher whose
+The model will see the direct `build_discord_server`, `guild_blueprint_apply`, and
+`guild_blueprint_evidence` architecture lifecycle when guild architecture is authorized, plus
+`mcp_tools_search`, `mcp_tools_read`, `mcp_tools_write`, and
+`mcp_tools_destructive`. The front door is a progressive alias of canonical
+`guild_blueprint_plan`; each search match for other tools names the exact dispatcher whose
 host-visible annotations match that tool's risk. Searches return compact
 matches by default. A single match already carries its schema; for multiple
 matches, the model searches the chosen exact tool name before dispatching, or

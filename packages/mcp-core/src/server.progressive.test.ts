@@ -22,6 +22,27 @@ async function connect(env: NodeJS.ProcessEnv): Promise<Client> {
   return client;
 }
 
+function successOutputSchema(outputSchema: unknown): Record<string, unknown> {
+  const schema = outputSchema as { anyOf?: unknown[] } | undefined;
+  const success = schema?.anyOf?.[0];
+  if (success === null || typeof success !== 'object' || Array.isArray(success)) {
+    throw new Error('Expected a success output-schema arm at anyOf[0].');
+  }
+  return success as Record<string, unknown>;
+}
+
+function sortedKeys(value: unknown): string[] {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.keys(value).sort();
+}
+
+function requiredKeys(value: Record<string, unknown>): string[] {
+  const required = value.required;
+  return Array.isArray(required)
+    ? required.filter((item): item is string => typeof item === 'string').sort()
+    : [];
+}
+
 describe('progressive tool surface', () => {
   let fullClient: Client;
   let progressiveClient: Client;
@@ -56,18 +77,49 @@ describe('progressive tool surface', () => {
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 
-  it('advertises only search and risk-specific dispatchers with at least 90% less catalog JSON', async () => {
+  it('advertises the architecture front door plus discovery dispatchers with at least 90% less catalog JSON', async () => {
     const [{ tools: fullTools }, { tools: progressiveTools }] = await Promise.all([
       fullClient.listTools(),
       progressiveClient.listTools(),
     ]);
 
     expect(progressiveTools.map((tool) => tool.name)).toEqual([
+      'build_discord_server',
+      'guild_blueprint_apply',
+      'guild_blueprint_evidence',
       'mcp_tools_search',
       'mcp_tools_read',
       'mcp_tools_write',
       'mcp_tools_destructive',
     ]);
+    expect(progressiveTools[0]?.description).toContain(
+      'Required first step for Discord server architecture',
+    );
+    expect(progressiveTools[0]?.description).toContain('Do not ask which kind of server');
+    expect(progressiveTools[0]?.description).toContain('exactly once');
+    expect(progressiveTools[0]?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
+    expect(progressiveTools[0]?.inputSchema).toMatchObject({
+      required: ['request'],
+      properties: { request: expect.any(Object) },
+    });
+    expect(progressiveTools[0]?.outputSchema).toMatchObject({
+      type: 'object',
+      anyOf: expect.any(Array),
+    });
+    for (const toolName of ['guild_blueprint_apply', 'guild_blueprint_evidence']) {
+      const tool = progressiveTools.find((candidate) => candidate.name === toolName);
+      expect(tool?.inputSchema).toMatchObject({ type: 'object' });
+      expect(tool?.outputSchema).toMatchObject({ type: 'object', anyOf: expect.any(Array) });
+    }
+    expect(
+      progressiveTools.find((tool) => tool.name === 'guild_blueprint_apply')?.annotations,
+    ).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(
+      progressiveTools.find((tool) => tool.name === 'guild_blueprint_evidence')?.annotations,
+    ).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(
       progressiveTools.find((tool) => tool.name === 'mcp_tools_read')?.annotations,
     ).toMatchObject({ readOnlyHint: true, destructiveHint: false });
@@ -77,13 +129,82 @@ describe('progressive tool surface', () => {
     expect(
       progressiveTools.find((tool) => tool.name === 'mcp_tools_destructive')?.annotations,
     ).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(
+      progressiveTools.find((tool) => tool.name === 'mcp_tools_search')?.description,
+    ).toContain('means a Discord guild');
+    expect(
+      progressiveTools.find((tool) => tool.name === 'mcp_tools_search')?.description,
+    ).toContain('unless the user explicitly says otherwise');
     const progressiveBytes = Buffer.byteLength(JSON.stringify(progressiveTools));
-    expect(progressiveBytes).toBeLessThan(6_000);
+    expect(progressiveBytes).toBeLessThan(16_000);
     expect(Buffer.byteLength(JSON.stringify(progressiveTools))).toBeLessThan(
       Buffer.byteLength(JSON.stringify(fullTools)) * 0.1,
     );
     expect(progressiveClient.getInstructions()).toContain('Progressive tool surface');
-    expect(progressiveClient.getInstructions()).toContain('guild_blueprint_plan first');
+    expect(progressiveClient.getInstructions()).toContain('means a Discord guild');
+    expect(progressiveClient.getInstructions()).toContain(
+      'directly advertised build_discord_server first',
+    );
+    expect(progressiveClient.getInstructions()).toContain('do not repeat identical calls');
+  });
+
+  it('keeps compact architecture output schemas aligned with canonical full contracts', async () => {
+    const [{ tools: fullTools }, { tools: progressiveTools }] = await Promise.all([
+      fullClient.listTools(),
+      progressiveClient.listTools(),
+    ]);
+    const mappings = [
+      ['build_discord_server', 'guild_blueprint_plan'],
+      ['guild_blueprint_apply', 'guild_blueprint_apply'],
+      ['guild_blueprint_evidence', 'guild_blueprint_evidence'],
+    ] as const;
+
+    for (const [progressiveName, canonicalName] of mappings) {
+      const compact = progressiveTools.find((tool) => tool.name === progressiveName);
+      const canonical = fullTools.find((tool) => tool.name === canonicalName);
+      expect(compact?.outputSchema).toBeDefined();
+      expect(canonical?.outputSchema).toBeDefined();
+
+      const compactSuccess = successOutputSchema(compact?.outputSchema);
+      const canonicalSuccess = successOutputSchema(canonical?.outputSchema);
+      expect(sortedKeys(compactSuccess.properties)).toEqual(
+        sortedKeys(canonicalSuccess.properties),
+      );
+      expect(requiredKeys(compactSuccess)).toEqual(requiredKeys(canonicalSuccess));
+
+      const compactStatus = (compactSuccess.properties as Record<string, unknown>).status as {
+        enum?: unknown;
+      };
+      const canonicalStatus = (canonicalSuccess.properties as Record<string, unknown>).status as {
+        enum?: unknown;
+      };
+      expect(compactStatus?.enum).toEqual(canonicalStatus?.enum);
+    }
+  });
+
+  it('keeps the direct architecture front door inside category authorization', async () => {
+    const { tools } = await scopedClient.listTools();
+    expect(tools.map((tool) => tool.name)).not.toContain('build_discord_server');
+    expect(tools.map((tool) => tool.name)).not.toContain('guild_blueprint_apply');
+    expect(tools.map((tool) => tool.name)).not.toContain('guild_blueprint_evidence');
+    expect(scopedClient.getInstructions()).toContain(
+      'Architecture tools are unavailable under the active MCP_CATEGORIES policy',
+    );
+    const directCall = await scopedClient.callTool({
+      name: 'build_discord_server',
+      arguments: { request: 'Build a professional gaming Discord server' },
+    });
+    expect(directCall.isError).toBe(true);
+    expect(directCall.structuredContent).toMatchObject({ code: 'SCOPE_REJECTED' });
+  });
+
+  it('sends the direct architecture front door through normal validation middleware', async () => {
+    const result = await progressiveClient.callTool({
+      name: 'build_discord_server',
+      arguments: {},
+    });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
   it('returns a direct contract for a single match and exact authorized schemas on demand', async () => {
@@ -182,6 +303,8 @@ describe('progressive tool surface', () => {
       'make a gaming server',
       'dựng cho tôi server gaming',
       'dựng cho tôi một server gaming chuyên nghiệp, an toàn, có preview, tiếp tục khi gián đoạn và bằng chứng hoàn tất',
+      'tạo một server gaming',
+      'tạo cho tôi một server gaming',
     ]) {
       const result = await progressiveClient.callTool({
         name: 'mcp_tools_search',
@@ -210,11 +333,14 @@ describe('progressive tool surface', () => {
   });
 
   it('keeps resource-level requests inside an existing server on their narrow tool', async () => {
-    for (const query of [
-      'create a scheduled event in my server',
-      'create gaming events in my Discord server',
-      'make a gaming event in my server',
-      'set up a gaming event inside our community',
+    for (const { query, toolName } of [
+      { query: 'create a scheduled event in my server', toolName: 'events_create' },
+      { query: 'create gaming events in my Discord server', toolName: 'events_create' },
+      { query: 'make a gaming event in my server', toolName: 'events_create' },
+      { query: 'set up a gaming event inside our community', toolName: 'events_create' },
+      { query: 'dựng một event trong server', toolName: 'events_create' },
+      { query: 'tạo một sự kiện trong server', toolName: 'events_create' },
+      { query: 'thêm một kênh trong server', toolName: 'channels_create_guild_channel' },
     ]) {
       const result = await progressiveClient.callTool({
         name: 'mcp_tools_search',
@@ -224,7 +350,10 @@ describe('progressive tool surface', () => {
       expect(result.isError).toBe(false);
       expect(result.structuredContent).toMatchObject({
         matches: [
-          expect.objectContaining({ name: 'events_create', dispatcher: 'mcp_tools_write' }),
+          expect.objectContaining({
+            name: toolName,
+            dispatcher: 'mcp_tools_write',
+          }),
         ],
       });
     }

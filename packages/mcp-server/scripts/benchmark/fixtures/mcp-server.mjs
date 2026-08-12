@@ -3,6 +3,36 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 
 const server = new McpServer({ name: 'benchmark-fixture', version: '1.0.0' });
+const PLAN_ID = `sha256:${'b'.repeat(64)}`;
+const BLUEPRINT_ID = `sha256:${'a'.repeat(64)}`;
+const SNAPSHOT_ID = `sha256:${'c'.repeat(64)}`;
+const APPROVAL_ID = `sha256:${'d'.repeat(64)}`;
+const EVIDENCE_ID = `sha256:${'e'.repeat(64)}`;
+const TEMPLATE_CODE = 'WNSCpfHWnqXr';
+const CATALOG_VERSION = 'fixture-catalog-v1';
+
+const TEMPLATE_EVIDENCE = {
+  primary: {
+    code: TEMPLATE_CODE,
+    use_url: `https://discord.new/${TEMPLATE_CODE}`,
+    quality: {
+      verified: true,
+      code_match: true,
+      permission_handling: 'discarded_and_regenerated',
+    },
+    provenance: {
+      evidence_digest: `sha256:${'f'.repeat(64)}`,
+      fetched_at: '2026-08-12T00:00:00.000Z',
+      source_guild: {
+        id: '999000999000999002',
+        snapshot_id: 'fixture-source-snapshot',
+        icon_hash: null,
+        preferred_locale: 'en-US',
+      },
+    },
+  },
+  inspirations: [],
+};
 
 const PLAN_CONTRACT = {
   name: 'guild_blueprint_plan',
@@ -193,12 +223,106 @@ function dispatch(dispatcher, args) {
   const invalid = nestedArgs(args, contract);
   if (invalid !== null) return invalid;
   if (contract.name === PLAN_CONTRACT.name) {
-    return { status: 'ready', tool: contract.name, target: null, request: args.args.request };
+    return {
+      status: 'ready',
+      tool: contract.name,
+      request: args.args.request,
+      target: {
+        guild_id: args.args.guild_id ?? '999000999000999001',
+        bot_id: args.args.expected_bot_id ?? '999000999000999000',
+      },
+      source: {
+        catalog_version: CATALOG_VERSION,
+        ...TEMPLATE_EVIDENCE,
+        permission_policy: 'discard_source_and_regenerate',
+      },
+      blueprint_id: BLUEPRINT_ID,
+      snapshot_id: SNAPSHOT_ID,
+      plan_id: PLAN_ID,
+      approval_id: APPROVAL_ID,
+      plan_token: 'fixture-plan-token',
+      blueprint: {
+        roles: [],
+        categories: [],
+        channels: [{ key: 'general' }],
+        onboarding: { prompts: [] },
+        automod: { rules: [] },
+        components_v2: { publications: [{ key: 'welcome', channel_key: 'general' }] },
+      },
+      operations: [{ operation_id: 'channel:create:general' }],
+      blockers: [],
+    };
   }
   if (contract.name === APPLY_CONTRACT.name) {
-    return { status: 'complete', tool: contract.name, confirmed: true };
+    return {
+      status: 'complete',
+      tool: contract.name,
+      confirmed: true,
+      plan_id: PLAN_ID,
+      blueprint_id: BLUEPRINT_ID,
+      target: { guild_id: args.args.guild_id, bot_id: args.args.expected_bot_id },
+      progress: { remaining: 0 },
+      evidence: { identity_verified: true, guild_verified: true, readback: 'match' },
+    };
   }
-  return { status: 'verified', tool: contract.name };
+  return {
+    status: 'verified',
+    tool: contract.name,
+    plan_id: args.args.plan_id,
+    blueprint_id: BLUEPRINT_ID,
+    evidence_id: EVIDENCE_ID,
+    target: { guild_id: args.args.guild_id, bot_id: args.args.expected_bot_id },
+    record: {
+      schema_version: 'guild_blueprint_activity_evidence.v1',
+      recorded_at: '2026-08-12T00:00:00.000Z',
+      initial_operation_count: 1,
+      plan_invariants: {
+        expected_counts: {
+          identity: 2,
+          roles: 0,
+          categories: 0,
+          channels: 1,
+          ordering: 2,
+          guild: 1,
+          welcome_screen: 1,
+          onboarding: 1,
+          automod: 0,
+          components_v2: 1,
+        },
+        safety_policy: {
+          source_permissions_applied: false,
+          dangerous_generated_permissions: 0,
+          bot_permission_grants: 0,
+          discord_managed_role_mutations: 0,
+        },
+      },
+      observed: {
+        initial_snapshot_id: SNAPSHOT_ID,
+        final_snapshot_id: SNAPSHOT_ID,
+        checkpoint_version: 1,
+        completed_operation_ids: ['channel:create:general'],
+        bindings: { roles: {}, categories: {}, channels: {}, automod_rules: {}, publications: {} },
+        blueprint_readback_match: true,
+      },
+    },
+    verification: {
+      identity_verified: true,
+      guild_verified: true,
+      readback: 'match',
+      snapshot_unchanged: true,
+      current_snapshot: {
+        snapshot_id: SNAPSHOT_ID,
+        guild: { id: args.args.guild_id, name: 'fixture', features: [] },
+        bot_id: args.args.expected_bot_id,
+        resources: { roles: 0, categories: 0, channels: 1, automod_rules: 0, recent_messages: 0 },
+        onboarding_enabled: false,
+        welcome_screen_configured: false,
+      },
+      remaining_operations: [],
+      blockers: [],
+      warnings: [],
+    },
+  };
 }
 
 const names =

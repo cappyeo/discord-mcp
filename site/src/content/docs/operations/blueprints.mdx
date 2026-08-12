@@ -17,10 +17,13 @@ until the caller supplies one explicit `guild_id`.
 
 ## The two-call write contract
 
-1. Call `guild_blueprint_plan` with `request`. It resolves `expected_bot_id` from
-   the locked profile and resolves `guild_id` only from an allowlisted default or
-   exactly one allowlisted guild. Explicit target IDs remain available for
-   multi-guild profiles. This is a read-only target-bound dry-run.
+1. On the recommended progressive surface, call `build_discord_server` with
+   `request`; it is the directly advertised alias of canonical
+   `guild_blueprint_plan`, which remains the name on the full surface and in
+   search results. It resolves `expected_bot_id` from the locked profile and
+   resolves `guild_id` only from an allowlisted default or exactly one allowlisted
+   guild. Explicit target IDs remain available for multi-guild profiles. This is
+   a read-only target-bound dry-run.
 2. Present its source evidence, blockers, operation summary, risks, and
    `approval_id` for review.
 3. After approval, call `guild_blueprint_apply` with the unchanged `plan_token`,

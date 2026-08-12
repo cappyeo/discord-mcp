@@ -304,6 +304,9 @@ try {
     const { tools } = await client.listTools();
     const advertised = tools.map((tool) => tool.name);
     assert.deepEqual(advertised, [
+      'build_discord_server',
+      'guild_blueprint_apply',
+      'guild_blueprint_evidence',
       'mcp_tools_search',
       'mcp_tools_read',
       'mcp_tools_write',
@@ -447,7 +450,15 @@ try {
       const { tools } = await httpClient.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
-        ['mcp_tools_search', 'mcp_tools_read', 'mcp_tools_write', 'mcp_tools_destructive'],
+        [
+          'build_discord_server',
+          'guild_blueprint_apply',
+          'guild_blueprint_evidence',
+          'mcp_tools_search',
+          'mcp_tools_read',
+          'mcp_tools_write',
+          'mcp_tools_destructive',
+        ],
       );
 
       const discoverySamples = [];
