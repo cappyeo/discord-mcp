@@ -310,11 +310,13 @@ async function resolveRuntimeDependency({ root, packageRoot, name }) {
   for (const candidate of candidates) {
     try {
       const metadata = await lstat(candidate);
-      if (!metadata.isDirectory()) continue;
+      if (!metadata.isDirectory() && !metadata.isSymbolicLink()) continue;
       const target = await realpath(candidate);
       if (!isWithin(root, target)) {
         throw new Error(`runtime dependency ${name} resolves outside the repository`);
       }
+      const targetMetadata = await lstat(target);
+      if (!targetMetadata.isDirectory()) continue;
       return target;
     } catch (error) {
       if (error?.code === 'ENOENT') continue;
