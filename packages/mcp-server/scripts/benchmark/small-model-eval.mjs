@@ -25,6 +25,7 @@ export const SMALL_MODEL_POLICY =
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../');
 const MAX_STDOUT_BYTES = 8 * 1024 * 1024;
 const MAX_LINES = 100_000;
+const CODEX_PROBE_TIMEOUT_MS = 15_000;
 const TOOL_NAME_RE = /^[A-Za-z0-9_.-]{1,128}$/;
 const TEMPLATE_CODE_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const CLARIFICATION_PATTERNS = Object.freeze([
@@ -201,6 +202,7 @@ export async function resolveCodexLauncher({ platform = process.platform, run = 
         encoding: 'utf8',
         windowsHide: true,
         maxBuffer: 64 * 1024,
+        timeout: CODEX_PROBE_TIMEOUT_MS,
       });
       const path = String(result?.stdout ?? '')
         .split(/\r?\n/)
@@ -726,6 +728,7 @@ async function commandVersion(launcher, run = execFile, env = undefined) {
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: 64 * 1024,
+      timeout: CODEX_PROBE_TIMEOUT_MS,
       ...(env === undefined ? {} : { env }),
     });
     const value = String(result?.stdout ?? '')

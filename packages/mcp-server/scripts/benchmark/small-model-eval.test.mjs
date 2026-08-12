@@ -402,6 +402,7 @@ describe('small-model evaluation contract', () => {
     const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-small-model-host-'));
     try {
       let runCalls = 0;
+      const runOptions = [];
       const artifact = await runSmallModelEvaluation({
         output: join(directory, 'host.json'),
         cwd: 'C:/repo',
@@ -412,8 +413,9 @@ describe('small-model evaluation contract', () => {
           ALLOWED_GUILDS: '1533998797863256165',
           DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
         },
-        run: async () => {
+        run: async (_command, _args, options) => {
           runCalls += 1;
+          runOptions.push(options);
           if (runCalls === 1) return { stdout: `${'a'.repeat(40)}\n` };
           throw new Error('Codex unavailable');
         },
@@ -435,6 +437,7 @@ describe('small-model evaluation contract', () => {
         },
       });
       expect(artifact.host.codex).toBe('unavailable');
+      expect(runOptions[1]?.timeout).toBe(15_000);
       expect(artifact.trials.map((trial) => trial.classification)).toEqual([
         'host_invalid',
         'host_invalid',
