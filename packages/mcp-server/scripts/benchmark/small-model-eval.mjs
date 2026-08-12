@@ -210,6 +210,22 @@ export async function resolveCodexLauncher({ platform = process.platform, run = 
         .find(Boolean);
       if (path === undefined) continue;
       if (candidate === 'codex.exe') return { command: path, prefix_args: [], kind: 'binary' };
+      const nodeEntry = resolve(
+        dirname(path),
+        'node_modules',
+        '@openai',
+        'codex',
+        'bin',
+        'codex.js',
+      );
+      try {
+        const metadata = await lstat(nodeEntry);
+        if (metadata.isFile()) {
+          return { command: process.execPath, prefix_args: [nodeEntry], kind: 'node' };
+        }
+      } catch {
+        // Fall back to the PowerShell shim when the npm entrypoint is packaged differently.
+      }
       return {
         command: 'powershell.exe',
         prefix_args: [
