@@ -6,7 +6,10 @@ const MAX_RETRY_AFTER_MS = 15 * 60_000;
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 export class DiscordRestError extends Error {
-  constructor(message, { status = null, discordCode = null, method, path, disposition }) {
+  constructor(
+    message,
+    { status = null, discordCode = null, method, path, disposition, retryAfterMs = null },
+  ) {
     super(message);
     this.name = 'DiscordRestError';
     this.status = status;
@@ -14,19 +17,34 @@ export class DiscordRestError extends Error {
     this.method = method;
     this.path = path;
     this.disposition = disposition;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
 function restFailure(
   message,
-  { status = null, discordCode = null, method, path, disposition: dispositionOverride },
+  {
+    status = null,
+    discordCode = null,
+    method,
+    path,
+    disposition: dispositionOverride,
+    retryAfterMs = null,
+  },
 ) {
   const disposition =
     dispositionOverride ??
     (status === null || status === 429 || status >= 500 || (method === 'DELETE' && status === 404)
       ? 'ambiguous'
       : 'deterministic');
-  return new DiscordRestError(message, { status, discordCode, method, path, disposition });
+  return new DiscordRestError(message, {
+    status,
+    discordCode,
+    method,
+    path,
+    disposition,
+    retryAfterMs,
+  });
 }
 
 function wait(milliseconds) {
@@ -106,19 +124,39 @@ async function readBody(response) {
   }
 }
 
-function retryDelay(response, body, attempt) {
-  const bodySeconds = Number(body?.retry_after);
-  const headerSeconds = Number(response.headers.get('retry-after'));
-  if (Number.isFinite(bodySeconds) && bodySeconds >= 0) {
-    const milliseconds = Math.ceil(bodySeconds * 1_000);
-    return Number.isSafeInteger(milliseconds) && milliseconds <= MAX_RETRY_AFTER_MS
-      ? milliseconds
-      : null;
+function parseRetryAfterMilliseconds(value) {
+  const text =
+    typeof value === 'number' && Number.isFinite(value) ? String(value) : String(value ?? '');
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
+  const [secondsText, fractionText = ''] = text.split('.');
+  let milliseconds;
+  try {
+    const fractionMilliseconds = BigInt(`${fractionText.slice(0, 3)}00`.slice(0, 3));
+    const fractionRemainder = fractionText.slice(3);
+    milliseconds =
+      BigInt(secondsText) * 1_000n +
+      fractionMilliseconds +
+      (fractionRemainder !== '' && /[1-9]/.test(fractionRemainder) ? 1n : 0n);
+  } catch {
+    return null;
   }
-  if (Number.isFinite(headerSeconds) && headerSeconds >= 0) {
-    const milliseconds = Math.ceil(headerSeconds * 1_000);
-    return Number.isSafeInteger(milliseconds) && milliseconds <= MAX_RETRY_AFTER_MS
-      ? milliseconds
+  return milliseconds <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(milliseconds) : null;
+}
+
+function retryAfterMetadata(response, body) {
+  if (body !== null && typeof body === 'object' && 'retry_after' in body) {
+    return { present: true, milliseconds: parseRetryAfterMilliseconds(body.retry_after) };
+  }
+  const header = response.headers.get('retry-after');
+  return header === null
+    ? { present: false, milliseconds: null }
+    : { present: true, milliseconds: parseRetryAfterMilliseconds(header) };
+}
+
+function retryDelay(metadata, attempt) {
+  if (metadata.present) {
+    return metadata.milliseconds !== null && metadata.milliseconds <= MAX_RETRY_AFTER_MS
+      ? metadata.milliseconds
       : null;
   }
   return Math.min(250 * 2 ** attempt, 4_000);
@@ -196,13 +234,15 @@ export function createDiscordRestClient({
           signal: requestSignal,
         });
         const body = await readBody(response);
+        const retryAfter = retryAfterMetadata(response, body);
+        const retryAfterMs = response.status === 429 ? retryAfter.milliseconds : null;
         if (response.ok) return body;
         if (
           retry &&
           (response.status === 429 || response.status >= 500) &&
           attempt + 1 < maxAttempts
         ) {
-          const delay = retryDelay(response, body, attempt);
+          const delay = retryDelay(retryAfter, attempt);
           if (delay === null || accumulatedRetryWaitMs + delay > MAX_RETRY_AFTER_MS) {
             throw restFailure('Discord REST Retry-After exceeds the benchmark wait budget', {
               status: 429,
@@ -210,6 +250,7 @@ export function createDiscordRestClient({
               method,
               path,
               disposition: 'deterministic',
+              retryAfterMs,
             });
           }
           accumulatedRetryWaitMs += delay;
@@ -228,6 +269,7 @@ export function createDiscordRestClient({
             discordCode: code ?? null,
             method,
             path,
+            retryAfterMs,
           },
         );
       } catch (error) {

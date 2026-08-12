@@ -54,7 +54,12 @@ commit history and downloadable artifacts, see
   campaign now quarantines at a verified, restored trial boundary as soon as
   the required 19/20 pass threshold is mathematically unreachable. Cleanup
   bindings are accepted only when they match the signed plan, exact guild/bot
-  target, and blueprint resource domains.
+  target, and blueprint resource domains. Before spending a full trial, the
+  real-server campaign now probes each controlled guild with one zero-permission
+  temporary role, removes it, and requires the exact baseline fingerprint; an
+  unavailable role-create window quarantines the run before touching the next
+  guild, with over-budget Retry-After windows reported separately as
+  unaffordable.
 - The source registry now contains 208 tools across the same 31 categories. The
   honest >=95% real-server benchmark remains the next delivery gate; mocked
   integration coverage is not reported as that result.

@@ -432,6 +432,22 @@ describe('Discord benchmark REST snapshot', () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
+  it('preserves an exact long JSON Retry-After on a direct POST 429', async () => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchImpl = vi.fn(async () => response({ retry_after: 172207.05 }, 429));
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl, sleep });
+
+    await expect(
+      rest.request('POST', `/guilds/${GUILD_ID}/roles`, { body: { name: 'Canary' } }),
+    ).rejects.toMatchObject({
+      code: null,
+      status: 429,
+      retryAfterMs: 172_207_050,
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['body', { retry_after: 45 }],
     ['header', {}, { 'retry-after': '45' }],
@@ -464,6 +480,26 @@ describe('Discord benchmark REST snapshot', () => {
       code: 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
       status: 429,
       disposition: 'deterministic',
+      retryAfterMs: 999_999_000,
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['negative', { retry_after: -1 }, undefined],
+    ['malformed', { retry_after: 'later' }, undefined],
+    ['unsafe integer', { retry_after: 1e20 }, undefined],
+    ['malformed header', {}, { 'retry-after': 'later' }],
+  ])('fails closed for an explicitly invalid 429 Retry-After: %s', async (_label, body, headers) => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchImpl = vi.fn(async () => response(body, 429, headers));
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl, sleep });
+
+    await expect(rest.get('/users/@me')).rejects.toMatchObject({
+      code: 'RETRY_AFTER_EXCEEDS_CAMPAIGN_BUDGET',
+      status: 429,
+      retryAfterMs: null,
     });
     expect(fetchImpl).toHaveBeenCalledOnce();
     expect(sleep).not.toHaveBeenCalled();

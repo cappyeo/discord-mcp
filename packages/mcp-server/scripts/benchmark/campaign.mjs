@@ -5,6 +5,7 @@ import {
   createBenchmarkReport,
   resultEvidencePass,
 } from './manifest.mjs';
+import { BenchmarkQuotaPreflightError, MAX_QUOTA_PREFLIGHT_WAIT_MS } from './quota-preflight.mjs';
 
 export const CONTROLLED_GUILD_IDS = Object.freeze(['1533989004406558851', '1533998797863256165']);
 export const CONTROLLED_BOT_ID = '1533457669384306858';
@@ -12,9 +13,13 @@ export const DEFAULT_BENCHMARK_REQUEST =
   'Build a professional gaming Discord community with LFG, voice rooms, events, safe onboarding, moderation, and polished welcome content.';
 const RESTORE_RECOVERY_DELAYS_MS = Object.freeze([0, 1_000, 2_000, 4_000, 8_000, 16_000]);
 const REQUIRED_PASSING_TRIALS = 19;
+const QUOTA_PREFLIGHT_SCHEMA = 'discord-mcp.benchmark-quota-preflight.v1';
+const QUOTA_PREFLIGHT_POOL_SCHEMA = 'discord-mcp.benchmark-quota-preflight-pool.v1';
+const SNOWFLAKE = /^\d{17,20}$/;
 
 const REQUIRED_CAMPAIGN_DEPENDENCIES = [
   'verifyBaseline',
+  'runQuotaPreflight',
   'runSafetyCases',
   'runTrial',
   'restoreBaseline',
@@ -305,6 +310,169 @@ async function verifyPoolOrQuarantine(dependencies, manifest, baselines, guildId
   }
 }
 
+function normalizeQuotaPreflightEvidence(
+  value,
+  baseline,
+  guildId,
+  botId,
+  allowErrorStatus = false,
+) {
+  if (!record(value) || value.schema_version !== QUOTA_PREFLIGHT_SCHEMA) {
+    throw new TypeError('quota preflight evidence schema is invalid');
+  }
+  if (value.guild_id !== guildId || value.bot_id !== botId) {
+    throw new TypeError('quota preflight evidence target mismatch');
+  }
+  const validStatus =
+    value.status === 'ready' ||
+    value.status === 'unavailable' ||
+    (allowErrorStatus && value.status === null);
+  if (!validStatus) throw new TypeError('quota preflight evidence status is invalid');
+  if (
+    !Number.isSafeInteger(value.create_attempts) ||
+    value.create_attempts < 0 ||
+    value.create_attempts > 2 ||
+    !Number.isSafeInteger(value.waited_ms) ||
+    value.waited_ms < 0 ||
+    (value.retry_after_ms !== null &&
+      (!Number.isSafeInteger(value.retry_after_ms) || value.retry_after_ms < 0)) ||
+    (value.role_id !== null &&
+      (typeof value.role_id !== 'string' || !SNOWFLAKE.test(value.role_id))) ||
+    value.baseline_fingerprint_before !== baseline.fingerprint ||
+    (value.baseline_fingerprint_after !== null &&
+      value.baseline_fingerprint_after !== baseline.fingerprint) ||
+    typeof value.baseline_restored !== 'boolean' ||
+    value.baseline_restored !== (value.baseline_fingerprint_after === baseline.fingerprint)
+  ) {
+    throw new TypeError('quota preflight evidence fields are invalid');
+  }
+  if (
+    (value.status !== null && value.create_attempts === 0) ||
+    (value.status === 'ready' && value.role_id === null) ||
+    (value.status === 'unavailable' && value.role_id !== null) ||
+    (value.status !== null &&
+      (value.baseline_restored !== true ||
+        value.baseline_fingerprint_after !== baseline.fingerprint))
+  ) {
+    throw new TypeError('quota preflight evidence does not prove its status');
+  }
+  return {
+    schema_version: QUOTA_PREFLIGHT_SCHEMA,
+    guild_id: guildId,
+    bot_id: botId,
+    status: value.status,
+    create_attempts: value.create_attempts,
+    waited_ms: value.waited_ms,
+    retry_after_ms: value.retry_after_ms,
+    role_id: value.role_id,
+    baseline_fingerprint_before: value.baseline_fingerprint_before,
+    baseline_fingerprint_after: value.baseline_fingerprint_after,
+    baseline_restored: value.baseline_restored,
+  };
+}
+
+function quotaPreflightArtifact(results) {
+  return {
+    schema_version: QUOTA_PREFLIGHT_POOL_SCHEMA,
+    results,
+  };
+}
+
+async function runPoolQuotaPreflight(dependencies, manifest, baselines, guildIds) {
+  const results = [];
+  for (const [index, guildId] of guildIds.entries()) {
+    const botId = expectedBotForGuild(manifest, guildId);
+    const baseline = baselines[guildId];
+    await progress(dependencies, {
+      phase: 'quota_preflight',
+      status: 'started',
+      guild_id: guildId,
+    });
+    let result;
+    try {
+      result = normalizeQuotaPreflightEvidence(
+        await dependencies.runQuotaPreflight({
+          baseline,
+          guildId,
+          botId,
+          runId: manifest.run_id,
+        }),
+        baseline,
+        guildId,
+        botId,
+      );
+    } catch (error) {
+      const code =
+        error instanceof BenchmarkQuotaPreflightError &&
+        typeof error.code === 'string' &&
+        /^PREFLIGHT_[A-Z0-9_]+$/.test(error.code)
+          ? error.code
+          : 'PREFLIGHT_UNAVAILABLE';
+      let failureEvidence;
+      try {
+        failureEvidence = normalizeQuotaPreflightEvidence(
+          error instanceof BenchmarkQuotaPreflightError ? error.evidence : {},
+          baseline,
+          guildId,
+          botId,
+          true,
+        );
+      } catch {
+        failureEvidence = {
+          schema_version: QUOTA_PREFLIGHT_SCHEMA,
+          guild_id: guildId,
+          bot_id: botId,
+          status: null,
+          create_attempts: 0,
+          waited_ms: 0,
+          retry_after_ms: null,
+          role_id: null,
+          baseline_fingerprint_before: baseline.fingerprint,
+          baseline_fingerprint_after: null,
+          baseline_restored: false,
+        };
+      }
+      results.push(failureEvidence);
+      await dependencies.writeArtifact('quota-preflight.json', quotaPreflightArtifact(results));
+      await quarantine(dependencies, manifest, {
+        code,
+        phase: 'quota_preflight',
+        guild_id: guildId,
+        retry_after_ms: failureEvidence.retry_after_ms,
+        role_id: failureEvidence.role_id,
+        baseline_restored: failureEvidence.baseline_restored,
+        skipped_guild_ids: guildIds.slice(index + 1),
+      });
+      throw new BenchmarkQuarantineError(code);
+    }
+    results.push(result);
+    if (result.status !== 'ready') {
+      const code =
+        result.retry_after_ms !== null && result.retry_after_ms > MAX_QUOTA_PREFLIGHT_WAIT_MS
+          ? 'PREFLIGHT_ROLE_CREATE_UNAFFORDABLE'
+          : 'PREFLIGHT_ROLE_CREATE_UNAVAILABLE';
+      await dependencies.writeArtifact('quota-preflight.json', quotaPreflightArtifact(results));
+      await quarantine(dependencies, manifest, {
+        code,
+        phase: 'quota_preflight',
+        guild_id: guildId,
+        retry_after_ms: result.retry_after_ms,
+        baseline_restored: true,
+        skipped_guild_ids: guildIds.slice(index + 1),
+      });
+      throw new BenchmarkQuarantineError(code);
+    }
+    await progress(dependencies, {
+      phase: 'quota_preflight',
+      status: 'passed',
+      guild_id: guildId,
+      create_attempts: result.create_attempts,
+      waited_ms: result.waited_ms,
+    });
+  }
+  await dependencies.writeArtifact('quota-preflight.json', quotaPreflightArtifact(results));
+}
+
 export async function runBenchmarkCampaign(input) {
   const manifest = validateCampaignInput(input);
   const { dependencies } = input;
@@ -318,6 +486,7 @@ export async function runBenchmarkCampaign(input) {
     guildIds,
     'baseline_precheck',
   );
+  await runPoolQuotaPreflight(dependencies, manifest, input.baselines, guildIds);
 
   const safetyStateDirectory = await dependencies.createStateDirectory('safety');
   await progress(dependencies, { phase: 'safety', status: 'started' });

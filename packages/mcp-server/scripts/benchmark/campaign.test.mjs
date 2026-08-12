@@ -9,6 +9,7 @@ import {
   runBenchmarkCampaign,
 } from './campaign.mjs';
 import { createBenchmarkReport } from './manifest.mjs';
+import { BenchmarkQuotaPreflightError } from './quota-preflight.mjs';
 
 const COMMIT = 'babe8518767270733e5442643690cac13f94e473';
 const FINGERPRINTS = Object.fromEntries(
@@ -111,9 +112,30 @@ function safetyCases() {
   ];
 }
 
+function quotaEvidence(guildId, overrides = {}) {
+  const index = CONTROLLED_GUILD_IDS.indexOf(guildId);
+  return {
+    schema_version: 'discord-mcp.benchmark-quota-preflight.v1',
+    guild_id: guildId,
+    bot_id: CONTROLLED_BOT_ID,
+    status: 'ready',
+    create_attempts: 1,
+    waited_ms: 0,
+    retry_after_ms: null,
+    role_id: `77700077700077800${index}`,
+    baseline_fingerprint_before: FINGERPRINTS[guildId],
+    baseline_fingerprint_after: FINGERPRINTS[guildId],
+    baseline_restored: true,
+    ...overrides,
+  };
+}
+
 function harness({
   seriousAt = null,
   failedAt = [],
+  quotaUnavailableGuild = null,
+  quotaUnavailableEvidence = {},
+  quotaErrorGuild = null,
   restoreFailure = false,
   restoreFailuresBeforeSuccess = 0,
   preflightFailuresBeforeSuccess = 0,
@@ -148,6 +170,31 @@ function harness({
           bot_id: baseline.bot_id,
           fingerprint: baseline.fingerprint,
         };
+      },
+      async runQuotaPreflight({ baseline, guildId, botId, runId }) {
+        calls.push(['quota', guildId]);
+        assert.equal(baseline.guild_id, guildId);
+        assert.equal(botId, CONTROLLED_BOT_ID);
+        assert.equal(runId, 'campaign-test');
+        if (guildId === quotaErrorGuild) {
+          throw new BenchmarkQuotaPreflightError(
+            'PREFLIGHT_ROLE_DELETE_FAILED',
+            quotaEvidence(guildId, {
+              status: null,
+              baseline_fingerprint_after: null,
+              baseline_restored: false,
+            }),
+          );
+        }
+        if (guildId === quotaUnavailableGuild) {
+          return quotaEvidence(guildId, {
+            status: 'unavailable',
+            retry_after_ms: 172_207_050,
+            role_id: null,
+            ...quotaUnavailableEvidence,
+          });
+        }
+        return quotaEvidence(guildId);
       },
       async runSafetyCases(options) {
         calls.push(['safety']);
@@ -210,10 +257,12 @@ function harness({
       },
       createReport: createBenchmarkReport,
       async writeArtifact(path, value) {
+        calls.push(['artifact', path]);
         if (artifacts.has(path)) throw new Error('artifact overwrite');
         artifacts.set(path, structuredClone(value));
       },
       async createStateDirectory(name) {
+        calls.push(['state', name]);
         assert.equal(states.includes(name), false);
         states.push(name);
         return `C:/state/${name}`;
@@ -316,9 +365,149 @@ describe('real benchmark campaign', () => {
     );
     assert.deepEqual(test.states, ['safety', ...manifest().trials.map((trial) => trial.trial_id)]);
     assert.equal(test.artifacts.has('manifest.json'), true);
+    assert.equal(test.artifacts.get('quota-preflight.json').results.length, 2);
     assert.equal(test.artifacts.has('safety-cases.json'), true);
     assert.equal(test.artifacts.has('report.json'), true);
+    assert.deepEqual(
+      test.calls.filter(
+        ([kind, value]) =>
+          kind === 'quota' ||
+          kind === 'safety' ||
+          value === 'quota-preflight.json' ||
+          value === 'safety',
+      ),
+      [
+        ['quota', CONTROLLED_GUILD_IDS[0]],
+        ['quota', CONTROLLED_GUILD_IDS[1]],
+        ['artifact', 'quota-preflight.json'],
+        ['state', 'safety'],
+        ['safety'],
+      ],
+    );
     assert.equal(JSON.stringify([...test.artifacts.values()]).includes('benchmark-token'), false);
+  });
+
+  it('quarantines before safety when a guild role-create window is unaffordable', async () => {
+    const test = harness({ quotaUnavailableGuild: CONTROLLED_GUILD_IDS[0] });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError &&
+        error.code === 'PREFLIGHT_ROLE_CREATE_UNAFFORDABLE',
+    );
+    assert.equal(test.calls.filter(([kind]) => kind === 'quota').length, 1);
+    assert.equal(
+      test.calls.some(([kind]) => kind === 'safety'),
+      false,
+    );
+    assert.equal(
+      test.calls.some(([kind]) => kind === 'trial'),
+      false,
+    );
+    assert.equal(test.artifacts.get('quota-preflight.json').results[0].retry_after_ms, 172_207_050);
+    assert.deepEqual(test.artifacts.get('quarantine.json'), {
+      schema_version: 'discord-mcp.real-benchmark-quarantine.v1',
+      run_id: 'campaign-test',
+      commit: COMMIT,
+      code: 'PREFLIGHT_ROLE_CREATE_UNAFFORDABLE',
+      phase: 'quota_preflight',
+      guild_id: CONTROLLED_GUILD_IDS[0],
+      retry_after_ms: 172_207_050,
+      baseline_restored: true,
+      skipped_guild_ids: [CONTROLLED_GUILD_IDS[1]],
+    });
+    assert.equal(test.artifacts.has('report.json'), false);
+  });
+
+  it('classifies an exhausted affordable retry window as unavailable', async () => {
+    const test = harness({
+      quotaUnavailableGuild: CONTROLLED_GUILD_IDS[0],
+      quotaUnavailableEvidence: {
+        create_attempts: 2,
+        waited_ms: 53_037,
+        retry_after_ms: 53_037,
+      },
+    });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError &&
+        error.code === 'PREFLIGHT_ROLE_CREATE_UNAVAILABLE',
+    );
+    assert.equal(test.artifacts.get('quarantine.json').code, 'PREFLIGHT_ROLE_CREATE_UNAVAILABLE');
+    assert.equal(test.artifacts.get('quarantine.json').retry_after_ms, 53_037);
+    assert.equal(test.artifacts.has('report.json'), false);
+  });
+
+  it('preserves the first guild evidence when the second guild is unavailable', async () => {
+    const test = harness({ quotaUnavailableGuild: CONTROLLED_GUILD_IDS[1] });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError &&
+        error.code === 'PREFLIGHT_ROLE_CREATE_UNAFFORDABLE',
+    );
+    assert.deepEqual(
+      test.calls.filter(([kind]) => kind === 'quota'),
+      CONTROLLED_GUILD_IDS.map((guildId) => ['quota', guildId]),
+    );
+    assert.deepEqual(
+      test.artifacts.get('quota-preflight.json').results.map(({ guild_id, status }) => ({
+        guild_id,
+        status,
+      })),
+      [
+        { guild_id: CONTROLLED_GUILD_IDS[0], status: 'ready' },
+        { guild_id: CONTROLLED_GUILD_IDS[1], status: 'unavailable' },
+      ],
+    );
+    assert.deepEqual(test.artifacts.get('quarantine.json').skipped_guild_ids, []);
+    assert.equal(
+      test.calls.some(([kind]) => kind === 'safety'),
+      false,
+    );
+  });
+
+  it('rejects quota evidence for another target before safety', async () => {
+    const test = harness();
+    const runQuotaPreflight = test.dependencies.runQuotaPreflight;
+    test.dependencies.runQuotaPreflight = async (options) => ({
+      ...(await runQuotaPreflight(options)),
+      guild_id: CONTROLLED_GUILD_IDS[1],
+    });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'PREFLIGHT_UNAVAILABLE',
+    );
+    assert.equal(test.calls.filter(([kind]) => kind === 'quota').length, 1);
+    assert.equal(test.artifacts.get('quota-preflight.json').results[0].baseline_restored, false);
+    assert.equal(
+      test.calls.some(([kind]) => kind === 'safety'),
+      false,
+    );
+  });
+
+  it('fails closed with the known role when quota preflight cleanup is unverified', async () => {
+    const test = harness({ quotaErrorGuild: CONTROLLED_GUILD_IDS[0] });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'PREFLIGHT_ROLE_DELETE_FAILED',
+    );
+    assert.equal(test.calls.filter(([kind]) => kind === 'quota').length, 1);
+    assert.equal(
+      test.calls.some(([kind]) => kind === 'safety'),
+      false,
+    );
+    assert.equal(test.artifacts.get('quarantine.json').role_id, '777000777000778000');
+    assert.equal(test.artifacts.get('quarantine.json').baseline_restored, false);
+    assert.equal(test.artifacts.has('report.json'), false);
   });
 
   it('restores then quarantines immediately on a serious permission failure', async () => {

@@ -25,6 +25,7 @@ import {
 } from './campaign.mjs';
 import { createDiscordRestClient, readDiscordSnapshot } from './discord-rest.mjs';
 import { createBenchmarkReport } from './manifest.mjs';
+import { probeGuildRoleCreateQuota } from './quota-preflight.mjs';
 import { createTrialDependencies } from './runtime.mjs';
 import { runBenchmarkSafetyCases } from './safety-cases.mjs';
 import { snapshotFingerprint } from './snapshot-fingerprint.mjs';
@@ -196,6 +197,20 @@ async function runCommand(options, token) {
           readSnapshot: trialDependencies.readSnapshot,
           snapshotFingerprint,
           baseline,
+        }),
+      runQuotaPreflight: ({ baseline, guildId, botId, runId }) =>
+        probeGuildRoleCreateQuota({
+          rest: trialDependencies.rest,
+          verifyBaseline: ({ baseline: targetBaseline }) =>
+            verifyBenchmarkBaseline({
+              readSnapshot: trialDependencies.readSnapshot,
+              snapshotFingerprint,
+              baseline: targetBaseline,
+            }),
+          baseline,
+          guildId,
+          botId,
+          runId,
         }),
       runSafetyCases: runBenchmarkSafetyCases,
       runTrial: runBenchmarkTrial,
