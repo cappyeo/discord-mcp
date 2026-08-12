@@ -40,6 +40,19 @@ const PREVIEW_ENVIRONMENT = Object.freeze({
   MCP_AUDIT_ENABLED: 'false',
 });
 const ENABLED_TOOLS = new Set(['build_discord_server', 'mcp_tools_search', 'mcp_tools_read']);
+// The progressive server advertises its complete bounded catalog during
+// preflight.  This is intentionally separate from ENABLED_TOOLS: the latter
+// is the model-call allowlist, while preflight also exposes the two
+// architecture tools and the write/destructive dispatchers for discovery.
+export const PREFLIGHT_TOOLS = new Set([
+  'build_discord_server',
+  'guild_blueprint_apply',
+  'guild_blueprint_evidence',
+  'mcp_tools_destructive',
+  'mcp_tools_read',
+  'mcp_tools_search',
+  'mcp_tools_write',
+]);
 const CLASSIFICATIONS = new Set([
   'pass',
   'model_no_tool_call',
@@ -627,11 +640,13 @@ export async function verifySmallModelArtifact({
     ['available_tools', 'front_door_available', 'instructions_available'],
     'preflight',
   );
+  const availableTools = artifact.preflight.available_tools;
   if (
-    !Array.isArray(artifact.preflight.available_tools) ||
-    !artifact.preflight.available_tools.every(
-      (tool) => typeof tool === 'string' && ENABLED_TOOLS.has(tool),
-    )
+    !Array.isArray(availableTools) ||
+    availableTools.length !== new Set(availableTools).size ||
+    canonicalJson(availableTools) !== canonicalJson([...availableTools].sort()) ||
+    !availableTools.every((tool) => typeof tool === 'string' && PREFLIGHT_TOOLS.has(tool)) ||
+    ![...ENABLED_TOOLS].every((tool) => availableTools.includes(tool))
   )
     throw new Error('preflight tools are malformed');
   if (

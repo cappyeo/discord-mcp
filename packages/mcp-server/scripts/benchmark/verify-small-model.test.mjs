@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createSmallModelIntegrity } from './small-model-attestation.mjs';
 import { runSmallModelEvaluation } from './small-model-eval.mjs';
-import { parseSmallModelVerifierArgs, verifySmallModelArtifact } from './verify-small-model.mjs';
+import {
+  PREFLIGHT_TOOLS,
+  parseSmallModelVerifierArgs,
+  verifySmallModelArtifact,
+} from './verify-small-model.mjs';
 
 const TOKEN = 'caller-owned-discord-token-'.padEnd(60, 'x');
 const COMMIT = 'a'.repeat(40);
@@ -54,7 +58,7 @@ async function makeArtifact() {
       },
     }),
     openSession: async () => ({
-      toolNames: [],
+      toolNames: [...PREFLIGHT_TOOLS],
       instructions: '',
       close: async () => {},
     }),
@@ -171,6 +175,38 @@ describe('independent small-model verifier', () => {
           repoRoot: test.directory,
         }),
       ).rejects.toThrow(/exactly 5 trials/);
+    } finally {
+      await rm(test.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts the bounded progressive catalog and rejects unknown preflight tools', async () => {
+    const test = await makeArtifact();
+    try {
+      const artifact = JSON.parse(await readFile(test.output, 'utf8'));
+      artifact.preflight.available_tools = [...PREFLIGHT_TOOLS].sort();
+      artifact.integrity = createSmallModelIntegrity({ artifact, integrityKey: TOKEN });
+      await writeFile(test.output, `${JSON.stringify(artifact)}\n`);
+      await expect(
+        verifySmallModelArtifact({
+          artifactPath: test.output,
+          expectedCommit: COMMIT,
+          integrityKey: TOKEN,
+          repoRoot: test.directory,
+        }),
+      ).resolves.toMatchObject({ hmac_verified: true });
+
+      artifact.preflight.available_tools = [...PREFLIGHT_TOOLS, 'unbounded_tool'].sort();
+      artifact.integrity = createSmallModelIntegrity({ artifact, integrityKey: TOKEN });
+      await writeFile(test.output, `${JSON.stringify(artifact)}\n`);
+      await expect(
+        verifySmallModelArtifact({
+          artifactPath: test.output,
+          expectedCommit: COMMIT,
+          integrityKey: TOKEN,
+          repoRoot: test.directory,
+        }),
+      ).rejects.toThrow(/preflight tools are malformed/);
     } finally {
       await rm(test.directory, { recursive: true, force: true });
     }
