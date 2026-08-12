@@ -1,7 +1,20 @@
 import { execFile as nodeExecFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { chmod, lstat, mkdir, mkdtemp, open, readdir, realpath, rm, rmdir } from 'node:fs/promises';
+import {
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  rmdir,
+  symlink,
+} from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -263,22 +276,75 @@ async function writePrivateFile(path, bytes) {
   }
 }
 
+async function readPackageManifest(path) {
+  try {
+    const manifest = JSON.parse(await readFile(path, 'utf8'));
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+      throw new Error('package manifest must contain an object');
+    }
+    return manifest;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {};
+    throw new Error(`cannot read runtime package manifest ${path}: ${error.message}`);
+  }
+}
+
+function manifestDependencies(manifest) {
+  const dependencies = new Map();
+  for (const field of ['dependencies', 'peerDependencies']) {
+    for (const name of Object.keys(manifest[field] ?? {})) {
+      if (!/^@?[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)?$/.test(name)) {
+        throw new Error(`runtime dependency name is invalid: ${name}`);
+      }
+      dependencies.set(name, dependencies.get(name) ?? false);
+    }
+  }
+  for (const [name, metadata] of Object.entries(manifest.peerDependenciesMeta ?? {})) {
+    if (metadata?.optional === true && dependencies.has(name)) dependencies.set(name, true);
+  }
+  return dependencies;
+}
+
+async function resolveRuntimeDependency({ root, packageRoot, name }) {
+  const candidates = [join(packageRoot, 'node_modules', name), join(root, 'node_modules', name)];
+  for (const candidate of candidates) {
+    try {
+      const metadata = await lstat(candidate);
+      if (!metadata.isDirectory()) continue;
+      const target = await realpath(candidate);
+      if (!isWithin(root, target)) {
+        throw new Error(`runtime dependency ${name} resolves outside the repository`);
+      }
+      return target;
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      throw error;
+    }
+  }
+  return null;
+}
+
 async function createRuntimeSnapshot({ root, cliFiles, coreFiles }) {
   const packageRoot = resolve(root, 'packages/mcp-server');
+  const corePackageRoot = resolve(root, 'packages/mcp-core');
   const directory = await mkdtemp(join(packageRoot, '.discord-mcp-attested-runtime-'));
   const files = [];
+  const dependencies = [];
   const directories = new Set();
   try {
     await chmod(directory, 0o700);
-    const copy = async (target, bytes) => {
-      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
-      await writePrivateFile(target, bytes);
-      files.push(target);
+    const trackParentDirectories = (target) => {
       let parent = dirname(target);
       while (parent !== directory) {
         directories.add(parent);
         parent = dirname(parent);
       }
+    };
+    const copy = async (target, bytes) => {
+      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+      await writePrivateFile(target, bytes);
+      files.push(target);
+      trackParentDirectories(target);
     };
     for (const file of cliFiles) {
       await copy(join(directory, 'dist', basename(file.path)), file.bytes);
@@ -288,6 +354,49 @@ async function createRuntimeSnapshot({ root, cliFiles, coreFiles }) {
         join(directory, 'node_modules', '@discord-mcp', 'core', 'dist', basename(file.path)),
         file.bytes,
       );
+    }
+
+    // Keep the attested core files private and byte-for-byte unchanged. Its
+    // package imports remain external, so expose only the declared runtime
+    // packages in the private snapshot. Junctions work without elevated
+    // privileges on Windows; copying is the fallback for filesystems where
+    // links are unavailable.
+    const manifests = [join(corePackageRoot, 'package.json'), join(packageRoot, 'package.json')];
+    const runtimeDependencies = new Map();
+    for (const manifestPath of manifests) {
+      const values = manifestDependencies(await readPackageManifest(manifestPath));
+      for (const [name, optional] of values) {
+        if (name === '@discord-mcp/core') continue;
+        runtimeDependencies.set(name, (runtimeDependencies.get(name) ?? true) && optional);
+      }
+    }
+    for (const [name, optional] of [...runtimeDependencies].sort(([left], [right]) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    )) {
+      let source = null;
+      for (const ownerRoot of [corePackageRoot, packageRoot]) {
+        source = await resolveRuntimeDependency({ root, packageRoot: ownerRoot, name });
+        if (source) break;
+      }
+      if (!source) {
+        if (optional) continue;
+        throw new Error(`required runtime dependency is not installed: ${name}`);
+      }
+      const target = join(directory, 'node_modules', name);
+      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+      trackParentDirectories(target);
+      dependencies.push(target);
+      try {
+        await symlink(source, target, process.platform === 'win32' ? 'junction' : 'dir');
+      } catch (error) {
+        if (!['EACCES', 'EINVAL', 'ENOTSUP', 'EPERM'].includes(error?.code)) throw error;
+        await cp(source, target, {
+          recursive: true,
+          dereference: true,
+          errorOnExist: true,
+          force: false,
+        });
+      }
     }
     const packageJson = `${JSON.stringify({
       name: '@discord-mcp/core',
@@ -300,6 +409,8 @@ async function createRuntimeSnapshot({ root, cliFiles, coreFiles }) {
       Buffer.from(packageJson, 'utf8'),
     );
     const cleanup = async () => {
+      for (const path of [...dependencies].reverse())
+        await rm(path, { recursive: true, force: true });
       for (const path of [...files].reverse()) await rm(path, { force: true });
       for (const path of [...directories].sort((left, right) => right.length - left.length)) {
         await rmdir(path);
@@ -316,6 +427,8 @@ async function createRuntimeSnapshot({ root, cliFiles, coreFiles }) {
       cleanup,
     };
   } catch (error) {
+    for (const path of [...dependencies].reverse())
+      await rm(path, { recursive: true, force: true });
     for (const path of [...files].reverse()) await rm(path, { force: true });
     for (const path of [...directories].sort((left, right) => right.length - left.length)) {
       await rmdir(path).catch(() => {});

@@ -24,9 +24,28 @@ async function git(cwd, args) {
 async function repository() {
   const cwd = await mkdtemp(join(tmpdir(), 'discord-mcp-build-attestation-'));
   await git(cwd, ['init', '--quiet']);
-  await writeFile(join(cwd, '.gitignore'), 'packages/mcp-server/dist/\npackages/mcp-core/dist/\n');
+  await writeFile(
+    join(cwd, '.gitignore'),
+    'packages/mcp-server/dist/\npackages/mcp-core/dist/\npackages/*/node_modules/\n',
+  );
+  await mkdir(join(cwd, 'packages', 'mcp-core'), { recursive: true });
+  await mkdir(join(cwd, 'packages', 'mcp-server'), { recursive: true });
+  await writeFile(
+    join(cwd, 'packages', 'mcp-core', 'package.json'),
+    JSON.stringify({ name: '@discord-mcp/core', dependencies: { cockatiel: '*' } }),
+  );
+  await writeFile(join(cwd, 'packages', 'mcp-server', 'package.json'), '{}');
+  await mkdir(join(cwd, 'packages', 'mcp-core', 'node_modules', 'cockatiel'), { recursive: true });
+  await writeFile(
+    join(cwd, 'packages', 'mcp-core', 'node_modules', 'cockatiel', 'package.json'),
+    JSON.stringify({ name: 'cockatiel', type: 'module', main: './index.js' }),
+  );
+  await writeFile(
+    join(cwd, 'packages', 'mcp-core', 'node_modules', 'cockatiel', 'index.js'),
+    'export const value = "external";\n',
+  );
   await writeFile(join(cwd, 'tracked.txt'), 'clean\n');
-  await git(cwd, ['add', '.gitignore', 'tracked.txt']);
+  await git(cwd, ['add', '.gitignore', 'tracked.txt', 'packages']);
   await git(cwd, ['commit', '--quiet', '-m', 'initial']);
   const { stdout } = await git(cwd, ['rev-parse', 'HEAD']);
   return { cwd, commit: stdout.trim() };
@@ -115,7 +134,10 @@ describe('built CLI attestation', () => {
             'import { value } from "@discord-mcp/core"; console.log(value);\n',
           );
           await writeFile(join(coreOutput, 'index.js'), 'export { value } from "./chunk.js";\n');
-          await writeFile(join(coreOutput, 'chunk.js'), 'export const value = "attested";\n');
+          await writeFile(
+            join(coreOutput, 'chunk.js'),
+            'import { value } from "cockatiel"; export { value };\n',
+          );
         },
       });
       const execution = await execFile(process.execPath, [result.cliPath], {
@@ -123,7 +145,7 @@ describe('built CLI attestation', () => {
         encoding: 'utf8',
         windowsHide: true,
       });
-      expect(execution.stdout.trim()).toBe('attested');
+      expect(execution.stdout.trim()).toBe('external');
       expect(result.attestation.core_files.map((file) => file.path)).toEqual([
         'packages/mcp-core/dist/chunk.js',
         'packages/mcp-core/dist/index.js',
