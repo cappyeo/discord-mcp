@@ -32,6 +32,123 @@ describe('openMcpBenchmarkSession', () => {
     }
   });
 
+  it('boots the progressive surface and exercises discovery plus nested dispatch contracts', async () => {
+    const session = await openMcpBenchmarkSession({
+      cliPath: SERVER_PATH,
+      cwd: resolve(import.meta.dirname, '../..'),
+      env: { MCP_TOOL_SURFACE: 'progressive' },
+    });
+
+    try {
+      expect(session.toolNames).toEqual(
+        expect.arrayContaining([
+          'mcp_tools_search',
+          'mcp_tools_read',
+          'mcp_tools_write',
+          'mcp_tools_destructive',
+        ]),
+      );
+      expect(session.toolNames).toHaveLength(4);
+      const request = 'Build a professional gaming Discord server';
+      const planSearch = await session.callTool('mcp_tools_search', { query: request, limit: 1 });
+      expect(planSearch).toMatchObject({
+        total_matches: 1,
+        matches: [
+          expect.objectContaining({
+            name: 'guild_blueprint_plan',
+            dispatcher: 'mcp_tools_read',
+            inputSchema: expect.objectContaining({ required: ['request'] }),
+          }),
+        ],
+      });
+      await expect(
+        session.callTool('mcp_tools_read', {
+          tool: 'guild_blueprint_plan',
+          args: { request },
+        }),
+      ).resolves.toMatchObject({ status: 'ready', request });
+      await expect(
+        session.callTool('mcp_tools_read', {
+          tool: 'guild_blueprint_plan',
+          args: {
+            request,
+            guild_id: '999000999000999001',
+            expected_bot_id: '999000999000999000',
+            preferred_primary_code: 'WNSCpfHWnqXr',
+          },
+        }),
+      ).resolves.toMatchObject({ status: 'ready', request });
+      await expect(
+        session.callTool('mcp_tools_read', {
+          tool: 'guild_blueprint_plan',
+          args: { request, unknown: true },
+        }),
+      ).rejects.toSatisfy((error) => error.code === 'VALIDATION_FAILED');
+      await expect(
+        session.callTool('mcp_tools_read', {
+          tool: 'guild_blueprint_plan',
+          args: { request, preferred_primary_code: 7 },
+        }),
+      ).rejects.toSatisfy((error) => error.code === 'VALIDATION_FAILED');
+
+      const applySearch = await session.callTool('mcp_tools_search', {
+        query: 'guild_blueprint_apply',
+        limit: 1,
+      });
+      expect(applySearch.matches[0]).toMatchObject({
+        name: 'guild_blueprint_apply',
+        dispatcher: 'mcp_tools_destructive',
+      });
+      const applyArgs = {
+        approval_id: `sha256:${'a'.repeat(64)}`,
+        expected_bot_id: '999000999000999000',
+        guild_id: '999000999000999001',
+        plan_token: 'signed-plan-token',
+        __confirm: true,
+        operation_budget: 10,
+      };
+      await expect(
+        session.callTool('mcp_tools_destructive', {
+          tool: 'guild_blueprint_apply',
+          args: applyArgs,
+        }),
+      ).resolves.toMatchObject({ status: 'complete', confirmed: true });
+      await expect(
+        session.callTool('mcp_tools_read', { tool: 'guild_blueprint_apply', args: applyArgs }),
+      ).rejects.toSatisfy((error) => error.code === 'DISPATCH_MODE_MISMATCH');
+      await expect(
+        session.callTool('mcp_tools_destructive', {
+          tool: 'guild_blueprint_apply',
+          args: { ...applyArgs, operation_budget: 0 },
+        }),
+      ).rejects.toSatisfy((error) => error.code === 'VALIDATION_FAILED');
+
+      const evidenceSearch = await session.callTool('mcp_tools_search', {
+        query: 'guild_blueprint_evidence',
+        limit: 1,
+      });
+      expect(evidenceSearch.matches[0]).toMatchObject({
+        name: 'guild_blueprint_evidence',
+        dispatcher: 'mcp_tools_read',
+      });
+      await expect(
+        session.callTool('mcp_tools_read', {
+          tool: 'guild_blueprint_evidence',
+          args: {
+            expected_bot_id: '999000999000999000',
+            guild_id: '999000999000999001',
+            plan_id: `sha256:${'b'.repeat(64)}`,
+          },
+        }),
+      ).resolves.toMatchObject({ status: 'verified' });
+      await expect(
+        session.callTool('mcp_tools_search', { query: request, limit: 2 }),
+      ).rejects.toSatisfy((error) => error.code === 'VALIDATION_FAILED');
+    } finally {
+      await session.close();
+    }
+  });
+
   it('uses an explicit bounded timeout for long-running tool calls', async () => {
     const session = await openMcpBenchmarkSession({
       cliPath: SERVER_PATH,

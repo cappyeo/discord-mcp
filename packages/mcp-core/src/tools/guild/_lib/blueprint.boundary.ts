@@ -4,8 +4,8 @@ import type { BlueprintBlocker } from './blueprint.execution.schema.js';
 
 export function blueprintBoundaryBlockers(
   config: Config,
-  guildId: string,
-  expectedBotId: string,
+  guildId: string | undefined,
+  expectedBotId: string | undefined,
 ): BlueprintBlocker[] {
   const blockers: BlueprintBlocker[] = [];
   if (config.DISCORD_EXPECTED_BOT_ID === undefined) {
@@ -14,6 +14,13 @@ export function blueprintBoundaryBlockers(
       message: 'Target-bound blueprint execution requires DISCORD_EXPECTED_BOT_ID.',
       resource: null,
       recovery_hint: 'Set the caller-owned bot ID in the selected profile, then restart once.',
+    });
+  } else if (expectedBotId === undefined) {
+    blockers.push({
+      code: 'TARGET_BOT_SELECTION_REQUIRED',
+      message: 'The caller-owned bot target could not be resolved from the selected profile.',
+      resource: null,
+      recovery_hint: 'Set DISCORD_EXPECTED_BOT_ID in the selected caller profile, then retry.',
     });
   } else if (config.DISCORD_EXPECTED_BOT_ID !== expectedBotId) {
     blockers.push({
@@ -31,6 +38,14 @@ export function blueprintBoundaryBlockers(
       resource: null,
       recovery_hint:
         'Allowlist the exact target guild in the selected caller profile, then restart once.',
+    });
+  } else if (guildId === undefined) {
+    blockers.push({
+      code: 'TARGET_GUILD_SELECTION_REQUIRED',
+      message: 'The target guild could not be resolved unambiguously from the selected profile.',
+      resource: null,
+      recovery_hint:
+        'Pass one allowlisted guild_id, configure DISCORD_DEFAULT_GUILD_ID, or select a profile with one allowed guild.',
     });
   } else if (!allowlist.has(guildId)) {
     blockers.push({

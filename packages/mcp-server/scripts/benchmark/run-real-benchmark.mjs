@@ -7,6 +7,7 @@ import {
   baselineArtifactExists,
   prepareArtifactStore,
   readBaselineArtifact,
+  recoverLegacyBaselineArtifact,
   writeBaselineArtifact,
 } from './artifact-store.mjs';
 import {
@@ -48,8 +49,8 @@ function commandError(message) {
 }
 
 export function parseBenchmarkCommand(argv) {
-  if (!Array.isArray(argv) || !['initialize', 'run'].includes(argv[0])) {
-    commandError('first argument must be initialize or run');
+  if (!Array.isArray(argv) || !['initialize', 'migrate', 'run'].includes(argv[0])) {
+    commandError('first argument must be initialize, migrate, or run');
   }
   const command = argv[0];
   const values = {};
@@ -75,6 +76,11 @@ export function parseBenchmarkCommand(argv) {
       if (!Object.hasOwn(values, required)) commandError(`missing ${required}`);
     }
     if (values['--request'] !== undefined) commandError('--request is only valid for run');
+  } else if (command === 'migrate') {
+    if (values['--guild'] === undefined) commandError('missing --guild');
+    for (const flag of ['--confirmation', '--request', '--run-id']) {
+      if (values[flag] !== undefined) commandError(`${flag} is not valid for migrate`);
+    }
   } else if (values['--guild'] !== undefined || values['--confirmation'] !== undefined) {
     commandError('--guild and --confirmation are only valid for initialize');
   }
@@ -140,6 +146,7 @@ async function initializeCommand(options, token) {
     cwd: REPOSITORY_ROOT,
     artifactRoot: options.artifactRoot,
     baseline,
+    integrityKey: token,
   });
   return {
     ok: true,
@@ -148,6 +155,43 @@ async function initializeCommand(options, token) {
     bot_id: baseline.bot_id,
     fingerprint: baseline.fingerprint,
     artifact: path,
+  };
+}
+
+async function migrateCommand(options, token) {
+  if (!CONTROLLED_GUILD_IDS.includes(options.guildId)) {
+    throw new Error('migration guild is outside the controlled pool');
+  }
+  await assertBenchmarkSourceIntegrity({
+    cwd: REPOSITORY_ROOT,
+    expectedCommit: options.expectedCommit,
+  });
+  const rest = createDiscordRestClient({ token });
+  const result = await recoverLegacyBaselineArtifact({
+    cwd: REPOSITORY_ROOT,
+    artifactRoot: options.artifactRoot,
+    guildId: options.guildId,
+    integrityKey: token,
+    verify: (baseline) => {
+      if (baseline.bot_id !== CONTROLLED_BOT_ID) {
+        throw new Error(`baseline bot mismatch for ${options.guildId}`);
+      }
+      return verifyBenchmarkBaseline({
+        readSnapshot: (input) => readDiscordSnapshot(rest, input),
+        snapshotFingerprint,
+        baseline,
+        integrityKey: token,
+      });
+    },
+  });
+  return {
+    ok: true,
+    command: 'migrate',
+    guild_id: result.baseline.guild_id,
+    bot_id: result.baseline.bot_id,
+    fingerprint: result.baseline.fingerprint,
+    artifact: result.path,
+    legacy_backup: result.backupPath,
   };
 }
 
@@ -163,6 +207,7 @@ async function runCommand(options, token) {
           cwd: REPOSITORY_ROOT,
           artifactRoot: options.artifactRoot,
           guildId,
+          integrityKey: token,
         });
         if (baseline.bot_id !== CONTROLLED_BOT_ID) {
           throw new Error(`baseline bot mismatch for ${guildId}`);
@@ -197,6 +242,7 @@ async function runCommand(options, token) {
           readSnapshot: trialDependencies.readSnapshot,
           snapshotFingerprint,
           baseline,
+          integrityKey: token,
         }),
       runQuotaPreflight: ({ baseline, guildId, botId, runId }) =>
         probeGuildRoleCreateQuota({
@@ -206,6 +252,7 @@ async function runCommand(options, token) {
               readSnapshot: trialDependencies.readSnapshot,
               snapshotFingerprint,
               baseline: targetBaseline,
+              integrityKey: token,
             }),
           baseline,
           guildId,
@@ -226,6 +273,7 @@ async function runCommand(options, token) {
           cleanup,
           reason,
           retryProof,
+          integrityKey: token,
         }),
       createReport: createBenchmarkReport,
       writeArtifact: store.writeArtifact,
@@ -247,9 +295,9 @@ async function runCommand(options, token) {
 export async function main(argv = process.argv.slice(2), environment = process.env) {
   const options = parseBenchmarkCommand(argv);
   const token = benchmarkToken(environment);
-  return options.command === 'initialize'
-    ? initializeCommand(options, token)
-    : runCommand(options, token);
+  if (options.command === 'initialize') return initializeCommand(options, token);
+  if (options.command === 'migrate') return migrateCommand(options, token);
+  return runCommand(options, token);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === SCRIPT_PATH) {

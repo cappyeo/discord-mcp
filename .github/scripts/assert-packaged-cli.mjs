@@ -331,6 +331,18 @@ try {
     );
     assert.equal(activityEvidence.structuredContent?.matches?.[0]?.dispatcher, 'mcp_tools_read');
 
+    const naturalArchitect = await client.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query: 'dựng cho tôi một server gaming chuyên nghiệp', limit: 1 },
+    });
+    assert.equal(naturalArchitect.isError, false);
+    assert.equal(naturalArchitect.structuredContent?.matches?.length, 1);
+    assert.equal(naturalArchitect.structuredContent?.matches?.[0]?.name, 'guild_blueprint_plan');
+    assert.equal(naturalArchitect.structuredContent?.matches?.[0]?.dispatcher, 'mcp_tools_read');
+    assert.deepEqual(naturalArchitect.structuredContent?.matches?.[0]?.inputSchema?.required, [
+      'request',
+    ]);
+
     const browse = await client.callTool({
       name: 'mcp_tools_search',
       arguments: { query: 'channels', limit: 8 },

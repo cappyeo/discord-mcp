@@ -21,6 +21,30 @@ describe('real benchmark command boundary', () => {
     ).toMatchObject({ command: 'initialize', guildId: '1533989004406558851' });
     expect(
       parseBenchmarkCommand([
+        'migrate',
+        '--expected-commit',
+        COMMIT,
+        '--artifact-root',
+        'C:/artifacts',
+        '--guild',
+        '1533989004406558851',
+      ]),
+    ).toMatchObject({ command: 'migrate', guildId: '1533989004406558851' });
+    expect(() =>
+      parseBenchmarkCommand([
+        'migrate',
+        '--expected-commit',
+        COMMIT,
+        '--artifact-root',
+        'C:/artifacts',
+        '--guild',
+        '1533989004406558851',
+        '--confirmation',
+        'RESET_DISPOSABLE_GUILD:1533989004406558851',
+      ]),
+    ).toThrow(/not valid for migrate/);
+    expect(
+      parseBenchmarkCommand([
         'run',
         '--expected-commit',
         COMMIT,

@@ -161,7 +161,15 @@ describe('templates_recommend', () => {
     expect(first.isError).toBe(false);
     expect(first.structuredContent).toMatchObject({
       status: 'ready',
-      primary: { code: preferredCode, quality: { verified: true, marked_dirty: false } },
+      primary: {
+        code: preferredCode,
+        quality: { verified: true, marked_dirty: false },
+        provenance: {
+          evidence_digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          fetched_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          source_guild: { id: '999000999000999000' },
+        },
+      },
       composition_plan: {
         permission_policy: 'regenerate_with_discord_mcp_safety_policy',
       },
@@ -172,6 +180,7 @@ describe('templates_recommend', () => {
         rest_failed: 0,
         preferred_primary_selected: true,
       },
+      rejected_candidates: [],
     });
     expect(requestedCodes).toContain(preferredCode);
     expect(requestedCodes).toContain('8SD2cQxdSB5h');
@@ -277,6 +286,12 @@ describe('templates_recommend', () => {
       status: 'partial',
       primary: null,
       verification: { rest_failed: 8, rest_verified: 0, safety_rejected: 0 },
+      rejected_candidates: expect.arrayContaining([
+        expect.objectContaining({
+          code: expect.any(String),
+          reasons: ['Live evidence is unavailable (unverified).'],
+        }),
+      ]),
     });
   });
 

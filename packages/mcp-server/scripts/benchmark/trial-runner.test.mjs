@@ -45,6 +45,7 @@ function plan() {
       { operation_id: 'publication:welcome' },
     ],
     blockers: [],
+    warnings: ['No Discord resource was changed; this is an exact target-bound dry-run.'],
   };
 }
 
@@ -171,6 +172,7 @@ function harness(
     checkpointFailure = null,
     snapshotSettlesAfter = 1,
     auditSettlesAfter = 1,
+    progressiveContractMismatch = false,
   } = {},
 ) {
   const readableBaselineChannelIds =
@@ -199,23 +201,71 @@ function harness(
       closed: false,
       async callTool(name, args) {
         calls.push({ name, args });
-        if (name === 'guild_blueprint_plan') {
-          if (remainingPlanFailures > 0) {
-            remainingPlanFailures -= 1;
-            throw Object.assign(new Error('guild_blueprint_plan failed (UPSTREAM_TIMEOUT)'), {
-              code: 'UPSTREAM_TIMEOUT',
-              source: 'mcp_tool_result',
-              retriable: true,
-            });
-          }
-          const fixturePlan = plan();
-          fixturePlan.operations = Array.from({ length: operationsPlanned }, (_, index) => ({
-            operation_id: fixturePlan.operations[index]?.operation_id ?? `fixture:${index}`,
-          }));
-          return fixturePlan;
+        if (name === 'mcp_tools_search') {
+          const toolName =
+            args.query === 'guild_blueprint_apply'
+              ? 'guild_blueprint_apply'
+              : args.query === 'guild_blueprint_evidence'
+                ? 'guild_blueprint_evidence'
+                : 'guild_blueprint_plan';
+          const required =
+            toolName === 'guild_blueprint_plan'
+              ? ['request']
+              : toolName === 'guild_blueprint_apply'
+                ? ['approval_id', 'expected_bot_id', 'guild_id', 'plan_token']
+                : ['expected_bot_id', 'guild_id', 'plan_id'];
+          const properties = Object.fromEntries(
+            [...required, ...(toolName === 'guild_blueprint_apply' ? ['__confirm'] : [])].map(
+              (field) => [field, { type: field === '__confirm' ? 'boolean' : 'string' }],
+            ),
+          );
+          const destructive = toolName === 'guild_blueprint_apply';
+          return {
+            query: args.query,
+            category: null,
+            detail: 'compact',
+            total_matches: 1,
+            matches: [
+              {
+                name: toolName,
+                dispatcher:
+                  progressiveContractMismatch || toolName === 'guild_blueprint_apply'
+                    ? 'mcp_tools_destructive'
+                    : 'mcp_tools_read',
+                summary: toolName,
+                description: `${toolName} fixture contract`,
+                inputSchema: { type: 'object', properties, required },
+                annotations: {
+                  readOnlyHint: !destructive,
+                  destructiveHint: destructive,
+                },
+              },
+            ],
+            categories: [],
+          };
         }
-        if (name === 'guild_blueprint_evidence') return evidenceResult;
-        assert.equal(name, 'guild_blueprint_apply');
+        if (name === 'mcp_tools_read') {
+          if (args.tool === 'guild_blueprint_plan') {
+            if (remainingPlanFailures > 0) {
+              remainingPlanFailures -= 1;
+              throw Object.assign(new Error('guild_blueprint_plan failed (UPSTREAM_TIMEOUT)'), {
+                code: 'UPSTREAM_TIMEOUT',
+                source: 'mcp_tool_result',
+                retriable: true,
+              });
+            }
+            const fixturePlan = plan();
+            fixturePlan.operations = Array.from({ length: operationsPlanned }, (_, index) => ({
+              operation_id: fixturePlan.operations[index]?.operation_id ?? `fixture:${index}`,
+            }));
+            return fixturePlan;
+          }
+          assert.equal(args.tool, 'guild_blueprint_evidence');
+          return evidenceResult;
+        }
+        assert.equal(name, 'mcp_tools_destructive');
+        assert.equal(args.tool, 'guild_blueprint_apply');
+        args = args.args;
         applyBudgets.push(args.operation_budget);
         if (remainingApplyTransportFailures > 0) {
           remainingApplyTransportFailures -= 1;
@@ -468,6 +518,19 @@ function input(mode, dependencies) {
 }
 
 describe('real benchmark trial orchestration', () => {
+  it('fails closed when progressive discovery returns a mismatched dispatcher', async () => {
+    const test = harness('full', { progressiveContractMismatch: true });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'error');
+    assert.equal(outcome.result.apply_calls, 0);
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'PROGRESSIVE_DISCOVERY_INVALID',
+      ),
+    );
+  });
+
   it('runs a full apply, idempotent replay, fresh-process evidence, and all independent oracles', async () => {
     const test = harness('full');
     const outcome = await runBenchmarkTrial(input('full', test.dependencies));
@@ -475,12 +538,20 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(outcome.result.terminal_status, 'complete');
     assert.equal(outcome.result.oracle_match, true);
     assert.equal(outcome.result.plan_snapshot_unchanged, true);
+    assert.equal(outcome.result.progressive_discovery_succeeded, true);
+    assert.equal(outcome.result.dry_run_observed_before_apply, true);
     assert.equal(outcome.result.replay_status, 'already_current');
     assert.equal(outcome.result.evidence_status, 'verified');
     assert.equal(outcome.result.restart_count, 1);
     assert.deepEqual(test.applyBudgets, [10, 10]);
     assert.equal(test.sessions.length, 2);
     assert.ok(test.sessions.every((session) => session.closed));
+    const planDispatch = test.sessions
+      .flatMap((session) => session.calls)
+      .find((call) => call.name === 'mcp_tools_read' && call.args.tool === 'guild_blueprint_plan');
+    assert.deepEqual(planDispatch?.args.args, {
+      request: 'Build a professional gaming Discord server',
+    });
     assert.deepEqual(outcome.cleanup.bindings, bindings());
     assert.deepEqual(outcome.cleanup.message_channel_ids, [BASELINE_CHANNEL_ID, CHANNEL_ID]);
     assert.deepEqual(outcome.cleanup.publication_targets, [
@@ -587,10 +658,11 @@ describe('real benchmark trial orchestration', () => {
       blocker_resources: [],
     });
     const applyCalls = test.sessions.flatMap((session) =>
-      session.calls.filter((call) => call.name === 'guild_blueprint_apply'),
+      session.calls.filter((call) => call.name === 'mcp_tools_destructive'),
     );
-    assert.ok(applyCalls.every((call) => call.args.plan_token === plan().plan_token));
-    assert.ok(applyCalls.every((call) => call.args.approval_id === APPROVAL_ID));
+    assert.ok(applyCalls.every((call) => call.args.args.plan_token === plan().plan_token));
+    assert.ok(applyCalls.every((call) => call.args.args.approval_id === APPROVAL_ID));
+    assert.ok(applyCalls.every((call) => call.args.args.__confirm === true));
   });
 
   it('reconnects when final verification times out after every mutation completed', async () => {
@@ -883,6 +955,9 @@ describe('real benchmark trial orchestration', () => {
       test.sessions.every(
         (session) => session.options.env.MCP_BLUEPRINT_STATE_DIR === 'C:\\state\\forced_resume',
       ),
+    );
+    assert.ok(
+      test.sessions.every((session) => session.options.env.MCP_TOOL_SURFACE === 'progressive'),
     );
   });
 

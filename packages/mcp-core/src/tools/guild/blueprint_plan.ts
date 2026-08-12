@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { z } from 'zod';
 import { verifyExpectedBotIdentity } from '../../identity-lock.js';
+import { resolveBlueprintPlanTarget } from '../../middleware/blueprint-plan-target.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, UserId } from '../_lib/snowflake.js';
@@ -61,18 +62,21 @@ export default defineTool({
   name: 'guild_blueprint_plan',
   category: 'guild',
   description: [
-    '**Purpose**: Turn one natural-language server request into a target-bound, read-only Discord execution preview. It compiles a safe blueprint, verifies the exact caller-owned bot and allowlisted guild, reads live state, blocks ambiguous resources or missing permissions, and returns a compact plan token for `guild_blueprint_apply`.',
+    '**Purpose**: Build, create, or design a complete Discord server from one natural-language request and return a target-bound, read-only execution preview. It compiles a safe blueprint, verifies the exact caller-owned bot and allowlisted guild, reads live state, blocks ambiguous resources or missing permissions, and returns a compact plan token for `guild_blueprint_apply`.',
     '',
-    '**When to use**: Use this instead of manually chaining template, role, channel, onboarding, AutoMod, and Components V2 tools. The caller supplies only the desired server description plus the explicit target bot/guild IDs.',
+    '**When to use**: Use this instead of manually chaining template, role, channel, onboarding, AutoMod, and Components V2 tools for requests such as “build a professional gaming server with a safe preview, resume, and evidence” or “dựng cho tôi một server gaming chuyên nghiệp, an toàn, có preview, tiếp tục khi gián đoạn và bằng chứng hoàn tất”.',
     '',
-    '**Safety**: This tool makes no Discord mutation and writes no checkpoint. `DISCORD_EXPECTED_BOT_ID`, `ALLOWED_GUILDS`, and an explicit `guild_id` are mandatory. Existing unrelated resources are preserved; duplicate or mismatched unbound resources block the plan. The opaque token is authenticated to this bot profile; the displayed approval ID is not standalone authorization.',
+    '**Safety**: This tool makes no Discord mutation and writes no checkpoint. It resolves the bot only from `DISCORD_EXPECTED_BOT_ID` and resolves an omitted guild only from `DISCORD_DEFAULT_GUILD_ID` or exactly one `ALLOWED_GUILDS` entry; multiple possible guilds fail closed. Explicit values are never overwritten and must match the locked profile. Existing unrelated resources are preserved; duplicate or mismatched unbound resources block the plan. The opaque token is authenticated to this bot profile; the displayed approval ID is not standalone authorization.',
     '',
     '**Returns**: Verified source evidence, the complete blueprint, exact bot/guild binding, dry-run operations and risks, blockers, and a compressed `plan_token` accepted by the confirmed resumable apply tool.',
   ].join('\n'),
-  preconditions: ['explicit_guild_required'],
   inputSchema: {
-    guild_id: GuildId.describe('Explicit target guild; defaults are never accepted for this tool'),
-    expected_bot_id: UserId.describe('Exact caller-owned bot ID locked by the selected profile'),
+    guild_id: GuildId.optional().describe(
+      'Optional explicit target guild; omit only when the selected profile has a default or exactly one allowlisted guild',
+    ),
+    expected_bot_id: UserId.optional().describe(
+      'Optional exact caller-owned bot ID; omit to use DISCORD_EXPECTED_BOT_ID from the selected profile',
+    ),
     request: z
       .string()
       .trim()
@@ -128,11 +132,14 @@ export default defineTool({
   },
   idempotent: true,
   handler: async (args, ctx) => {
-    const staticBlockers = blueprintBoundaryBlockers(
+    const resolvedTarget = resolveBlueprintPlanTarget(
       container.config,
       args.guild_id,
       args.expected_bot_id,
     );
+    const guildId = resolvedTarget.guild_id;
+    const expectedBotId = resolvedTarget.expected_bot_id;
+    const staticBlockers = blueprintBoundaryBlockers(container.config, guildId, expectedBotId);
     if (staticBlockers.length > 0) {
       return dualResult({
         text: `Blueprint plan blocked before Discord access: ${staticBlockers.map((item) => item.code).join(', ')}. No guild was changed.`,
@@ -156,15 +163,18 @@ export default defineTool({
         },
       });
     }
+    if (guildId === undefined || expectedBotId === undefined) {
+      throw new Error('Blueprint target resolution passed its boundary without a complete target.');
+    }
 
     try {
-      await verifyExpectedBotIdentity(container.rest, args.expected_bot_id, ctx.signal);
+      await verifyExpectedBotIdentity(container.rest, expectedBotId, ctx.signal);
     } catch (error) {
       if (ctx.signal.aborted) throw error;
       const identityBlocker = {
         code: 'EXPECTED_BOT_MISMATCH',
         message: 'The active Discord token did not verify as the explicitly selected bot.',
-        resource: `bot:${args.expected_bot_id}`,
+        resource: `bot:${expectedBotId}`,
         recovery_hint: 'Select the correct caller-owned bot profile and restart before retrying.',
       };
       return dualResult({
@@ -235,8 +245,8 @@ export default defineTool({
 
     const snapshot = await readBlueprintTargetSnapshot(
       container.rest,
-      args.guild_id,
-      args.expected_bot_id,
+      guildId,
+      expectedBotId,
       compiled.blueprint,
       undefined,
       ctx.signal,
@@ -253,7 +263,7 @@ export default defineTool({
         `Source templates exposed ${compiled.source_permission_risks.length} risky permission class(es); all source permissions and overwrites were discarded.`,
       );
     }
-    const target = { guild_id: args.guild_id, bot_id: args.expected_bot_id };
+    const target = { guild_id: guildId, bot_id: expectedBotId };
     if (reconciled.blockers.length > 0) {
       return dualResult({
         text: `Blueprint dry-run found ${reconciled.blockers.length} blocker(s) and scheduled no apply token. No guild was changed.`,
@@ -310,7 +320,7 @@ export default defineTool({
       text:
         status === 'already_current'
           ? `Blueprint ${compiled.blueprint_id} already matches the locked target; no Discord mutation is needed.`
-          : `Blueprint dry-run is ready for bot ${args.expected_bot_id} in guild ${args.guild_id}: ${summary.total_operations} operation(s), including ${summary.high_risk_operations} explicitly confirmed high-risk replacement(s). No guild was changed.`,
+          : `Blueprint dry-run is ready for bot ${expectedBotId} in guild ${guildId}: ${summary.total_operations} operation(s), including ${summary.high_risk_operations} explicitly confirmed high-risk replacement(s). No guild was changed.`,
       data: {
         status,
         request: args.request,

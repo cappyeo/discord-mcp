@@ -6,14 +6,21 @@ sidebar:
 ---
 
 Use the blueprint workflow when the request describes a complete server rather
-than one isolated Discord operation. A small model needs only the natural-language
-request and the explicit bot and guild IDs; discord-mcp owns template selection,
-safe compilation, live reconciliation, and operation ordering.
+than one isolated Discord operation. Request-only target resolution requires the
+selected caller profile to lock one `DISCORD_EXPECTED_BOT_ID` and an
+`ALLOWED_GUILDS` boundary. A small model needs only the natural-language request
+when `DISCORD_DEFAULT_GUILD_ID` is itself allowlisted, or when exactly one
+allowlisted guild exists; discord-mcp resolves that target, owns template
+selection, safe compilation, live reconciliation, and operation ordering. If a
+profile allows several guilds without an allowlisted default, plan fails closed
+until the caller supplies one explicit `guild_id`.
 
 ## The two-call write contract
 
-1. Call `guild_blueprint_plan` with `request`, `guild_id`, and
-   `expected_bot_id`. This is a read-only target-bound dry-run.
+1. Call `guild_blueprint_plan` with `request`. It resolves `expected_bot_id` from
+   the locked profile and resolves `guild_id` only from an allowlisted default or
+   exactly one allowlisted guild. Explicit target IDs remain available for
+   multi-guild profiles. This is a read-only target-bound dry-run.
 2. Present its source evidence, blockers, operation summary, risks, and
    `approval_id` for review.
 3. After approval, call `guild_blueprint_apply` with the unchanged `plan_token`,
@@ -40,10 +47,17 @@ permissions, and overwrites. The trusted compiler regenerates the desired guild
 settings, roles, channel overwrites, ordering, Welcome Screen, Onboarding,
 AutoMod rules, and Components V2 publications.
 
+Every inspected live template is audit-bound to a canonical SHA-256 digest,
+fetch timestamp, and safe source-guild metadata. Selected candidates carry that
+provenance; rejected candidates retain explicit reasons and provenance when a
+valid live response existed. The catalog version binds the local candidate set.
+These records prove which Discord response informed selection without promoting
+third-party text or permission bitfields into trusted blueprint state.
+
 Before returning an apply token, plan verifies:
 
 - the active Discord credential matches `DISCORD_EXPECTED_BOT_ID`;
-- the explicit guild is in `ALLOWED_GUILDS`;
+- the resolved or explicit guild is in `ALLOWED_GUILDS`, with ambiguity rejected;
 - the live bot permissions and role hierarchy can perform every planned step;
 - existing same-name resources are exact, unique safe matches;
 - no bound resource has drifted; and
@@ -107,9 +121,12 @@ profiles, and state directories instead.
 
 A successful final readback persists one immutable, authenticated
 `activity-evidence.json` sidecar for the plan. Apply returns only its ID,
-timestamp, per-domain verified counts, and enforced safety invariants; it never
-returns the stored full blueprint or a credential. Partial, stale, busy,
-blocked, and drifted apply results always return `activity: null`.
+timestamp, trusted blueprint policy invariants, and execution/readback record;
+it never returns the stored full blueprint or a credential. Policy invariants
+are labeled separately from live observations: the latter bind the initial and
+final snapshot IDs, completed operations, exact resource bindings, and successful
+zero-drift blueprint readback. Partial, stale, busy, blocked, and drifted apply
+results always return `activity: null`.
 
 `guild_blueprint_evidence` validates the caller boundary and local HMAC before
 any Discord request, verifies the exact bot, reads the current guild, and runs

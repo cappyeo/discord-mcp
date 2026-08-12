@@ -189,6 +189,8 @@ export function resultEvidencePass(result) {
     result.plan_snapshot_unchanged === true &&
     result.replay_status === 'already_current' &&
     result.evidence_status === 'verified' &&
+    result.progressive_discovery_succeeded === true &&
+    result.dry_run_observed_before_apply === true &&
     result.audit_trail_complete === true &&
     result.audit_entry_count > 0 &&
     result.baseline_verified_before === true &&
@@ -412,6 +414,11 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
         resultErrors.push(`${path}.functional_failures: must be an array`);
       if (typeof result.plan_snapshot_unchanged !== 'boolean')
         resultErrors.push(`${path}.plan_snapshot_unchanged: must be boolean`);
+      for (const field of ['progressive_discovery_succeeded', 'dry_run_observed_before_apply']) {
+        if (typeof result[field] !== 'boolean') {
+          resultErrors.push(`${path}.${field}: must be boolean`);
+        }
+      }
       if (
         result.forced_resume_observed !== null &&
         typeof result.forced_resume_observed !== 'boolean'

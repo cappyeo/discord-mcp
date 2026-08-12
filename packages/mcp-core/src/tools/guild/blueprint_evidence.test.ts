@@ -357,9 +357,16 @@ describe('guild_blueprint_evidence', () => {
       evidence_id: fixture.evidence.evidence_id,
       record: {
         recorded_at: fixture.evidence.recorded_at,
-        final_snapshot_id: fixture.evidence.final_snapshot_id,
-        checkpoint_version: 7,
-        completed_operation_ids: ['roles:create:member'],
+        plan_invariants: {
+          expected_counts: {
+            roles: fixture.plan.blueprint.roles.length,
+          },
+        },
+        observed: {
+          final_snapshot_id: fixture.evidence.observed.final_snapshot_id,
+          checkpoint_version: 7,
+          completed_operation_ids: ['roles:create:member'],
+        },
       },
       verification: {
         readback: 'match',

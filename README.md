@@ -133,15 +133,20 @@ the current OAuth boundary.
 
 Explore the complete, generated [tool reference](https://cappyeo.github.io/discord-mcp/tools/) and practical [recipes](https://cappyeo.github.io/discord-mcp/recipes/).
 
-For a server-architecture request, call `guild_blueprint_plan` with one natural-language request
-and the explicit caller-owned bot and guild IDs. It selects one verified primary template plus
-0–3 bounded inspirations, compiles regenerated permissions, onboarding, AutoMod, and Components
-V2 content, then returns a target-bound dry-run. Review its operations and `approval_id`; only
-then pass the unchanged `plan_token` to `guild_blueprint_apply` with `__confirm:true`. Apply is
+For a server-architecture request, call `guild_blueprint_plan` with one natural-language request.
+Request-only target resolution requires the selected caller profile to lock one
+`DISCORD_EXPECTED_BOT_ID` and an `ALLOWED_GUILDS` boundary. The planner uses
+`DISCORD_DEFAULT_GUILD_ID` only when that default is itself allowlisted; otherwise it resolves
+the guild only when exactly one allowlisted guild exists. A multi-guild profile without an
+allowlisted default requires an explicit `guild_id` and is never guessed. It selects one
+verified primary template plus 0–3 bounded inspirations, compiles regenerated permissions,
+onboarding, AutoMod, and Components V2 content,
+then returns a target-bound dry-run. Review its operations and `approval_id`; only then pass the
+unchanged `plan_token` and returned target IDs to `guild_blueprint_apply` with `__confirm:true`. Apply is
 locally checkpointed after every successful step, reconciled at each call or resume, independently
 read back at completion, and never deletes an existing resource. A completed approval is
 single-use: later drift requires a fresh plan. A terminal result persists authenticated Activity
-Evidence and returns its ID plus per-domain verification counts. Later—even after a restart—call
+Evidence and returns its ID, blueprint policy invariants, and final live-readback record. Later—even after a restart—call
 `guild_blueprint_evidence` with only the same `guild_id`, `expected_bot_id`, and `plan_id` to
 revalidate the current guild without a plan token, confirmation flag, or Discord mutation.
 `guild_blueprint_compile` remains the lower-level read-only compiler, while

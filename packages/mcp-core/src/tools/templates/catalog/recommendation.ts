@@ -1,3 +1,4 @@
+import type { TemplateProvenance } from '../_lib/provenance.js';
 import type { CatalogRecord } from './index.js';
 
 /** The small, stable capability vocabulary used by metadata retrieval. */
@@ -76,6 +77,8 @@ export interface TemplateLiveEvidence {
   readonly risky_signals?: readonly string[];
   /** Optional capabilities derived by a trusted live blueprint inspector. */
   readonly capabilities?: readonly RecommendationCapability[];
+  /** Audit binding for the live payload used to derive this evidence. */
+  readonly provenance?: TemplateProvenance;
 }
 
 export interface LiveEvidenceSummary {
@@ -84,6 +87,7 @@ export interface LiveEvidenceSummary {
   readonly is_dirty: boolean | null | undefined;
   readonly blueprint?: TemplateBlueprintCounts;
   readonly risky_signals: readonly string[];
+  readonly provenance?: TemplateProvenance;
 }
 
 export interface PortfolioScoreBreakdown {
@@ -104,6 +108,7 @@ export interface SelectedCandidate extends MetadataCandidate {
 export interface RejectedCandidate {
   readonly code: string;
   readonly reasons: readonly string[];
+  readonly provenance?: TemplateProvenance;
 }
 
 export interface TemplatePortfolio {
@@ -449,6 +454,7 @@ function summary(evidence: TemplateLiveEvidence): LiveEvidenceSummary {
     is_dirty: evidence.is_dirty,
     ...(evidence.blueprint === undefined ? {} : { blueprint: evidence.blueprint }),
     risky_signals: riskNames(evidence),
+    ...(evidence.provenance === undefined ? {} : { provenance: evidence.provenance }),
   };
 }
 
@@ -620,8 +626,13 @@ export function selectTemplatePortfolio(
     if (code === null) continue;
     const itemEvidence = byCode.get(code);
     const reasons = gateReasons(itemEvidence);
-    if (reasons.length > 0) rejected.push({ code, reasons });
-    else {
+    if (reasons.length > 0) {
+      rejected.push({
+        code,
+        reasons,
+        ...(itemEvidence?.provenance === undefined ? {} : { provenance: itemEvidence.provenance }),
+      });
+    } else {
       const effectiveCapabilities = [
         ...new Set([...candidate.matched_capabilities, ...(itemEvidence?.capabilities ?? [])]),
       ];

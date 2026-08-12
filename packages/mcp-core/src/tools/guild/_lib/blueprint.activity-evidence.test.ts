@@ -147,16 +147,18 @@ describe('Guild Blueprint Activity Evidence', () => {
     expect(evidence).toMatchObject({
       schema_version: 'guild_blueprint_activity_evidence.v1',
       plan_id: fixture().plan_id,
-      blueprint_readback_match: true,
-      safety: {
-        source_permissions_applied: false,
-        dangerous_generated_permissions: 0,
-        bot_permission_grants: 0,
-        discord_managed_role_mutations: 0,
+      plan_invariants: {
+        safety_policy: {
+          source_permissions_applied: false,
+          dangerous_generated_permissions: 0,
+          bot_permission_grants: 0,
+          discord_managed_role_mutations: 0,
+        },
       },
+      observed: { blueprint_readback_match: true },
     });
     expect(evidence.evidence_id).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(evidence.verified_counts).toEqual({
+    expect(evidence.plan_invariants.expected_counts).toEqual({
       identity: 2,
       roles: evidence.blueprint.roles.length,
       categories: evidence.blueprint.categories.length,
@@ -219,8 +221,32 @@ describe('Guild Blueprint Activity Evidence', () => {
     });
 
     expect(evidence.initial_operation_count).toBe(1);
-    expect(evidence.completed_operation_ids).toEqual([]);
-    expect(evidence.blueprint_readback_match).toBe(true);
+    expect(evidence.observed.completed_operation_ids).toEqual([]);
+    expect(evidence.observed.blueprint_readback_match).toBe(true);
+  });
+
+  it('labels plan-derived counts and safety as invariants, not observations', () => {
+    const evidence = evidenceFromFixture();
+
+    expect(evidence).not.toHaveProperty('verified_counts');
+    expect(evidence).not.toHaveProperty('safety');
+    expect(evidence.plan_invariants.expected_counts).toEqual(
+      expect.objectContaining({ roles: evidence.blueprint.roles.length }),
+    );
+    expect(evidence.plan_invariants.safety_policy).toEqual({
+      source_permissions_applied: false,
+      dangerous_generated_permissions: 0,
+      bot_permission_grants: 0,
+      discord_managed_role_mutations: 0,
+    });
+    expect(evidence.observed).toEqual(
+      expect.objectContaining({
+        initial_snapshot_id: `sha256:${'a'.repeat(64)}`,
+        final_snapshot_id: `sha256:${'b'.repeat(64)}`,
+        checkpoint_version: 7,
+        blueprint_readback_match: true,
+      }),
+    );
   });
 
   it('persists one authenticated evidence record across store instances without credentials', async () => {
@@ -267,12 +293,12 @@ describe('Guild Blueprint Activity Evidence', () => {
     );
     const saved = readFileSync(path, 'utf8');
     const envelope = JSON.parse(saved) as {
-      evidence: { checkpoint_version: number };
+      evidence: { observed: { checkpoint_version: number } };
     };
     writeFileSync(path, 'x'.repeat(1_048_577), { mode: 0o600 });
     await expect(store.loadEvidence()).rejects.toMatchObject({ code: 'EVIDENCE_MALFORMED' });
 
-    envelope.evidence.checkpoint_version = 8;
+    envelope.evidence.observed.checkpoint_version = 8;
     writeFileSync(path, JSON.stringify(envelope), { mode: 0o600 });
     await expect(store.loadEvidence()).rejects.toMatchObject({ code: 'EVIDENCE_TAMPERED' });
 

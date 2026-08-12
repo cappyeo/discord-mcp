@@ -16,15 +16,28 @@ const SEARCH_STOP_WORDS = new Set([
   'a',
   'an',
   'and',
+  'cho',
+  'co',
   'discord',
+  'khi',
+  'mot',
   'for',
   'in',
+  'inside',
+  'my',
   'of',
   'on',
   'or',
+  'our',
+  'please',
+  'set',
   'the',
+  'this',
+  'toi',
   'to',
   'tool',
+  'up',
+  'va',
 ]);
 
 const SearchArgsSchema = z
@@ -191,6 +204,9 @@ export const PROGRESSIVE_DISPATCH_TOOLS: readonly McpTool[] = [
 function normalize(value: string): string {
   return value
     .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
@@ -210,6 +226,43 @@ interface SearchableTool {
   normalizedDescription: string;
 }
 
+const SERVER_ARCHITECTURE_SIGNALS = new Set([
+  'automod',
+  'channels',
+  'complete',
+  'events',
+  'gaming',
+  'lfg',
+  'moderation',
+  'onboarding',
+  'permissions',
+  'professional',
+  'roles',
+  'staff',
+  'voice',
+  'welcome',
+]);
+
+const SCOPED_RESOURCE_INTENT =
+  /\b(?:add|build|create|design|make|schedule|set up|setup|update)\b(?:\s+[a-z0-9]+){0,8}\s+\b(?:automod(?:\s+rule)?|channel|channels|emoji|emojis|event|events|invite|invites|message|messages|onboarding|role|roles|thread|threads|webhook|webhooks)\b(?:\s+[a-z0-9]+){0,8}\s+\b(?:for|in|inside|on|to)\s+(?:(?:a|an|my|our|the|this)\s+)?(?:(?:discord)\s+)?(?:community|guild|server)\b/;
+
+function isServerArchitectureIntent(query: string, terms: readonly string[]): boolean {
+  const termSet = new Set(terms);
+  const hasScope = ['server', 'community', 'guild'].some((term) => termSet.has(term));
+  if (!hasScope) return false;
+  // Keep a resource-level request inside an existing guild on its narrow tool.
+  // "Create a gaming event in my server" is not permission to redesign the server.
+  if (SCOPED_RESOURCE_INTENT.test(query)) return false;
+  const hasStrongVerb =
+    ['architect', 'build', 'design', 'dung', 'make', 'redesign', 'setup'].some((term) =>
+      termSet.has(term),
+    ) || query.includes('set up');
+  if (hasStrongVerb) return true;
+  if (!termSet.has('create') && !termSet.has('tao')) return false;
+  const breadth = [...SERVER_ARCHITECTURE_SIGNALS].filter((term) => termSet.has(term)).length;
+  return breadth >= 2 || /\bcreate (?:a )?(?:discord )?server\b/.test(query);
+}
+
 export interface ProgressiveToolCatalog {
   searchable: readonly SearchableTool[];
   categories: readonly { name: string; tool_count: number }[];
@@ -222,14 +275,33 @@ function scoreTool(tool: SearchableTool, query: string, terms: readonly string[]
   if (query === '') return 1;
 
   let score = 0;
+  const termSet = new Set(terms);
 
   if (tool.normalizedName === query) score += 200;
+  if (tool.tool.name === 'guild_blueprint_plan' && isServerArchitectureIntent(query, terms)) {
+    score += 300;
+  }
+  const hasDeleteIntent = ['cancel', 'delete', 'remove'].some((term) => termSet.has(term));
+  const hasCreateIntent =
+    !hasDeleteIntent &&
+    (query.includes('set up') ||
+      ['add', 'build', 'create', 'dung', 'make', 'schedule', 'setup', 'tao'].some((term) =>
+        termSet.has(term),
+      ));
+  if (hasCreateIntent && tool.normalizedName.split(' ').includes('create')) score += 60;
   if (tool.normalizedName.startsWith(query)) score += 80;
   if (tool.normalizedCategory === query) score += 40;
+  let descriptionMatches = 0;
   for (const term of terms) {
     if (tool.normalizedName.includes(term)) score += 25;
     if (tool.normalizedCategory.includes(term)) score += 12;
-    if (tool.normalizedDescription.includes(term)) score += 4;
+    if (tool.normalizedDescription.includes(term)) {
+      score += 4;
+      descriptionMatches += 1;
+    }
+  }
+  if (descriptionMatches >= 2 && terms.length >= 2) {
+    score += Math.round((descriptionMatches / terms.length) * 80) + descriptionMatches * 3;
   }
   return score;
 }
@@ -331,7 +403,9 @@ export function searchProgressiveTools(
     exact !== undefined && (categoryFilter === undefined || exact.category === categoryFilter)
       ? exact
       : undefined;
-  const terms = query.split(' ').filter((term) => term !== '' && !SEARCH_STOP_WORDS.has(term));
+  const terms = [
+    ...new Set(query.split(' ').filter((term) => term !== '' && !SEARCH_STOP_WORDS.has(term))),
+  ];
   const candidates =
     categoryFilter === undefined
       ? catalog.searchable

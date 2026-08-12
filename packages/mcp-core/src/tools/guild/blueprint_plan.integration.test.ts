@@ -10,6 +10,7 @@ import { buildServer } from '../../server.js';
 
 const API = 'https://discord.com/api/v10';
 const GUILD_ID = '100000000000000001';
+const OTHER_GUILD_ID = '100000000000000002';
 const BOT_ID = '100002088458902020';
 const BOT_ROLE_ID = '100000000000000010';
 const TEMPLATE_CODE = 'WNSCpfHWnqXr';
@@ -131,8 +132,6 @@ describe('guild_blueprint_plan public MCP journey', () => {
       const result = await client.callTool({
         name: 'guild_blueprint_plan',
         arguments: {
-          guild_id: GUILD_ID,
-          expected_bot_id: BOT_ID,
           request: 'Dựng cho tôi một server gaming chuyên nghiệp có tìm đồng đội và voice',
           preferred_primary_code: TEMPLATE_CODE,
         },
@@ -204,6 +203,48 @@ describe('guild_blueprint_plan public MCP journey', () => {
         blockers: [expect.objectContaining({ code: 'EXPECTED_BOT_MISMATCH' })],
       });
       expect(templateReads).toBe(0);
+      expect(targetReads).toBe(0);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('requires an explicit guild before Discord access when the profile allows several', async () => {
+    let targetReads = 0;
+    mockServer.use(
+      http.get(`${API}/users/@me`, () =>
+        HttpResponse.json({ id: BOT_ID, username: 'DevBot', bot: true }),
+      ),
+      http.all(`${API}/guilds/:rest*`, () => {
+        targetReads += 1;
+        return HttpResponse.json({ message: 'unexpected target access' }, { status: 500 });
+      }),
+    );
+    const config = loadConfig({
+      DISCORD_TOKEN: TOKEN,
+      DISCORD_EXPECTED_BOT_ID: BOT_ID,
+      ALLOWED_GUILDS: `${GUILD_ID},${OTHER_GUILD_ID}`,
+      LOG_LEVEL: 'fatal',
+      MCP_AUDIT_ENABLED: 'false',
+    });
+    const rest = new REST({ version: '10', retries: 0, makeRequest: fetch }).setToken(TOKEN);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const built = await buildServer({ rest, logger: createLogger(config), config });
+    const client = new Client(
+      { name: 'blueprint-plan-target-selection-test', version: '0.0.0' },
+      { capabilities: {} },
+    );
+    await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.callTool({
+        name: 'guild_blueprint_plan',
+        arguments: { request: 'Build a gaming server' },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        issues: [expect.objectContaining({ code: 'target_selection_required' })],
+      });
       expect(targetReads).toBe(0);
     } finally {
       await client.close();

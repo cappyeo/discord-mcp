@@ -6,8 +6,8 @@ import { dualResult } from '../_lib/response.js';
 import { GuildId, UserId } from '../_lib/snowflake.js';
 import {
   type GuildBlueprintActivityEvidence,
-  GuildBlueprintSafetyEvidenceSchema,
-  GuildBlueprintVerifiedCountsSchema,
+  GuildBlueprintObservedEvidenceSchema,
+  GuildBlueprintPlanInvariantsSchema,
 } from './_lib/blueprint.activity-evidence.js';
 import { blueprintBoundaryBlockers } from './_lib/blueprint.boundary.js';
 import {
@@ -15,7 +15,6 @@ import {
   BlueprintCheckpointStoreError,
 } from './_lib/blueprint.checkpoint-store.js';
 import {
-  BlueprintBindingsSchema,
   type BlueprintBlocker,
   BlueprintBlockerSchema,
   type BlueprintOperation,
@@ -61,13 +60,9 @@ const PublicEvidenceRecordSchema = z
   .object({
     schema_version: z.literal('guild_blueprint_activity_evidence.v1'),
     recorded_at: z.string().datetime({ offset: true }),
-    final_snapshot_id: Digest,
-    checkpoint_version: z.number().int().nonnegative(),
     initial_operation_count: z.number().int().nonnegative().max(128),
-    completed_operation_ids: z.array(z.string().min(1).max(160)).max(128),
-    bindings: BlueprintBindingsSchema,
-    verified_counts: GuildBlueprintVerifiedCountsSchema,
-    safety: GuildBlueprintSafetyEvidenceSchema,
+    plan_invariants: GuildBlueprintPlanInvariantsSchema,
+    observed: GuildBlueprintObservedEvidenceSchema,
   })
   .strict();
 
@@ -105,13 +100,9 @@ function publicRecord(evidence: GuildBlueprintActivityEvidence) {
   return {
     schema_version: evidence.schema_version,
     recorded_at: evidence.recorded_at,
-    final_snapshot_id: evidence.final_snapshot_id,
-    checkpoint_version: evidence.checkpoint_version,
+    plan_invariants: evidence.plan_invariants,
+    observed: evidence.observed,
     initial_operation_count: evidence.initial_operation_count,
-    completed_operation_ids: evidence.completed_operation_ids,
-    bindings: evidence.bindings,
-    verified_counts: evidence.verified_counts,
-    safety: evidence.safety,
   };
 }
 
@@ -320,16 +311,16 @@ export default defineTool({
         args.guild_id,
         args.expected_bot_id,
         evidence.blueprint,
-        evidence.bindings,
+        evidence.observed.bindings,
         ctx.signal,
       );
       const reconciled = reconcileGuildBlueprint(
         evidence.blueprint_id,
         evidence.blueprint,
         snapshot,
-        evidence.bindings,
+        evidence.observed.bindings,
       );
-      const snapshotUnchanged = reconciled.snapshot_id === evidence.final_snapshot_id;
+      const snapshotUnchanged = reconciled.snapshot_id === evidence.observed.final_snapshot_id;
       const blueprintMatches =
         reconciled.operations.length === 0 && reconciled.blockers.length === 0;
       const verification = {

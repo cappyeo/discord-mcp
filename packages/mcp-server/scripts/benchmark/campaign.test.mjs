@@ -45,6 +45,8 @@ function result(trial, serious = []) {
     serious_permission_failures: serious,
     functional_failures: [],
     plan_snapshot_unchanged: true,
+    progressive_discovery_succeeded: true,
+    dry_run_observed_before_apply: true,
     forced_resume_observed: trial.mode === 'forced_resume' ? true : null,
     operations_planned: 25,
     apply_calls: trial.mode === 'forced_resume' ? 2 : 1,
@@ -144,6 +146,7 @@ function harness({
   executionRejectedRestoreFailure = false,
   unclassifiedRestoreFailure = false,
   baselineFailure = false,
+  throwAt = [],
 } = {}) {
   const failedRestoreAttempts = restoreFailure
     ? Number.POSITIVE_INFINITY
@@ -208,6 +211,7 @@ function harness({
       async runTrial({ trial, baselineMessageChannelId }) {
         calls.push(['trial', trial.trial_id]);
         assert.equal(baselineMessageChannelId, CANARY_CHANNEL_IDS[trial.guild_id]);
+        if (throwAt.includes(trial.trial_id)) throw new Error('trial runner exploded');
         const trialResult = result(
           trial,
           trial.trial_id === seriousAt ? [{ code: 'GENERATED_ROLE_DANGEROUS_PERMISSION' }] : [],
@@ -551,6 +555,47 @@ describe('real benchmark campaign', () => {
       required_passing_trials: 19,
       baseline_restored: true,
     });
+  });
+
+  it('records an uncaught trial failure with a schema-valid progressive result', async () => {
+    const test = harness({ throwAt: ['trial-01'] });
+
+    const report = await runBenchmarkCampaign(input(test));
+    const failed = test.artifacts.get('results/trial-01.json');
+    assert.equal(failed.progressive_discovery_succeeded, false);
+    assert.equal(failed.dry_run_observed_before_apply, false);
+    assert.equal(failed.functional_failures[0].code, 'TRIAL_RUNNER_UNAVAILABLE');
+    assert.equal(failed.baseline_verified_before, true);
+    assert.equal(failed.baseline_restored_after, true);
+    assert.equal(failed.baseline_fingerprint_before, FINGERPRINTS[failed.guild_id]);
+    assert.equal(failed.baseline_fingerprint_after, FINGERPRINTS[failed.guild_id]);
+    assert.equal(report.results.length, 20);
+    assert.equal(test.artifacts.has('report.json'), true);
+  });
+
+  it('quarantines after uncaught trial failures without a report-schema crash', async () => {
+    const test = harness({ throwAt: ['trial-01', 'trial-02'] });
+
+    await assert.rejects(
+      runBenchmarkCampaign(input(test)),
+      (error) =>
+        error instanceof BenchmarkQuarantineError && error.code === 'SUCCESS_THRESHOLD_UNREACHABLE',
+    );
+
+    const failed = test.artifacts.get('results/trial-01.json');
+    assert.equal(failed.progressive_discovery_succeeded, false);
+    assert.equal(failed.dry_run_observed_before_apply, false);
+    assert.equal(failed.functional_failures[0].code, 'TRIAL_RUNNER_UNAVAILABLE');
+    assert.equal(failed.baseline_verified_before, true);
+    assert.equal(failed.baseline_restored_after, true);
+    assert.equal(failed.baseline_fingerprint_before, FINGERPRINTS[failed.guild_id]);
+    assert.equal(failed.baseline_fingerprint_after, FINGERPRINTS[failed.guild_id]);
+    assert.deepEqual(test.calls.filter(([kind]) => kind === 'verify').slice(-2), [
+      ['verify', CONTROLLED_GUILD_IDS[1]],
+      ['verify', CONTROLLED_GUILD_IDS[1]],
+    ]);
+    assert.equal(test.artifacts.has('report.json'), false);
+    assert.equal(test.artifacts.get('quarantine.json').code, 'SUCCESS_THRESHOLD_UNREACHABLE');
   });
 
   it('keeps serious permission failure precedence over threshold fail-fast', async () => {

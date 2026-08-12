@@ -17,7 +17,8 @@ commit history and downloadable artifacts, see
   NSFW templates are rejected; an unknown dirty state has medium confidence.
   Risky source permission signals are surfaced and penalized, but all source
   permissions and overwrites are discarded and regenerated. Third-party names
-  and descriptions remain fenced as untrusted text.
+  and descriptions remain fenced as untrusted text. Canonical provenance digests
+  bind every valid live response used to select or reject a candidate.
 - Added `guild_blueprint_compile`, the one-call architecture entrypoint. It reuses
   the bounded recommendation provider internally and emits a deterministic symbolic
   desired state by converting verified source structure into bounded capability
@@ -30,18 +31,21 @@ commit history and downloadable artifacts, see
   Onboarding's 7/5 rule, AutoMod semantics and caps, and every Components V2 tree
   without writing to Discord. Components V2 channel placeholders are explicitly
   marked for target-guild resolution and revalidation before send.
-- Added `guild_blueprint_plan` and `guild_blueprint_apply`: an explicit bot/guild
-  lock, target-bound dry-run, authenticated approval token, locally checkpointed
+- Added `guild_blueprint_plan` and `guild_blueprint_apply`: natural progressive
+  discovery, request-only resolution from one locked caller profile, a
+  target-bound dry-run, authenticated approval token, locally checkpointed
   resume, fail-closed reconciliation, and independent final Discord readback.
-  Completed approvals cannot repair later drift; a fresh plan is required.
+  Ambiguous multi-guild profiles require an explicit target. Completed approvals
+  cannot repair later drift; a fresh plan is required.
 - Community-protected singleton AutoMod rules can now be reused without a
   duplicate create: adoption requires one matching immutable trigger and the
   exact caller-owned bot as `creator_id`. Foreign-owned or ambiguous rules fail
   closed, while the real-server benchmark restores an adopted protected rule to
   its exact baseline instead of attempting an impossible delete.
 - Successful terminal apply now persists completion-only, authenticated Activity
-  Evidence and returns its ID plus per-domain counts and enforced safety
-  invariants. Partial or drifted results cannot claim terminal evidence.
+  Evidence and returns its ID, trusted plan counts and safety policy, plus the
+  observed execution and final live-readback record. Partial or drifted results
+  cannot claim terminal evidence.
 - Added read-only `guild_blueprint_evidence`. With the explicit guild, bot, and
   plan IDs it reloads evidence after restart, verifies the caller and bot, and
   re-runs live Discord reconciliation without a plan token, confirmation flag,

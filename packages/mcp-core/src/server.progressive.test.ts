@@ -174,6 +174,62 @@ describe('progressive tool surface', () => {
     });
   });
 
+  it('routes natural server-architecture requests to the high-level blueprint planner', async () => {
+    for (const query of [
+      'build a professional gaming Discord server with preview, safe resume, and evidence',
+      'create a gaming community with LFG, voice rooms, events, onboarding, and moderation',
+      'create a gaming server',
+      'make a gaming server',
+      'dựng cho tôi server gaming',
+      'dựng cho tôi một server gaming chuyên nghiệp, an toàn, có preview, tiếp tục khi gián đoạn và bằng chứng hoàn tất',
+    ]) {
+      const result = await progressiveClient.callTool({
+        name: 'mcp_tools_search',
+        arguments: { query, limit: 1 },
+      });
+
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent).toMatchObject({
+        matches: [
+          expect.objectContaining({
+            name: 'guild_blueprint_plan',
+            category: 'guild',
+            dispatcher: 'mcp_tools_read',
+            inputSchema: expect.objectContaining({
+              required: ['request'],
+              properties: expect.objectContaining({
+                request: expect.any(Object),
+                guild_id: expect.any(Object),
+                expected_bot_id: expect.any(Object),
+              }),
+            }),
+          }),
+        ],
+      });
+    }
+  });
+
+  it('keeps resource-level requests inside an existing server on their narrow tool', async () => {
+    for (const query of [
+      'create a scheduled event in my server',
+      'create gaming events in my Discord server',
+      'make a gaming event in my server',
+      'set up a gaming event inside our community',
+    ]) {
+      const result = await progressiveClient.callTool({
+        name: 'mcp_tools_search',
+        arguments: { query, limit: 1 },
+      });
+
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent).toMatchObject({
+        matches: [
+          expect.objectContaining({ name: 'events_create', dispatcher: 'mcp_tools_write' }),
+        ],
+      });
+    }
+  });
+
   it('cuts category browse by 80% and the selected-tool discovery journey by 50%', async () => {
     const [compact, full, exact] = await Promise.all([
       progressiveClient.callTool({

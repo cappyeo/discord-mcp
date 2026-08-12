@@ -12,6 +12,7 @@ import { formatErrorForUser } from './errors/format.js';
 import { SubscriptionRegistry } from './gateway/subscription_registry.js';
 import { verifyExpectedBotIdentity } from './identity-lock.js';
 import { auditMiddleware } from './middleware/audit.js';
+import { blueprintPlanTargetMiddleware } from './middleware/blueprint-plan-target.js';
 import {
   ALWAYS_ALLOWED_CATEGORIES,
   categoryMiddleware,
@@ -1348,7 +1349,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   // Order matters:
   //   - telemetry: OUTERMOST so spans cover the entire call (including
   //     validation/precondition errors and middleware overhead).
-  //   - default guild: fills an omitted top-level guild_id before validation.
+  //   - default guild / blueprint target: resolve only operator-locked targets before validation.
   //   - validate / guild allowlist / precondition: argument and policy gates.
   //   - audit: INNERMOST per plan §10 critical rule 2 - only fires for
   //     actually-attempted operations. Blocked operations are visible
@@ -1358,6 +1359,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   const middlewares: ToolMiddleware[] = [
     telemetryMiddleware(),
     defaultGuildMiddleware(deps.config.DISCORD_DEFAULT_GUILD_ID),
+    blueprintPlanTargetMiddleware(deps.config),
     validateMiddleware(),
     guildAllowlistMiddleware(guildScopePolicy),
     categoryMiddleware(categoryAllowlist),

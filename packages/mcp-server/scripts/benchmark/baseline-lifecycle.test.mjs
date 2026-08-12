@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { signBaselineArtifact } from './artifact-store.mjs';
 import {
   initializeBenchmarkBaseline,
   restoreBenchmarkBaseline,
@@ -21,10 +22,12 @@ const MESSAGE = '777000777000999007';
 const PROTECTED_RULE = '777000777000999008';
 const FOREIGN_BOT = '666000666000666666';
 const FP = `sha256:${'a'.repeat(64)}`;
+const INTEGRITY_KEY = 'benchmark-baseline-lifecycle-test-key';
 const RESTORE_TARGET_GUARD = Object.freeze({
   allowedGuildIds: [GUILD],
   expectedBotId: BOT,
   confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+  integrityKey: INTEGRITY_KEY,
 });
 
 function baselineSnapshot() {
@@ -97,7 +100,7 @@ function mentionSpamRule({ creator_id = BOT, enabled = false } = {}) {
   };
 }
 
-function makeBaseline({ protectedRule = null } = {}) {
+function makeUnsignedBaseline({ protectedRule = null } = {}) {
   const snapshot = baselineSnapshot();
   if (protectedRule) snapshot.automod_rules = [structuredClone(protectedRule)];
   return {
@@ -123,6 +126,10 @@ function makeBaseline({ protectedRule = null } = {}) {
     preserved_role_ids: [BOT_ROLE, CANARY_ROLE, GUILD],
     baseline_snapshot: snapshot,
   };
+}
+
+function makeBaseline(options = {}) {
+  return signBaselineArtifact(makeUnsignedBaseline(options), { integrityKey: INTEGRITY_KEY });
 }
 
 function currentSnapshot() {
@@ -163,6 +170,7 @@ function currentSnapshot() {
 
 function dependencies(state, { drift = false } = {}) {
   return {
+    integrityKey: INTEGRITY_KEY,
     async readSnapshot() {
       return structuredClone(state.snapshot);
     },
@@ -255,6 +263,7 @@ describe('benchmark baseline lifecycle', () => {
       },
       snapshotFingerprint: () => FP,
       baseline: makeBaseline(),
+      integrityKey: INTEGRITY_KEY,
       cleanup: null,
       reason: 'guard regression',
     };
@@ -284,6 +293,69 @@ describe('benchmark baseline lifecycle', () => {
       }),
     ).rejects.toThrow('confirmation');
     expect(reads).toHaveLength(0);
+    expect(mutations).toHaveLength(0);
+  });
+
+  it.each([
+    ['guild_fields', (baseline) => (baseline.guild_fields.name = 'tampered guild')],
+    [
+      'baseline_snapshot resources',
+      (baseline) => (baseline.baseline_snapshot.channels[0].name = 'tampered channel'),
+    ],
+  ])('rejects tampered %s before any REST mutation', async (_label, tamper) => {
+    const baseline = makeBaseline();
+    tamper(baseline);
+    const mutations = [];
+    await expect(
+      restoreBenchmarkBaseline({
+        rest: { request: async (...args) => mutations.push(args) },
+        readSnapshot: async () => baselineSnapshot(),
+        snapshotFingerprint: () => FP,
+        baseline,
+        ...RESTORE_TARGET_GUARD,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
+          publication_targets: [],
+          bindings: {
+            roles: {},
+            categories: {},
+            channels: {},
+            automod_rules: {},
+            publications: {},
+          },
+        },
+        reason: 'tamper regression',
+        integrityKey: INTEGRITY_KEY,
+      }),
+    ).rejects.toThrow(/integrity/);
+    expect(mutations).toHaveLength(0);
+  });
+
+  it('rejects an unsigned baseline before any REST mutation', async () => {
+    const mutations = [];
+    await expect(
+      restoreBenchmarkBaseline({
+        rest: { request: async (...args) => mutations.push(args) },
+        readSnapshot: async () => baselineSnapshot(),
+        snapshotFingerprint: () => FP,
+        baseline: makeUnsignedBaseline(),
+        ...RESTORE_TARGET_GUARD,
+        cleanup: {
+          guild_id: GUILD,
+          bot_id: BOT,
+          publication_targets: [],
+          bindings: {
+            roles: {},
+            categories: {},
+            channels: {},
+            automod_rules: {},
+            publications: {},
+          },
+        },
+        reason: 'unsigned baseline regression',
+      }),
+    ).rejects.toThrow(/integrity/);
     expect(mutations).toHaveLength(0);
   });
 
@@ -483,6 +555,7 @@ describe('benchmark baseline lifecycle', () => {
     });
 
     expect(baseline.fingerprint).toBe(FP);
+    expect(baseline.run_id).toBe('initializer-test');
     expect(baseline.guild_fields.features).toContain('COMMUNITY');
     expect(state.snapshot.channels.map((channel) => channel.id)).toEqual([CANARY_CHANNEL]);
     expect(state.snapshot.roles.some((role) => role.id === EXTRA_ROLE)).toBe(false);
@@ -664,15 +737,16 @@ describe('benchmark baseline lifecycle', () => {
   });
 
   it('rejects a canary channel with permission overwrites', async () => {
-    const baseline = makeBaseline();
+    const baseline = makeUnsignedBaseline();
     baseline.baseline_snapshot.channels[0].permission_overwrites = [
       { id: GUILD, type: 0, allow: '0', deny: '0' },
     ];
+    const signedBaseline = signBaselineArtifact(baseline, { integrityKey: INTEGRITY_KEY });
 
     await expect(
       verifyBenchmarkBaseline({
         ...dependencies({ snapshot: baselineSnapshot() }),
-        baseline,
+        baseline: signedBaseline,
       }),
     ).rejects.toThrow(/canary channel.*unsafe/);
   });

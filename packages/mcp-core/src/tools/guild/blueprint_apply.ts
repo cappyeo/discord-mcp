@@ -11,8 +11,8 @@ import {
   buildGuildBlueprintActivityEvidence,
   type GuildBlueprintActivityEvidence,
   GuildBlueprintActivityEvidenceError,
-  GuildBlueprintSafetyEvidenceSchema,
-  GuildBlueprintVerifiedCountsSchema,
+  GuildBlueprintObservedEvidenceSchema,
+  GuildBlueprintPlanInvariantsSchema,
 } from './_lib/blueprint.activity-evidence.js';
 import {
   BlueprintExecutionError,
@@ -114,8 +114,8 @@ interface ApplyData {
       readonly schema_version: 'guild_blueprint_activity_evidence.v1';
       readonly evidence_id: string;
       readonly recorded_at: string;
-      readonly verified_counts: GuildBlueprintActivityEvidence['verified_counts'];
-      readonly safety: GuildBlueprintActivityEvidence['safety'];
+      readonly plan_invariants: GuildBlueprintActivityEvidence['plan_invariants'];
+      readonly observed: GuildBlueprintActivityEvidence['observed'];
     } | null;
   };
   readonly next_action: NextAction;
@@ -127,8 +127,8 @@ function activitySummary(evidence: GuildBlueprintActivityEvidence) {
     schema_version: evidence.schema_version,
     evidence_id: evidence.evidence_id,
     recorded_at: evidence.recorded_at,
-    verified_counts: evidence.verified_counts,
-    safety: evidence.safety,
+    plan_invariants: evidence.plan_invariants,
+    observed: evidence.observed,
   };
 }
 
@@ -280,7 +280,7 @@ export default defineTool({
     '',
     '**Resume**: A partial result is safe to call again with the same inputs. Discord readback plus a local append-only checkpoint prevents duplicate roles, channels, AutoMod rules, and Components V2 publications.',
     '',
-    '**Returns**: Bounded progress, safe error codes, remaining work, bindings, and final Discord readback evidence. A successful terminal result also persists and returns the ID plus per-domain summary of authenticated Activity Evidence. The plan token is never echoed.',
+    '**Returns**: Bounded progress, safe error codes, remaining work, bindings, and final Discord readback evidence. A successful terminal result also persists and returns authenticated Activity Evidence with policy invariants clearly separated from the execution and live-readback record. The plan token is never echoed.',
   ].join('\n'),
   preconditions: ['explicit_guild_required', 'confirm_required'] as const,
   inputSchema: {
@@ -335,8 +335,8 @@ export default defineTool({
             schema_version: z.literal('guild_blueprint_activity_evidence.v1'),
             evidence_id: Digest,
             recorded_at: z.string().datetime({ offset: true }),
-            verified_counts: GuildBlueprintVerifiedCountsSchema,
-            safety: GuildBlueprintSafetyEvidenceSchema,
+            plan_invariants: GuildBlueprintPlanInvariantsSchema,
+            observed: GuildBlueprintObservedEvidenceSchema,
           })
           .strict()
           .nullable(),

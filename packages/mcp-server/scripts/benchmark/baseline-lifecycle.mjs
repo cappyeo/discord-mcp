@@ -1,3 +1,4 @@
+import { assertBaselineArtifactIntegrity } from './artifact-store.mjs';
 import { DiscordRestError } from './discord-rest.mjs';
 
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -5,6 +6,7 @@ const RESET_PREFIX = 'RESET_DISPOSABLE_GUILD:';
 const CANARY_ROLE_NAME = '__discord_mcp_benchmark_canary_role__';
 const CANARY_CHANNEL_NAME = '__discord_mcp_benchmark_canary_channel__';
 const SCHEMA_VERSION = 1;
+const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const RESTORE_SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
 const RESTORE_RETRY_PROOFS = new WeakMap();
 const RESTORE_FAILURE_POLICIES = Object.freeze({
@@ -335,7 +337,7 @@ function validateCanary(snapshot, role, channel, guildId) {
   }
 }
 
-function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, fingerprint) {
+function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, fingerprint, runId) {
   const highestBotRole = highestDiscordRole(
     snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
   );
@@ -344,6 +346,7 @@ function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, f
     kind: 'discord-mcp-benchmark-baseline',
     guild_id: guildId,
     bot_id: botId,
+    run_id: runId,
     fingerprint,
     canary: { role_id: canaryRoleId, channel_id: canaryChannelId },
     guild_fields: {
@@ -374,7 +377,7 @@ function baselineView(snapshot, guildId, botId, canaryRoleId, canaryChannelId, f
   };
 }
 
-function validateBaselineRecord(baseline) {
+function validateBaselineRecord(baseline, integrityKey) {
   if (
     !record(baseline) ||
     baseline.schema_version !== SCHEMA_VERSION ||
@@ -383,6 +386,19 @@ function validateBaselineRecord(baseline) {
     throw new Error('benchmark baseline record is malformed');
   snowflake(baseline.guild_id, 'baseline.guild_id');
   snowflake(baseline.bot_id, 'baseline.bot_id');
+  if (
+    baseline.run_id !== undefined &&
+    (typeof baseline.run_id !== 'string' || !RUN_ID.test(baseline.run_id))
+  ) {
+    throw new Error('baseline run_id is malformed');
+  }
+  if (typeof integrityKey !== 'string' || integrityKey.trim() === '') {
+    throw new Error('baseline integrity key is required');
+  }
+  assertBaselineArtifactIntegrity(baseline, {
+    guildId: baseline.guild_id,
+    integrityKey,
+  });
   if (!/^sha256:[a-f0-9]{64}$/.test(baseline.fingerprint ?? ''))
     throw new Error('baseline fingerprint is malformed');
   snowflake(baseline.canary?.role_id, 'baseline.canary.role_id');
@@ -503,10 +519,15 @@ function assertBaselineResourcesPresent(snapshot, baseline) {
   }
 }
 
-export async function verifyBenchmarkBaseline({ readSnapshot, snapshotFingerprint, baseline }) {
+export async function verifyBenchmarkBaseline({
+  readSnapshot,
+  snapshotFingerprint,
+  baseline,
+  integrityKey,
+}) {
   requiredFunction(readSnapshot, 'readSnapshot');
   requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
-  validateBaselineRecord(baseline);
+  validateBaselineRecord(baseline, integrityKey);
   const snapshot = await readCanarySnapshot(
     readSnapshot,
     baseline.guild_id,
@@ -698,6 +719,7 @@ export async function restoreBenchmarkBaseline({
   reason,
   retryProof = null,
   sleep = wait,
+  integrityKey,
 }) {
   let ids;
   let cleanupIdentityKey;
@@ -707,7 +729,7 @@ export async function restoreBenchmarkBaseline({
     requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
     requiredFunction(rest?.request, 'rest.request');
     requiredFunction(sleep, 'sleep');
-    validateBaselineRecord(baseline);
+    validateBaselineRecord(baseline, integrityKey);
     validateCommon(
       {
         guildId: baseline.guild_id,
@@ -966,7 +988,7 @@ export async function initializeBenchmarkBaseline({
   requiredFunction(snapshotFingerprint, 'snapshotFingerprint');
   requiredFunction(rest?.request, 'rest.request');
   validateCommon({ guildId, botId, allowedGuildIds, confirmation }, 'initializer');
-  if (typeof runId !== 'string' || runId.trim() === '') throw new TypeError('runId is required');
+  if (typeof runId !== 'string' || !RUN_ID.test(runId)) throw new TypeError('runId is invalid');
   let snapshot = await readSnapshot({ guildId, botId });
   assertSnapshot(snapshot, guildId, botId);
   let canaryRole = canaryFromSnapshot(snapshot, 'role', CANARY_ROLE_NAME);
@@ -1083,6 +1105,7 @@ export async function initializeBenchmarkBaseline({
     canaryRoleId,
     canaryChannelId,
     fingerprint,
+    runId,
   );
   return cloneJson(baseline);
 }

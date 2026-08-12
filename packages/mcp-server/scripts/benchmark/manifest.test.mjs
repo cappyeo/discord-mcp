@@ -63,6 +63,8 @@ function makeResults(manifest = makeManifest()) {
     serious_permission_failures: [],
     functional_failures: [],
     plan_snapshot_unchanged: true,
+    progressive_discovery_succeeded: true,
+    dry_run_observed_before_apply: true,
     forced_resume_observed: trial.mode === 'forced_resume' ? true : null,
     operations_planned: 25,
     apply_calls: trial.mode === 'forced_resume' ? 2 : 1,

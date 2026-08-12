@@ -26,6 +26,9 @@ const REQUIRED_DEPENDENCIES = [
   'verifyAuditTrail',
   'loadCheckpoint',
 ];
+const PROGRESSIVE_SEARCH_TOOL = 'mcp_tools_search';
+const PROGRESSIVE_READ_TOOL = 'mcp_tools_read';
+const PROGRESSIVE_DESTRUCTIVE_TOOL = 'mcp_tools_destructive';
 
 class TrialFailure extends Error {
   constructor(code, { serious = false, terminalStatus = 'error' } = {}) {
@@ -108,9 +111,53 @@ function childEnv(input) {
     MCP_AUDIT_ENABLED: 'true',
     MCP_BLUEPRINT_STATE_DIR: input.stateDirectory,
     MCP_DRY_RUN: 'false',
-    MCP_TOOL_SURFACE: 'full',
+    MCP_TOOL_SURFACE: 'progressive',
     MCP_WRITE_MODE: 'allow',
   };
+}
+
+function validateProgressiveContract(result, toolName, dispatcher, requiredFields) {
+  assertRecord(result, 'PROGRESSIVE_DISCOVERY_INVALID');
+  if (!Array.isArray(result.matches) || result.matches.length !== 1) {
+    fail('PROGRESSIVE_DISCOVERY_INVALID');
+  }
+  const match = result.matches[0];
+  assertRecord(match, 'PROGRESSIVE_DISCOVERY_INVALID');
+  const properties = match.inputSchema?.properties;
+  const required = match.inputSchema?.required;
+  const expectedReadOnly = dispatcher === PROGRESSIVE_READ_TOOL;
+  if (
+    match.name !== toolName ||
+    match.dispatcher !== dispatcher ||
+    typeof match.description !== 'string' ||
+    match.description === '' ||
+    match.inputSchema === null ||
+    typeof match.inputSchema !== 'object' ||
+    Array.isArray(match.inputSchema) ||
+    properties === null ||
+    typeof properties !== 'object' ||
+    Array.isArray(properties) ||
+    !Array.isArray(required) ||
+    JSON.stringify([...required].sort()) !== JSON.stringify([...requiredFields].sort()) ||
+    requiredFields.some((field) => !Object.hasOwn(properties, field)) ||
+    match.annotations === null ||
+    typeof match.annotations !== 'object' ||
+    Array.isArray(match.annotations) ||
+    match.annotations.readOnlyHint !== expectedReadOnly ||
+    match.annotations.destructiveHint !== !expectedReadOnly
+  ) {
+    fail('PROGRESSIVE_DISCOVERY_INVALID');
+  }
+  return match;
+}
+
+async function discoverProgressiveTool(session, query, toolName, dispatcher, requiredFields) {
+  const result = await session.callTool(PROGRESSIVE_SEARCH_TOOL, { query, limit: 1 });
+  return validateProgressiveContract(result, toolName, dispatcher, requiredFields);
+}
+
+async function dispatchProgressiveTool(session, contract, args) {
+  return session.callTool(contract.dispatcher, { tool: contract.name, args });
 }
 
 function validatePlan(plan, trial) {
@@ -554,6 +601,8 @@ export async function runBenchmarkTrial(input) {
   let lastApplyResultUnavailable = false;
   let planRecoveryCount = 0;
   let planSnapshotUnchanged = false;
+  let progressiveDiscoverySucceeded = false;
+  let dryRunObservedBeforeApply = false;
   let forcedResumeObserved = false;
   let replayStatus = null;
   let evidenceStatus = null;
@@ -628,9 +677,14 @@ export async function runBenchmarkTrial(input) {
     while (true) {
       let rawPlan;
       try {
-        rawPlan = await currentSession.callTool('guild_blueprint_plan', {
-          guild_id: trial.guild_id,
-          expected_bot_id: trial.expected_bot_id,
+        const contract = await discoverProgressiveTool(
+          currentSession,
+          input.request,
+          'guild_blueprint_plan',
+          PROGRESSIVE_READ_TOOL,
+          ['request'],
+        );
+        rawPlan = await dispatchProgressiveTool(currentSession, contract, {
           request: input.request,
         });
       } catch (error) {
@@ -642,7 +696,9 @@ export async function runBenchmarkTrial(input) {
         await reopen(milliseconds);
         continue;
       }
-      return validatePlan(rawPlan, trial);
+      const validated = validatePlan(rawPlan, trial);
+      progressiveDiscoverySucceeded = true;
+      return validated;
     }
   };
   const callApply = async (operationBudget, recoverApply) => {
@@ -650,8 +706,16 @@ export async function runBenchmarkTrial(input) {
       let rawApply;
       applyCalls += 1;
       try {
-        rawApply = await currentSession.callTool(
+        const contract = await discoverProgressiveTool(
+          currentSession,
           'guild_blueprint_apply',
+          'guild_blueprint_apply',
+          PROGRESSIVE_DESTRUCTIVE_TOOL,
+          ['approval_id', 'expected_bot_id', 'guild_id', 'plan_token'],
+        );
+        rawApply = await dispatchProgressiveTool(
+          currentSession,
+          contract,
           applyArgs(input, plan, operationBudget),
         );
       } catch (error) {
@@ -717,6 +781,7 @@ export async function runBenchmarkTrial(input) {
     if (!planSnapshotUnchanged) {
       fail('PLAN_MUTATED_DISCORD', { serious: true });
     }
+    dryRunObservedBeforeApply = true;
 
     let latestApply;
     const mainApplyRecovery = createApplyRecovery();
@@ -810,7 +875,14 @@ export async function runBenchmarkTrial(input) {
 
     await closeCurrent();
     const evidenceSession = await open();
-    const evidence = await evidenceSession.callTool('guild_blueprint_evidence', {
+    const evidenceContract = await discoverProgressiveTool(
+      evidenceSession,
+      'guild_blueprint_evidence',
+      'guild_blueprint_evidence',
+      PROGRESSIVE_READ_TOOL,
+      ['expected_bot_id', 'guild_id', 'plan_id'],
+    );
+    const evidence = await dispatchProgressiveTool(evidenceSession, evidenceContract, {
       guild_id: trial.guild_id,
       expected_bot_id: trial.expected_bot_id,
       plan_id: plan.plan_id,
@@ -1035,6 +1107,8 @@ export async function runBenchmarkTrial(input) {
       serious_permission_failures: serious,
       functional_failures: functional,
       plan_snapshot_unchanged: planSnapshotUnchanged,
+      progressive_discovery_succeeded: progressiveDiscoverySucceeded,
+      dry_run_observed_before_apply: dryRunObservedBeforeApply,
       forced_resume_observed: trial.mode === 'forced_resume' ? forcedResumeObserved : null,
       operations_planned: operationsPlanned,
       apply_calls: applyCalls,

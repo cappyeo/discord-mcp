@@ -1,11 +1,13 @@
 import { Client } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
-const NORTH_STAR_TOOLS = [
-  'guild_blueprint_plan',
-  'guild_blueprint_apply',
-  'guild_blueprint_evidence',
+const PROGRESSIVE_TOOLS = [
+  'mcp_tools_search',
+  'mcp_tools_read',
+  'mcp_tools_write',
+  'mcp_tools_destructive',
 ];
+const LEGACY_TOOLS = ['guild_blueprint_plan', 'guild_blueprint_apply', 'guild_blueprint_evidence'];
 const TOOL_REQUEST_TIMEOUT_MS = 180_000;
 const ALLOWED_CHILD_ENV = new Set([
   'ALLOWED_GUILDS',
@@ -80,7 +82,7 @@ export async function openMcpBenchmarkSession({
   cliPath,
   cwd,
   env,
-  requiredTools = NORTH_STAR_TOOLS,
+  requiredTools = env?.MCP_TOOL_SURFACE === 'progressive' ? PROGRESSIVE_TOOLS : LEGACY_TOOLS,
 }) {
   const secrets = sensitiveValues(env);
   const transport = new StdioClientTransport({

@@ -493,19 +493,21 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
           checkpoint_persisted: true,
           activity: {
             schema_version: 'guild_blueprint_activity_evidence.v1',
-            verified_counts: {
-              identity: 2,
-              roles: blueprint.roles.length,
-              categories: blueprint.categories.length,
-              channels: blueprint.channels.length,
-              automod: blueprint.automod.rules.length,
-              components_v2: blueprint.components_v2.publications.length,
-            },
-            safety: {
-              source_permissions_applied: false,
-              dangerous_generated_permissions: 0,
-              bot_permission_grants: 0,
-              discord_managed_role_mutations: 0,
+            plan_invariants: {
+              expected_counts: {
+                identity: 2,
+                roles: blueprint.roles.length,
+                categories: blueprint.categories.length,
+                channels: blueprint.channels.length,
+                automod: blueprint.automod.rules.length,
+                components_v2: blueprint.components_v2.publications.length,
+              },
+              safety_policy: {
+                source_permissions_applied: false,
+                dangerous_generated_permissions: 0,
+                bot_permission_grants: 0,
+                discord_managed_role_mutations: 0,
+              },
             },
           },
         },

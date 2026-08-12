@@ -20,7 +20,7 @@ import {
 
 const SHA256_ID = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
-export const GuildBlueprintVerifiedCountsSchema = z
+export const GuildBlueprintPlanCountsSchema = z
   .object({
     identity: z.literal(2),
     roles: z.number().int().nonnegative(),
@@ -35,12 +35,30 @@ export const GuildBlueprintVerifiedCountsSchema = z
   })
   .strict();
 
-export const GuildBlueprintSafetyEvidenceSchema = z
+export const GuildBlueprintSafetyPolicySchema = z
   .object({
     source_permissions_applied: z.literal(false),
     dangerous_generated_permissions: z.literal(0),
     bot_permission_grants: z.literal(0),
     discord_managed_role_mutations: z.literal(0),
+  })
+  .strict();
+
+export const GuildBlueprintPlanInvariantsSchema = z
+  .object({
+    expected_counts: GuildBlueprintPlanCountsSchema,
+    safety_policy: GuildBlueprintSafetyPolicySchema,
+  })
+  .strict();
+
+export const GuildBlueprintObservedEvidenceSchema = z
+  .object({
+    initial_snapshot_id: SHA256_ID,
+    final_snapshot_id: SHA256_ID,
+    checkpoint_version: z.number().int().nonnegative(),
+    completed_operation_ids: z.array(z.string().min(1).max(160)).max(128),
+    bindings: BlueprintBindingsSchema,
+    blueprint_readback_match: z.literal(true),
   })
   .strict();
 
@@ -53,28 +71,23 @@ export const GuildBlueprintActivityEvidenceSchema = z
     blueprint_id: SHA256_ID,
     target: BlueprintPlanTargetSchema,
     blueprint: GuildBlueprintSchema,
-    initial_snapshot_id: SHA256_ID,
-    final_snapshot_id: SHA256_ID,
-    checkpoint_version: z.number().int().nonnegative(),
     initial_operation_count: z.number().int().nonnegative().max(128),
-    completed_operation_ids: z.array(z.string().min(1).max(160)).max(128),
-    bindings: BlueprintBindingsSchema,
-    verified_counts: GuildBlueprintVerifiedCountsSchema,
-    safety: GuildBlueprintSafetyEvidenceSchema,
-    blueprint_readback_match: z.literal(true),
+    plan_invariants: GuildBlueprintPlanInvariantsSchema,
+    observed: GuildBlueprintObservedEvidenceSchema,
   })
   .strict()
   .superRefine((evidence, context) => {
     if (
-      new Set(evidence.completed_operation_ids).size !== evidence.completed_operation_ids.length
+      new Set(evidence.observed.completed_operation_ids).size !==
+      evidence.observed.completed_operation_ids.length
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['completed_operation_ids'],
+        path: ['observed', 'completed_operation_ids'],
         message: 'completed_operation_ids must be unique.',
       });
     }
-    if (evidence.initial_operation_count < evidence.completed_operation_ids.length) {
+    if (evidence.initial_operation_count < evidence.observed.completed_operation_ids.length) {
       context.addIssue({
         code: 'custom',
         path: ['initial_operation_count'],
@@ -84,7 +97,7 @@ export const GuildBlueprintActivityEvidenceSchema = z
   });
 
 export type GuildBlueprintActivityEvidence = z.infer<typeof GuildBlueprintActivityEvidenceSchema>;
-export type GuildBlueprintVerifiedCounts = z.infer<typeof GuildBlueprintVerifiedCountsSchema>;
+export type GuildBlueprintPlanCounts = z.infer<typeof GuildBlueprintPlanCountsSchema>;
 
 export class GuildBlueprintActivityEvidenceError extends Error {
   public override readonly name = 'GuildBlueprintActivityEvidenceError';
@@ -128,7 +141,7 @@ function assertExactBindingKeysets(blueprint: GuildBlueprint, bindings: Blueprin
   }
 }
 
-function verifiedCounts(blueprint: GuildBlueprint): GuildBlueprintVerifiedCounts {
+function planCounts(blueprint: GuildBlueprint): GuildBlueprintPlanCounts {
   return {
     identity: 2,
     roles: blueprint.roles.length,
@@ -242,20 +255,24 @@ export function buildGuildBlueprintActivityEvidence(
     blueprint_id: input.plan.blueprint_id,
     target: input.plan.target,
     blueprint: input.plan.blueprint,
-    initial_snapshot_id: input.plan.initial_snapshot_id,
-    final_snapshot_id: input.final_reconciliation.snapshot_id,
-    checkpoint_version: checkpoint.data.version,
     initial_operation_count: input.plan.initial_operations.length,
-    completed_operation_ids: completedIds,
-    bindings: checkpoint.data.bindings,
-    verified_counts: verifiedCounts(input.plan.blueprint),
-    safety: {
-      source_permissions_applied: false as const,
-      dangerous_generated_permissions: 0 as const,
-      bot_permission_grants: 0 as const,
-      discord_managed_role_mutations: 0 as const,
+    plan_invariants: {
+      expected_counts: planCounts(input.plan.blueprint),
+      safety_policy: {
+        source_permissions_applied: false as const,
+        dangerous_generated_permissions: 0 as const,
+        bot_permission_grants: 0 as const,
+        discord_managed_role_mutations: 0 as const,
+      },
     },
-    blueprint_readback_match: true as const,
+    observed: {
+      initial_snapshot_id: input.plan.initial_snapshot_id,
+      final_snapshot_id: input.final_reconciliation.snapshot_id,
+      checkpoint_version: checkpoint.data.version,
+      completed_operation_ids: completedIds,
+      bindings: checkpoint.data.bindings,
+      blueprint_readback_match: true as const,
+    },
   };
   const evidence = { ...body, evidence_id: evidenceDigest(body) };
   return GuildBlueprintActivityEvidenceSchema.parse(evidence);
@@ -283,10 +300,24 @@ export function assertGuildBlueprintActivityEvidence(
     );
   }
   assertBlueprintSafe(parsed.data.blueprint);
-  assertExactBindingKeysets(parsed.data.blueprint, parsed.data.bindings);
-  if (!sameCanonical(parsed.data.verified_counts, verifiedCounts(parsed.data.blueprint))) {
+  assertExactBindingKeysets(parsed.data.blueprint, parsed.data.observed.bindings);
+  if (
+    !sameCanonical(parsed.data.plan_invariants.expected_counts, planCounts(parsed.data.blueprint))
+  ) {
     throw new GuildBlueprintActivityEvidenceError(
-      'Activity Evidence verified counts do not match its trusted blueprint.',
+      'Activity Evidence plan counts do not match its trusted blueprint.',
+    );
+  }
+  if (
+    !sameCanonical(parsed.data.plan_invariants.safety_policy, {
+      source_permissions_applied: false,
+      dangerous_generated_permissions: 0,
+      bot_permission_grants: 0,
+      discord_managed_role_mutations: 0,
+    })
+  ) {
+    throw new GuildBlueprintActivityEvidenceError(
+      'Activity Evidence safety policy does not match the trusted blueprint policy.',
     );
   }
 }
