@@ -80,12 +80,18 @@ export function createControlledReuseManifest({
   runId,
   commit,
   builtCli,
+  notBefore,
+  startedAt,
+  request,
   profile = 'caller-owned-devbot',
 } = {}) {
   const guildIds = CONTROLLED_GUILD_IDS;
   const botId = CONTROLLED_BOT_ID;
   requiredString(runId, 'runId');
   requiredString(commit, 'commit');
+  requiredString(notBefore, 'notBefore');
+  requiredString(startedAt, 'startedAt');
+  requiredString(request, 'request');
   requiredString(profile, 'profile');
   const trials = Array.from({ length: 20 }, (_, index) => ({
     trial_id: `trial-${String(index + 1).padStart(2, '0')}`,
@@ -98,6 +104,9 @@ export function createControlledReuseManifest({
     schema_version: BENCHMARK_SCHEMA,
     run_id: runId,
     commit,
+    not_before: notBefore,
+    started_at: startedAt,
+    request,
     built_cli: structuredClone(builtCli),
     api_version: '10',
     reuse_policy: {
@@ -144,6 +153,9 @@ function validateCampaignInput(input) {
   const manifest = assertBenchmarkManifest(input.manifest);
   assertControlledManifestTargets(manifest);
   for (const name of ['request', 'cliPath', 'cwd', 'token']) requiredString(input[name], name);
+  if (input.request !== manifest.request) {
+    throw new TypeError('campaign request does not match the manifest request');
+  }
   if (!record(input.baselines)) throw new TypeError('baselines are required');
   for (const guildId of new Set(manifest.trials.map((trial) => trial.guild_id))) {
     const baseline = input.baselines[guildId];

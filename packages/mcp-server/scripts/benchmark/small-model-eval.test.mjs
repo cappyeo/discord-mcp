@@ -18,9 +18,20 @@ import {
   SMALL_MODEL_POLICY,
   SMALL_MODEL_POLICY_VERSION,
   SMALL_MODEL_REQUEST,
+  terminateCodexProcessTree,
 } from './small-model-eval.mjs';
 
 const digest = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
+const BUILD_ATTESTATION = {
+  entrypoint: 'packages/mcp-server/dist/cli.js',
+  sha256: digest('cli'),
+  source_commit: 'a'.repeat(40),
+  core_entrypoint: 'packages/mcp-core/dist/index.js',
+  core_sha256: digest('core'),
+  core_source_commit: 'a'.repeat(40),
+  files: [{ path: 'packages/mcp-server/dist/cli.js', sha256: digest('cli') }],
+  core_files: [{ path: 'packages/mcp-core/dist/index.js', sha256: digest('core') }],
+};
 
 const TEMPLATE = {
   code: 'GamingTemplate',
@@ -28,6 +39,8 @@ const TEMPLATE = {
   verified: true,
   code_match: true,
   permission_handling: 'discarded_and_regenerated',
+  contributes: ['gaming'],
+  structural_contributions: ['categories', 'text_channels', 'custom_roles'],
   evidence_digest: digest('template-evidence'),
   fetched_at: '2026-08-13T00:00:00.000Z',
   source_guild: {
@@ -40,6 +53,8 @@ const TEMPLATE = {
 const RAW_TEMPLATE = {
   code: TEMPLATE.code,
   use_url: TEMPLATE.use_url,
+  contributes: TEMPLATE.contributes,
+  structural_contributions: TEMPLATE.structural_contributions,
   quality: {
     verified: true,
     code_match: true,
@@ -183,6 +198,67 @@ describe('small-model evaluation contract', () => {
     expect(JSON.stringify(parsed)).not.toContain('call-1');
   });
 
+  it('fails closed when a call_id completion diverges from its start contract', () => {
+    const start = {
+      type: 'item.started',
+      item: {
+        type: 'mcp_tool_call',
+        id: 'call-1',
+        tool: 'build_discord_server',
+        arguments: { request: SMALL_MODEL_REQUEST },
+      },
+    };
+    const completion = {
+      type: 'item.completed',
+      item: {
+        type: 'mcp_tool_call',
+        id: 'call-1',
+        tool: 'guild_blueprint_apply',
+        arguments: { request: 'different request', extra: true },
+      },
+    };
+    const parsed = parseCodexJsonl(`${JSON.stringify(start)}\n${JSON.stringify(completion)}`);
+    expect(parsed.contract_errors).toContain('call_id_contract_mismatch');
+    expect(classifySmallModelTrial({ trace: parsed.trace })).toBe('tool_contract_failure');
+  });
+
+  it('rejects each individual call_id completion divergence', () => {
+    const fields = [
+      ['tool', 'guild_blueprint_apply'],
+      ['arguments', { request: SMALL_MODEL_REQUEST, extra: true }],
+      ['arguments', { request: 'a different request' }],
+      [
+        'arguments',
+        {
+          args: { request: SMALL_MODEL_REQUEST, tool: 'guild_blueprint_apply' },
+          tool: 'mcp_tools_read',
+        },
+      ],
+    ];
+    for (const [field, value] of fields) {
+      const start = {
+        type: 'item.started',
+        item: {
+          type: 'mcp_tool_call',
+          id: 'call-1',
+          tool: 'build_discord_server',
+          arguments: { request: SMALL_MODEL_REQUEST },
+        },
+      };
+      const item = {
+        type: 'mcp_tool_call',
+        id: 'call-1',
+        tool: 'build_discord_server',
+        arguments: { request: SMALL_MODEL_REQUEST },
+      };
+      item[field] = value;
+      const parsed = parseCodexJsonl(
+        `${JSON.stringify(start)}\n${JSON.stringify({ type: 'item.completed', item })}`,
+      );
+      expect(parsed.contract_errors.length).toBeGreaterThan(0);
+    }
+  });
+
   it('accepts exactly one completed direct architecture call', () => {
     const parsed = parseCodexJsonl(directOutput());
     expect(classifySmallModelTrial({ trace: parsed.trace, clarificationDetected: false })).toBe(
@@ -269,6 +345,31 @@ describe('small-model evaluation contract', () => {
     const readyWithoutOps = structuredClone(trace);
     readyWithoutOps[0].result_summary.counts.operations = 0;
     expect(classifySmallModelTrial({ trace: readyWithoutOps })).toBe('tool_contract_failure');
+    const invalidCapability = structuredClone(trace);
+    invalidCapability[0].result_summary.template_evidence.primary.contributes = ['untrusted'];
+    expect(classifySmallModelTrial({ trace: invalidCapability })).toBe('tool_contract_failure');
+    const decorative = structuredClone(trace);
+    decorative[0].result_summary.template_evidence.inspirations = [
+      {
+        ...decorative[0].result_summary.template_evidence.primary,
+        code: 'decorative-inspiration',
+        use_url: 'https://discord.new/decorative-inspiration',
+        contributes: [],
+        structural_contributions: [],
+      },
+    ];
+    expect(classifySmallModelTrial({ trace: decorative })).toBe('tool_contract_failure');
+    const noopPrimary = structuredClone(trace);
+    noopPrimary[0].result_summary.template_evidence.primary.contributes = [];
+    noopPrimary[0].result_summary.template_evidence.primary.structural_contributions = [];
+    expect(classifySmallModelTrial({ trace: noopPrimary })).toBe('tool_contract_failure');
+    const missingPrimaryContribution = structuredClone(trace);
+    delete missingPrimaryContribution[0].result_summary.template_evidence.primary.contributes;
+    delete missingPrimaryContribution[0].result_summary.template_evidence.primary
+      .structural_contributions;
+    expect(classifySmallModelTrial({ trace: missingPrimaryContribution })).toBe(
+      'tool_contract_failure',
+    );
   });
 
   it('pins the isolated Codex invocation and enabled MCP tools', () => {
@@ -334,6 +435,46 @@ describe('small-model evaluation contract', () => {
     expect(calls[0]).toEqual(['where.exe', ['codex.exe']]);
   });
 
+  it('terminates the complete Codex process tree on Windows and POSIX', async () => {
+    const windowsCommands = [];
+    const windowsChild = { pid: 12345, kill: () => false };
+    await expect(
+      terminateCodexProcessTree({
+        child: windowsChild,
+        platform: 'win32',
+        run: async (command, args, options) => windowsCommands.push({ command, args, options }),
+      }),
+    ).resolves.toBe(true);
+    await terminateCodexProcessTree({
+      child: windowsChild,
+      platform: 'win32',
+      force: true,
+      run: async (command, args, options) => windowsCommands.push({ command, args, options }),
+    });
+    expect(windowsCommands.map(({ args }) => args)).toEqual([
+      ['/PID', '12345', '/T'],
+      ['/PID', '12345', '/T', '/F'],
+    ]);
+
+    const posixSignals = [];
+    const posixChild = { pid: 54321, kill: () => false };
+    await terminateCodexProcessTree({
+      child: posixChild,
+      platform: 'linux',
+      kill: (pid, signal) => posixSignals.push([pid, signal]),
+    });
+    await terminateCodexProcessTree({
+      child: posixChild,
+      platform: 'linux',
+      force: true,
+      kill: (pid, signal) => posixSignals.push([pid, signal]),
+    });
+    expect(posixSignals).toEqual([
+      [-54321, 'SIGTERM'],
+      [-54321, 'SIGKILL'],
+    ]);
+  });
+
   it('writes a fail-closed artifact without spawning Codex when the front door is missing', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-small-model-'));
     try {
@@ -341,8 +482,8 @@ describe('small-model evaluation contract', () => {
       const artifact = await runSmallModelEvaluation({
         output,
         cwd: 'C:/repo',
-        trials: 3,
-        threshold: 2,
+        trials: 5,
+        threshold: 4,
         env: {
           DISCORD_TOKEN: 'x'.repeat(60),
           ALLOWED_GUILDS: '1533998797863256165',
@@ -352,9 +493,7 @@ describe('small-model evaluation contract', () => {
         attest: async () => ({
           cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
           attestation: {
-            entrypoint: 'packages/mcp-server/dist/cli.js',
-            sha256: digest('cli'),
-            source_commit: 'a'.repeat(40),
+            ...BUILD_ATTESTATION,
           },
         }),
         openSession: async () => ({
@@ -366,14 +505,14 @@ describe('small-model evaluation contract', () => {
           throw new Error('Codex must not spawn');
         },
       });
-      expect(artifact.trials).toHaveLength(3);
+      expect(artifact.trials).toHaveLength(5);
       expect(
         artifact.trials.every((trial) => trial.classification === 'product_front_door_missing'),
       ).toBe(true);
       expect(artifact.aggregate).toMatchObject({
-        total: 3,
+        total: 5,
         passes: 0,
-        required_passes: 2,
+        required_passes: 4,
         meets_threshold: false,
       });
       expect(JSON.parse(await readFile(output, 'utf8')).policy.sha256).toBe(
@@ -384,15 +523,40 @@ describe('small-model evaluation contract', () => {
     }
   });
 
-  it('rejects a zero or over-sized pass threshold before any host work', async () => {
+  it('rejects any downgrade of the fixed five-trial, four-pass gate before host work', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-small-model-threshold-'));
     try {
       await expect(
-        runSmallModelEvaluation({ output: join(directory, 'zero.json'), trials: 5, threshold: 0 }),
-      ).rejects.toThrow('threshold must be between 1 and trials');
+        runSmallModelEvaluation({ output: join(directory, 'short.json'), trials: 1, threshold: 1 }),
+      ).rejects.toThrow('requires exactly 5 trials');
       await expect(
-        runSmallModelEvaluation({ output: join(directory, 'large.json'), trials: 5, threshold: 6 }),
-      ).rejects.toThrow('threshold must be between 1 and trials');
+        runSmallModelEvaluation({ output: join(directory, 'weak.json'), trials: 5, threshold: 1 }),
+      ).rejects.toThrow('requires exactly 4 passes');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a valid-looking target outside the controlled guild and bot pool', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-small-model-target-'));
+    let hostCalls = 0;
+    try {
+      await expect(
+        runSmallModelEvaluation({
+          output: join(directory, 'outside.json'),
+          env: {
+            DISCORD_TOKEN: 'x'.repeat(60),
+            ALLOWED_GUILDS: '1533478783867420712',
+            DISCORD_DEFAULT_GUILD_ID: '1533478783867420712',
+            DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+          },
+          run: async () => {
+            hostCalls += 1;
+            return { stdout: `${'a'.repeat(40)}\n` };
+          },
+        }),
+      ).rejects.toThrow(/outside the controlled guild\/bot scope/);
+      expect(hostCalls).toBe(0);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -406,8 +570,8 @@ describe('small-model evaluation contract', () => {
       const artifact = await runSmallModelEvaluation({
         output: join(directory, 'host.json'),
         cwd: 'C:/repo',
-        trials: 2,
-        threshold: 1,
+        trials: 5,
+        threshold: 4,
         env: {
           DISCORD_TOKEN: 'x'.repeat(60),
           ALLOWED_GUILDS: '1533998797863256165',
@@ -422,9 +586,7 @@ describe('small-model evaluation contract', () => {
         attest: async () => ({
           cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
           attestation: {
-            entrypoint: 'packages/mcp-server/dist/cli.js',
-            sha256: digest('cli'),
-            source_commit: 'a'.repeat(40),
+            ...BUILD_ATTESTATION,
           },
         }),
         openSession: async () => ({
@@ -441,8 +603,75 @@ describe('small-model evaluation contract', () => {
       expect(artifact.trials.map((trial) => trial.classification)).toEqual([
         'host_invalid',
         'host_invalid',
+        'host_invalid',
+        'host_invalid',
+        'host_invalid',
       ]);
       expect(artifact.aggregate.meets_threshold).toBe(false);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('cleans up the private runtime when build attestation validation fails', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-small-model-cleanup-'));
+    let cleanupCalls = 0;
+    let sessionCalls = 0;
+    try {
+      await expect(
+        runSmallModelEvaluation({
+          output: join(directory, 'invalid-attestation.json'),
+          cwd: 'C:/repo',
+          env: {
+            DISCORD_TOKEN: 'x'.repeat(60),
+            ALLOWED_GUILDS: '1533998797863256165',
+            DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+          },
+          run: async () => ({ stdout: `${'a'.repeat(40)}\n` }),
+          attest: async () => ({
+            cliPath: 'C:/repo/private/cli.js',
+            attestation: { entrypoint: 'invalid' },
+            cleanup: async () => {
+              cleanupCalls += 1;
+            },
+          }),
+          openSession: async () => {
+            sessionCalls += 1;
+            throw new Error('session must not open');
+          },
+        }),
+      ).rejects.toThrow(/attestation is invalid/);
+      expect(cleanupCalls).toBe(1);
+      expect(sessionCalls).toBe(0);
+
+      let closeFailureCleanupCalls = 0;
+      await expect(
+        runSmallModelEvaluation({
+          output: join(directory, 'close-failure.json'),
+          cwd: 'C:/repo',
+          env: {
+            DISCORD_TOKEN: 'x'.repeat(60),
+            ALLOWED_GUILDS: '1533998797863256165',
+            DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+          },
+          run: async () => ({ stdout: `${'a'.repeat(40)}\n` }),
+          attest: async () => ({
+            cliPath: 'C:/repo/private/cli.js',
+            attestation: { ...BUILD_ATTESTATION },
+            cleanup: async () => {
+              closeFailureCleanupCalls += 1;
+            },
+          }),
+          openSession: async () => ({
+            toolNames: [],
+            instructions: '',
+            close: async () => {
+              throw new Error('preflight close failed');
+            },
+          }),
+        }),
+      ).rejects.toThrow('preflight close failed');
+      expect(closeFailureCleanupCalls).toBe(1);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -452,8 +681,8 @@ describe('small-model evaluation contract', () => {
     const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-small-model-spawn-'));
     const common = {
       cwd: 'C:/repo',
-      trials: 1,
-      threshold: 1,
+      trials: 5,
+      threshold: 4,
       env: {
         DISCORD_TOKEN: 'x'.repeat(60),
         ALLOWED_GUILDS: '1533998797863256165',
@@ -466,9 +695,7 @@ describe('small-model evaluation contract', () => {
       attest: async () => ({
         cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
         attestation: {
-          entrypoint: 'packages/mcp-server/dist/cli.js',
-          sha256: digest('cli'),
-          source_commit: 'a'.repeat(40),
+          ...BUILD_ATTESTATION,
         },
       }),
       openSession: async () => ({
@@ -493,21 +720,55 @@ describe('small-model evaluation contract', () => {
         meets_threshold: false,
       });
 
-      const timeoutChild = () => {
+      const timeoutSignals = [];
+      const timeoutSpawnOptions = [];
+      const timeoutChild = (_command, _args, options) => {
         const child = new EventEmitter();
         child.stdout = new EventEmitter();
         child.stderr = new EventEmitter();
-        child.kill = () => true;
+        timeoutSpawnOptions.push(options);
+        child.kill = (signal) => {
+          timeoutSignals.push(signal);
+          queueMicrotask(() => child.emit('close', null, signal));
+          return true;
+        };
         return child;
       };
       const timeoutArtifact = await runSmallModelEvaluation({
         ...common,
         output: join(directory, 'timeout.json'),
         timeoutMs: 1,
+        terminationGraceMs: 50,
         spawn: timeoutChild,
       });
       expect(timeoutArtifact.trials[0]?.classification).toBe('host_invalid');
       expect(timeoutArtifact.trials[0]?.trace).toEqual([]);
+      expect(timeoutSignals).toEqual(['SIGTERM', 'SIGTERM', 'SIGTERM', 'SIGTERM', 'SIGTERM']);
+      expect(timeoutSpawnOptions).toHaveLength(5);
+      expect(timeoutSpawnOptions.every((options) => options.detached === true)).toBe(true);
+
+      let stuckSpawnCount = 0;
+      const stuckSignals = [];
+      const stuckArtifactPromise = runSmallModelEvaluation({
+        ...common,
+        output: join(directory, 'stuck.json'),
+        timeoutMs: 1,
+        terminationGraceMs: 1,
+        spawn: () => {
+          stuckSpawnCount += 1;
+          const child = new EventEmitter();
+          child.stdout = new EventEmitter();
+          child.stderr = new EventEmitter();
+          child.kill = (signal) => {
+            stuckSignals.push(signal);
+            return true;
+          };
+          return child;
+        },
+      });
+      await expect(stuckArtifactPromise).rejects.toThrow(/process tree did not close/);
+      expect(stuckSpawnCount).toBe(1);
+      expect(stuckSignals).toEqual(['SIGTERM', 'SIGKILL']);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

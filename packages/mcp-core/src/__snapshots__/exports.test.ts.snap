@@ -45,6 +45,7 @@ exports[`public export surface > matches the frozen snapshot 1`] = `
   "VERSION",
   "ValidationError",
   "WebhookId",
+  "assertGuildBlueprintActivityEvidence",
   "auditMiddleware",
   "buildPolicy",
   "buildResource",

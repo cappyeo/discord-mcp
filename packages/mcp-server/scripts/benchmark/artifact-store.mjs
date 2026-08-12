@@ -1,19 +1,21 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
+  chmod,
   link,
   lstat,
   mkdir,
   open,
-  readFile,
   realpath,
   rename,
+  rmdir,
   stat,
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { homedir, hostname } from 'node:os';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-import { assertSecretFreeJson } from './manifest.mjs';
+import { assertSecretFreeJson, strictRfc3339Milliseconds } from './manifest.mjs';
 
 const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const RELATIVE_ARTIFACT = /^[a-zA-Z0-9._/-]+$/;
@@ -21,6 +23,11 @@ const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
 const BASELINE_INTEGRITY_ALGORITHM = 'hmac-sha256';
 const BASELINE_INTEGRITY_CONTEXT = 'discord-mcp-benchmark-baseline:v1';
 const LEGACY_BASELINE_SUFFIX = '.legacy.json';
+const CAMPAIGN_LOCK_OWNER_KEYS = ['run_id', 'commit', 'started_at', 'pid', 'hostname'];
+const MAX_CAMPAIGN_LOCK_OWNER_BYTES = 16 * 1024;
+const SNOWFLAKE = /^\d{17,20}$/;
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const CAMPAIGN_LOCK_CONFIRMATION_PREFIX = 'RELEASE_DISCORD_MCP_LOCK:';
 
 function within(root, target) {
   const path = relative(root, target);
@@ -41,6 +48,117 @@ async function assertNoSymlinkPath(path, description) {
     const parent = dirname(current);
     if (parent === current) return;
     current = parent;
+  }
+}
+
+async function ensurePrivateDirectory(
+  path,
+  description,
+  { platform = process.platform, enforceProfile = false, homeDirectory = homedir() } = {},
+) {
+  if (!isAbsolute(path)) throw new TypeError(`${description} must be absolute`);
+  const requested = resolve(path);
+  if (platform === 'win32' && enforceProfile) {
+    const profileRoot = resolve(homeDirectory);
+    if (!within(profileRoot, requested)) {
+      throw new Error(`${description} must be inside the caller profile`);
+    }
+  }
+  await assertNoSymlinkPath(requested, description);
+  const missing = [];
+  let existingAncestor = requested;
+  while (true) {
+    try {
+      const metadata = await lstat(existingAncestor);
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+        throw new Error(`${description} must not contain a non-directory path component`);
+      }
+      break;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      missing.push(existingAncestor);
+      const parent = dirname(existingAncestor);
+      if (parent === existingAncestor) {
+        throw new Error(`${description} has no existing directory ancestor`);
+      }
+      existingAncestor = parent;
+    }
+  }
+  for (const component of missing.reverse()) {
+    try {
+      await mkdir(component, { recursive: false, mode: PRIVATE_DIRECTORY_MODE });
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      const metadata = await lstat(component);
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+        throw new Error(`${description} changed while creating its path`);
+      }
+    }
+    await assertNoSymlinkPath(component, description);
+    if (platform !== 'win32') await chmod(component, PRIVATE_DIRECTORY_MODE);
+  }
+  await assertNoSymlinkPath(requested, description);
+  if (platform !== 'win32') {
+    await chmod(requested, PRIVATE_DIRECTORY_MODE);
+    const metadata = await lstat(requested);
+    if (!metadata.isDirectory() || (metadata.mode & 0o077) !== 0) {
+      throw new Error(`${description} is not private`);
+    }
+  }
+  const resolved = await realpath(requested);
+  const metadata = await lstat(resolved);
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new Error(`${description} is not a directory`);
+  }
+  if (platform === 'win32' && enforceProfile) {
+    const profileRoot = resolve(homeDirectory);
+    if (!within(profileRoot, resolved)) {
+      throw new Error(`${description} resolves outside the caller profile`);
+    }
+  }
+  return resolved;
+}
+
+async function readBoundedRegularFile(path, maxBytes, description) {
+  const metadata = await lstat(path);
+  if (
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.size < 2 ||
+    metadata.size > maxBytes
+  ) {
+    throw new Error(`${description} is outside the size bound`);
+  }
+  const handle = await open(path, 'r');
+  try {
+    const opened = await handle.stat();
+    if (
+      !opened.isFile() ||
+      opened.dev !== metadata.dev ||
+      opened.ino !== metadata.ino ||
+      opened.size !== metadata.size
+    ) {
+      throw new Error(`${description} changed while opening`);
+    }
+    const buffer = Buffer.alloc(metadata.size + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      const result = await handle.read(buffer, total, buffer.length - total, total);
+      total += result.bytesRead;
+      if (result.bytesRead === 0) break;
+    }
+    const final = await handle.stat();
+    if (
+      final.dev !== metadata.dev ||
+      final.ino !== metadata.ino ||
+      final.size !== total ||
+      total !== metadata.size
+    ) {
+      throw new Error(`${description} changed while reading`);
+    }
+    return buffer.subarray(0, total);
+  } finally {
+    await handle.close();
   }
 }
 
@@ -134,10 +252,7 @@ export function assertBaselineArtifactIntegrity(
 }
 
 async function readBaselineJson(path, guildId) {
-  const bytes = await readFile(path);
-  if (bytes.length < 2 || bytes.length > MAX_BASELINE_BYTES) {
-    throw new Error('baseline artifact is outside the size bound');
-  }
+  const bytes = await readBoundedRegularFile(path, MAX_BASELINE_BYTES, 'baseline artifact');
   let baseline;
   try {
     baseline = JSON.parse(bytes.toString('utf8'));
@@ -157,9 +272,7 @@ async function baselinePaths({ cwd, artifactRoot, guildId }) {
   }
   const root = await ensureArtifactRoot({ cwd, artifactRoot });
   const directory = join(root, 'baselines');
-  await assertNoSymlinkPath(directory, 'baseline artifact directory');
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  await assertNoSymlinkPath(directory, 'baseline artifact directory');
+  await ensurePrivateDirectory(directory, 'baseline artifact directory');
   return {
     directory,
     path: join(directory, `${guildId}.json`),
@@ -283,7 +396,12 @@ async function writeJsonExclusive(path, value) {
   await writeFile(path, text, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
 }
 
-export async function ensureArtifactRoot({ cwd, artifactRoot }) {
+export async function ensureArtifactRoot({
+  cwd,
+  artifactRoot,
+  platform = process.platform,
+  homeDirectory = homedir(),
+}) {
   if (typeof cwd !== 'string' || cwd.trim() === '') throw new TypeError('cwd is required');
   if (typeof artifactRoot !== 'string' || !isAbsolute(artifactRoot)) {
     throw new TypeError('artifactRoot must be an absolute path');
@@ -293,14 +411,291 @@ export async function ensureArtifactRoot({ cwd, artifactRoot }) {
   if (within(sourceRoot, requestedRoot)) {
     throw new Error('benchmark artifacts must be stored outside the source repository');
   }
-  await assertNoSymlinkPath(requestedRoot, 'benchmark artifact root');
-  await mkdir(requestedRoot, { recursive: true, mode: 0o700 });
-  await assertNoSymlinkPath(requestedRoot, 'benchmark artifact root');
-  const root = await realpath(requestedRoot);
+  const root = await ensurePrivateDirectory(requestedRoot, 'benchmark artifact root', {
+    platform,
+    enforceProfile: platform === 'win32',
+    homeDirectory,
+  });
   if (within(sourceRoot, root)) {
     throw new Error('benchmark artifact root resolves inside the source repository');
   }
   return root;
+}
+
+function validStrictRfc3339(value) {
+  return strictRfc3339Milliseconds(value) !== null;
+}
+
+function assertCampaignLockOwner(owner, { normalize = true, requireFull = false } = {}) {
+  if (owner === null || typeof owner !== 'object' || Array.isArray(owner)) {
+    throw new TypeError('campaign lock owner is required');
+  }
+  const keys = Object.keys(owner).sort();
+  const identityKeys = ['commit', 'run_id', 'started_at'];
+  const fullKeys = CAMPAIGN_LOCK_OWNER_KEYS.slice().sort();
+  const allowedKeys = requireFull
+    ? [fullKeys.join('\0')]
+    : [identityKeys.slice().sort().join('\0'), fullKeys.join('\0')];
+  if (!allowedKeys.includes(keys.join('\0'))) {
+    throw new TypeError('campaign lock owner contains unexpected fields');
+  }
+  if (typeof owner.run_id !== 'string' || !RUN_ID.test(owner.run_id)) {
+    throw new TypeError('campaign lock owner run_id is invalid');
+  }
+  if (typeof owner.commit !== 'string' || !/^[a-f0-9]{40}$/.test(owner.commit)) {
+    throw new TypeError('campaign lock owner commit is invalid');
+  }
+  if (!validStrictRfc3339(owner.started_at)) {
+    throw new TypeError('campaign lock owner started_at is invalid');
+  }
+  if (owner.pid !== undefined && (!Number.isSafeInteger(owner.pid) || owner.pid < 1)) {
+    throw new TypeError('campaign lock owner pid is invalid');
+  }
+  if (
+    owner.hostname !== undefined &&
+    (typeof owner.hostname !== 'string' || owner.hostname.length < 1 || owner.hostname.length > 255)
+  ) {
+    throw new TypeError('campaign lock owner hostname is invalid');
+  }
+  assertSecretFreeJson(owner);
+  if (!normalize || (owner.pid !== undefined && owner.hostname !== undefined)) return owner;
+  return { ...owner, pid: process.pid, hostname: hostname() };
+}
+
+function campaignLockDirectory({ botId, guildIds }) {
+  if (typeof botId !== 'string' || !SNOWFLAKE.test(botId)) {
+    throw new TypeError('campaign lock botId is invalid');
+  }
+  if (
+    !Array.isArray(guildIds) ||
+    guildIds.length === 0 ||
+    guildIds.some((guildId) => typeof guildId !== 'string' || !SNOWFLAKE.test(guildId))
+  ) {
+    throw new TypeError('campaign lock guildIds are invalid');
+  }
+  const normalizedGuildIds = [...guildIds].sort();
+  if (new Set(normalizedGuildIds).size !== normalizedGuildIds.length) {
+    throw new TypeError('campaign lock guildIds must be unique');
+  }
+  const identity = `discord-mcp.real-benchmark:v1|bot=${botId}|guilds=${normalizedGuildIds.join(',')}`;
+  return `discord-mcp-campaign-lock-${createHash('sha256').update(identity, 'utf8').digest('hex')}`;
+}
+
+export function defaultCampaignLockRoot({ homeDirectory = homedir() } = {}) {
+  if (typeof homeDirectory !== 'string' || !isAbsolute(homeDirectory)) {
+    throw new TypeError('homeDirectory must be an absolute path');
+  }
+  return join(resolve(homeDirectory), '.discord-mcp', 'locks');
+}
+
+export function campaignLockConfirmation({ botId, guildIds }) {
+  return `${CAMPAIGN_LOCK_CONFIRMATION_PREFIX}${campaignLockDirectory({ botId, guildIds })}`;
+}
+
+async function resolveCampaignLockRoot(
+  lockRoot,
+  { platform = process.platform, homeDirectory = homedir() } = {},
+) {
+  const requested = lockRoot ?? defaultCampaignLockRoot({ homeDirectory });
+  if (typeof requested !== 'string' || !isAbsolute(requested)) {
+    throw new TypeError('lockRoot must be an absolute path');
+  }
+  return ensurePrivateDirectory(requested, 'campaign lock root', {
+    platform,
+    enforceProfile: platform === 'win32',
+    homeDirectory,
+  });
+}
+
+function sameCampaignLockOwner(left, right) {
+  return CAMPAIGN_LOCK_OWNER_KEYS.every((key) => left[key] === right[key]);
+}
+
+function assertOwnerProcessIsNotAlive(owner) {
+  if (owner.hostname !== hostname()) {
+    throw new Error('campaign lock owner process cannot be proven stopped');
+  }
+  try {
+    process.kill(owner.pid, 0);
+  } catch (error) {
+    if (error?.code === 'ESRCH') return;
+    throw new Error('campaign lock owner process cannot be proven stopped');
+  }
+  throw new Error('campaign lock owner process is still alive');
+}
+
+async function readCampaignLockOwner(lockPath) {
+  const ownerPath = join(lockPath, 'owner.json');
+  await assertNoSymlinkPath(lockPath, 'campaign lock');
+  const lockMetadata = await lstat(lockPath);
+  if (!lockMetadata.isDirectory()) throw new Error('campaign lock is not a directory');
+  await assertNoSymlinkPath(ownerPath, 'campaign lock owner metadata');
+  const ownerMetadata = await lstat(ownerPath);
+  if (!ownerMetadata.isFile()) throw new Error('campaign lock owner metadata is not a file');
+  if (ownerMetadata.size > MAX_CAMPAIGN_LOCK_OWNER_BYTES) {
+    throw new Error('campaign lock owner metadata is outside the size bound');
+  }
+  let owner;
+  try {
+    owner = JSON.parse(
+      (
+        await readBoundedRegularFile(
+          ownerPath,
+          MAX_CAMPAIGN_LOCK_OWNER_BYTES,
+          'campaign lock owner metadata',
+        )
+      ).toString('utf8'),
+    );
+  } catch {
+    throw new Error('campaign lock owner metadata is unavailable');
+  }
+  try {
+    return assertCampaignLockOwner(owner, { normalize: false, requireFull: true });
+  } catch {
+    throw new Error('campaign lock owner metadata is unavailable');
+  }
+}
+
+async function publishCampaignLockOwner(ownerPath, lockPath, owner) {
+  const temporary = join(lockPath, `.owner.${process.pid}.${randomBytes(8).toString('hex')}.tmp`);
+  const payload = `${JSON.stringify(owner, null, 2)}\n`;
+  let handle;
+  try {
+    handle = await open(temporary, 'wx', 0o600);
+    await handle.writeFile(payload, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    // Hard-link publication is atomic and never replaces an existing owner.
+    await link(temporary, ownerPath);
+    return true;
+  } finally {
+    if (handle !== undefined) await handle.close().catch(() => undefined);
+    await unlink(temporary).catch(() => undefined);
+  }
+}
+
+async function removePublishedOwnerIfOwned(lockPath, owner) {
+  try {
+    const current = await readCampaignLockOwner(lockPath);
+    if (sameCampaignLockOwner(current, owner)) {
+      await unlink(join(lockPath, 'owner.json'));
+    }
+  } catch {
+    // Preserve the lock if ownership cannot be proven.
+  }
+}
+
+/** Acquire the fail-closed caller-scope campaign lock for the controlled guild pool. */
+export async function acquireCampaignLock({
+  botId,
+  guildIds,
+  owner,
+  lockRoot,
+  platform = process.platform,
+  homeDirectory = homedir(),
+}) {
+  const requestedOwner = assertCampaignLockOwner(owner, { normalize: false });
+  if (requestedOwner.pid !== undefined || requestedOwner.hostname !== undefined) {
+    throw new TypeError('campaign lock acquisition owner must not provide pid or hostname');
+  }
+  const normalizedOwner = { ...requestedOwner, pid: process.pid, hostname: hostname() };
+  const resolvedLockRoot = await resolveCampaignLockRoot(lockRoot, { platform, homeDirectory });
+  const lockPath = join(resolvedLockRoot, campaignLockDirectory({ botId, guildIds }));
+  await assertNoSymlinkPath(lockPath, 'campaign lock');
+  try {
+    await mkdir(lockPath, { recursive: false, mode: 0o700 });
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+    let heldBy;
+    try {
+      heldBy = await readCampaignLockOwner(lockPath);
+    } catch {
+      throw new Error('benchmark campaign lock is held but owner metadata is unavailable');
+    }
+    throw new Error(`benchmark campaign lock is held: ${JSON.stringify(heldBy)}`);
+  }
+
+  const ownerPath = join(lockPath, 'owner.json');
+  let ownerPublished = false;
+  try {
+    await assertNoSymlinkPath(lockPath, 'campaign lock');
+    ownerPublished = await publishCampaignLockOwner(ownerPath, lockPath, normalizedOwner);
+    await assertNoSymlinkPath(ownerPath, 'campaign lock owner metadata');
+  } catch (error) {
+    if (ownerPublished) await removePublishedOwnerIfOwned(lockPath, normalizedOwner);
+    await rmdir(lockPath).catch(() => undefined);
+    throw error;
+  }
+
+  let released = false;
+  return {
+    lockPath,
+    async release() {
+      if (released) return;
+      const heldBy = await readCampaignLockOwner(lockPath);
+      if (!sameCampaignLockOwner(heldBy, normalizedOwner)) {
+        throw new Error('campaign lock owner metadata changed; refusing release');
+      }
+      await unlink(join(lockPath, 'owner.json'));
+      await rmdir(lockPath);
+      released = true;
+    },
+  };
+}
+
+/**
+ * Explicitly release a lock after an interrupted campaign.
+ *
+ * This is intentionally never called by acquisition or campaign execution:
+ * callers must provide the exact recorded owner and a confirmation bound to
+ * the bot/guild lock identity. Missing or malformed owner metadata fails
+ * closed and requires manual operator inspection.
+ */
+export async function recoverCampaignLock({
+  botId,
+  guildIds,
+  owner,
+  confirmation,
+  lockRoot,
+  platform = process.platform,
+  homeDirectory = homedir(),
+}) {
+  assertCampaignLockOwner(owner, { normalize: false, requireFull: true });
+  if (confirmation !== campaignLockConfirmation({ botId, guildIds })) {
+    throw new Error('campaign lock recovery confirmation does not match the lock identity');
+  }
+  const resolvedLockRoot = await resolveCampaignLockRoot(lockRoot, { platform, homeDirectory });
+  const lockPath = join(resolvedLockRoot, campaignLockDirectory({ botId, guildIds }));
+  await assertNoSymlinkPath(lockPath, 'campaign lock');
+  let heldBy;
+  try {
+    heldBy = await readCampaignLockOwner(lockPath);
+  } catch {
+    throw new Error('campaign lock recovery requires valid owner metadata');
+  }
+  if (!sameCampaignLockOwner(heldBy, owner)) {
+    throw new Error('campaign lock recovery owner does not match');
+  }
+  assertOwnerProcessIsNotAlive(heldBy);
+  const quarantinePath = join(
+    resolvedLockRoot,
+    `${basename(lockPath)}.quarantine.${process.pid}.${randomBytes(8).toString('hex')}`,
+  );
+  await assertNoSymlinkPath(quarantinePath, 'campaign lock quarantine');
+  // Re-read and compare the complete owner immediately before the atomic move.
+  const latestOwner = await readCampaignLockOwner(lockPath);
+  if (!sameCampaignLockOwner(latestOwner, owner)) {
+    throw new Error('campaign lock recovery owner changed before quarantine');
+  }
+  assertOwnerProcessIsNotAlive(latestOwner);
+  try {
+    // Keep the complete lock tree for inspection; never recursively delete it.
+    await rename(lockPath, quarantinePath);
+  } catch (error) {
+    throw new Error(`campaign lock recovery could not quarantine the lock: ${error.message}`);
+  }
+  return { lockPath, quarantinePath, owner: latestOwner };
 }
 
 export async function prepareArtifactStore({ cwd, artifactRoot, runId }) {
@@ -308,20 +703,14 @@ export async function prepareArtifactStore({ cwd, artifactRoot, runId }) {
   const root = await ensureArtifactRoot({ cwd, artifactRoot });
   const runDirectory = join(root, 'runs', runId);
   const runsDirectory = join(root, 'runs');
-  await assertNoSymlinkPath(runsDirectory, 'benchmark runs directory');
-  await mkdir(runsDirectory, { recursive: true, mode: 0o700 });
-  await assertNoSymlinkPath(runsDirectory, 'benchmark runs directory');
+  await ensurePrivateDirectory(runsDirectory, 'benchmark runs directory');
   await assertNoSymlinkPath(runDirectory, 'benchmark run directory');
   await mkdir(runDirectory, { recursive: false, mode: 0o700 });
   await assertNoSymlinkPath(runDirectory, 'benchmark run directory');
   const resultsDirectory = join(runDirectory, 'results');
   const stateDirectory = join(runDirectory, 'state');
-  await assertNoSymlinkPath(resultsDirectory, 'artifact results directory');
-  await mkdir(resultsDirectory, { mode: 0o700 });
-  await assertNoSymlinkPath(resultsDirectory, 'artifact results directory');
-  await assertNoSymlinkPath(stateDirectory, 'artifact state directory');
-  await mkdir(stateDirectory, { mode: 0o700 });
-  await assertNoSymlinkPath(stateDirectory, 'artifact state directory');
+  await ensurePrivateDirectory(resultsDirectory, 'artifact results directory');
+  await ensurePrivateDirectory(stateDirectory, 'artifact state directory');
 
   return {
     root,
@@ -352,9 +741,7 @@ export async function writeBaselineArtifact({ cwd, artifactRoot, baseline, integ
   }
   const root = await ensureArtifactRoot({ cwd, artifactRoot });
   const directory = join(root, 'baselines');
-  await assertNoSymlinkPath(directory, 'baseline artifact directory');
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  await assertNoSymlinkPath(directory, 'baseline artifact directory');
+  await ensurePrivateDirectory(directory, 'baseline artifact directory');
   const path = join(directory, `${baseline.guild_id}.json`);
   await assertNoSymlinkPath(path, 'baseline artifact target');
   await writeJsonExclusive(

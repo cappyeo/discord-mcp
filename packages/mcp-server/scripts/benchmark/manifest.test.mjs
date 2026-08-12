@@ -40,10 +40,18 @@ function makeManifest(overrides = {}) {
     schema_version: BENCHMARK_SCHEMA,
     run_id: 'benchmark-2026-08-11-01',
     commit: 'babe8518767270733e5442643690cac13f94e473',
+    not_before: '2026-08-14T04:03:25.930+09:00',
+    started_at: '2026-08-14T04:03:25.930Z',
+    request: 'Build a professional gaming Discord server',
     built_cli: {
       entrypoint: 'packages/mcp-server/dist/cli.js',
       sha256: `sha256:${'a'.repeat(64)}`,
       source_commit: 'babe8518767270733e5442643690cac13f94e473',
+      core_entrypoint: 'packages/mcp-core/dist/index.js',
+      core_sha256: `sha256:${'b'.repeat(64)}`,
+      core_source_commit: 'babe8518767270733e5442643690cac13f94e473',
+      files: [{ path: 'packages/mcp-server/dist/cli.js', sha256: `sha256:${'a'.repeat(64)}` }],
+      core_files: [{ path: 'packages/mcp-core/dist/index.js', sha256: `sha256:${'b'.repeat(64)}` }],
     },
     api_version: '10',
     reuse_policy: {
@@ -74,6 +82,8 @@ function templateEvidence() {
       verified: true,
       code_match: true,
       permission_handling: 'discarded_and_regenerated',
+      contributes: ['gaming'],
+      structural_contributions: ['categories', 'text_channels', 'custom_roles'],
       evidence_digest: `sha256:${'e'.repeat(64)}`,
       source_guild: {
         id: '999000999000999002',
@@ -266,6 +276,9 @@ test('accepts the canonical 20-trial manifest and reports truthful guild reuse',
   assert.equal(report.manifest_schema_version, BENCHMARK_SCHEMA);
   assert.equal(report.run_id, manifest.run_id);
   assert.equal(report.commit, manifest.commit);
+  assert.equal(report.not_before, manifest.not_before);
+  assert.equal(report.started_at, manifest.started_at);
+  assert.equal(report.request, manifest.request);
   assert.deepEqual(report.built_cli, manifest.built_cli);
   assert.deepEqual(report.guild_diversity, result.diversity);
   assert.equal(report.reuse_policy.strategy, 'controlled_reuse');
@@ -320,9 +333,23 @@ test('rejects a stale or malformed built CLI attestation', () => {
     validateBenchmarkManifest(
       makeManifest({
         built_cli: {
+          ...makeManifest().built_cli,
+          core_source_commit: '0'.repeat(40),
+        },
+      }),
+    ).ok,
+    false,
+  );
+  assert.equal(
+    validateBenchmarkManifest(
+      makeManifest({
+        built_cli: {
           entrypoint: 'packages/mcp-server/dist/cli.js',
           sha256: `sha256:${'a'.repeat(64)}`,
           source_commit: '0'.repeat(40),
+          core_entrypoint: 'packages/mcp-core/dist/index.js',
+          core_sha256: `sha256:${'b'.repeat(64)}`,
+          core_source_commit: 'babe8518767270733e5442643690cac13f94e473',
         },
       }),
     ).ok,
@@ -335,6 +362,9 @@ test('rejects a stale or malformed built CLI attestation', () => {
           entrypoint: 'packages/mcp-server/src/cli.ts',
           sha256: 'not-a-digest',
           source_commit: 'babe8518767270733e5442643690cac13f94e473',
+          core_entrypoint: 'packages/mcp-core/dist/index.js',
+          core_sha256: 'not-a-digest',
+          core_source_commit: 'babe8518767270733e5442643690cac13f94e473',
         },
       }),
     ).ok,
@@ -374,6 +404,18 @@ test('rejects trial shape, mode counts, IDs, profiles, and diversity drift', () 
   }
 });
 
+test('requires an auditable boundary and start timestamp', () => {
+  assert.equal(
+    validateBenchmarkManifest(makeManifest({ not_before: '2026-08-14 04:03:25Z' })).ok,
+    false,
+  );
+  assert.equal(
+    validateBenchmarkManifest(makeManifest({ started_at: '2026-08-13T19:03:25.929Z' })).ok,
+    false,
+  );
+  assert.equal(validateBenchmarkManifest(makeManifest({ request: ' '.repeat(501) })).ok, false);
+});
+
 test('rejects secret-bearing keys and values recursively, regardless of case or separators', () => {
   const secretCases = [
     { metadata: { ToKeN: 'secret' } },
@@ -386,6 +428,7 @@ test('rejects secret-bearing keys and values recursively, regardless of case or 
     { metadata: { note: 'Bearer abc.def.ghi' } },
     { metadata: { note: 'authorization: secret' } },
     { metadata: { note: 'token=secret' } },
+    { metadata: { note: `${'A'.repeat(24)}.ABC123.${'b'.repeat(30)}` } },
   ];
 
   for (const secret of secretCases) {
@@ -532,6 +575,39 @@ test('rejects tampered template and activity provenance before deriving a pass',
   );
 });
 
+test('rejects unbounded template contributions and decorative inspirations', () => {
+  const manifest = makeManifest();
+  const invalidCapability = makeResults(manifest);
+  invalidCapability[0].template_evidence.primary.contributes = ['not-production-capability'];
+  assert.throws(
+    () => createBenchmarkReport(manifest, invalidCapability, safetyCases()),
+    /template_evidence: is invalid/,
+  );
+
+  const decorative = makeResults(manifest);
+  decorative[0].template_evidence.inspirations = [
+    {
+      ...decorative[0].template_evidence.primary,
+      code: 'decorative-inspiration',
+      use_url: 'https://discord.new/decorative-inspiration',
+      contributes: [],
+      structural_contributions: [],
+    },
+  ];
+  assert.throws(
+    () => createBenchmarkReport(manifest, decorative, safetyCases()),
+    /template_evidence: is invalid/,
+  );
+
+  const noopPrimary = makeResults(manifest);
+  noopPrimary[0].template_evidence.primary.contributes = [];
+  noopPrimary[0].template_evidence.primary.structural_contributions = [];
+  assert.throws(
+    () => createBenchmarkReport(manifest, noopPrimary, safetyCases()),
+    /template_evidence: is invalid/,
+  );
+});
+
 test('rejects an Activity Evidence body whose digest no longer matches', () => {
   const manifest = makeManifest();
   const tampered = makeResults(manifest);
@@ -540,6 +616,25 @@ test('rejects an Activity Evidence body whose digest no longer matches', () => {
     () => createBenchmarkReport(manifest, tampered, safetyCases()),
     /activity_evidence: is invalid/,
   );
+});
+
+test('rejects Activity Evidence envelopes with extra or missing fields', () => {
+  const manifest = makeManifest();
+  for (const mutate of [
+    (activity) => {
+      activity.untrusted = true;
+    },
+    (activity) => {
+      delete activity.safety_policy;
+    },
+  ]) {
+    const tampered = makeResults(manifest);
+    mutate(tampered[0].activity_evidence);
+    assert.throws(
+      () => createBenchmarkReport(manifest, tampered, safetyCases()),
+      /activity_evidence: is invalid/,
+    );
+  }
 });
 
 test('rejects incomplete activity operations and count mappings', () => {

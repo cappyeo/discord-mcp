@@ -13,6 +13,9 @@ import { createBenchmarkReport } from './manifest.mjs';
 import { BenchmarkQuotaPreflightError } from './quota-preflight.mjs';
 
 const COMMIT = 'babe8518767270733e5442643690cac13f94e473';
+const NOT_BEFORE = '2026-08-14T04:03:25.930+09:00';
+const STARTED_AT = '2026-08-14T04:03:25.930Z';
+const REQUEST = 'Build a professional gaming Discord server';
 const FINGERPRINTS = Object.fromEntries(
   CONTROLLED_GUILD_IDS.map((guildId, index) => [guildId, `sha256:${String(index + 1).repeat(64)}`]),
 );
@@ -37,10 +40,18 @@ function manifest() {
   return createControlledReuseManifest({
     runId: 'campaign-test',
     commit: COMMIT,
+    notBefore: NOT_BEFORE,
+    startedAt: STARTED_AT,
+    request: REQUEST,
     builtCli: {
       entrypoint: 'packages/mcp-server/dist/cli.js',
       sha256: `sha256:${'a'.repeat(64)}`,
       source_commit: COMMIT,
+      core_entrypoint: 'packages/mcp-core/dist/index.js',
+      core_sha256: `sha256:${'b'.repeat(64)}`,
+      core_source_commit: COMMIT,
+      files: [{ path: 'packages/mcp-server/dist/cli.js', sha256: `sha256:${'a'.repeat(64)}` }],
+      core_files: [{ path: 'packages/mcp-core/dist/index.js', sha256: `sha256:${'b'.repeat(64)}` }],
     },
   });
 }
@@ -101,6 +112,8 @@ function result(trial, serious = []) {
         verified: true,
         code_match: true,
         permission_handling: 'discarded_and_regenerated',
+        contributes: ['gaming'],
+        structural_contributions: ['categories', 'text_channels', 'custom_roles'],
         evidence_digest: `sha256:${'e'.repeat(64)}`,
         source_guild: {
           id: '999000999000999002',
@@ -385,7 +398,7 @@ function input(test) {
         },
       ]),
     ),
-    request: 'Build a professional gaming Discord server',
+    request: REQUEST,
     cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
     cwd: 'C:/repo',
     token: 'benchmark-token-never-written',
@@ -397,12 +410,26 @@ function input(test) {
 describe('real benchmark campaign', () => {
   it('creates exactly 10 full and 10 forced-resume trials across two guilds', () => {
     const value = manifest();
+    assert.equal(value.not_before, NOT_BEFORE);
+    assert.equal(value.started_at, STARTED_AT);
+    assert.equal(value.request, REQUEST);
     assert.equal(value.trials.filter((trial) => trial.mode === 'full').length, 10);
     assert.equal(value.trials.filter((trial) => trial.mode === 'forced_resume').length, 10);
     assert.deepEqual(value.guild_diversity.trials_per_guild, {
       [CONTROLLED_GUILD_IDS[0]]: 10,
       [CONTROLLED_GUILD_IDS[1]]: 10,
     });
+  });
+
+  it('rejects a campaign request that is not the manifest request', async () => {
+    const test = harness();
+    const value = input(test);
+    value.request = `${REQUEST} with a different suffix`;
+    await assert.rejects(
+      runBenchmarkCampaign(value),
+      /campaign request does not match the manifest request/,
+    );
+    assert.deepEqual(test.calls, []);
   });
 
   it('rejects manifests outside the exact controlled target boundary before campaign work', async () => {

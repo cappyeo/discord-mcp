@@ -3,6 +3,32 @@ import { createHash } from 'node:crypto';
 const SUCCESS_STATUSES = new Set(['complete', 'already_current']);
 const NEXT_ACTIONS = new Set(['done', 'resume', 'replan', 'fix_configuration']);
 const SNOWFLAKE = /^\d{17,20}$/;
+// Keep this bounded vocabulary aligned with the production template recommender
+// (`mcp-core/src/tools/templates/catalog/recommendation.ts` and `recommend.ts`).
+const RECOMMENDATION_CAPABILITIES = new Set([
+  'gaming',
+  'community',
+  'roleplay',
+  'lfg',
+  'platform',
+  'staff',
+  'support',
+  'events',
+  'technology',
+  'learning',
+  'art',
+  'music',
+  'voice',
+  'forum',
+]);
+const STRUCTURAL_DIMENSIONS = new Set([
+  'categories',
+  'text_channels',
+  'voice_channels',
+  'forums',
+  'stages',
+  'custom_roles',
+]);
 const SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
 const PLAN_RECOVERY_DELAYS_MS = Object.freeze([1_000, 3_000]);
 const APPLY_RECOVERY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000, 8_000, 16_000]);
@@ -134,6 +160,17 @@ function templateCandidateEvidence(candidate, catalogVersion) {
   ) {
     fail('TEMPLATE_EVIDENCE_INVALID');
   }
+  if (
+    !Array.isArray(candidate.contributes) ||
+    !Array.isArray(candidate.structural_contributions) ||
+    new Set(candidate.contributes).size !== candidate.contributes.length ||
+    new Set(candidate.structural_contributions).size !==
+      candidate.structural_contributions.length ||
+    candidate.contributes.some((value) => !RECOMMENDATION_CAPABILITIES.has(value)) ||
+    candidate.structural_contributions.some((value) => !STRUCTURAL_DIMENSIONS.has(value))
+  ) {
+    fail('TEMPLATE_EVIDENCE_INVALID');
+  }
   const sourceGuild = candidate.provenance.source_guild;
   if (
     !assertRecord(sourceGuild, 'TEMPLATE_EVIDENCE_INVALID') ||
@@ -153,6 +190,8 @@ function templateCandidateEvidence(candidate, catalogVersion) {
     verified: true,
     code_match: true,
     permission_handling: 'discarded_and_regenerated',
+    contributes: [...candidate.contributes],
+    structural_contributions: [...candidate.structural_contributions],
     evidence_digest: candidate.provenance.evidence_digest,
     source_guild: {
       id: sourceGuild.id,
@@ -177,6 +216,14 @@ function validateTemplateSource(source) {
   const inspirations = source.inspirations.map((candidate) =>
     templateCandidateEvidence(candidate, source.catalog_version),
   );
+  if (
+    [primary, ...inspirations].some(
+      (candidate) =>
+        candidate.contributes.length === 0 && candidate.structural_contributions.length === 0,
+    )
+  ) {
+    fail('TEMPLATE_EVIDENCE_INVALID');
+  }
   const codes = [primary.code, ...inspirations.map((candidate) => candidate.code)];
   if (new Set(codes).size !== codes.length) fail('TEMPLATE_EVIDENCE_INVALID');
   return { primary, inspirations };

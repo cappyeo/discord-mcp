@@ -118,6 +118,10 @@ export {
   wrapUntrusted,
 } from './tools/_lib/untrusted.js';
 export {
+  assertGuildBlueprintActivityEvidence,
+  type GuildBlueprintActivityEvidence,
+} from './tools/guild/_lib/blueprint.activity-evidence.js';
+export {
   type AuthenticatedBlueprintCheckpointOptions,
   loadAuthenticatedBlueprintCheckpoint,
 } from './tools/guild/_lib/blueprint.checkpoint-store.js';

@@ -9,8 +9,8 @@ import { createHash } from 'node:crypto';
  * a request.
  */
 
-export const BENCHMARK_SCHEMA = 'discord-mcp.real-benchmark.v1';
-export const REPORT_SCHEMA = 'discord-mcp.real-benchmark-result.v1';
+export const BENCHMARK_SCHEMA = 'discord-mcp.real-benchmark.v2';
+export const REPORT_SCHEMA = 'discord-mcp.real-benchmark-result.v2';
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const TRIAL_MODES = new Set(['full', 'forced_resume']);
@@ -25,7 +25,36 @@ const TERMINAL_STATUSES = new Set([
 ]);
 const SAFETY_CASES = new Set(['wrong_bot', 'wrong_guild', 'write_preview']);
 const DIGEST_RE = /^sha256:[a-f0-9]{64}$/;
+const BUILD_GRAPH_MAX_FILES = 256;
+const BUILD_GRAPH_MAX_PATH_LENGTH = 200;
+const BUILD_GRAPH_PATH_RE = /^packages\/mcp-(?:server|core)\/dist\/[A-Za-z0-9][A-Za-z0-9._-]*\.js$/;
 const TEMPLATE_CODE_RE = /^[a-zA-Z0-9_-]{1,100}$/;
+// Must match the production template recommendation vocabularies. These
+// strings are the only candidate justification allowed into a report.
+const RECOMMENDATION_CAPABILITIES = new Set([
+  'gaming',
+  'community',
+  'roleplay',
+  'lfg',
+  'platform',
+  'staff',
+  'support',
+  'events',
+  'technology',
+  'learning',
+  'art',
+  'music',
+  'voice',
+  'forum',
+]);
+const STRUCTURAL_DIMENSIONS = new Set([
+  'categories',
+  'text_channels',
+  'voice_channels',
+  'forums',
+  'stages',
+  'custom_roles',
+]);
 const ACTIVITY_SCHEMA = 'guild_blueprint_activity_evidence.v1';
 const ACTIVITY_BODY_KEYS = new Set([
   'schema_version',
@@ -37,6 +66,30 @@ const ACTIVITY_BODY_KEYS = new Set([
   'initial_operation_count',
   'plan_invariants',
   'observed',
+]);
+const ACTIVITY_EVIDENCE_KEYS = new Set([
+  'schema_version',
+  'evidence_id',
+  'recorded_at',
+  'digest_verified',
+  'plan_id',
+  'blueprint_id',
+  'target',
+  'initial_snapshot_id',
+  'final_snapshot_id',
+  'current_snapshot_id',
+  'initial_operation_count',
+  'checkpoint_version',
+  'completed_operation_count',
+  'blueprint_readback_match',
+  'identity_verified',
+  'guild_verified',
+  'readback',
+  'snapshot_unchanged',
+  'evidence_body',
+  'expected_counts',
+  'blueprint_counts',
+  'safety_policy',
 ]);
 const VERIFIED_COUNT_KEYS = new Set([
   'roles',
@@ -51,6 +104,9 @@ const MANIFEST_KEYS = new Set([
   'schema_version',
   'run_id',
   'commit',
+  'not_before',
+  'started_at',
+  'request',
   'built_cli',
   'api_version',
   'reuse_policy',
@@ -95,7 +151,17 @@ const RESULT_KEYS = new Set([
 ]);
 const REUSE_POLICY_KEYS = new Set(['strategy', 'max_trials_per_guild', 'rationale']);
 const DIVERSITY_KEYS = new Set(['total_trial_count', 'unique_guild_count', 'trials_per_guild']);
-const BUILT_CLI_KEYS = new Set(['entrypoint', 'sha256', 'source_commit']);
+const BUILT_CLI_KEYS = new Set([
+  'entrypoint',
+  'sha256',
+  'source_commit',
+  'core_entrypoint',
+  'core_sha256',
+  'core_source_commit',
+  'files',
+  'core_files',
+]);
+const BUILT_FILE_KEYS = new Set(['path', 'sha256']);
 const SECRET_KEY_WORDS = [
   'token',
   'authorization',
@@ -114,6 +180,11 @@ const SAFE_USAGE_KEYS = new Set([
 ]);
 const SECRET_VALUE_RE =
   /\b(?:(?:bot|bearer)\s+[a-z0-9._-]{20,}|(?:plan[\s_.-]*token|token|authorization|api[\s_.-]*key|password|cookie|secret|credential)\s*[:=]\s*\S+)/i;
+// Discord bot/user tokens have three dot-separated base64url segments. Keep
+// this detector conservative: it is only a persistence boundary, not a token
+// parser, and deliberately never includes the matched value in an error.
+const DISCORD_TOKEN_VALUE_RE =
+  /(?:^|[^a-z0-9_-])(?:mfa\.[a-z0-9_-]{20,}|[a-z0-9_-]{20,30}\.[a-z0-9_-]{6}\.[a-z0-9_-]{25,})(?:$|[^a-z0-9_-])/i;
 
 function isRecord(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -132,7 +203,7 @@ function isSecretKey(key) {
 
 function scanSecrets(value, path = '$', seen = new WeakSet(), errors = []) {
   if (typeof value === 'string') {
-    if (SECRET_VALUE_RE.test(value)) {
+    if (SECRET_VALUE_RE.test(value) || DISCORD_TOKEN_VALUE_RE.test(value)) {
       errors.push(`${path}: secret-bearing value is not allowed`);
     }
     return errors;
@@ -207,7 +278,7 @@ function calculateDiversity(trials) {
   };
 }
 
-function canonicalJson(value) {
+export function canonicalJson(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   return `{${Object.keys(value)
@@ -253,6 +324,16 @@ function validTemplateCandidate(value) {
   ) {
     return false;
   }
+  if (
+    !Array.isArray(value.contributes) ||
+    !Array.isArray(value.structural_contributions) ||
+    new Set(value.contributes).size !== value.contributes.length ||
+    new Set(value.structural_contributions).size !== value.structural_contributions.length ||
+    value.contributes.some((item) => !RECOMMENDATION_CAPABILITIES.has(item)) ||
+    value.structural_contributions.some((item) => !STRUCTURAL_DIMENSIONS.has(item))
+  ) {
+    return false;
+  }
   const sourceGuild = value.source_guild;
   return (
     isRecord(sourceGuild) &&
@@ -268,10 +349,65 @@ function validTemplateEvidence(value) {
   if (!Array.isArray(value.inspirations) || value.inspirations.length > 3) return false;
   const candidates = [value.primary, ...value.inspirations];
   return (
+    (value.primary.contributes.length > 0 || value.primary.structural_contributions.length > 0) &&
     new Set(candidates.map((candidate) => candidate.code)).size === candidates.length &&
     new Set(candidates.map((candidate) => candidate.catalog_version)).size === 1 &&
-    value.inspirations.every(validTemplateCandidate)
+    value.inspirations.every(
+      (candidate) =>
+        validTemplateCandidate(candidate) &&
+        (candidate.contributes.length > 0 || candidate.structural_contributions.length > 0),
+    )
   );
+}
+
+function validateBuiltFileMap(
+  value,
+  expectedPrefix,
+  expectedEntrypoint,
+  expectedDigest,
+  path,
+  errors,
+) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > BUILD_GRAPH_MAX_FILES) {
+    errors.push(`${path}: must contain 1-${BUILD_GRAPH_MAX_FILES} files`);
+    return;
+  }
+  let previousPath = '';
+  let entrypointCount = 0;
+  const seen = new Set();
+  for (const [index, file] of value.entries()) {
+    const filePath = `${path}[${index}]`;
+    checkKeys(file, BUILT_FILE_KEYS, filePath, errors);
+    if (!isRecord(file)) continue;
+    if (
+      typeof file.path !== 'string' ||
+      file.path.length > BUILD_GRAPH_MAX_PATH_LENGTH ||
+      !BUILD_GRAPH_PATH_RE.test(file.path) ||
+      !file.path.startsWith(expectedPrefix) ||
+      file.path.includes('\\') ||
+      file.path.includes('/./') ||
+      file.path.includes('/../')
+    ) {
+      errors.push(`${filePath}.path: must be a safe top-level JavaScript path`);
+    }
+    if (!DIGEST_RE.test(file.sha256 ?? '')) {
+      errors.push(`${filePath}.sha256: must be a sha256 digest`);
+    }
+    if (seen.has(file.path)) errors.push(`${filePath}.path: duplicate path`);
+    seen.add(file.path);
+    if (previousPath !== '' && file.path <= previousPath) {
+      errors.push(`${path}: paths must be strictly sorted and unique`);
+    }
+    previousPath = file.path;
+    if (file.path === expectedEntrypoint) {
+      entrypointCount += 1;
+      if (file.sha256 !== expectedDigest) {
+        errors.push(`${filePath}.sha256: must match the attested entrypoint digest`);
+      }
+    }
+  }
+  if (entrypointCount !== 1)
+    errors.push(`${path}: must contain the attested entrypoint exactly once`);
 }
 
 const ACTIVITY_COUNT_KEYS = new Set([
@@ -313,8 +449,40 @@ function validTimestamp(value) {
   );
 }
 
+export function strictRfc3339Milliseconds(value) {
+  if (typeof value !== 'string') return null;
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (match === null) return null;
+  const [, year, month, day, hour, minute, second, zone] = match;
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const zoneMatch = zone === 'Z' ? null : /([+-])(\d{2}):(\d{2})/.exec(zone);
+  if (
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > new Date(Date.UTC(Number(year), monthNumber, 0)).getUTCDate() ||
+    Number(hour) > 23 ||
+    Number(minute) > 59 ||
+    Number(second) > 59 ||
+    (zoneMatch !== null && (Number(zoneMatch[2]) > 23 || Number(zoneMatch[3]) > 59))
+  ) {
+    return null;
+  }
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) ? milliseconds : null;
+}
+
+function validStrictRfc3339(value) {
+  return strictRfc3339Milliseconds(value) !== null;
+}
+
 function validActivityEvidence(value) {
   if (!isRecord(value)) return false;
+  if (!sameJson([...Object.keys(value)].sort(), [...ACTIVITY_EVIDENCE_KEYS].sort())) {
+    return false;
+  }
   const body = value.evidence_body;
   if (
     value.schema_version !== ACTIVITY_SCHEMA ||
@@ -491,6 +659,21 @@ function validateManifestShape(input, errors) {
   if (typeof input.commit !== 'string' || !/^[a-f0-9]{40}$/.test(input.commit)) {
     errors.push('$.commit: must be a full lowercase Git commit SHA');
   }
+  if (!validStrictRfc3339(input.not_before)) {
+    errors.push('$.not_before: must be a strict RFC3339 timestamp');
+  }
+  if (!validStrictRfc3339(input.started_at)) {
+    errors.push('$.started_at: must be a strict RFC3339 timestamp');
+  } else if (Date.parse(input.started_at) < Date.parse(input.not_before)) {
+    errors.push('$.started_at: must be at or after $.not_before');
+  }
+  if (
+    typeof input.request !== 'string' ||
+    input.request.trim() === '' ||
+    input.request.length > 500
+  ) {
+    errors.push('$.request: must be a nonempty string of at most 500 characters');
+  }
   if (input.api_version !== '10') errors.push('$.api_version: must be 10');
 
   checkKeys(input.built_cli, BUILT_CLI_KEYS, '$.built_cli', errors);
@@ -504,6 +687,31 @@ function validateManifestShape(input, errors) {
     if (input.built_cli.source_commit !== input.commit) {
       errors.push('$.built_cli.source_commit: must match the manifest commit');
     }
+    if (input.built_cli.core_entrypoint !== 'packages/mcp-core/dist/index.js') {
+      errors.push('$.built_cli.core_entrypoint: must be the attested core entrypoint');
+    }
+    if (!DIGEST_RE.test(input.built_cli.core_sha256 ?? '')) {
+      errors.push('$.built_cli.core_sha256: must be a sha256 digest');
+    }
+    if (input.built_cli.core_source_commit !== input.commit) {
+      errors.push('$.built_cli.core_source_commit: must match the manifest commit');
+    }
+    validateBuiltFileMap(
+      input.built_cli.files,
+      'packages/mcp-server/dist/',
+      input.built_cli.entrypoint,
+      input.built_cli.sha256,
+      '$.built_cli.files',
+      errors,
+    );
+    validateBuiltFileMap(
+      input.built_cli.core_files,
+      'packages/mcp-core/dist/',
+      input.built_cli.core_entrypoint,
+      input.built_cli.core_sha256,
+      '$.built_cli.core_files',
+      errors,
+    );
   }
 
   checkKeys(input.reuse_policy, REUSE_POLICY_KEYS, '$.reuse_policy', errors);
@@ -817,6 +1025,9 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
     manifest_schema_version: BENCHMARK_SCHEMA,
     run_id: manifest.run_id,
     commit: manifest.commit,
+    not_before: manifest.not_before,
+    started_at: manifest.started_at,
+    request: manifest.request,
     built_cli: cloneJson(manifest.built_cli),
     api_version: manifest.api_version,
     trial_count: trialResults.length,

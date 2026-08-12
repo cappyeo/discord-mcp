@@ -5,10 +5,12 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { attestBuiltCli } from './build-attestation.mjs';
+import { CONTROLLED_BOT_ID, CONTROLLED_GUILD_IDS } from './campaign.mjs';
 import { assertSecretFreeJson } from './manifest.mjs';
 import { openMcpBenchmarkSession } from './mcp-session.mjs';
+import { createSmallModelIntegrity } from './small-model-attestation.mjs';
 
-export const SMALL_MODEL_SCHEMA = 'discord-mcp.small-model-eval.v1';
+export const SMALL_MODEL_SCHEMA = 'discord-mcp.small-model-eval.v2';
 export const SMALL_MODEL = 'gpt-5.6-luna';
 export const SMALL_MODEL_REQUEST = 'Dựng cho tôi một server gaming chuyên nghiệp.';
 export const DEFAULT_TRIALS = 5;
@@ -26,6 +28,8 @@ const REPO_ROOT = resolve(import.meta.dirname, '../../../../');
 const MAX_STDOUT_BYTES = 8 * 1024 * 1024;
 const MAX_LINES = 100_000;
 const CODEX_PROBE_TIMEOUT_MS = 15_000;
+const PROCESS_TERMINATION_GRACE_MS = 2_000;
+const PROCESS_TERMINATION_COMMAND_TIMEOUT_MS = 5_000;
 const TOOL_NAME_RE = /^[A-Za-z0-9_.-]{1,128}$/;
 const TEMPLATE_CODE_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const CLARIFICATION_PATTERNS = Object.freeze([
@@ -66,6 +70,39 @@ const REQUIRED_BLUEPRINT_COUNTS = Object.freeze([
   'automod_rules',
   'publications',
 ]);
+// Keep this bounded vocabulary aligned with the production template recommender
+// (`mcp-core/src/tools/templates/catalog/recommendation.ts` and `recommend.ts`).
+const RECOMMENDATION_CAPABILITIES = new Set([
+  'gaming',
+  'community',
+  'roleplay',
+  'lfg',
+  'platform',
+  'staff',
+  'support',
+  'events',
+  'technology',
+  'learning',
+  'art',
+  'music',
+  'voice',
+  'forum',
+]);
+const STRUCTURAL_DIMENSIONS = new Set([
+  'categories',
+  'text_channels',
+  'voice_channels',
+  'forums',
+  'stages',
+  'custom_roles',
+]);
+
+const PREVIEW_ENVIRONMENT = Object.freeze({
+  MCP_DRY_RUN: 'true',
+  MCP_WRITE_MODE: 'preview',
+  MCP_TOOL_SURFACE: 'progressive',
+  MCP_AUDIT_ENABLED: 'false',
+});
 
 function record(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -186,6 +223,50 @@ function safeDigest(value) {
   return typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value) ? value : null;
 }
 
+function validBuildAttestation(value, commit) {
+  const validFiles = (files, prefix, entrypoint, entryDigest) => {
+    if (!Array.isArray(files) || files.length < 1 || files.length > 256) return false;
+    let previous = '';
+    let entrypointCount = 0;
+    for (const file of files) {
+      if (
+        !record(file) ||
+        Object.keys(file).sort().join('\0') !== 'path\0sha256' ||
+        typeof file.path !== 'string' ||
+        !file.path.startsWith(prefix) ||
+        !/^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/.test(file.path.slice(prefix.length)) ||
+        !safeDigest(file.sha256) ||
+        (previous !== '' && file.path <= previous)
+      )
+        return false;
+      previous = file.path;
+      if (file.path === entrypoint) {
+        entrypointCount += 1;
+        if (file.sha256 !== entryDigest) return false;
+      }
+    }
+    return entrypointCount === 1;
+  };
+  return (
+    record(value) &&
+    Object.keys(value).sort().join('\0') ===
+      'core_entrypoint\0core_files\0core_sha256\0core_source_commit\0entrypoint\0files\0sha256\0source_commit' &&
+    value.entrypoint === 'packages/mcp-server/dist/cli.js' &&
+    safeDigest(value.sha256) !== null &&
+    value.source_commit === commit &&
+    value.core_entrypoint === 'packages/mcp-core/dist/index.js' &&
+    safeDigest(value.core_sha256) !== null &&
+    value.core_source_commit === commit &&
+    validFiles(value.files, 'packages/mcp-server/dist/', value.entrypoint, value.sha256) &&
+    validFiles(
+      value.core_files,
+      'packages/mcp-core/dist/',
+      value.core_entrypoint,
+      value.core_sha256,
+    )
+  );
+}
+
 function validTimestamp(value) {
   return (
     typeof value === 'string' &&
@@ -290,12 +371,24 @@ function safeTemplateCandidate(value) {
   ) {
     return null;
   }
+  if (
+    !Array.isArray(value.contributes) ||
+    !Array.isArray(value.structural_contributions) ||
+    new Set(value.contributes).size !== value.contributes.length ||
+    new Set(value.structural_contributions).size !== value.structural_contributions.length ||
+    value.contributes.some((item) => !RECOMMENDATION_CAPABILITIES.has(item)) ||
+    value.structural_contributions.some((item) => !STRUCTURAL_DIMENSIONS.has(item))
+  ) {
+    return null;
+  }
   return {
     code: value.code,
     use_url: value.use_url,
     verified: quality.verified === true,
     code_match: quality.code_match === true,
     permission_handling: 'discarded_and_regenerated',
+    contributes: [...value.contributes],
+    structural_contributions: [...value.structural_contributions],
     evidence_digest: evidenceDigest,
     fetched_at: provenance.fetched_at,
     source_guild: {
@@ -448,6 +541,7 @@ export function parseCodexJsonl(stdout) {
   const byId = new Map();
   const pendingWithoutId = new Map();
   let malformedJsonLines = 0;
+  const contractErrors = [];
   let clarification = false;
   let usage = null;
   const lines = stdout.split(/\r?\n/);
@@ -487,6 +581,13 @@ export function parseCodexJsonl(stdout) {
         request_digest: requestDigest,
         status: candidate.phase,
         ...(parsed.targetTool === null ? {} : { target_tool: parsed.targetTool }),
+        _contract: {
+          tool: candidate.name,
+          argument_keys: parsed.argumentKeys,
+          nested_argument_keys: parsed.nestedArgumentKeys,
+          request_digest: requestDigest,
+          target_tool: parsed.targetTool,
+        },
       };
       const resultSummary = summarizeToolResult(candidate.result);
       if (resultSummary !== null) trace.result_summary = resultSummary;
@@ -498,6 +599,26 @@ export function parseCodexJsonl(stdout) {
         pendingWithoutId.set(baseKey, pending);
       }
     } else if (candidate.phase === 'completed') {
+      const expected = trace._contract;
+      const actual = {
+        tool: candidate.name,
+        argument_keys: parsed.argumentKeys,
+        nested_argument_keys: parsed.nestedArgumentKeys,
+        request_digest: requestDigest,
+        target_tool: parsed.targetTool,
+      };
+      if (
+        expected !== undefined &&
+        (expected.tool !== actual.tool ||
+          JSON.stringify(expected.argument_keys) !== JSON.stringify(actual.argument_keys) ||
+          JSON.stringify(expected.nested_argument_keys) !==
+            JSON.stringify(actual.nested_argument_keys) ||
+          expected.request_digest !== actual.request_digest ||
+          expected.target_tool !== actual.target_tool)
+      ) {
+        contractErrors.push('call_id_contract_mismatch');
+        trace.contract_invalid = true;
+      }
       trace.status = 'completed';
       if (requestDigest !== null) trace.request_digest = requestDigest;
       if (parsed.targetTool !== null) trace.target_tool = parsed.targetTool;
@@ -509,8 +630,12 @@ export function parseCodexJsonl(stdout) {
     }
   }
   return {
-    trace: calls.map((call) => ({ ...call })),
+    trace: calls.map((call) => {
+      const { _contract: ignored, ...publicCall } = call;
+      return publicCall;
+    }),
     malformed_json_lines: malformedJsonLines,
+    contract_errors: [...contractErrors],
     clarification_detected: clarification,
     usage: usage ?? {},
   };
@@ -524,6 +649,7 @@ export function parseCodexTrialOutput(stdout) {
       parsed: {
         trace: [],
         malformed_json_lines: 0,
+        contract_errors: ['parser_failure'],
         clarification_detected: false,
         usage: {},
       },
@@ -575,14 +701,31 @@ function validPlanEvidence(summary, target) {
     return false;
   }
   const candidates = [template.primary, ...template.inspirations];
+  const validContributionArrays = (candidate) =>
+    Array.isArray(candidate.contributes) &&
+    Array.isArray(candidate.structural_contributions) &&
+    new Set(candidate.contributes).size === candidate.contributes.length &&
+    new Set(candidate.structural_contributions).size ===
+      candidate.structural_contributions.length &&
+    candidate.contributes.every((item) => RECOMMENDATION_CAPABILITIES.has(item)) &&
+    candidate.structural_contributions.every((item) => STRUCTURAL_DIMENSIONS.has(item));
   return (
     typeof template.catalog_version === 'string' &&
     template.catalog_version.trim() !== '' &&
     template.permission_policy === 'discard_source_and_regenerate' &&
     template.inspirations.length <= 3 &&
+    validContributionArrays(template.primary) &&
+    (template.primary.contributes.length > 0 ||
+      template.primary.structural_contributions.length > 0) &&
     new Set(candidates.map((candidate) => candidate.code)).size === candidates.length &&
+    template.inspirations.every(
+      (candidate) =>
+        validContributionArrays(candidate) &&
+        (candidate.contributes.length > 0 || candidate.structural_contributions.length > 0),
+    ) &&
     candidates.every(
       (candidate) =>
+        validContributionArrays(candidate) &&
         candidate.verified === true &&
         candidate.code_match === true &&
         candidate.permission_handling === 'discarded_and_regenerated' &&
@@ -598,6 +741,7 @@ function validPlanEvidence(summary, target) {
 export function classifySmallModelTrial({
   trace,
   malformedJsonLines = 0,
+  contractErrors = [],
   clarificationDetected = false,
   exitCode = 0,
   timedOut = false,
@@ -610,6 +754,8 @@ export function classifySmallModelTrial({
   if (!Array.isArray(trace)) throw new TypeError('trace must be an array');
   if (!frontDoorAvailable) return 'product_front_door_missing';
   if (spawnError || timedOut || truncated || exitCode !== 0) return 'host_invalid';
+  if (!Array.isArray(contractErrors) || contractErrors.length > 0) return 'tool_contract_failure';
+  if (trace.some((call) => call?.contract_invalid === true)) return 'tool_contract_failure';
   if (trace.some((call) => !ENABLED_TOOLS.includes(call.tool))) return 'unsafe_tool_call';
   const completed = trace.filter((call) => call.status === 'completed');
   if (completed.length === 0)
@@ -714,6 +860,9 @@ function targetFromEnvironment(env) {
   if (!/^\d{17,20}$/.test(guildId ?? '') || !/^\d{17,20}$/.test(botId ?? '')) {
     throw new Error('DISCORD_DEFAULT_GUILD_ID and DISCORD_EXPECTED_BOT_ID are required');
   }
+  if (!CONTROLLED_GUILD_IDS.includes(guildId) || botId !== CONTROLLED_BOT_ID) {
+    throw new Error('small-model target is outside the controlled guild/bot scope');
+  }
   return { token, guildId, botId };
 }
 
@@ -756,8 +905,56 @@ async function commandVersion(launcher, run = execFile, env = undefined) {
   }
 }
 
-function runCodexTrial({ launcher, args, cwd, env, timeoutMs, spawn = nodeSpawn }) {
-  return new Promise((resolveTrial) => {
+function delay(milliseconds) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
+export async function terminateCodexProcessTree({
+  child,
+  platform = process.platform,
+  force = false,
+  run = execFile,
+  kill = process.kill,
+} = {}) {
+  if (!record(child)) return false;
+  const pid = child.pid;
+  if (platform === 'win32' && Number.isSafeInteger(pid) && pid > 0) {
+    try {
+      await run('taskkill.exe', ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])], {
+        windowsHide: true,
+        timeout: PROCESS_TERMINATION_COMMAND_TIMEOUT_MS,
+      });
+      return true;
+    } catch {
+      // Fall back to the direct child handle below.
+    }
+  } else if (platform !== 'win32' && Number.isSafeInteger(pid) && pid > 0) {
+    try {
+      kill(-pid, force ? 'SIGKILL' : 'SIGTERM');
+      return true;
+    } catch {
+      // Fall back to the direct child handle below.
+    }
+  }
+  try {
+    return child.kill?.(force ? 'SIGKILL' : 'SIGTERM') === true;
+  } catch {
+    return false;
+  }
+}
+
+function runCodexTrial({
+  launcher,
+  args,
+  cwd,
+  env,
+  timeoutMs,
+  platform,
+  terminationGraceMs,
+  terminate,
+  spawn = nodeSpawn,
+}) {
+  return new Promise((resolveTrial, rejectTrial) => {
     const stdoutChunks = [];
     let stdoutBytes = 0;
     let stdoutTruncated = false;
@@ -765,6 +962,10 @@ function runCodexTrial({ launcher, args, cwd, env, timeoutMs, spawn = nodeSpawn 
     let spawnError = false;
     let settled = false;
     let timer;
+    let resolveClosed;
+    const closed = new Promise((resolveClose) => {
+      resolveClosed = resolveClose;
+    });
     const finish = (exitCode, signal) => {
       if (settled) return;
       settled = true;
@@ -784,6 +985,7 @@ function runCodexTrial({ launcher, args, cwd, env, timeoutMs, spawn = nodeSpawn 
         cwd,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
         windowsHide: true,
       });
     } catch {
@@ -806,27 +1008,70 @@ function runCodexTrial({ launcher, args, cwd, env, timeoutMs, spawn = nodeSpawn 
     child.stderr?.on('data', () => {});
     child.once('error', () => {
       spawnError = true;
-      finish(null, null);
+      if (!timedOut) finish(null, null);
     });
-    child.once('close', (code, signal) => finish(code, signal));
-    timer = setTimeout(() => {
+    child.once('close', (code, signal) => {
+      resolveClosed();
+      finish(code, signal);
+    });
+    timer = setTimeout(async () => {
       timedOut = true;
       try {
-        child.kill?.();
+        await terminate({ child, platform, force: false });
       } catch {
-        // The timeout itself is already a host-invalid result.
-      } finally {
-        // A broken/injected child may never emit close after kill. Resolve
-        // immediately so a host timeout always becomes a fail-closed trial.
-        finish(null, null);
+        // Continue to the bounded forceful termination path.
       }
+      const closedGracefully = await Promise.race([
+        closed.then(() => true),
+        delay(terminationGraceMs).then(() => false),
+      ]);
+      if (!closedGracefully) {
+        try {
+          await terminate({ child, platform, force: true });
+        } catch {
+          // The close proof below remains authoritative.
+        }
+        const closedAfterForce = await Promise.race([
+          closed.then(() => true),
+          delay(terminationGraceMs).then(() => false),
+        ]);
+        if (!closedAfterForce && !settled) {
+          settled = true;
+          if (timer !== undefined) clearTimeout(timer);
+          rejectTrial(new Error('timed-out Codex process tree did not close'));
+          return;
+        }
+      }
+      finish(null, null);
     }, timeoutMs);
   });
 }
 
-async function oneTrial({ index, launcher, args, cwd, env, timeoutMs, spawn, target }) {
+async function oneTrial({
+  index,
+  launcher,
+  args,
+  cwd,
+  env,
+  timeoutMs,
+  platform,
+  terminationGraceMs,
+  terminate,
+  spawn,
+  target,
+}) {
   const started = Date.now();
-  const result = await runCodexTrial({ launcher, args, cwd, env, timeoutMs, spawn });
+  const result = await runCodexTrial({
+    launcher,
+    args,
+    cwd,
+    env,
+    timeoutMs,
+    platform,
+    terminationGraceMs,
+    terminate,
+    spawn,
+  });
   const parsedResult = parseCodexTrialOutput(result.stdout);
   if (parsedResult.parse_failed) {
     return {
@@ -836,6 +1081,7 @@ async function oneTrial({ index, launcher, args, cwd, env, timeoutMs, spawn, tar
       usage: {},
       trace: [],
       clarification_detected: false,
+      contract_errors: ['parser_failure'],
       parse_failed: true,
     };
   }
@@ -843,6 +1089,7 @@ async function oneTrial({ index, launcher, args, cwd, env, timeoutMs, spawn, tar
   const classification = classifySmallModelTrial({
     trace: parsed.trace,
     malformedJsonLines: parsed.malformed_json_lines,
+    contractErrors: parsed.contract_errors,
     clarificationDetected: parsed.clarification_detected,
     exitCode: result.exitCode,
     timedOut: result.timedOut,
@@ -857,6 +1104,7 @@ async function oneTrial({ index, launcher, args, cwd, env, timeoutMs, spawn, tar
     usage: parsed.usage,
     trace: parsed.trace,
     clarification_detected: parsed.clarification_detected,
+    contract_errors: parsed.contract_errors,
   };
 }
 
@@ -871,14 +1119,26 @@ export async function runSmallModelEvaluation({
   openSession = openMcpBenchmarkSession,
   now = () => new Date().toISOString(),
   timeoutMs = 180_000,
+  terminationGraceMs = PROCESS_TERMINATION_GRACE_MS,
   platform = process.platform,
   attest = attestBuiltCli,
+  terminate = terminateCodexProcessTree,
 } = {}) {
   const outputPath = await safeOutputPath(output);
-  if (!Number.isInteger(trials) || trials < 1 || trials > 100)
-    throw new Error('trials must be 1..100');
-  if (!Number.isInteger(threshold) || threshold < 1 || threshold > trials)
-    throw new Error('threshold must be between 1 and trials');
+  if (trials !== DEFAULT_TRIALS) {
+    throw new Error(`small-model evidence requires exactly ${DEFAULT_TRIALS} trials`);
+  }
+  if (threshold !== DEFAULT_PASS_THRESHOLD) {
+    throw new Error(`small-model evidence requires exactly ${DEFAULT_PASS_THRESHOLD} passes`);
+  }
+  if (
+    !Number.isSafeInteger(terminationGraceMs) ||
+    terminationGraceMs < 1 ||
+    terminationGraceMs > 10_000
+  ) {
+    throw new Error('terminationGraceMs must be an integer between 1 and 10000');
+  }
+  if (typeof terminate !== 'function') throw new TypeError('terminate must be a function');
   const target = targetFromEnvironment(env);
   const commitResult = await run('git', ['rev-parse', 'HEAD'], {
     cwd,
@@ -889,25 +1149,29 @@ export async function runSmallModelEvaluation({
   if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error('repository commit is unavailable');
   if (typeof attest !== 'function') throw new TypeError('attest must be a function');
   const attestation = await attest({ cwd, expectedCommit: commit });
-  const cliPath = attestation.cliPath;
-  const builtCli = attestation.attestation;
-  const childEnv = buildCodexEnvironment(env, target);
-  const preflight = await openSession({
-    cliPath,
-    cwd,
-    env: {
-      DISCORD_TOKEN: target.token,
-      ALLOWED_GUILDS: target.guildId,
-      DISCORD_DEFAULT_GUILD_ID: target.guildId,
-      DISCORD_EXPECTED_BOT_ID: target.botId,
-      MCP_DRY_RUN: 'true',
-      MCP_WRITE_MODE: 'preview',
-      MCP_TOOL_SURFACE: 'progressive',
-      MCP_AUDIT_ENABLED: 'false',
-    },
-    requiredTools: [],
-  });
+  let preflight;
   try {
+    const cliPath = attestation?.cliPath;
+    const builtCli = attestation?.attestation;
+    if (!validBuildAttestation(builtCli, commit)) {
+      throw new Error('built CLI/core attestation is invalid');
+    }
+    const childEnv = buildCodexEnvironment(env, target);
+    preflight = await openSession({
+      cliPath,
+      cwd,
+      env: {
+        DISCORD_TOKEN: target.token,
+        ALLOWED_GUILDS: target.guildId,
+        DISCORD_DEFAULT_GUILD_ID: target.guildId,
+        DISCORD_EXPECTED_BOT_ID: target.botId,
+        MCP_DRY_RUN: 'true',
+        MCP_WRITE_MODE: 'preview',
+        MCP_TOOL_SURFACE: 'progressive',
+        MCP_AUDIT_ENABLED: 'false',
+      },
+      requiredTools: [],
+    });
     const available = [...preflight.toolNames].sort();
     const frontDoorAvailable = ENABLED_TOOLS.every((name) => available.includes(name));
     const instructionsAvailable =
@@ -940,6 +1204,9 @@ export async function runSmallModelEvaluation({
                   cwd,
                   env: childEnv,
                   timeoutMs,
+                  platform,
+                  terminationGraceMs,
+                  terminate,
                   spawn,
                   target,
                 }),
@@ -954,6 +1221,7 @@ export async function runSmallModelEvaluation({
             usage: {},
             trace: [],
             clarification_detected: false,
+            contract_errors: [],
           }));
     const passes = results.filter((result) => result.classification === 'pass').length;
     const artifact = {
@@ -964,6 +1232,12 @@ export async function runSmallModelEvaluation({
       model: SMALL_MODEL,
       reasoning_effort: 'low',
       request: SMALL_MODEL_REQUEST,
+      target: { guild_id: target.guildId, bot_id: target.botId },
+      preview_environment: { ...PREVIEW_ENVIRONMENT },
+      execution: {
+        policy_conditioned: true,
+        mutation_execution: false,
+      },
       policy: {
         version: SMALL_MODEL_POLICY_VERSION,
         sha256: sha256(SMALL_MODEL_POLICY),
@@ -988,6 +1262,10 @@ export async function runSmallModelEvaluation({
         meets_threshold: passes >= threshold,
       },
     };
+    artifact.integrity = createSmallModelIntegrity({
+      artifact,
+      integrityKey: target.token,
+    });
     assertSecretFreeJson(artifact);
     await writeFile(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, {
       encoding: 'utf8',
@@ -995,7 +1273,11 @@ export async function runSmallModelEvaluation({
     });
     return artifact;
   } finally {
-    await preflight.close();
+    try {
+      if (preflight !== undefined) await preflight.close();
+    } finally {
+      if (typeof attestation?.cleanup === 'function') await attestation.cleanup();
+    }
   }
 }
 

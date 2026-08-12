@@ -27,6 +27,7 @@ describe('public export surface', () => {
     expect(typeof api.buildPolicy).toBe('function');
     expect(typeof api.wrapRestWithResilience).toBe('function');
     expect(typeof api.loadAuthenticatedBlueprintCheckpoint).toBe('function');
+    expect(typeof api.assertGuildBlueprintActivityEvidence).toBe('function');
   });
 
   it('exports no symbol whose value is undefined', () => {

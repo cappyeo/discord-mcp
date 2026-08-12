@@ -5,16 +5,23 @@ sidebar:
   order: 5
 ---
 
-discord-mcp v0.18.1 is the current public release. The current source tree contains
-208 tools. v1.0.0 commits to API stability
+discord-mcp v0.18.1 remains the current public release. The current source tree
+prepares v0.19.0 and contains 208 tools. v1.0.0 commits to API stability
 for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
 below is ticked. Re-evaluate the evidence before each release; unchecked items are
 real gates, not aspirational release notes.
 
-## Current source evidence (public release: v0.18.1)
+## Current source evidence (release candidate: v0.19.0; public release: v0.18.1)
 
 - The current source tree exposes 208 MCP tools across 31 categories; the public
   v0.18.1 packages expose 203.
+- The v0.19.0 candidate exposes the production
+  `assertGuildBlueprintActivityEvidence` validator from `@discord-mcp/core` so
+  independent verification can reuse the same semantic rules as the apply path.
+  This is a public additive export and is covered by the frozen export contract.
+- The official 20-trial real-server campaign is not complete yet. No success
+  rate, permission-error rate, or Activity Evidence campaign result is claimed
+  until the cooldown, campaign, and independent verifier gates pass.
 - More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
   and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
   remaining OTel parent-child integration seam.

@@ -34,9 +34,16 @@ change types or behavior. Pin a compatible version and read the
 | Gateway notifications | `createGatewayClient`, `GatewayClient`, `SubscriptionRegistry` |
 | Audit | `createAuditSink`, sink classes, `redactArgs` |
 | Safety helpers | `wrapMessages`, `wrapUntrusted`, `redactRoute` |
+| Activity Evidence | `assertGuildBlueprintActivityEvidence`, `GuildBlueprintActivityEvidence` |
 
 The authoritative export list is
 [`packages/mcp-core/src/index.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/index.ts).
+
+`assertGuildBlueprintActivityEvidence` is a read-only semantic validator for
+completion-only Activity Evidence. It checks the trusted plan identity,
+blueprint safety invariants, exact resource bindings, checkpoint completion, and
+final readback continuity. It does not contact Discord or mutate local state;
+callers that need live verification must perform their own Discord readback first.
 
 ## Define a tool
 

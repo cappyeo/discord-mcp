@@ -1,6 +1,6 @@
 import { execFile as nodeExecFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -24,7 +24,7 @@ async function git(cwd, args) {
 async function repository() {
   const cwd = await mkdtemp(join(tmpdir(), 'discord-mcp-build-attestation-'));
   await git(cwd, ['init', '--quiet']);
-  await writeFile(join(cwd, '.gitignore'), 'packages/mcp-server/dist/\n');
+  await writeFile(join(cwd, '.gitignore'), 'packages/mcp-server/dist/\npackages/mcp-core/dist/\n');
   await writeFile(join(cwd, 'tracked.txt'), 'clean\n');
   await git(cwd, ['add', '.gitignore', 'tracked.txt']);
   await git(cwd, ['commit', '--quiet', '-m', 'initial']);
@@ -50,8 +50,11 @@ describe('built CLI attestation', () => {
       expectedCommit: source.commit,
       async build({ cwd }) {
         const output = join(cwd, 'packages', 'mcp-server', 'dist');
+        const coreOutput = join(cwd, 'packages', 'mcp-core', 'dist');
         await mkdir(output, { recursive: true });
+        await mkdir(coreOutput, { recursive: true });
         await writeFile(join(output, 'cli.js'), bytes);
+        await writeFile(join(coreOutput, 'index.js'), bytes);
       },
     });
 
@@ -59,10 +62,24 @@ describe('built CLI attestation', () => {
       entrypoint: 'packages/mcp-server/dist/cli.js',
       sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
       source_commit: source.commit,
+      core_entrypoint: 'packages/mcp-core/dist/index.js',
+      core_sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+      core_source_commit: source.commit,
+      files: [
+        {
+          path: 'packages/mcp-server/dist/cli.js',
+          sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        },
+      ],
+      core_files: [
+        {
+          path: 'packages/mcp-core/dist/index.js',
+          sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        },
+      ],
     });
-    expect(result.cliPath).toBe(
-      await realpath(join(source.cwd, 'packages', 'mcp-server', 'dist', 'cli.js')),
-    );
+    expect(result.cliPath).toMatch(/\.discord-mcp-attested-runtime-[^\\/]+[\\/]dist[\\/]cli\.js$/);
+    await result.cleanup();
   });
 
   it('rejects a build that changes tracked source', async () => {
@@ -78,6 +95,42 @@ describe('built CLI attestation', () => {
         },
       }),
     ).rejects.toThrow(/not clean/);
+  });
+
+  it('executes the private snapshot with the attested CLI/core graph', async () => {
+    const source = await repository();
+    directories.push(source.cwd);
+    let result;
+    try {
+      result = await attestBuiltCli({
+        cwd: source.cwd,
+        expectedCommit: source.commit,
+        async build({ cwd }) {
+          const output = join(cwd, 'packages', 'mcp-server', 'dist');
+          const coreOutput = join(cwd, 'packages', 'mcp-core', 'dist');
+          await mkdir(output, { recursive: true });
+          await mkdir(coreOutput, { recursive: true });
+          await writeFile(
+            join(output, 'cli.js'),
+            'import { value } from "@discord-mcp/core"; console.log(value);\n',
+          );
+          await writeFile(join(coreOutput, 'index.js'), 'export { value } from "./chunk.js";\n');
+          await writeFile(join(coreOutput, 'chunk.js'), 'export const value = "attested";\n');
+        },
+      });
+      const execution = await execFile(process.execPath, [result.cliPath], {
+        cwd: source.cwd,
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      expect(execution.stdout.trim()).toBe('attested');
+      expect(result.attestation.core_files.map((file) => file.path)).toEqual([
+        'packages/mcp-core/dist/chunk.js',
+        'packages/mcp-core/dist/index.js',
+      ]);
+    } finally {
+      if (result?.cleanup) await result.cleanup();
+    }
   });
 
   it('rejects a stale ignored entrypoint when the current build produces nothing', async () => {

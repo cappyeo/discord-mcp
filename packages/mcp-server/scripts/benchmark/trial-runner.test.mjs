@@ -42,6 +42,8 @@ function plan() {
           code_match: true,
           permission_handling: 'discarded_and_regenerated',
         },
+        contributes: ['gaming'],
+        structural_contributions: ['categories', 'text_channels', 'custom_roles'],
         provenance: {
           evidence_digest: TEMPLATE_DIGEST,
           fetched_at: '2026-08-12T00:00:00.000Z',
@@ -719,6 +721,8 @@ describe('real benchmark trial orchestration', () => {
       verified: true,
       code_match: true,
       permission_handling: 'discarded_and_regenerated',
+      contributes: ['gaming'],
+      structural_contributions: ['categories', 'text_channels', 'custom_roles'],
       evidence_digest: TEMPLATE_DIGEST,
       source_guild: {
         id: '999000999000999002',
@@ -761,6 +765,64 @@ describe('real benchmark trial orchestration', () => {
     assert.equal(
       test.snapshotRequests.some((ids) => ids.length === 0),
       false,
+    );
+  });
+
+  it('fails closed when an inspiration has no bounded contribution', async () => {
+    const test = harness('full');
+    const originalOpenSession = test.dependencies.openSession;
+    test.dependencies.openSession = async (options) => {
+      const session = await originalOpenSession(options);
+      const originalCallTool = session.callTool;
+      session.callTool = async (name, args) => {
+        const result = await originalCallTool(name, args);
+        if (name === 'mcp_tools_read' && args.tool === 'guild_blueprint_plan') {
+          result.source.inspirations = [
+            {
+              ...result.source.primary,
+              code: 'decorative-inspiration',
+              use_url: 'https://discord.new/decorative-inspiration',
+              contributes: [],
+              structural_contributions: [],
+            },
+          ];
+        }
+        return result;
+      };
+      return session;
+    };
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'TEMPLATE_EVIDENCE_INVALID',
+      ),
+    );
+  });
+
+  it('fails closed when the primary has no bounded contribution', async () => {
+    const test = harness('full');
+    const originalOpenSession = test.dependencies.openSession;
+    test.dependencies.openSession = async (options) => {
+      const session = await originalOpenSession(options);
+      const originalCallTool = session.callTool;
+      session.callTool = async (name, args) => {
+        const result = await originalCallTool(name, args);
+        if (name === 'mcp_tools_read' && args.tool === 'guild_blueprint_plan') {
+          result.source.primary = {
+            ...result.source.primary,
+            contributes: [],
+            structural_contributions: [],
+          };
+        }
+        return result;
+      };
+      return session;
+    };
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+    assert.ok(
+      outcome.result.functional_failures.some(
+        (failure) => failure.code === 'TEMPLATE_EVIDENCE_INVALID',
+      ),
     );
   });
 

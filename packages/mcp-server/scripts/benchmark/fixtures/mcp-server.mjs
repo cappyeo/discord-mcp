@@ -20,6 +20,8 @@ const TEMPLATE_EVIDENCE = {
       code_match: true,
       permission_handling: 'discarded_and_regenerated',
     },
+    contributes: ['gaming'],
+    structural_contributions: ['categories', 'text_channels', 'voice_channels', 'custom_roles'],
     provenance: {
       evidence_digest: `sha256:${'f'.repeat(64)}`,
       fetched_at: '2026-08-12T00:00:00.000Z',
