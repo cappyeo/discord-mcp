@@ -106,6 +106,12 @@ const SECRET_KEY_WORDS = [
   'secret',
   'credential',
 ];
+const SAFE_USAGE_KEYS = new Set([
+  'input_tokens',
+  'cached_input_tokens',
+  'output_tokens',
+  'total_tokens',
+]);
 const SECRET_VALUE_RE =
   /\b(?:(?:bot|bearer)\s+[a-z0-9._-]{20,}|(?:plan[\s_.-]*token|token|authorization|api[\s_.-]*key|password|cookie|secret|credential)\s*[:=]\s*\S+)/i;
 
@@ -156,7 +162,9 @@ function scanSecrets(value, path = '$', seen = new WeakSet(), errors = []) {
 
   for (const [key, child] of Object.entries(value)) {
     const childPath = `${path}.${key}`;
-    if (isSecretKey(key)) errors.push(`${childPath}: secret-bearing key is not allowed`);
+    const isSafeUsageCount = SAFE_USAGE_KEYS.has(key) && Number.isSafeInteger(child) && child >= 0;
+    if (!isSafeUsageCount && isSecretKey(key))
+      errors.push(`${childPath}: secret-bearing key is not allowed`);
     scanSecrets(child, childPath, seen, errors);
   }
   return errors;

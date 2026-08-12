@@ -4,6 +4,7 @@ import { it as test } from 'vitest';
 
 import {
   assertBenchmarkManifest,
+  assertSecretFreeJson,
   BENCHMARK_SCHEMA,
   createBenchmarkReport,
   REPORT_SCHEMA,
@@ -410,6 +411,23 @@ test('rejects secret-bearing keys and values recursively, regardless of case or 
         [{ trial_id: 'trial-01', status: 'ok', nested: { cookie: 'x' } }],
         safetyCases(),
       ),
+    /secret-bearing/i,
+  );
+});
+
+test('allows numeric model usage counters without allowing token-shaped credentials', () => {
+  assert.doesNotThrow(() =>
+    assertSecretFreeJson({
+      usage: {
+        input_tokens: 10,
+        cached_input_tokens: 2,
+        output_tokens: 4,
+        total_tokens: 16,
+      },
+    }),
+  );
+  assert.throws(
+    () => assertSecretFreeJson({ usage: { input_tokens: 'credential-value' } }),
     /secret-bearing/i,
   );
 });
