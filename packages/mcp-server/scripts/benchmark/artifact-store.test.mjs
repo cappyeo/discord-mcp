@@ -9,9 +9,9 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import { hostname, tmpdir } from 'node:os';
+import { homedir, hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import {
   acquireCampaignLock as acquireRawCampaignLock,
@@ -27,12 +27,16 @@ import {
 } from './artifact-store.mjs';
 
 const temporaryDirectories = [];
+let windowsTemporaryRootPromise;
 const INTEGRITY_KEY = 'benchmark-artifact-test-key';
 const LOCK_COMMIT = 'babe8518767270733e5442643690cac13f94e473';
 const LOCK_STARTED_AT = '2026-08-14T04:03:25.930Z';
 const LOCK_BOT_ID = '1533457669384306858';
 const LOCK_GUILD_IDS = ['1533989004406558851', '1533998797863256165'];
-const LOCK_ROOT = join(tmpdir(), `discord-mcp-campaign-lock-tests-${process.pid}`);
+const LOCK_ROOT = join(
+  process.platform === 'win32' ? homedir() : tmpdir(),
+  `discord-mcp-campaign-lock-tests-${process.pid}`,
+);
 
 function lockOwner(runId, fields = {}) {
   return { run_id: runId, commit: LOCK_COMMIT, started_at: LOCK_STARTED_AT, ...fields };
@@ -48,7 +52,16 @@ function acquireCampaignLock(options) {
 }
 
 async function directory(name) {
-  const path = await mkdtemp(join(tmpdir(), name));
+  let base;
+  if (process.platform === 'win32') {
+    if (!windowsTemporaryRootPromise) {
+      windowsTemporaryRootPromise = mkdtemp(join(homedir(), 'discord-mcp-test-'));
+    }
+    base = await windowsTemporaryRootPromise;
+  } else {
+    base = tmpdir();
+  }
+  const path = await mkdtemp(join(base, name));
   temporaryDirectories.push(path);
   return path;
 }
@@ -73,6 +86,12 @@ afterEach(async () => {
     temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
   await rm(LOCK_ROOT, { recursive: true, force: true });
+});
+
+afterAll(async () => {
+  if (windowsTemporaryRootPromise) {
+    await rm(await windowsTemporaryRootPromise, { recursive: true, force: true });
+  }
 });
 
 describe('benchmark artifact store', () => {
