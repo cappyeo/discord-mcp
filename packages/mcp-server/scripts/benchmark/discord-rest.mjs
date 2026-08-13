@@ -3,6 +3,7 @@ const SNOWFLAKE = /^\d{17,20}$/;
 const MESSAGE_PAGE_SIZE = 100;
 const MESSAGE_HISTORY_CONCURRENCY = 4;
 const MAX_RETRY_AFTER_MS = 15 * 60_000;
+const DISCORD_VIRTUAL_AUTOMOD_RULE_ID = '1030554520465440818';
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 export class DiscordRestError extends Error {
@@ -379,6 +380,9 @@ export async function readDiscordSnapshot(
       throw new Error(`AutoMod rules[${index}].trigger_type must be an integer from 1 to 6`);
     }
   }
+  const returnedAutomodRules = automodRules.filter(
+    (rule) => rule.id !== DISCORD_VIRTUAL_AUTOMOD_RULE_ID,
+  );
 
   const community = Array.isArray(guild.features) && guild.features.includes('COMMUNITY');
   const [onboarding, welcomeScreen] = community
@@ -418,7 +422,7 @@ export async function readDiscordSnapshot(
     bot,
     roles,
     channels,
-    automod_rules: automodRules,
+    automod_rules: returnedAutomodRules,
     onboarding,
     welcome_screen: welcomeScreen,
     recent_messages: Object.fromEntries(

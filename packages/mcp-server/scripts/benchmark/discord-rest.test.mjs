@@ -218,6 +218,62 @@ describe('Discord benchmark REST snapshot', () => {
     });
   });
 
+  it('validates Discord virtual AutoMod rules but excludes the immutable default rule from snapshots', async () => {
+    const virtualRuleId = '1030554520465440818';
+    const botRuleId = '666000666000666000';
+    const fetchImpl = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/auto-moderation/rules')) {
+        return response([
+          {
+            id: virtualRuleId,
+            guild_id: GUILD_ID,
+            creator_id: '1008776202191634432',
+            trigger_type: 5,
+            name: 'Discord default protection',
+          },
+          {
+            id: botRuleId,
+            guild_id: GUILD_ID,
+            creator_id: BOT_ID,
+            trigger_type: 5,
+            name: 'Benchmark protection',
+          },
+        ]);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await expect(
+      readDiscordSnapshot(rest, { guildId: GUILD_ID, botId: BOT_ID }),
+    ).resolves.toMatchObject({
+      automod_rules: [expect.objectContaining({ id: botRuleId, name: 'Benchmark protection' })],
+    });
+  });
+
+  it('fails closed when the virtual AutoMod rule is malformed before filtering it', async () => {
+    const fetchImpl = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/auto-moderation/rules')) {
+        return response([
+          {
+            id: '1030554520465440818',
+            guild_id: GUILD_ID,
+            creator_id: 'not-a-snowflake',
+            trigger_type: 5,
+          },
+        ]);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await expect(readDiscordSnapshot(rest, { guildId: GUILD_ID, botId: BOT_ID })).rejects.toThrow(
+      'creator_id',
+    );
+  });
+
   it('reads Community state and bounded publication histories with identity checks', async () => {
     const channelId = '666000666000666000';
     const messageId = '555000555000555000';

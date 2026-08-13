@@ -5,6 +5,8 @@ const SNOWFLAKE = /^\d{17,20}$/;
 const RESET_PREFIX = 'RESET_DISPOSABLE_GUILD:';
 const CANARY_ROLE_NAME = '__discord_mcp_benchmark_canary_role__';
 const CANARY_CHANNEL_NAME = '__discord_mcp_benchmark_canary_channel__';
+const CANARY_AUTOMOD_RULE_NAME = '__discord_mcp_benchmark_canary_mention_spam__';
+const DISCORD_COMMUNITY_SYSTEM_AUTHOR_IDS = new Set(['669627189624307712', '1008776202191634432']);
 const SCHEMA_VERSION = 1;
 const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const RESTORE_SETTLE_DELAYS_MS = Object.freeze([0, 250, 500, 1_000, 2_000, 4_000]);
@@ -208,11 +210,35 @@ function isProtectedMentionSpamRule(rule, botId) {
   return record(rule) && rule.trigger_type === 5 && rule.creator_id === botId;
 }
 
+function botOwnedProtectedMentionSpamRules(snapshot, botId) {
+  const mentionSpamRules = snapshot.automod_rules.filter((rule) => rule.trigger_type === 5);
+  if (mentionSpamRules.some((rule) => rule.creator_id !== botId)) {
+    throw new Error('foreign protected mention-spam rule');
+  }
+  if (mentionSpamRules.length > 1) {
+    throw new Error('multiple bot-owned protected mention-spam rules');
+  }
+  return mentionSpamRules;
+}
+
 function protectedRulePatchBody(rule) {
   return {
     name: rule.name,
     event_type: rule.event_type,
     trigger_metadata: cloneJson(rule.trigger_metadata ?? {}),
+    actions: [{ type: 1 }],
+    enabled: false,
+    exempt_roles: [],
+    exempt_channels: [],
+  };
+}
+
+function protectedRuleCreateBody() {
+  return {
+    name: CANARY_AUTOMOD_RULE_NAME,
+    event_type: 1,
+    trigger_type: 5,
+    trigger_metadata: { mention_total_limit: 5, mention_raid_protection_enabled: true },
     actions: [{ type: 1 }],
     enabled: false,
     exempt_roles: [],
@@ -500,6 +526,51 @@ async function readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId)
     throw new Error('canary message history is incomplete');
   if ((snapshot.recent_messages?.[canaryChannelId] ?? []).length !== 0)
     throw new Error('canary channel must have empty message history');
+  return snapshot;
+}
+
+function initializerCanaryMessages(snapshot, canaryChannelId) {
+  if (snapshot.publication_history_complete?.[canaryChannelId] !== true)
+    throw new Error('canary message history is incomplete');
+  const messages = snapshot.recent_messages?.[canaryChannelId] ?? [];
+  if (!Array.isArray(messages)) throw new Error('canary message history is malformed');
+  for (const message of messages) {
+    snowflake(message?.id, 'canary message id');
+    if (
+      message.channel_id !== canaryChannelId ||
+      message.author?.bot !== true ||
+      !DISCORD_COMMUNITY_SYSTEM_AUTHOR_IDS.has(message.author?.id)
+    ) {
+      throw new Error('canary channel contains a non-Discord-system message');
+    }
+  }
+  return messages;
+}
+
+async function readInitializerCanarySnapshot(
+  rest,
+  readSnapshot,
+  guildId,
+  botId,
+  canaryRoleId,
+  canaryChannelId,
+  reason,
+) {
+  let snapshot = await readSnapshot({
+    guildId,
+    botId,
+    messageChannelIds: [canaryChannelId],
+  });
+  assertSnapshot(snapshot, guildId, botId);
+  validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
+  const messages = initializerCanaryMessages(snapshot, canaryChannelId);
+  for (const message of messages) {
+    await mutate(rest, 'DELETE', `/channels/${canaryChannelId}/messages/${message.id}`, { reason });
+  }
+  if (messages.length === 0) return snapshot;
+  snapshot = await readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId);
+  assertSnapshot(snapshot, guildId, botId);
+  validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
   return snapshot;
 }
 
@@ -991,6 +1062,7 @@ export async function initializeBenchmarkBaseline({
   if (typeof runId !== 'string' || !RUN_ID.test(runId)) throw new TypeError('runId is invalid');
   let snapshot = await readSnapshot({ guildId, botId });
   assertSnapshot(snapshot, guildId, botId);
+  botOwnedProtectedMentionSpamRules(snapshot, botId);
   let canaryRole = canaryFromSnapshot(snapshot, 'role', CANARY_ROLE_NAME);
   let canaryChannel = canaryFromSnapshot(snapshot, 'channel', CANARY_CHANNEL_NAME);
   if (canaryRole && (canaryRole.managed || canaryRole.permissions !== '0'))
@@ -1023,9 +1095,15 @@ export async function initializeBenchmarkBaseline({
   }
   const canaryRoleId = canaryRole.id;
   const canaryChannelId = canaryChannel.id;
-  snapshot = await readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId);
-  assertSnapshot(snapshot, guildId, botId);
-  validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
+  snapshot = await readInitializerCanarySnapshot(
+    rest,
+    readSnapshot,
+    guildId,
+    botId,
+    canaryRoleId,
+    canaryChannelId,
+    reason,
+  );
   const verificationLevel = Math.max(snapshot.guild.verification_level ?? 0, 1);
   const defaultMessageNotifications = Math.max(
     snapshot.guild.default_message_notifications ?? 0,
@@ -1057,6 +1135,16 @@ export async function initializeBenchmarkBaseline({
   ) {
     throw new Error('guild Community route response is malformed');
   }
+  snapshot = await readInitializerCanarySnapshot(
+    rest,
+    readSnapshot,
+    guildId,
+    botId,
+    canaryRoleId,
+    canaryChannelId,
+    reason,
+  );
+  botOwnedProtectedMentionSpamRules(snapshot, botId);
   responseOnboarding(
     await mutate(rest, 'PUT', `/guilds/${guildId}/onboarding`, {
       body: { prompts: [], default_channel_ids: [], enabled: false, mode: 0 },
@@ -1087,6 +1175,57 @@ export async function initializeBenchmarkBaseline({
       });
     }
   }
+  snapshot = await readInitializerCanarySnapshot(
+    rest,
+    readSnapshot,
+    guildId,
+    botId,
+    canaryRoleId,
+    canaryChannelId,
+    reason,
+  );
+  const protectedRules = botOwnedProtectedMentionSpamRules(snapshot, botId);
+  if (protectedRules.length === 0) {
+    const createdRule = responseGuildScoped(
+      await mutate(rest, 'POST', `/guilds/${guildId}/auto-moderation/rules`, {
+        body: protectedRuleCreateBody(),
+        reason,
+      }),
+      guildId,
+      'protected mention-spam canary create',
+    );
+    responseId(createdRule, guildId, 'protected mention-spam canary create');
+    if (
+      createdRule.creator_id !== botId ||
+      createdRule.name !== CANARY_AUTOMOD_RULE_NAME ||
+      createdRule.event_type !== 1 ||
+      createdRule.trigger_type !== 5 ||
+      createdRule.enabled !== false ||
+      createdRule.trigger_metadata?.mention_total_limit !== 5 ||
+      createdRule.trigger_metadata?.mention_raid_protection_enabled !== true ||
+      !Array.isArray(createdRule.actions) ||
+      createdRule.actions.length !== 1 ||
+      createdRule.actions[0]?.type !== 1 ||
+      !Array.isArray(createdRule.exempt_roles) ||
+      createdRule.exempt_roles.length !== 0 ||
+      !Array.isArray(createdRule.exempt_channels) ||
+      createdRule.exempt_channels.length !== 0
+    ) {
+      throw new Error('protected mention-spam canary response is malformed');
+    }
+  }
+  snapshot = await readInitializerCanarySnapshot(
+    rest,
+    readSnapshot,
+    guildId,
+    botId,
+    canaryRoleId,
+    canaryChannelId,
+    reason,
+  );
+  if (botOwnedProtectedMentionSpamRules(snapshot, botId).length !== 1) {
+    throw new Error('baseline protected mention-spam canary is missing');
+  }
   const highestBotRole = highestDiscordRole(
     snapshot.roles.filter((item) => (snapshot.bot.roles ?? []).includes(item.id)),
   );
@@ -1103,9 +1242,18 @@ export async function initializeBenchmarkBaseline({
   channels.sort((left, right) => Number(left.type === 4) - Number(right.type === 4));
   for (const channel of channels)
     await mutate(rest, 'DELETE', `/channels/${channel.id}`, { reason });
-  snapshot = await readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId);
-  assertSnapshot(snapshot, guildId, botId);
-  validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
+  snapshot = await readInitializerCanarySnapshot(
+    rest,
+    readSnapshot,
+    guildId,
+    botId,
+    canaryRoleId,
+    canaryChannelId,
+    reason,
+  );
+  if (botOwnedProtectedMentionSpamRules(snapshot, botId).length !== 1) {
+    throw new Error('baseline protected mention-spam canary is missing');
+  }
   assertDisabledCommunityState(snapshot, guildId);
   const fingerprint = snapshotFingerprint(snapshot);
   if (typeof fingerprint !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(fingerprint))

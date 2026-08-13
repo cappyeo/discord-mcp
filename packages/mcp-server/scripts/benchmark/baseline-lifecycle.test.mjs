@@ -20,6 +20,8 @@ const EXTRA_CHANNEL = '777000777000999005';
 const RULE = '777000777000999006';
 const MESSAGE = '777000777000999007';
 const PROTECTED_RULE = '777000777000999008';
+const COMMUNITY_SETUP_MESSAGE = '777000777000999009';
+const AUTOMOD_SETUP_MESSAGE = '777000777000999010';
 const FOREIGN_BOT = '666000666000666666';
 const FP = `sha256:${'a'.repeat(64)}`;
 const INTEGRITY_KEY = 'benchmark-baseline-lifecycle-test-key';
@@ -212,6 +214,41 @@ function protectedInitializerHarness({ creator_id = BOT, deleteError }) {
           welcome_channels: options.body.welcome_channels,
         };
         return structuredClone(state.snapshot.welcome_screen);
+      }
+      throw new Error(`unexpected mutation ${method} ${path}`);
+    },
+  };
+  return { state, calls, rest };
+}
+
+function cleanInitializerHarness({ createResponse, persistCreatedRule = true } = {}) {
+  const state = { snapshot: baselineSnapshot() };
+  const calls = [];
+  const rest = {
+    async request(method, path, options) {
+      calls.push([method, path, options]);
+      if (method === 'PATCH' && path === `/guilds/${GUILD}`) {
+        Object.assign(state.snapshot.guild, options.body);
+        return structuredClone(state.snapshot.guild);
+      }
+      if (method === 'PUT' && path.endsWith('/onboarding')) {
+        state.snapshot.onboarding = { guild_id: GUILD, ...options.body };
+        return structuredClone(state.snapshot.onboarding);
+      }
+      if (method === 'PATCH' && path.endsWith('/welcome-screen')) {
+        state.snapshot.welcome_screen = {
+          description: options.body.description,
+          welcome_channels: options.body.welcome_channels,
+        };
+        return structuredClone(state.snapshot.welcome_screen);
+      }
+      if (method === 'POST' && path.endsWith('/auto-moderation/rules')) {
+        const rule = createResponse ?? {
+          ...mentionSpamRule(),
+          name: '__discord_mcp_benchmark_canary_mention_spam__',
+        };
+        if (persistCreatedRule) state.snapshot.automod_rules.push(structuredClone(rule));
+        return structuredClone(rule);
       }
       throw new Error(`unexpected mutation ${method} ${path}`);
     },
@@ -473,7 +510,12 @@ describe('benchmark baseline lifecycle', () => {
     const calls = [];
     const readSnapshot = async ({ messageChannelIds = [] }) => {
       const value = structuredClone(state.snapshot);
-      value.recent_messages = Object.fromEntries(messageChannelIds.map((id) => [id, []]));
+      value.recent_messages = Object.fromEntries(
+        messageChannelIds.map((id) => [
+          id,
+          structuredClone(state.snapshot.recent_messages[id] ?? []),
+        ]),
+      );
       value.publication_history_complete = Object.fromEntries(
         messageChannelIds.map((id) => [id, true]),
       );
@@ -506,8 +548,32 @@ describe('benchmark baseline lifecycle', () => {
           state.snapshot.channels.push(channel);
           return channel;
         }
+        if (method === 'POST' && path.endsWith('/auto-moderation/rules')) {
+          const rule = {
+            ...mentionSpamRule(),
+            name: '__discord_mcp_benchmark_canary_mention_spam__',
+          };
+          state.snapshot.automod_rules.push(rule);
+          return structuredClone(rule);
+        }
         if (method === 'PATCH' && path === `/guilds/${GUILD}`) {
           Object.assign(state.snapshot.guild, options.body);
+          state.snapshot.recent_messages[CANARY_CHANNEL] = [
+            {
+              id: COMMUNITY_SETUP_MESSAGE,
+              guild_id: GUILD,
+              channel_id: CANARY_CHANNEL,
+              type: 0,
+              author: { id: '669627189624307712', bot: true },
+            },
+            {
+              id: AUTOMOD_SETUP_MESSAGE,
+              guild_id: GUILD,
+              channel_id: CANARY_CHANNEL,
+              type: 24,
+              author: { id: '1008776202191634432', bot: true },
+            },
+          ];
           state.snapshot.onboarding = {
             guild_id: GUILD,
             enabled: false,
@@ -534,6 +600,13 @@ describe('benchmark baseline lifecycle', () => {
         }
         if (method === 'DELETE' && path.includes('/auto-moderation/rules/')) {
           state.snapshot.automod_rules = [];
+          return null;
+        }
+        if (method === 'DELETE' && path.includes('/messages/')) {
+          const id = path.split('/').at(-1);
+          state.snapshot.recent_messages[CANARY_CHANNEL] = (
+            state.snapshot.recent_messages[CANARY_CHANNEL] ?? []
+          ).filter((message) => message.id !== id);
           return null;
         }
         if (method === 'DELETE' && path.includes('/roles/')) {
@@ -564,6 +637,9 @@ describe('benchmark baseline lifecycle', () => {
     expect(baseline.fingerprint).toBe(FP);
     expect(baseline.run_id).toBe('initializer-test');
     expect(baseline.guild_fields.features).toContain('COMMUNITY');
+    expect(baseline.baseline_snapshot.automod_rules).toEqual([
+      expect.objectContaining({ id: PROTECTED_RULE, creator_id: BOT, enabled: false }),
+    ]);
     expect(state.snapshot.channels.map((channel) => channel.id)).toEqual([CANARY_CHANNEL]);
     expect(state.snapshot.roles.some((role) => role.id === EXTRA_ROLE)).toBe(false);
     expect(state.snapshot.roles.some((role) => role.id === EQUAL_POSITION_ABOVE_ROLE)).toBe(true);
@@ -584,6 +660,14 @@ describe('benchmark baseline lifecycle', () => {
     expect(guildPatch).toBeGreaterThan(-1);
     expect(guildPatch).toBeLessThan(firstChannelDelete);
     expect(
+      calls
+        .filter(([method, path]) => method === 'DELETE' && path.includes('/messages/'))
+        .map(([, path]) => path),
+    ).toEqual([
+      `/channels/${CANARY_CHANNEL}/messages/${COMMUNITY_SETUP_MESSAGE}`,
+      `/channels/${CANARY_CHANNEL}/messages/${AUTOMOD_SETUP_MESSAGE}`,
+    ]);
+    expect(
       calls.find(([method, path]) => method === 'PUT' && path.endsWith('/onboarding')),
     ).toBeTruthy();
     expect(
@@ -594,6 +678,34 @@ describe('benchmark baseline lifecycle', () => {
         method === 'POST' ? options.retry === false : options.retry === undefined,
       ),
     ).toBe(true);
+  });
+
+  it('fails closed instead of deleting a non-system canary message', async () => {
+    const snapshot = baselineSnapshot();
+    snapshot.recent_messages[CANARY_CHANNEL] = [
+      {
+        id: MESSAGE,
+        guild_id: GUILD,
+        channel_id: CANARY_CHANNEL,
+        type: 0,
+        author: { id: BOT, bot: true },
+      },
+    ];
+    const calls = [];
+
+    await expect(
+      initializeBenchmarkBaseline({
+        rest: { request: async (...args) => calls.push(args) },
+        readSnapshot: async () => structuredClone(snapshot),
+        snapshotFingerprint: () => FP,
+        guildId: GUILD,
+        botId: BOT,
+        allowedGuildIds: [GUILD],
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+        runId: 'unexpected-canary-message',
+      }),
+    ).rejects.toThrow('non-Discord-system message');
+    expect(calls).toHaveLength(0);
   });
 
   it('fails closed and preserves manageable roles when no bot hierarchy anchor exists', async () => {
@@ -624,6 +736,14 @@ describe('benchmark baseline lifecycle', () => {
             welcome_channels: options.body.welcome_channels,
           };
           return structuredClone(state.snapshot.welcome_screen);
+        }
+        if (method === 'POST' && path.endsWith('/auto-moderation/rules')) {
+          const rule = {
+            ...mentionSpamRule(),
+            name: '__discord_mcp_benchmark_canary_mention_spam__',
+          };
+          state.snapshot.automod_rules.push(rule);
+          return structuredClone(rule);
         }
         throw new Error(`unexpected mutation ${method} ${path}`);
       },
@@ -678,6 +798,11 @@ describe('benchmark baseline lifecycle', () => {
           method === 'DELETE' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`),
       ),
     ).toBe(true);
+    expect(
+      harness.calls.some(
+        ([method, path]) => method === 'POST' && path.endsWith('/auto-moderation/rules'),
+      ),
+    ).toBe(false);
     const patch = harness.calls.find(
       ([method, path]) =>
         method === 'PATCH' && path.endsWith(`/auto-moderation/rules/${PROTECTED_RULE}`),
@@ -693,7 +818,53 @@ describe('benchmark baseline lifecycle', () => {
     });
   });
 
-  it('fails closed for a foreign creator on protected delete code 200006', async () => {
+  it('fails closed when the protected mention-spam create response is malformed', async () => {
+    const harness = cleanInitializerHarness({
+      createResponse: {
+        ...mentionSpamRule({ creator_id: FOREIGN_BOT }),
+        name: '__discord_mcp_benchmark_canary_mention_spam__',
+      },
+      persistCreatedRule: false,
+    });
+
+    await expect(
+      initializeBenchmarkBaseline({
+        rest: harness.rest,
+        readSnapshot: async () => structuredClone(harness.state.snapshot),
+        snapshotFingerprint: () => FP,
+        guildId: GUILD,
+        botId: BOT,
+        allowedGuildIds: [GUILD],
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+        runId: 'malformed-protected-create',
+      }),
+    ).rejects.toThrow('protected mention-spam canary response is malformed');
+    expect(
+      harness.calls.filter(
+        ([method, path]) => method === 'POST' && path.endsWith('/auto-moderation/rules'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('fails closed when final readback cannot find the protected mention-spam canary', async () => {
+    const harness = cleanInitializerHarness({ persistCreatedRule: false });
+
+    await expect(
+      initializeBenchmarkBaseline({
+        rest: harness.rest,
+        readSnapshot: async () => structuredClone(harness.state.snapshot),
+        snapshotFingerprint: () => FP,
+        guildId: GUILD,
+        botId: BOT,
+        allowedGuildIds: [GUILD],
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+        runId: 'missing-protected-readback',
+      }),
+    ).rejects.toThrow('baseline protected mention-spam canary is missing');
+    expect(harness.calls.some(([method]) => method === 'DELETE')).toBe(false);
+  });
+
+  it('fails closed before mutation for a foreign protected mention-spam rule', async () => {
     const harness = protectedInitializerHarness({
       creator_id: FOREIGN_BOT,
       deleteError: Object.assign(new Error('Discord REST 400 code 200006'), { code: 200006 }),
@@ -709,12 +880,31 @@ describe('benchmark baseline lifecycle', () => {
         confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
         runId: 'foreign-protected-rule',
       }),
-    ).rejects.toThrow('200006');
-    expect(
-      harness.calls.some(
-        ([method, path]) => method === 'PATCH' && path.includes('/auto-moderation/'),
-      ),
-    ).toBe(false);
+    ).rejects.toThrow('foreign protected mention-spam rule');
+    expect(harness.calls).toHaveLength(0);
+  });
+
+  it('fails closed before mutation for multiple bot-owned protected mention-spam rules', async () => {
+    const snapshot = baselineSnapshot();
+    snapshot.automod_rules = [
+      mentionSpamRule(),
+      { ...mentionSpamRule(), id: '777000777000999011' },
+    ];
+    const calls = [];
+
+    await expect(
+      initializeBenchmarkBaseline({
+        rest: { request: async (...args) => calls.push(args) },
+        readSnapshot: async () => structuredClone(snapshot),
+        snapshotFingerprint: () => FP,
+        guildId: GUILD,
+        botId: BOT,
+        allowedGuildIds: [GUILD],
+        confirmation: `RESET_DISPOSABLE_GUILD:${GUILD}`,
+        runId: 'multiple-protected-rules',
+      }),
+    ).rejects.toThrow('multiple bot-owned protected mention-spam rules');
+    expect(calls).toHaveLength(0);
   });
 
   it('fails closed for any AutoMod delete error other than code 200006', async () => {

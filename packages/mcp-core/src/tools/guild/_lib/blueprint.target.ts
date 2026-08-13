@@ -124,6 +124,8 @@ export interface BlueprintTargetSnapshot {
 }
 
 export const BLUEPRINT_PUBLICATION_HISTORY_LIMIT = 1_000;
+/** Discord exposes this immutable built-in rule in guild AutoMod listings. */
+const DISCORD_VIRTUAL_AUTOMOD_RULE_ID = '1030554520465440818';
 const BLUEPRINT_PUBLICATION_HISTORY_PAGE_SIZE = 100;
 
 export class BlueprintTargetError extends Error {
@@ -283,6 +285,9 @@ export async function readBlueprintTargetSnapshot(
     assertTargetId('AutoMod rule', guildId, rule.guild_id);
     assertTargetSnowflake('AutoMod rule creator_id', rule.creator_id);
   }
+  const mutableAutomodRules = automodRules.filter(
+    (rule) => rule.id !== DISCORD_VIRTUAL_AUTOMOD_RULE_ID,
+  );
 
   const community = guild.features.includes('COMMUNITY');
   const [onboarding, welcomeScreen] = community
@@ -351,7 +356,7 @@ export async function readBlueprintTargetSnapshot(
       permission_overwrites: channel.permission_overwrites ?? [],
       available_tags: channel.available_tags ?? [],
     })),
-    automod_rules: automodRules,
+    automod_rules: mutableAutomodRules,
     onboarding,
     welcome_screen: welcomeScreen,
     recent_messages: Object.fromEntries(messagesByChannel),

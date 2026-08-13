@@ -272,6 +272,36 @@ describe('blueprint publication target readback', () => {
     ).toBe(false);
   });
 
+  it("excludes Discord's immutable default AutoMod rule but retains other rules", async () => {
+    const snapshot = await readBlueprintTargetSnapshot(
+      fakeRest(
+        '200000000000000001',
+        [],
+        undefined,
+        [[], []],
+        [
+          {
+            id: '1030554520465440818',
+            guild_id: guildId,
+            creator_id: '1008776202191634432',
+            trigger_type: 5,
+          },
+          {
+            id: '1030554520465440819',
+            guild_id: guildId,
+            creator_id: '1008776202191634432',
+            trigger_type: 5,
+          },
+        ],
+      ),
+      guildId,
+      botId,
+      blueprint,
+    );
+
+    expect(snapshot.automod_rules.map((rule) => rule.id)).toEqual(['1030554520465440819']);
+  });
+
   it('treats an exact-message 404 as a safe replacement opportunity', async () => {
     const { publication, channelId, bindings } = publicationFixture();
     const snapshot = await readBlueprintTargetSnapshot(
