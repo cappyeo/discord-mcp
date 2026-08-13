@@ -25,6 +25,10 @@ const checks = [
   ],
   [server.name === cli.mcpName, 'server.json name and CLI mcpName must match'],
   [
+    typeof server.description === 'string' && server.description.length <= 100,
+    'server.json description must fit the MCP Registry 100-character limit',
+  ],
+  [
     server.packages?.[0]?.identifier === cli.name,
     'server.json package identifier and CLI name must match',
   ],
