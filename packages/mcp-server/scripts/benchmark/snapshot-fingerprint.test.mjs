@@ -87,6 +87,20 @@ describe('snapshotFingerprint', () => {
     expect(snapshotFingerprint(configurationChange)).not.toBe(snapshotFingerprint(before));
   });
 
+  it('ignores only the append-only onboarding history feature', () => {
+    const before = snapshot();
+    before.guild.features = ['COMMUNITY'];
+    const historicalChange = structuredClone(before);
+    historicalChange.guild.features.push('GUILD_ONBOARDING_EVER_ENABLED');
+
+    expect(snapshotFingerprint(historicalChange)).toBe(snapshotFingerprint(before));
+    expect(snapshotSecurityView(historicalChange).guild.features).toEqual(['COMMUNITY']);
+
+    const configurationChange = structuredClone(before);
+    configurationChange.guild.features.push('WELCOME_SCREEN_ENABLED');
+    expect(snapshotFingerprint(configurationChange)).not.toBe(snapshotFingerprint(before));
+  });
+
   it('is stable across response ordering but sensitive to security state', () => {
     const before = snapshot();
     const reordered = structuredClone(before);

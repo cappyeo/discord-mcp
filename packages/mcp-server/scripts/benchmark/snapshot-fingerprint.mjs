@@ -21,6 +21,12 @@ const VOLATILE_KEYS = new Set([
   'timestamp',
 ]);
 
+// Discord adds this historical capability marker after onboarding is enabled
+// once and does not remove it when onboarding is disabled again. It is not a
+// mutable configuration or permission boundary, so it cannot participate in
+// exact baseline restoration.
+const NON_RESTORABLE_GUILD_FEATURES = new Set(['GUILD_ONBOARDING_EVER_ENABLED']);
+
 function sanitizeRaw(value) {
   if (Array.isArray(value)) {
     return value.map((item) => (item === undefined ? null : sanitizeRaw(item)));
@@ -92,7 +98,11 @@ export function snapshotSecurityView(snapshot) {
   const bot = sanitizeRaw(snapshot.bot ?? {});
   if (Array.isArray(bot.roles)) bot.roles = [...bot.roles].sort();
   const guild = sanitizeRaw(snapshot.guild ?? {});
-  if (Array.isArray(guild.features)) guild.features = [...guild.features].sort();
+  if (Array.isArray(guild.features)) {
+    guild.features = guild.features
+      .filter((feature) => !NON_RESTORABLE_GUILD_FEATURES.has(feature))
+      .sort();
+  }
   return {
     guild,
     bot,
