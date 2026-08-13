@@ -694,6 +694,9 @@ function codexConfig({ cliPath, cwd, target, stateDirectory, enabledTools }) {
     'mcp_servers.discord_mcp.required=true',
     'mcp_servers.discord_mcp.startup_timeout_sec=60',
     'mcp_servers.discord_mcp.tool_timeout_sec=180',
+    ...(isInitialPhase
+      ? []
+      : ['mcp_servers.discord_mcp.tools.guild_blueprint_apply.approval_mode="approve"']),
   ];
 }
 

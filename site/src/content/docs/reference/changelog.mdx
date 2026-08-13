@@ -40,9 +40,11 @@ verification paths; no live campaign result is predeclared here.
   server are available.
 - Bound every resumed model turn to the exact non-secret guild, bot, approval,
   plan, blueprint, and caller-local reference while keeping the opaque legacy
-  plan token out of prompts and artifacts. Approved failures now leave a bounded, HMAC-signed
-  diagnostic capsule or retain the campaign lock if that capsule cannot be
-  persisted.
+  plan token out of prompts and artifacts. After the harness records explicit
+  caller approval, its non-interactive Codex resume pre-approves only
+  `guild_blueprint_apply`; it does not weaken the server-wide MCP tool policy.
+  Approved failures now leave a bounded, HMAC-signed diagnostic capsule or
+  retain the campaign lock if that capsule cannot be persisted.
 - Added a deterministic benchmark for the local compile, reconcile, summarize,
   and authenticated-plan encoding path. It explicitly excludes template lookup,
   Discord I/O, and network waits.

@@ -400,6 +400,15 @@ describe('small-model live evaluation contract', () => {
       expect(resume.join('\n')).toContain('MCP_TOOL_SURFACE="full"');
       expect(initial.join('\n')).toContain('mcp_servers.discord_mcp.tool_timeout_sec=180');
       expect(resume.join('\n')).toContain('mcp_servers.discord_mcp.tool_timeout_sec=180');
+      expect(initial.join('\n')).not.toContain(
+        'mcp_servers.discord_mcp.tools.guild_blueprint_apply.approval_mode',
+      );
+      expect(resume.join('\n')).toContain(
+        'mcp_servers.discord_mcp.tools.guild_blueprint_apply.approval_mode="approve"',
+      );
+      expect(resume.join('\n')).not.toContain(
+        'mcp_servers.discord_mcp.default_tools_approval_mode',
+      );
       expect(initial.join('\n')).toContain(directory.replaceAll('\\', '\\\\'));
       expect(initial.join('\n')).toContain('["build_discord_server"]');
       expect(initial.join('\n')).toContain('calling build_discord_server exactly once');
