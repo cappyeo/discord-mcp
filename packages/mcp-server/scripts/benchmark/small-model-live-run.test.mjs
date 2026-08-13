@@ -7,8 +7,10 @@ import {
   compileGuildBlueprint,
 } from '../../../mcp-core/src/tools/guild/_lib/blueprint.js';
 import { BenchmarkRestoreFailure } from './baseline-lifecycle.mjs';
+import { verifySmallModelIntegrity } from './small-model-attestation.mjs';
 import {
   createSmallModelLiveArtifact,
+  createSmallModelLiveFailureArtifact,
   parseSmallModelLiveRunArgs,
   runSmallModelLiveTrial,
   SMALL_MODEL_LIVE_CONFIRMATION_PREFIX,
@@ -292,7 +294,7 @@ function expectedCleanup(p = plan()) {
 
 function evaluation({
   fail = false,
-  failBeforeApply = false,
+  bindingFailure = false,
   lostApply = false,
   unclosed = false,
 } = {}) {
@@ -319,7 +321,26 @@ function evaluation({
       error.code = 'CODEX_PROCESS_DID_NOT_CLOSE';
       throw error;
     }
-    if (failBeforeApply) throw new Error('model failed before apply');
+    if (bindingFailure) {
+      const error = new Error(`unsafe detail ${PLAN_TOKEN} C:\\private\\auth.json`);
+      error.code = 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH';
+      error.diagnostic = {
+        phase: 'resume',
+        turn: 1,
+        classification: 'apply_argument_plan_digest_mismatch',
+        session_digest: digest('thread-secret'),
+        tool: 'guild_blueprint_apply',
+        call_count: 1,
+        completed_call_count: 1,
+        confirmed: true,
+        expected: { guild_id: GUILD, expected_bot_id: BOT, plan_digest: digest(PLAN_TOKEN) },
+        observed: { guild_id: GUILD, expected_bot_id: BOT, plan_digest: digest('wrong') },
+        matches: { argument_guild: true, argument_bot: true, argument_plan_digest: false },
+        stdout: 'stdout-secret',
+        auth_path: 'C:\\private\\auth.json',
+      };
+      throw error;
+    }
     onValidatedToolCall({
       phase: 'resume',
       tool: 'guild_blueprint_apply',
@@ -398,6 +419,8 @@ function deps({
   restore,
   validateAttestedActivity,
   driftChecksAfterPrecheck = 0,
+  driftError = 'BASELINE_FINGERPRINT_DRIFT',
+  checkpointValue = '__default_checkpoint__',
 } = {}) {
   const p = plan();
   const lock = { release: vi.fn(async () => {}) };
@@ -407,7 +430,9 @@ function deps({
   };
   const runtime = {
     readSnapshot: vi.fn(async () => ({ bot: { user: { id: BOT } } })),
-    loadCheckpoint: vi.fn(async () => checkpoint(p)),
+    loadCheckpoint: vi.fn(async () =>
+      checkpointValue === '__default_checkpoint__' ? checkpoint(p) : checkpointValue,
+    ),
   };
   let baselineCheck = 0;
   return {
@@ -417,7 +442,7 @@ function deps({
     verifyBaseline: vi.fn(async () => {
       baselineCheck += 1;
       if (baselineCheck > 1 && baselineCheck <= 1 + driftChecksAfterPrecheck)
-        throw new Error('BASELINE_FINGERPRINT_DRIFT');
+        throw new Error(driftError);
       return {
         verified: true,
         guild_id: GUILD,
@@ -520,13 +545,72 @@ describe('small-model-live-run', () => {
     expect(d.acquireLock).not.toHaveBeenCalled();
   });
 
-  it('releases the lock without restore when failure occurs before any Discord mutation', async () => {
-    const d = deps({ evaluate: evaluation({ failBeforeApply: true }) });
+  it('attests a safe binding-failure capsule and releases the lock when baseline is unchanged', async () => {
+    const d = deps({ evaluate: evaluation({ bindingFailure: true }) });
     await expect(runSmallModelLiveTrial(runOptions(d, 'run-no-mutation'))).rejects.toThrow(
-      'model failed before apply',
+      'unsafe detail',
     );
     expect(d.restore).not.toHaveBeenCalled();
     expect(d.lock.release).toHaveBeenCalledTimes(1);
+    const [artifactPath, artifact] = d.store.writeArtifact.mock.calls[0];
+    expect(artifactPath).toBe('results/small-model-live.failure.json');
+    expect(artifact.status).toBe('failed');
+    expect(artifact.approved).toBe(true);
+    expect(artifact.failure_code).toBe('RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH');
+    expect(artifact.baseline.outcome).toBe('unchanged');
+    expect(artifact.restoration.outcome).toBe('not_required');
+    expect(artifact.lock_retained).toBe(false);
+    expect(() => verifySmallModelIntegrity({ artifact, integrityKey: TOKEN })).not.toThrow();
+    const serialized = JSON.stringify(artifact);
+    for (const secret of [
+      TOKEN,
+      PLAN_TOKEN,
+      'thread-secret',
+      'stdout-secret',
+      'C:\\private\\auth.json',
+    ])
+      expect(serialized).not.toContain(secret);
+    expect(artifact.diagnostic).toMatchObject({
+      phase: 'resume',
+      turn: 1,
+      classification: 'apply_argument_plan_digest_mismatch',
+      session_digest: digest('thread-secret'),
+      matches: { argument_plan_digest: false },
+    });
+  });
+
+  it('retains the lock and writes a safe artifact when drift has no authenticated checkpoint', async () => {
+    const d = deps({
+      evaluate: evaluation({ lostApply: true }),
+      driftChecksAfterPrecheck: 1,
+      checkpointValue: null,
+    });
+    await expect(runSmallModelLiveTrial(runOptions(d, 'run-no-checkpoint'))).rejects.toThrow(
+      'LIVE_FAILURE_AND_RESTORE_FAILURE',
+    );
+    expect(d.restore).not.toHaveBeenCalled();
+    expect(d.lock.release).not.toHaveBeenCalled();
+    const [artifactPath, artifact] = d.store.writeArtifact.mock.calls[0];
+    expect(artifactPath).toBe('results/small-model-live.failure.json');
+    expect(artifact.baseline.outcome).toBe('drifted');
+    expect(artifact.restoration.outcome).toBe('failed');
+    expect(artifact.lock_retained).toBe(true);
+    expect(() => verifySmallModelIntegrity({ artifact, integrityKey: TOKEN })).not.toThrow();
+  });
+
+  it('classifies deterministic onboarding state divergence as baseline drift', async () => {
+    const d = deps({
+      evaluate: evaluation({ lostApply: true }),
+      driftChecksAfterPrecheck: 1,
+      driftError: 'baseline onboarding is not disabled and empty',
+      checkpointValue: null,
+    });
+    await expect(runSmallModelLiveTrial(runOptions(d, 'run-onboarding-drift'))).rejects.toThrow(
+      'LIVE_FAILURE_AND_RESTORE_FAILURE',
+    );
+    const [, artifact] = d.store.writeArtifact.mock.calls[0];
+    expect(artifact.baseline.outcome).toBe('drifted');
+    expect(artifact.lock_retained).toBe(true);
   });
 
   it('cleans the attested build even when releasing the lock fails', async () => {
@@ -535,6 +619,19 @@ describe('small-model-live-run', () => {
     await expect(runSmallModelLiveTrial(runOptions(d, 'run-release-failure'))).rejects.toThrow(
       'lock release failed',
     );
+    expect(d.builtCli.cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the lock when an approved failure artifact cannot be persisted', async () => {
+    const d = deps({ evaluate: evaluation({ bindingFailure: true }) });
+    d.store.writeArtifact.mockRejectedValueOnce(
+      new Error(`disk failure ${PLAN_TOKEN} C:\\private\\auth.json`),
+    );
+    await expect(runSmallModelLiveTrial(runOptions(d, 'run-failure-write'))).rejects.toThrow(
+      'LIVE_FAILURE_ARTIFACT_WRITE_FAILURE',
+    );
+    expect(d.store.writeArtifact).toHaveBeenCalledTimes(1);
+    expect(d.lock.release).not.toHaveBeenCalled();
     expect(d.builtCli.cleanup).toHaveBeenCalledTimes(1);
   });
 
@@ -630,5 +727,96 @@ describe('small-model-live-run', () => {
         expectedCommit: COMMIT,
       }),
     ).toThrow();
+  });
+
+  it('keeps failure artifacts bounded and allowlisted', () => {
+    const artifact = createSmallModelLiveFailureArtifact({
+      expectedCommit: COMMIT,
+      target: { guildId: GUILD, botId: BOT },
+      failureCode: 'not-allowlisted',
+      baselineOutcome: 'unavailable',
+      restorationOutcome: 'not_attempted',
+      lockRetained: true,
+      diagnostic: {
+        phase: 'resume',
+        expected: { guild_id: GUILD },
+        observed: {
+          stdout: 'stdout-secret',
+          session_id: 'thread-secret',
+          plan_digest: digest('safe-digest'),
+          error_code: 'dmbp1.raw-opaque-plan-token',
+        },
+        auth_path: 'C:\\private\\auth.json',
+      },
+    });
+    expect(artifact.failure_code).toBe('LIVE_FAILURE_UNCLASSIFIED');
+    expect(artifact.diagnostic).toEqual({
+      phase: 'resume',
+      expected: { guild_id: GUILD },
+      observed: { plan_digest: digest('safe-digest') },
+    });
+    expect(JSON.stringify(artifact)).not.toContain('stdout-secret');
+    expect(JSON.stringify(artifact)).not.toContain('thread-secret');
+    expect(JSON.stringify(artifact)).not.toContain('auth.json');
+  });
+
+  it('preserves only the evaluator failure codes and safe projections', () => {
+    const artifact = createSmallModelLiveFailureArtifact({
+      expectedCommit: COMMIT,
+      target: { guildId: GUILD, botId: BOT },
+      failureCode: 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+      baselineOutcome: 'unchanged',
+      restorationOutcome: 'not_required',
+      lockRetained: false,
+      diagnostic: {
+        phase: 'resume',
+        turn: 1,
+        classification: 'apply_argument_plan_digest_mismatch',
+        session_digest: digest('thread-secret'),
+        tool: 'guild_blueprint_apply',
+        call_count: 1,
+        completed_call_count: 1,
+        confirmed: true,
+        expected: { guild_id: GUILD, plan_digest: digest('expected') },
+        observed: { guild_id: GUILD, plan_digest: digest('observed') },
+        matches: {
+          argument_guild: true,
+          argument_bot: true,
+          argument_approval: true,
+          argument_plan_digest: false,
+        },
+        error_code: 'DMBP1_RAW_OPAQUE_PLAN_TOKEN',
+      },
+    });
+    expect(artifact.failure_code).toBe('RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH');
+    expect(artifact.diagnostic).toMatchObject({
+      phase: 'resume',
+      turn: 1,
+      session_digest: digest('thread-secret'),
+      expected: { guild_id: GUILD },
+      observed: { guild_id: GUILD },
+      matches: {
+        argument_guild: true,
+        argument_bot: true,
+        argument_approval: true,
+        argument_plan_digest: false,
+      },
+    });
+    expect(JSON.stringify(artifact)).not.toContain('thread-secret');
+    expect(JSON.stringify(artifact)).not.toContain('dmbp1.');
+  });
+
+  it('preserves the bounded JSONL failure code without trusting arbitrary diagnostics', () => {
+    const artifact = createSmallModelLiveFailureArtifact({
+      expectedCommit: COMMIT,
+      target: { guildId: GUILD, botId: BOT },
+      failureCode: 'JSONL_LINE_LIMIT',
+      baselineOutcome: 'unchanged',
+      restorationOutcome: 'not_required',
+      lockRetained: false,
+      diagnostic: { stdout: `dmbp1.${'x'.repeat(128)}` },
+    });
+    expect(artifact.failure_code).toBe('JSONL_LINE_LIMIT');
+    expect(artifact).not.toHaveProperty('diagnostic');
   });
 });

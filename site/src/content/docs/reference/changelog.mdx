@@ -19,6 +19,11 @@ predeclared here. The release does not change product tool or schema behavior.
 - Added the small-model live lifecycle benchmark harness and verifier for
   independently checking an approved run when credentials and a real Discord
   server are available.
+- Bound every resumed model turn to the exact non-secret guild, bot, approval,
+  plan, blueprint, and plan-token digest while keeping the opaque plan token out
+  of prompts and artifacts. Approved failures now leave a bounded, HMAC-signed
+  diagnostic capsule or retain the campaign lock if that capsule cannot be
+  persisted.
 - Added a deterministic benchmark for the local compile, reconcile, summarize,
   and authenticated-plan encoding path. It explicitly excludes template lookup,
   Discord I/O, and network waits.

@@ -32,11 +32,158 @@ import {
 } from './trial-runner.mjs';
 
 export const SMALL_MODEL_LIVE_RUN_SCHEMA = 'discord-mcp.small-model-live-run.v1';
+export const SMALL_MODEL_LIVE_FAILURE_SCHEMA = 'discord-mcp.small-model-live-failure.v1';
 export const SMALL_MODEL_LIVE_CONFIRMATION_PREFIX = 'APPROVE_SMALL_MODEL_LIVE:';
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+const SNOWFLAKE = /^\d{17,20}$/;
+const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
+const SAFE_CLASSIFICATION = /^[a-z][a-z0-9_]{0,127}$/;
 const RESTORE_RECOVERY_DELAYS_MS = Object.freeze([0, 1_000, 2_000, 4_000, 8_000, 16_000]);
+const SAFE_FAILURE_CODES = new Set([
+  'LIVE_FAILURE_UNCLASSIFIED',
+  'LIVE_PROCESS_QUARANTINED',
+  'LIVE_FAILURE_AND_RESTORE_FAILURE',
+  'LIVE_FAILURE_ARTIFACT_WRITE_FAILURE',
+  'CODEX_AUTH_UNAVAILABLE',
+  'CODEX_HOME_INVALID',
+  'CODEX_HOME_CLEANUP_MISSING',
+  'JSONL_LINE_LIMIT',
+  'INITIAL_JSONL_INVALID',
+  'INITIAL_PHASE_FAILED',
+  'RESUME_JSONL_INVALID',
+  'RESUME_HOST_FAILED',
+  'RESUME_SESSION_MISMATCH',
+  'RESUME_TOOL_CONTRACT_FAILURE',
+  'RESUME_INITIAL_BINDING_FAILURE',
+  'RESUME_UNSAFE_TOOL_CALL',
+  'RESUME_MODEL_NO_APPLY_CALL',
+  'RESUME_APPLY_DUPLICATE',
+  'RESUME_EVIDENCE_DUPLICATE',
+  'RESUME_APPLY_CONTRACT_FAILURE',
+  'RESUME_APPLY_CONFIRMATION_FAILURE',
+  'RESUME_APPLY_ARGUMENT_TARGET_MISMATCH',
+  'RESUME_APPLY_ARGUMENT_APPROVAL_MISMATCH',
+  'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+  'RESUME_APPLY_RESULT_TARGET_MISMATCH',
+  'RESUME_APPLY_RESULT_BINDING_MISMATCH',
+  'RESUME_APPLY_RESULT_INVALID',
+  'RESUME_EVIDENCE_BEFORE_COMPLETION',
+  'RESUME_EVIDENCE_BINDING_FAILURE',
+  'RESUME_EVIDENCE_VERIFICATION_FAILURE',
+  'RESUME_APPLY_TERMINAL_FAILURE',
+  'RESUME_RETRY_DELAY_INVALID',
+  'RESUME_EXTERNAL_WAIT_LIMIT',
+  'RESUME_TURN_LIMIT',
+]);
+const BASELINE_OUTCOMES = new Set(['not_checked', 'unchanged', 'drifted', 'unavailable']);
+const RESTORATION_OUTCOMES = new Set(['not_attempted', 'not_required', 'restored', 'failed']);
+const APPLY_RESULT_STATUSES = new Set([
+  'complete',
+  'already_current',
+  'partial',
+  'busy',
+  'blocked',
+  'stale',
+]);
+const BASELINE_DRIFT_FAILURES = new Set([
+  'BASELINE_FINGERPRINT_DRIFT',
+  'benchmark guild must have Community enabled',
+  'baseline onboarding is not disabled and empty',
+  'baseline welcome screen is not disabled and empty',
+  'canary channel must have empty message history',
+  'canary role is missing or unsafe',
+  'canary channel is missing or unsafe',
+]);
+const MATCH_KEYS = Object.freeze([
+  'argument_guild',
+  'argument_bot',
+  'argument_approval',
+  'argument_plan_digest',
+  'result_guild',
+  'result_bot',
+  'result_plan',
+  'result_blueprint',
+]);
+const MAX_FAILURE_DIAGNOSTIC_BYTES = 2_048;
+
+function safeFailureCode(error) {
+  const candidate = error?.failureCode ?? error?.code;
+  return SAFE_FAILURE_CODES.has(candidate) ? candidate : 'LIVE_FAILURE_UNCLASSIFIED';
+}
+
+function safeOptional(value, pattern) {
+  return value === null || (typeof value === 'string' && pattern.test(value)) ? value : null;
+}
+
+function safeCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function safeFailureDiagnostic(value) {
+  if (!record(value)) return undefined;
+  const expected = record(value.expected) ? value.expected : {};
+  const observed = record(value.observed) ? value.observed : {};
+  const matches = record(value.matches) ? value.matches : {};
+  const diagnostic = {
+    phase: value.phase === 'resume' ? 'resume' : null,
+    turn:
+      Number.isSafeInteger(value.turn) && value.turn >= 1 && value.turn <= 64 ? value.turn : null,
+    classification:
+      typeof value.classification === 'string' && SAFE_CLASSIFICATION.test(value.classification)
+        ? value.classification
+        : null,
+    session_digest: safeOptional(value.session_digest, DIGEST),
+    tool: value.tool === 'guild_blueprint_apply' ? value.tool : null,
+    call_count: safeCount(value.call_count),
+    completed_call_count: safeCount(value.completed_call_count),
+    confirmed: typeof value.confirmed === 'boolean' ? value.confirmed : null,
+    expected: {
+      guild_id: safeOptional(expected.guild_id, SNOWFLAKE),
+      expected_bot_id: safeOptional(expected.expected_bot_id, SNOWFLAKE),
+      approval_id: safeOptional(expected.approval_id, DIGEST),
+      plan_id: safeOptional(expected.plan_id, DIGEST),
+      blueprint_id: safeOptional(expected.blueprint_id, DIGEST),
+      plan_digest: safeOptional(expected.plan_digest, DIGEST),
+    },
+    observed: {
+      guild_id: safeOptional(observed.guild_id, SNOWFLAKE),
+      expected_bot_id: safeOptional(observed.expected_bot_id, SNOWFLAKE),
+      approval_id: safeOptional(observed.approval_id, DIGEST),
+      plan_digest: safeOptional(observed.plan_digest, DIGEST),
+      result_guild_id: safeOptional(observed.result_guild_id, SNOWFLAKE),
+      result_bot_id: safeOptional(observed.result_bot_id, SNOWFLAKE),
+      result_plan_id: safeOptional(observed.result_plan_id, DIGEST),
+      result_blueprint_id: safeOptional(observed.result_blueprint_id, DIGEST),
+      status: APPLY_RESULT_STATUSES.has(observed.status) ? observed.status : null,
+      error_code:
+        typeof observed.error_code === 'string' && SAFE_ERROR_CODE.test(observed.error_code)
+          ? observed.error_code
+          : null,
+      completed_total: safeCount(observed.completed_total),
+      remaining: safeCount(observed.remaining),
+    },
+    matches: Object.fromEntries(
+      MATCH_KEYS.map((key) => [key, typeof matches[key] === 'boolean' ? matches[key] : null]),
+    ),
+  };
+  const compact = (input) => {
+    const output = {};
+    for (const [key, child] of Object.entries(input)) {
+      if (child === null) continue;
+      if (record(child)) {
+        const nested = compact(child);
+        if (Object.keys(nested).length > 0) output[key] = nested;
+      } else {
+        output[key] = child;
+      }
+    }
+    return output;
+  };
+  const result = compact(diagnostic);
+  return Object.keys(result).length > 0 ? result : undefined;
+}
 
 export function parseSmallModelLiveRunArgs(args) {
   const values = {};
@@ -208,6 +355,12 @@ function exactBaselineVerification(result, baseline) {
   );
 }
 
+function baselineFailureOutcome(error) {
+  return error instanceof Error && BASELINE_DRIFT_FAILURES.has(error.message)
+    ? 'drifted'
+    : 'unavailable';
+}
+
 async function restoreWithRecovery({ restore, verifyBaseline, baseline, cleanup, sleep = wait }) {
   let retryProof = null;
   let lastFailure = null;
@@ -261,6 +414,44 @@ export function createSmallModelLiveArtifact({ summary, expectedCommit, builtCli
     restored: restored === true,
   };
   assertSecretFreeJson(artifact, 'small_model_live_run_artifact');
+  return artifact;
+}
+
+export function createSmallModelLiveFailureArtifact({
+  expectedCommit,
+  target,
+  failureCode,
+  baselineOutcome,
+  restorationOutcome,
+  lockRetained,
+  diagnostic,
+} = {}) {
+  const targetValue = targetFor(requiredString(target?.guildId, 'target.guildId'));
+  if (!COMMIT.test(requiredString(expectedCommit, 'expectedCommit')))
+    throw new TypeError('expectedCommit must be a full lowercase Git SHA');
+  if (!BASELINE_OUTCOMES.has(baselineOutcome)) throw new TypeError('baselineOutcome is invalid');
+  if (!RESTORATION_OUTCOMES.has(restorationOutcome))
+    throw new TypeError('restorationOutcome is invalid');
+  const artifact = {
+    schema_version: SMALL_MODEL_LIVE_FAILURE_SCHEMA,
+    status: 'failed',
+    model: 'gpt-5.6-luna',
+    request: SMALL_MODEL_LIVE_REQUEST,
+    expected_commit: expectedCommit,
+    target: { guild_id: targetValue.guildId, bot_id: targetValue.botId },
+    approved: true,
+    failure_code: SAFE_FAILURE_CODES.has(failureCode) ? failureCode : 'LIVE_FAILURE_UNCLASSIFIED',
+    baseline: { outcome: baselineOutcome },
+    restoration: { outcome: restorationOutcome },
+    lock_retained: lockRetained === true,
+  };
+  const safeDiagnostic = safeFailureDiagnostic(diagnostic);
+  if (record(safeDiagnostic)) {
+    const serialized = JSON.stringify(safeDiagnostic);
+    if (Buffer.byteLength(serialized, 'utf8') <= MAX_FAILURE_DIAGNOSTIC_BYTES)
+      artifact.diagnostic = safeDiagnostic;
+  }
+  assertSecretFreeJson(artifact, 'small_model_live_failure_artifact');
   return artifact;
 }
 
@@ -412,6 +603,7 @@ export async function runSmallModelLiveTrial({
   let retainLock = false;
   let runtime;
   let stateDirectory;
+  let store;
   let verifyBaseline;
   const trial = {
     trial_id: runId,
@@ -451,7 +643,7 @@ export async function runSmallModelLiveTrial({
           integrityKey: token,
         }));
     const before = (await verifyBaseline()).fingerprint;
-    const store = dependencies.store ?? (await prepareArtifactStore({ cwd, artifactRoot, runId }));
+    store = dependencies.store ?? (await prepareArtifactStore({ cwd, artifactRoot, runId }));
     builtCli =
       dependencies.builtCli ??
       (await (dependencies.attestBuild ?? attestBuiltCli)({ cwd, expectedCommit }));
@@ -617,45 +809,77 @@ export async function runSmallModelLiveTrial({
       validateActivityEvidence: validateAttestedActivity,
     });
   } catch (error) {
+    let failureError = error;
+    const failureDiagnostic = error?.diagnostic;
+    let baselineOutcome = 'not_checked';
+    let restorationOutcome = 'not_attempted';
     if (error?.code === 'CODEX_PROCESS_DID_NOT_CLOSE') {
       retainLock = true;
-      throw new Error(`LIVE_PROCESS_QUARANTINED: ${error.message}`);
-    }
-    if (approvalGranted && baseline && !restored) {
+      failureError = new Error('LIVE_PROCESS_QUARANTINED');
+      failureError.failureCode = 'LIVE_PROCESS_QUARANTINED';
+    } else if (approvalGranted && baseline && !restored) {
       let baselineUnchanged = false;
       try {
         baselineUnchanged = exactBaselineVerification(await verifyBaseline(), baseline);
-      } catch {
-        // Baseline drift or unavailable readback requires authenticated recovery below.
+        baselineOutcome = baselineUnchanged ? 'unchanged' : 'drifted';
+      } catch (baselineError) {
+        baselineOutcome = baselineFailureOutcome(baselineError);
       }
-      if (baselineUnchanged) throw error;
-      try {
-        if (!cleanup && plan && runtime?.loadCheckpoint) {
-          const checkpoint = await runtime.loadCheckpoint({
-            stateDirectory,
-            planId: plan.plan_id,
+      if (baselineUnchanged) {
+        restorationOutcome = 'not_required';
+      } else {
+        try {
+          if (!cleanup && plan && runtime?.loadCheckpoint) {
+            const checkpoint = await runtime.loadCheckpoint({
+              stateDirectory,
+              planId: plan.plan_id,
+            });
+            if (checkpoint === null) throw new Error('AUTHENTICATED_CHECKPOINT_MISSING');
+            const bindings = recoverCheckpointBindings(checkpoint, plan, trial, null, -1);
+            cleanup = cleanupFromBindings(plan, target, bindings, {
+              requireComplete: false,
+            });
+          }
+          if (!cleanup) throw new Error('CLEANUP_BINDINGS_UNAVAILABLE');
+          await restoreWithRecovery({
+            restore,
+            verifyBaseline,
+            baseline,
+            cleanup,
+            sleep: dependencies.sleep ?? wait,
           });
-          if (checkpoint === null) throw new Error('AUTHENTICATED_CHECKPOINT_MISSING');
-          const bindings = recoverCheckpointBindings(checkpoint, plan, trial, null, -1);
-          cleanup = cleanupFromBindings(plan, target, bindings, {
-            requireComplete: false,
-          });
+          restored = true;
+          restorationOutcome = 'restored';
+        } catch {
+          retainLock = true;
+          restorationOutcome = 'failed';
+          failureError = new Error('LIVE_FAILURE_AND_RESTORE_FAILURE');
+          failureError.failureCode = 'LIVE_FAILURE_AND_RESTORE_FAILURE';
         }
-        if (!cleanup) throw new Error('CLEANUP_BINDINGS_UNAVAILABLE');
-        await restoreWithRecovery({
-          restore,
-          verifyBaseline,
-          baseline,
-          cleanup,
-          sleep: dependencies.sleep ?? wait,
-        });
-        restored = true;
-      } catch (restoreError) {
-        retainLock = true;
-        throw new Error(`LIVE_FAILURE_AND_RESTORE_FAILURE: ${restoreError.message}`);
       }
     }
-    throw error;
+    if (approvalGranted && store) {
+      try {
+        const failureArtifact = createSmallModelLiveFailureArtifact({
+          expectedCommit,
+          target,
+          failureCode: safeFailureCode(failureError),
+          baselineOutcome,
+          restorationOutcome,
+          lockRetained: retainLock,
+          diagnostic: failureDiagnostic,
+        });
+        await store.writeArtifact('results/small-model-live.failure.json', {
+          ...failureArtifact,
+          integrity: createSmallModelIntegrity({ artifact: failureArtifact, integrityKey: token }),
+        });
+      } catch {
+        retainLock = true;
+        failureError = new Error('LIVE_FAILURE_ARTIFACT_WRITE_FAILURE');
+        failureError.failureCode = 'LIVE_FAILURE_ARTIFACT_WRITE_FAILURE';
+      }
+    }
+    throw failureError;
   } finally {
     try {
       if (!retainLock) await lock.release();
@@ -687,7 +911,7 @@ export async function main(args = process.argv.slice(2), environment = process.e
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`${safeFailureCode(error)}\n`);
     process.exitCode = 1;
   });
 }

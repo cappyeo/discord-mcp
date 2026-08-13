@@ -28,6 +28,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const SNOWFLAKE = /^\d{17,20}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const SAFE_TOOL = /^[A-Za-z0-9_.-]{1,128}$/;
+const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
 const INITIAL_TOOLS = Object.freeze(['build_discord_server']);
 const RESUME_TOOLS = Object.freeze(['guild_blueprint_apply', 'guild_blueprint_evidence']);
 const APPLY_STATUSES = new Set([
@@ -277,10 +278,12 @@ function extractThreadId(event) {
 }
 
 export class LiveEvalFailure extends Error {
-  constructor(code, message = code) {
-    super(message);
+  constructor(code, { diagnostic = null } = {}) {
+    super(code);
     this.name = 'LiveEvalFailure';
     this.code = code;
+    if (diagnostic !== null)
+      this.diagnostic = assertSecretFreeJson(diagnostic, 'live_eval_failure_diagnostic');
   }
 }
 
@@ -512,21 +515,23 @@ export function classifySmallModelLiveResume({
     if (call.confirmed !== true) return 'apply_confirmation_failure';
     if (
       call.argument_projection?.guild_id !== targetIds.guild_id ||
-      call.argument_projection?.expected_bot_id !== targetIds.bot_id ||
-      call.argument_projection?.approval_id !== approvalId ||
-      call.argument_projection?.plan_digest !== planDigest
+      call.argument_projection?.expected_bot_id !== targetIds.bot_id
     )
-      return 'apply_binding_failure';
+      return 'apply_argument_target_mismatch';
+    if (call.argument_projection?.approval_id !== approvalId)
+      return 'apply_argument_approval_mismatch';
+    if (call.argument_projection?.plan_digest !== planDigest)
+      return 'apply_argument_plan_digest_mismatch';
     if (
       call.result_summary?.target?.guild_id !== targetIds.guild_id ||
       call.result_summary?.target?.bot_id !== targetIds.bot_id
     )
-      return 'target_mismatch';
+      return 'apply_result_target_mismatch';
     if (
       call.result_summary?.plan_id !== planId ||
       call.result_summary?.blueprint_id !== blueprintId
     )
-      return 'apply_binding_failure';
+      return 'apply_result_binding_mismatch';
     if (!APPLY_STATUSES.has(call.result_summary?.status)) return 'apply_result_invalid';
   }
   const terminal = applies.some((call) => TERMINAL_APPLY_STATUSES.has(call.result_summary?.status));
@@ -562,6 +567,78 @@ export function classifySmallModelLiveResume({
   if (applies.some((call) => ['stale', 'blocked'].includes(call.result_summary?.status)))
     return 'apply_terminal_failure';
   return 'resume_required';
+}
+
+function exactContinuationBinding(binding) {
+  const normalized = {
+    plan_id: binding?.plan_id ?? binding?.planId,
+    blueprint_id: binding?.blueprint_id ?? binding?.blueprintId,
+    approval_id: binding?.approval_id ?? binding?.approvalId,
+    plan_digest: binding?.plan_digest ?? binding?.planDigest,
+  };
+  if (!Object.values(normalized).every((value) => DIGEST.test(value ?? '')))
+    throw new TypeError(
+      'resume binding must contain exact plan, blueprint, approval, and digest IDs',
+    );
+  return normalized;
+}
+
+function resumeFailureDiagnostic({ classification, turn, sessionId, target, binding, parsed }) {
+  const targetIds = expectedTarget(target);
+  const expected = exactContinuationBinding(binding);
+  const apply = [...parsed.trace]
+    .reverse()
+    .find((call) => call.status === 'completed' && call.tool === 'guild_blueprint_apply');
+  const argument = apply?.argument_projection ?? {};
+  const result = apply?.result_summary ?? {};
+  const resultTarget = result.target ?? {};
+  const progress = result.progress ?? {};
+  const diagnostic = {
+    phase: 'resume',
+    turn,
+    classification,
+    session_digest: digest(sessionId),
+    tool: apply?.tool ?? null,
+    call_count: parsed.trace.length,
+    completed_call_count: completed(parsed.trace).length,
+    confirmed: apply?.confirmed ?? null,
+    expected: {
+      guild_id: targetIds.guild_id,
+      expected_bot_id: targetIds.bot_id,
+      approval_id: expected.approval_id,
+      plan_id: expected.plan_id,
+      blueprint_id: expected.blueprint_id,
+      plan_digest: expected.plan_digest,
+    },
+    observed: {
+      guild_id: argument.guild_id ?? null,
+      expected_bot_id: argument.expected_bot_id ?? null,
+      approval_id: argument.approval_id ?? null,
+      plan_digest: argument.plan_digest ?? null,
+      result_guild_id: resultTarget.guild_id ?? null,
+      result_bot_id: resultTarget.bot_id ?? null,
+      result_plan_id: result.plan_id ?? null,
+      result_blueprint_id: result.blueprint_id ?? null,
+      status: APPLY_STATUSES.has(result.status) ? result.status : null,
+      error_code:
+        typeof result.error?.code === 'string' && SAFE_ERROR_CODE.test(result.error.code)
+          ? result.error.code
+          : null,
+      completed_total: safeNonnegativeInteger(progress.completed_total),
+      remaining: safeNonnegativeInteger(progress.remaining),
+    },
+    matches: {
+      argument_guild: argument.guild_id === targetIds.guild_id,
+      argument_bot: argument.expected_bot_id === targetIds.bot_id,
+      argument_approval: argument.approval_id === expected.approval_id,
+      argument_plan_digest: argument.plan_digest === expected.plan_digest,
+      result_guild: resultTarget.guild_id === targetIds.guild_id,
+      result_bot: resultTarget.bot_id === targetIds.bot_id,
+      result_plan: result.plan_id === expected.plan_id,
+      result_blueprint: result.blueprint_id === expected.blueprint_id,
+    },
+  };
+  return assertSecretFreeJson(diagnostic, 'live_eval_failure_diagnostic');
 }
 
 function codexConfig({ cliPath, cwd, target, stateDirectory, enabledTools }) {
@@ -603,6 +680,7 @@ export function buildSmallModelLiveArguments({
   stateDirectory,
   request = SMALL_MODEL_LIVE_REQUEST,
   sessionId = null,
+  binding = null,
 } = {}) {
   if (!['initial', 'resume'].includes(phase))
     throw new TypeError('phase must be initial or resume');
@@ -610,6 +688,7 @@ export function buildSmallModelLiveArguments({
     throw new TypeError('cliPath and cwd are required');
   if (!isAbsolute(stateDirectory)) throw new TypeError('stateDirectory must be absolute');
   const targetIds = controlledTarget(expectedTarget(target));
+  const continuation = phase === 'resume' ? exactContinuationBinding(binding) : null;
   if (phase === 'resume') exactUuid(sessionId, 'session_id');
   const args = [
     'exec',
@@ -632,7 +711,18 @@ export function buildSmallModelLiveArguments({
   if (phase === 'resume')
     args.push(
       sessionId,
-      'Approved by the caller. Continue the same plan. In this resume turn call exactly one guild_blueprint_apply with __confirm:true. If it returns partial or busy, stop immediately and do not call another apply or evidence; the harness will resume after the requested delay. After complete or already_current, call guild_blueprint_evidence exactly once. Do not replan.',
+      [
+        'Approved by the caller. Continue the same plan.',
+        'Use this exact non-secret continuation binding:',
+        `guild_id=${targetIds.guild_id}`,
+        `expected_bot_id=${targetIds.bot_id}`,
+        `approval_id=${continuation.approval_id}`,
+        `plan_id=${continuation.plan_id}`,
+        `blueprint_id=${continuation.blueprint_id}`,
+        `plan_token_digest=${continuation.plan_digest}`,
+        'Copy the opaque plan_token byte-for-byte from the immediately preceding build_discord_server result. Never invent, shorten, decode, derive, or retype it from its digest.',
+        'In this resume turn call exactly one guild_blueprint_apply with __confirm:true. If it returns partial or busy, stop immediately and do not call another apply or evidence; the harness will resume after the requested delay. After complete or already_current, call guild_blueprint_evidence exactly once. Do not replan.',
+      ].join('\n'),
     );
   else args.push(request);
   return args;
@@ -655,10 +745,8 @@ async function preparePrivateCodexHome({ env }) {
     };
   } catch (error) {
     await rm(privateHome, { recursive: true, force: true });
-    throw new LiveEvalFailure(
-      'CODEX_AUTH_UNAVAILABLE',
-      error instanceof Error ? error.message : undefined,
-    );
+    void error;
+    throw new LiveEvalFailure('CODEX_AUTH_UNAVAILABLE');
   }
 }
 
@@ -912,6 +1000,7 @@ export async function runSmallModelLiveEvaluation({
         target: targetIds,
         stateDirectory,
         sessionId: initialParsed.thread_id,
+        binding,
       });
       const result = await runProcess({
         launcher: codexLauncher,
@@ -964,7 +1053,16 @@ export async function runSmallModelLiveEvaluation({
         );
       }
       if (classification !== 'resume_required')
-        throw new LiveEvalFailure(`RESUME_${classification.toUpperCase()}`);
+        throw new LiveEvalFailure(`RESUME_${classification.toUpperCase()}`, {
+          diagnostic: resumeFailureDiagnostic({
+            classification,
+            turn: turn + 1,
+            sessionId: initialParsed.thread_id,
+            target: targetIds,
+            binding,
+            parsed,
+          }),
+        });
       for (const call of parsed.trace.filter((item) => item.status === 'completed')) {
         if (onValidatedToolCall !== null)
           onValidatedToolCall({

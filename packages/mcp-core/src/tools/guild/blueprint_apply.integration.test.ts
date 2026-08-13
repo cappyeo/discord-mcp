@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { server as mockServer } from '@discord-mcp/server-mocks';
@@ -346,6 +346,8 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
     let roleCreates = 0;
     let roleUpdates = 0;
     let channelCreates = 0;
+    let stateDirectory: string | undefined;
+    let firstDiscordMutationSawDurableCheckpoint = false;
     mockServer.use(
       http.get(`${API}/users/@me`, () =>
         HttpResponse.json({ id: BOT_ID, username: 'DevBot', bot: true }),
@@ -376,6 +378,15 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       ),
       http.post(`${API}/guilds/:guildId/auto-moderation/rules`, async ({ request }) => {
         automodCreates += 1;
+        const checkpointText = await readFile(
+          join(stateDirectory!, encoded.plan_id.slice('sha256:'.length), 'checkpoint-v0.json'),
+          'utf8',
+        );
+        const checkpointEnvelope = JSON.parse(checkpointText) as {
+          checkpoint?: { status?: string };
+        };
+        firstDiscordMutationSawDurableCheckpoint =
+          checkpointEnvelope.checkpoint?.status === 'applying';
         const body = (await request.json()) as Omit<
           TargetAutoModRule,
           'id' | 'guild_id' | 'creator_id'
@@ -431,7 +442,7 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       }),
     );
 
-    const stateDirectory = await mkdtemp(join(tmpdir(), 'discord-mcp-apply-integration-'));
+    stateDirectory = await mkdtemp(join(tmpdir(), 'discord-mcp-apply-integration-'));
     const originalDryRun = process.env.MCP_DRY_RUN;
     process.env.MCP_DRY_RUN = 'false';
     let client: Client | undefined;
@@ -497,6 +508,7 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       });
       expect(automodCreates).toBe(1);
       expect(publicationCreates).toBe(0);
+      expect(firstDiscordMutationSawDurableCheckpoint).toBe(true);
 
       const second = await client.callTool({ name: 'guild_blueprint_apply', arguments: args });
       expect(second.isError).toBe(false);
@@ -595,7 +607,7 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       expect(automodCreates + publicationCreates + roleCreates + channelCreates).toBe(2);
     } finally {
       await client?.close();
-      await rm(stateDirectory, { recursive: true, force: true });
+      await rm(stateDirectory!, { recursive: true, force: true });
       if (originalDryRun === undefined) delete process.env.MCP_DRY_RUN;
       else process.env.MCP_DRY_RUN = originalDryRun;
     }

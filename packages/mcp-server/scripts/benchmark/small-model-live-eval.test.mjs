@@ -15,10 +15,17 @@ import {
 const THREAD_ID = '123e4567-e89b-42d3-a456-426614174000';
 const UUID_V7_THREAD_ID = '019fc1fa-f933-79a0-b255-4e868edf0c71';
 const GUILD_ID = '1537363439452823645';
+const OTHER_GUILD_ID = '1537332825978568744';
 const BOT_ID = '1533719084636700773';
 const REQUEST = 'Dựng cho tôi một server gaming chuyên nghiệp.';
 const TOKEN = 'x'.repeat(60);
 const digest = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
+const BINDING = Object.freeze({
+  plan_id: digest('plan'),
+  blueprint_id: digest('blueprint'),
+  approval_id: digest('approval'),
+  plan_digest: digest('opaque-plan-token-must-not-leak'),
+});
 
 function line(value) {
   return JSON.stringify(value);
@@ -154,6 +161,17 @@ function partialApplyOutput({ id = THREAD_ID } = {}) {
   );
 }
 
+function transformOutput(stdout, transform) {
+  return stdout
+    .split('\n')
+    .map((entry) => {
+      const value = JSON.parse(entry);
+      transform(value);
+      return line(value);
+    })
+    .join('\n');
+}
+
 describe('small-model live evaluation contract', () => {
   it('extracts only the exact thread.started UUID and sanitizes tool results', () => {
     const parsed = parseSmallModelLiveJsonl(
@@ -249,12 +267,7 @@ describe('small-model live evaluation contract', () => {
         parsed,
         sessionId: THREAD_ID,
         target: { guildId: GUILD_ID, botId: BOT_ID },
-        binding: {
-          plan_id: digest('plan'),
-          blueprint_id: digest('blueprint'),
-          approval_id: digest('approval'),
-          plan_digest: digest('opaque-plan-token-must-not-leak'),
-        },
+        binding: BINDING,
       }),
     ).toBe('pass');
     expect(parsed.trace[0].argument_keys).toContain('plan_token');
@@ -269,14 +282,57 @@ describe('small-model live evaluation contract', () => {
         parsed: wrongSession,
         sessionId: THREAD_ID,
         target: { guildId: GUILD_ID, botId: BOT_ID },
-        binding: {
-          plan_id: digest('plan'),
-          blueprint_id: digest('blueprint'),
-          approval_id: digest('approval'),
-          plan_digest: digest('opaque-plan-token-must-not-leak'),
-        },
+        binding: BINDING,
       }),
     ).toBe('session_mismatch');
+  });
+
+  it('distinguishes argument and result binding mismatches without exposing the plan token', () => {
+    const classify = (stdout) =>
+      classifySmallModelLiveResume({
+        parsed: parseSmallModelLiveJsonl(stdout),
+        sessionId: THREAD_ID,
+        target: { guildId: GUILD_ID, botId: BOT_ID },
+        binding: BINDING,
+      });
+    const changed = (mutate) =>
+      transformOutput(applyOutput(), (event) => {
+        if (event.item?.name === 'guild_blueprint_apply') mutate(event.item);
+      });
+
+    expect(classify(changed((item) => (item.arguments.guild_id = OTHER_GUILD_ID)))).toBe(
+      'apply_argument_target_mismatch',
+    );
+    expect(classify(changed((item) => (item.arguments.approval_id = digest('wrong'))))).toBe(
+      'apply_argument_approval_mismatch',
+    );
+    expect(classify(changed((item) => (item.arguments.plan_token = 'wrong opaque value')))).toBe(
+      'apply_argument_plan_digest_mismatch',
+    );
+    expect(
+      classify(
+        changed((item) => {
+          item.result.structured_content.plan_id = digest('wrong');
+        }),
+      ),
+    ).toBe('apply_result_binding_mismatch');
+  });
+
+  it('accepts camelCase structured results and JSON-string arguments from Codex JSONL', () => {
+    const stdout = transformOutput(applyOutput(), (event) => {
+      if (!event.item?.name) return;
+      event.item.arguments = JSON.stringify(event.item.arguments);
+      event.item.result.structuredContent = event.item.result.structured_content;
+      delete event.item.result.structured_content;
+    });
+    expect(
+      classifySmallModelLiveResume({
+        parsed: parseSmallModelLiveJsonl(stdout),
+        sessionId: THREAD_ID,
+        target: { guildId: GUILD_ID, botId: BOT_ID },
+        binding: BINDING,
+      }),
+    ).toBe('pass');
   });
 
   it('builds separate initial and exact-id resume commands with live MCP gating', async () => {
@@ -296,6 +352,7 @@ describe('small-model live evaluation contract', () => {
         stateDirectory: directory,
         target: { guildId: GUILD_ID, botId: BOT_ID },
         sessionId: THREAD_ID,
+        binding: BINDING,
       });
       expect(initial).not.toContain('--ephemeral');
       expect(initial).not.toContain('--last');
@@ -316,6 +373,25 @@ describe('small-model live evaluation contract', () => {
       expect(initial.join('\n')).toContain('calling build_discord_server exactly once');
       expect(initial.join('\n')).toContain('Stop after the preview');
       expect(resume.join('\n')).toContain('["guild_blueprint_apply","guild_blueprint_evidence"]');
+      const resumePrompt = resume.at(-1);
+      expect(resumePrompt).toContain(`guild_id=${GUILD_ID}`);
+      expect(resumePrompt).toContain(`expected_bot_id=${BOT_ID}`);
+      expect(resumePrompt).toContain(`approval_id=${BINDING.approval_id}`);
+      expect(resumePrompt).toContain(`plan_id=${BINDING.plan_id}`);
+      expect(resumePrompt).toContain(`blueprint_id=${BINDING.blueprint_id}`);
+      expect(resumePrompt).toContain(`plan_token_digest=${BINDING.plan_digest}`);
+      expect(resumePrompt).toContain('byte-for-byte');
+      expect(resumePrompt).not.toContain('opaque-plan-token-must-not-leak');
+      expect(() =>
+        buildSmallModelLiveArguments({
+          phase: 'resume',
+          cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
+          cwd: 'C:/repo',
+          stateDirectory: directory,
+          target: { guildId: GUILD_ID, botId: BOT_ID },
+          sessionId: THREAD_ID,
+        }),
+      ).toThrow('resume binding');
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -333,6 +409,35 @@ describe('small-model live evaluation contract', () => {
           target: { guildId: '1537332825978568745', botId: BOT_ID },
         }),
       ).toThrow('controlled guild and bot');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('reports an unavailable Codex auth file without exposing its filesystem path', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-live-auth-failure-'));
+    const missingHome = join(directory, 'private-auth-source');
+    try {
+      let failure;
+      try {
+        await runSmallModelLiveEvaluation({
+          cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
+          cwd: 'C:/repo',
+          stateDirectory: directory,
+          target: { guildId: GUILD_ID, botId: BOT_ID, token: TOKEN },
+          env: { CODEX_HOME: missingHome },
+          approve: async () => true,
+          approvalProvenance: { source: 'test-caller', approval_id: digest('approval') },
+        });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({
+        code: 'CODEX_AUTH_UNAVAILABLE',
+        message: 'CODEX_AUTH_UNAVAILABLE',
+      });
+      expect(failure.message).not.toContain(missingHome);
+      expect(failure.message).not.toContain('auth.json');
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -408,6 +513,75 @@ describe('small-model live evaluation contract', () => {
       ]);
       expect(validated[1].arguments.plan_token).toBe('opaque-plan-token-must-not-leak');
       expect(result).not.toHaveProperty('raw');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a mismatched resume binding with only a secret-free diagnostic', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-live-binding-failure-'));
+    const validated = [];
+    let processCalls = 0;
+    try {
+      let failure;
+      try {
+        await runSmallModelLiveEvaluation({
+          cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
+          cwd: 'C:/repo',
+          stateDirectory: directory,
+          target: { guildId: GUILD_ID, botId: BOT_ID, token: TOKEN },
+          env: { PATH: 'safe-path' },
+          launcher: { command: 'codex', prefix_args: [] },
+          prepareCodexHome: async () => ({ path: directory, cleanup: async () => {} }),
+          runProcess: async () => {
+            processCalls += 1;
+            if (processCalls === 1)
+              return {
+                stdout: initialOutput(),
+                exitCode: 0,
+                signal: null,
+                timedOut: false,
+                spawnError: false,
+                truncated: false,
+              };
+            return {
+              stdout: transformOutput(applyOutput(), (event) => {
+                if (event.item?.name === 'guild_blueprint_apply') {
+                  event.item.arguments.plan_token = 'wrong opaque value';
+                  event.item.result.structured_content.error = {
+                    code: 'dmbp1.raw-opaque-plan-token',
+                  };
+                }
+              }),
+              exitCode: 0,
+              signal: null,
+              timedOut: false,
+              spawnError: false,
+              truncated: false,
+            };
+          },
+          approve: async () => true,
+          approvalProvenance: { source: 'test-caller', approval_id: digest('approval') },
+          onValidatedToolCall: (call) => validated.push(call),
+        });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({
+        code: 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+        message: 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+        diagnostic: {
+          phase: 'resume',
+          turn: 1,
+          classification: 'apply_argument_plan_digest_mismatch',
+          matches: { argument_plan_digest: false },
+        },
+      });
+      expect(validated.map((call) => call.tool)).toEqual(['build_discord_server']);
+      expect(JSON.stringify(failure.diagnostic)).not.toContain('opaque-plan-token-must-not-leak');
+      expect(JSON.stringify(failure.diagnostic)).not.toContain('wrong opaque value');
+      expect(JSON.stringify(failure.diagnostic)).not.toContain('dmbp1.');
+      expect(JSON.stringify(failure.diagnostic)).not.toContain(THREAD_ID);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
