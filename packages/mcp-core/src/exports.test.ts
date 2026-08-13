@@ -22,6 +22,7 @@ describe('public export surface', () => {
     // exported function's signature but not itself exported, so a consumer
     // cannot name it and cannot build the argument.
     expect(typeof api.buildServer).toBe('function');
+    expect(typeof api.buildCatalogServer).toBe('function');
     expect(typeof api.loadConfig).toBe('function');
     expect(typeof api.createLogger).toBe('function');
     expect(typeof api.buildPolicy).toBe('function');

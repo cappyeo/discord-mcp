@@ -251,7 +251,7 @@ try {
   assert.equal(version, sourceCli.version);
 
   const help = runCli(['--help']);
-  for (const command of ['serve', 'setup', 'doctor', 'init', 'smoke']) {
+  for (const command of ['serve', 'catalog', 'setup', 'doctor', 'init', 'smoke']) {
     assert.match(help, new RegExp(`\\b${command}\\b`));
   }
 
@@ -287,6 +287,40 @@ try {
   const requireFromCli = createRequire(join(cliDirectory, 'package.json'));
   const { Client, StreamableHTTPClientTransport } = requireFromCli('@modelcontextprotocol/client');
   const { StdioClientTransport } = requireFromCli('@modelcontextprotocol/client/stdio');
+  const catalogTransport = new StdioClientTransport({
+    command: process.execPath,
+    args: [cliEntry, 'catalog'],
+    cwd: installRoot,
+    env: commonEnvironment,
+    stderr: 'pipe',
+  });
+  const catalogClient = new Client(
+    { name: 'discord-mcp-package-catalog-acceptance', version: '0.0.0' },
+    { capabilities: {} },
+  );
+
+  try {
+    await catalogClient.connect(catalogTransport);
+    const { tools } = await catalogClient.listTools();
+    assert.equal(tools.length, 208);
+    for (const request of [
+      { name: 'guild_get', arguments: { guild_id: '111122223333444455' } },
+      {
+        name: 'messages_send',
+        arguments: { channel_id: '111122223333444455', content: 'must never execute' },
+      },
+      { name: 'unknown_catalog_tool', arguments: {} },
+    ]) {
+      const result = await catalogClient.callTool(request);
+      assert.equal(result.isError, true);
+      assert.equal(result.structuredContent?.code, 'CATALOG_ONLY');
+      assert.equal(result.structuredContent?.retriable, false);
+      assert.equal(result.structuredContent?.category, 'client');
+    }
+  } finally {
+    await catalogClient.close();
+  }
+
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [cliEntry, 'serve'],

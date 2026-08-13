@@ -88,7 +88,13 @@ export {
   type WrapResilienceOptions,
   wrapRestWithResilience,
 } from './rest/resilient.js';
-export { type BuildServerDeps, type BuildServerResult, buildServer } from './server.js';
+export {
+  type BuildCatalogServerResult,
+  type BuildServerDeps,
+  type BuildServerResult,
+  buildCatalogServer,
+  buildServer,
+} from './server.js';
 export { PreconditionStore } from './stores/PreconditionStore.js';
 // Stores
 export { ToolStore } from './stores/ToolStore.js';

@@ -5,7 +5,7 @@ import type { Logger } from 'pino';
 import { z } from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
 import { runWithCtx } from './als/context.js';
-import { type AuditSink, createAuditSink } from './audit/sink.js';
+import { type AuditSink, createAuditSink, NoopAuditSink } from './audit/sink.js';
 import type { Config } from './config.js';
 import { type DiscordRuntime, runWithDiscordRuntime } from './container.js';
 import { formatErrorForUser } from './errors/format.js';
@@ -281,6 +281,14 @@ export interface BuildServerResult {
    */
   auditSink: AuditSink;
 }
+
+/**
+ * A deterministic, credential-free server that advertises the complete tool
+ * contract but never dispatches a tool.  It intentionally has no config or
+ * REST dependency: callers can use it to inspect the live surface without
+ * loading a token or touching Discord.
+ */
+export type BuildCatalogServerResult = BuildServerResult;
 
 /**
  * The envelope every error result carries (see errors/format.ts `makeError`).
@@ -1806,6 +1814,84 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     server,
     registeredTools,
     registeredPreconditions,
+    notifyResource,
+    subscriptions,
+    auditSink,
+  };
+}
+
+const CATALOG_ONLY_ERROR = {
+  code: 'CATALOG_ONLY',
+  retriable: false,
+  category: 'client',
+  recovery_hint: 'Use a credentialed Discord MCP server to execute tools.',
+} as const;
+
+/**
+ * Build the complete MCP tool catalog without credentials or runtime I/O.
+ *
+ * This is deliberately separate from `buildServer`: the live builder keeps
+ * its existing identity, middleware, gateway, telemetry, and audit setup,
+ * while this seam only loads immutable tool pieces and installs read-only
+ * catalog handlers.  In particular, no `Config` is created and no ambient
+ * process environment is consulted here.
+ */
+export async function buildCatalogServer(): Promise<BuildCatalogServerResult> {
+  const toolStore = await getSharedToolStore();
+  const visibleTools = listVisibleTools(toolStore, null, false, false, true);
+  const resourceStore = new ResourceStore();
+  const subscriptions = new SubscriptionRegistry();
+  const auditSink = new NoopAuditSink();
+
+  const server = new Server(
+    { name: 'discord-mcp', version: packageJson.version },
+    {
+      capabilities: { tools: {}, resources: { subscribe: true } },
+      cacheHints: { 'tools/list': { ttlMs: 3_600_000, cacheScope: 'private' } },
+      instructions:
+        'Catalog-only mode: this server advertises the complete Discord MCP tool surface. ' +
+        'Tool execution is disabled and never contacts Discord; use a credentialed server to execute tools.',
+    },
+  );
+
+  server.setRequestHandler('tools/list', async () => ({ tools: visibleTools }));
+  server.setRequestHandler('tools/call', async () => ({
+    isError: true,
+    content: [{ type: 'text', text: 'Catalog-only mode does not execute tools.' }],
+    structuredContent: { ...CATALOG_ONLY_ERROR },
+  }));
+
+  server.setRequestHandler('resources/list', async () => {
+    const resources = await resourceStore.list();
+    return { resources: resources.map((resource) => ({ ...resource })) };
+  });
+
+  server.setRequestHandler('resources/read', async (req) => {
+    const content = await resourceStore.read(req.params.uri);
+    if (content === null) throw new Error(`Resource not found: ${req.params.uri}`);
+    return {
+      contents: [{ uri: content.uri, mimeType: content.mimeType, text: content.text }],
+    };
+  });
+
+  server.setRequestHandler('resources/subscribe', async (req) => {
+    subscriptions.subscribe(req.params.uri);
+    return {};
+  });
+
+  server.setRequestHandler('resources/unsubscribe', async (req) => {
+    subscriptions.unsubscribe(req.params.uri);
+    return {};
+  });
+
+  const notifyResource = async (uri: string): Promise<void> => {
+    if (subscriptions.has(uri)) await server.sendResourceUpdated({ uri });
+  };
+
+  return {
+    server,
+    registeredTools: [...toolStore.keys()],
+    registeredPreconditions: [],
     notifyResource,
     subscriptions,
     auditSink,

@@ -5,17 +5,20 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.20.1 and contains 208 tools.
+The current source tree targets discord-mcp v0.21.0 and contains 208 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.20.1)
+## Current source evidence (v0.21.0)
 
 - The current source tree exposes 208 MCP tools across 31 categories; the
   preceding v0.18.1 packages exposed 203.
-- v0.20.1 keeps the runtime and 208-tool contract unchanged while giving new
+- v0.21.0 keeps the operational 208-tool contract unchanged and adds a
+  credential-free catalog boundary for registry inspection. Catalog mode
+  exposes the exact schemas but fails every call with `CATALOG_ONLY`; it cannot
+  contact Discord or substitute for caller-owned `serve`. v0.20.1 gave new
   users one outcome-led path from setup to a reviewed blueprint, resumable
   apply, and independently revalidated Activity Evidence. Its voluntary public
   outcome report requests only coarse redacted facts; no adoption telemetry is
@@ -147,7 +150,7 @@ removal or rename fails CI instead of reaching a consumer.
 
 - [x] `@discord-mcp/core` exports frozen - `src/exports.test.ts`
 - [x] CLI flag set frozen - `packages/mcp-server/src/cli.surface.test.ts`
-      snapshots all nine committed subcommands and their flags
+      snapshots all ten committed subcommands and their flags
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
@@ -159,7 +162,7 @@ removal or rename fails CI instead of reaching a consumer.
 - **Semver**: breaking changes require a major bump (v2.0.0).
 - **API stability**: `@discord-mcp/core` exports stable for 6+ months.
 - **Tool surface**: 208 tools maintained; new tools = minor version.
-- **CLI flags**: `discord-mcp serve|doctor|init|migrate` flag set frozen.
+- **CLI flags**: the ten committed subcommands and their options are frozen.
 - **Config**: env var names + defaults frozen (additions allowed; renames
   forbidden).
 - **Discord API tracking**: Discord deprecations may force adapter changes;

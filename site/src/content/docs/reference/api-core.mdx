@@ -24,7 +24,7 @@ change types or behavior. Pin a compatible version and read the
 
 | Job | Root exports |
 | --- | --- |
-| Server | `buildServer`, `BuildServerDeps`, `BuildServerResult`, `VERSION` |
+| Server | `buildServer`, `buildCatalogServer`, `BuildServerDeps`, `BuildServerResult`, `BuildCatalogServerResult`, `VERSION` |
 | Configuration | `loadConfig`, `Config` |
 | Tools and results | `defineTool`, `ToolDefinition`, `Tool`, `ToolRunContext`, `dualResult` |
 | IDs and pagination | `Snowflake`, `ApplicationId`, `ChannelId`, `EmojiId`, `GuildId`, `MessageId`, `RoleId`, `UserId`, `WebhookId`, `encodeCursor`, `decodeCursor` |
@@ -135,6 +135,11 @@ async function shutdown() {
 precondition names, a resource-notification function, the subscription
 registry, and the audit sink. The normal CLI transport also starts optional
 OpenTelemetry and Gateway services and shuts them down in order.
+
+`buildCatalogServer()` returns the same shape without accepting configuration
+or credentials. It advertises the complete shipped schema and static resources,
+but every tool call fails with `CATALOG_ONLY` before validation or dispatch. It
+is intended for registry inspection, not Discord execution.
 
 `new REST({ retries: 0 })` disables discord.js retries for server errors and
 timeouts. It does not disable the library's route/global rate-limit queue.

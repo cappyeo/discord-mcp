@@ -9,6 +9,26 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.21.0 - credential-free catalog discovery
+
+This minor release makes the complete MCP contract safely discoverable by
+directories and security tooling without weakening the caller-owned execution
+boundary.
+
+- Added `discord-mcp catalog`, a credential-free stdio server that advertises
+  the same 208 tool schemas and six static resources as the unrestricted full
+  server. It does not load a token, profile, Discord REST client, Gateway, or
+  OpenTelemetry path.
+- Every catalog-mode `tools/call`, including unknown tool names, fails closed
+  with `CATALOG_ONLY` before argument validation or dispatch. Operational use
+  remains on `discord-mcp serve` with a caller-owned bot and the existing
+  identity, allowlist, approval, and audit controls.
+- Added a minimal non-root root `Dockerfile` whose default command is catalog
+  discovery, plus CI that starts it without credentials under a read-only,
+  network-disabled, capability-dropped container and verifies all 208 schemas.
+- Extended clean-tarball acceptance so the published CLI must expose the exact
+  catalog contract without regressing stdio or Streamable HTTP operation.
+
 ## v0.20.1 - outcome-led onboarding and discovery
 
 This patch makes the existing verified guild-build lifecycle discoverable and

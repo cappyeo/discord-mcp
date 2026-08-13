@@ -3,7 +3,7 @@
  *
  * Spawns the built `dist/cli.js` as a real subprocess and asserts:
  * 1. `--version` prints the package version.
- * 2. `--help` lists all nine sub-commands.
+ * 2. `--help` lists all ten sub-commands.
  * 3. `doctor --json` (without DISCORD_TOKEN) exits non-zero with parseable
  *    JSON that flags the missing token.
  *
@@ -64,10 +64,12 @@ describe('cli binary smoke (post-build)', () => {
     expect(status).toBe(0);
   });
 
-  it('--help lists all nine subcommands', () => {
+  it('--help lists all ten subcommands', () => {
     const { stdout, stderr, status } = runCli(['--help']);
     const combined = stdout + stderr;
     expect(combined).toContain('serve');
+    expect(combined).toMatch(/\n {2}catalog\s/);
+    expect(combined).toContain('Discord execution disabled');
     expect(combined).toContain('doctor');
     expect(combined).toContain('smoke');
     expect(combined).toContain('init');

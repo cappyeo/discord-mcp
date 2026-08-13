@@ -191,6 +191,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | Command | Purpose |
 | --- | --- |
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
+| `discord-mcp catalog` | Expose all 208 real tool schemas without a token; every tool call fails closed with `CATALOG_ONLY`. |
 | `discord-mcp setup` | Verify one caller-owned bot, save a non-secret profile, and generate its client configuration. |
 | `discord-mcp activity` | Show the local, privacy-safe evidence journal for setup and verification outcomes. |
 | `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
@@ -201,6 +202,19 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 
 Run `discord-mcp --help` or see the full [CLI reference](https://cappyeo.github.io/discord-mcp/reference/cli/) for flags and examples.
+
+### Registry-safe schema discovery
+
+`discord-mcp catalog` is a credential-free stdio server for MCP directories,
+security review, and contract inspection. It advertises the same 208 schemas as
+the full server, never reads a bot token, never contacts Discord, and returns
+`CATALOG_ONLY` for every `tools/call`. It is not an operational Discord server;
+use `discord-mcp serve` with your caller-owned bot when an AI agent should act.
+
+The repository's root `Dockerfile` intentionally defaults to this catalog-only
+mode so automated registry scanners can inspect the project safely. Images built
+from source can explicitly run `serve` instead, but the caller must supply their
+own `DISCORD_TOKEN` and safety configuration.
 
 ## Packages
 
@@ -233,7 +247,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.20.1**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.21.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)
