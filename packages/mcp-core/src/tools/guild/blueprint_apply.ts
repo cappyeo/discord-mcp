@@ -32,6 +32,7 @@ import {
   emptyBlueprintBindings,
   type GuildBlueprintPlanPayload,
 } from './_lib/blueprint.execution.schema.js';
+import { loadBlueprintPlanReference } from './_lib/blueprint.plan-reference-store.js';
 import { BlueprintPlanTokenError, decodeBlueprintPlan } from './_lib/blueprint.plan-token.js';
 import {
   type BlueprintReconcileResult,
@@ -274,7 +275,7 @@ export default defineTool({
   description: [
     '**Purpose**: Apply a previously previewed `guild_blueprint_plan` safely to one explicit guild using the exact caller-owned bot. The operation graph is checkpointed locally after every successful mutation and reconciled against Discord before every resume.',
     '',
-    '**When to use**: Call only after presenting the plan summary and receiving approval for its `approval_id`. Pass the unchanged `plan_token`, exact guild/bot IDs, `__confirm:true`, and run with `MCP_DRY_RUN=false`.',
+    '**When to use**: Call only after presenting the plan summary and receiving approval for its `approval_id`. Pass exactly one unchanged local `plan_ref` or legacy `plan_token`, exact guild/bot IDs, `__confirm:true`, and run with `MCP_DRY_RUN=false`.',
     '',
     '**Safety**: The tool re-verifies bot identity, guild allowlist, plan target, approval ID, live permissions, role hierarchy, drift, and a guild-wide apply lock before writing. It never deletes resources, never grants its own permissions, and stops on ambiguity or mismatched bound resources.',
     '',
@@ -286,11 +287,21 @@ export default defineTool({
   inputSchema: {
     guild_id: GuildId.describe('Explicit target guild; configured defaults are never accepted'),
     expected_bot_id: UserId.describe('Exact caller-owned bot ID locked by the selected profile'),
+    plan_ref: z
+      .string()
+      .regex(/^dmbpr1\.[a-f0-9]{64}$/)
+      .optional()
+      .describe(
+        'Preferred private local reference returned by guild_blueprint_plan; pass this field and omit plan_token',
+      ),
     plan_token: z
       .string()
       .min(1)
       .max(65_536)
-      .describe('Opaque token returned by guild_blueprint_plan'),
+      .optional()
+      .describe(
+        'Legacy fallback returned by guild_blueprint_plan; use only when plan_ref is null and omit plan_ref',
+      ),
     approval_id: Digest.describe('Approval ID shown by guild_blueprint_plan'),
     operation_budget: z
       .number()
@@ -373,14 +384,57 @@ export default defineTool({
       activity: null,
     };
 
+    const hasPlanRef = args.plan_ref !== undefined;
+    const hasPlanToken = args.plan_token !== undefined;
+    if (hasPlanRef === hasPlanToken) {
+      return response(
+        'Blueprint apply blocked: provide exactly one plan_ref or plan_token. No Discord access occurred.',
+        {
+          status: 'blocked',
+          plan_id: null,
+          blueprint_id: null,
+          target,
+          progress: emptyProgress,
+          attempts: [],
+          blockers: [
+            blocker(
+              'PLAN_REFERENCE_XOR_REQUIRED',
+              'Exactly one authenticated local plan reference or legacy plan token is required.',
+              null,
+              'Pass the unchanged plan_ref from guild_blueprint_plan, or use the legacy plan_token; never pass both.',
+            ),
+          ],
+          error: null,
+          evidence: emptyEvidence,
+          next_action: 'replan',
+          warnings: [],
+        },
+      );
+    }
+
     let decoded: ReturnType<typeof decodeBlueprintPlan>;
     const signingSecret = blueprintSigningSecret(container.config);
     try {
-      decoded = decodeBlueprintPlan(args.plan_token, signingSecret);
+      if (hasPlanRef) {
+        const reference = await loadBlueprintPlanReference({
+          stateDirectory: resolveBlueprintStateDirectory(container.config),
+          planRef: args.plan_ref as string,
+          signingSecret,
+        });
+        decoded = {
+          plan_id: reference.plan_id,
+          approval_id: reference.approval_id,
+          payload: reference.payload,
+        };
+      } else {
+        decoded = decodeBlueprintPlan(args.plan_token as string, signingSecret);
+      }
     } catch (error) {
-      const code = error instanceof BlueprintPlanTokenError ? error.code : 'PLAN_TOKEN_INVALID';
+      const code = error instanceof BlueprintPlanTokenError ? error.code : 'PLAN_REFERENCE_INVALID';
       return response(
-        'Blueprint apply blocked: the plan token is invalid. No Discord access occurred.',
+        hasPlanRef
+          ? 'Blueprint apply blocked: the local plan reference is invalid or unavailable. No Discord access occurred.'
+          : 'Blueprint apply blocked: the plan token is invalid. No Discord access occurred.',
         {
           status: 'blocked',
           plan_id: null,
@@ -391,7 +445,9 @@ export default defineTool({
           blockers: [
             blocker(
               code,
-              'The supplied plan token could not be verified.',
+              hasPlanRef
+                ? 'The supplied local plan reference could not be verified or loaded.'
+                : 'The supplied plan token could not be verified.',
               null,
               'Create a fresh preview with guild_blueprint_plan.',
             ),
@@ -399,7 +455,11 @@ export default defineTool({
           error: null,
           evidence: emptyEvidence,
           next_action: 'replan',
-          warnings: ['The invalid plan token was not echoed or persisted.'],
+          warnings: [
+            hasPlanRef
+              ? 'The invalid local plan reference was not echoed or persisted.'
+              : 'The invalid plan token was not echoed or persisted.',
+          ],
         },
       );
     }

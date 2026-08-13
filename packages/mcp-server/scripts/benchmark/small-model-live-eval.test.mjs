@@ -19,12 +19,13 @@ const OTHER_GUILD_ID = '1537332825978568744';
 const BOT_ID = '1533719084636700773';
 const REQUEST = 'Dựng cho tôi một server gaming chuyên nghiệp.';
 const TOKEN = 'x'.repeat(60);
+const PLAN_REF = `dmbpr1.${'f'.repeat(64)}`;
 const digest = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 const BINDING = Object.freeze({
   plan_id: digest('plan'),
   blueprint_id: digest('blueprint'),
   approval_id: digest('approval'),
-  plan_digest: digest('opaque-plan-token-must-not-leak'),
+  plan_ref: PLAN_REF,
 });
 
 function line(value) {
@@ -53,7 +54,7 @@ function initialOutput({ id = THREAD_ID, result = {} } = {}) {
             plan_id: digest('plan'),
             blueprint_id: digest('blueprint'),
             approval_id: digest('approval'),
-            plan_token: 'opaque-plan-token-must-not-leak',
+            plan_ref: PLAN_REF,
             ...result,
           },
         },
@@ -76,7 +77,7 @@ function applyOutput({ id = THREAD_ID, status = 'complete' } = {}) {
         arguments: {
           guild_id: GUILD_ID,
           expected_bot_id: BOT_ID,
-          plan_token: 'opaque-plan-token-must-not-leak',
+          plan_ref: PLAN_REF,
           approval_id: digest('approval'),
           operation_budget: 25,
           __confirm: true,
@@ -140,7 +141,7 @@ function partialApplyOutput({ id = THREAD_ID } = {}) {
         arguments: {
           guild_id: GUILD_ID,
           expected_bot_id: BOT_ID,
-          plan_token: 'opaque-plan-token-must-not-leak',
+          plan_ref: PLAN_REF,
           approval_id: digest('approval'),
           operation_budget: 25,
           __confirm: true,
@@ -192,6 +193,7 @@ describe('small-model live evaluation contract', () => {
     expect(JSON.stringify(parsed)).not.toContain('plan_token');
     expect(JSON.stringify(parsed)).not.toContain('opaque-plan-token');
     expect(parsed.trace[0].result_summary.plan_digest).toBe(digest('secret-plan-token'));
+    expect(parsed.trace[0].result_summary.plan_ref).toBe(PLAN_REF);
     expect(parsed.trace[0]).not.toHaveProperty('__raw');
   });
 
@@ -270,7 +272,7 @@ describe('small-model live evaluation contract', () => {
         binding: BINDING,
       }),
     ).toBe('pass');
-    expect(parsed.trace[0].argument_keys).toContain('plan_token');
+    expect(parsed.trace[0].argument_keys).toContain('plan_ref');
     expect(parsed.trace[0].confirmed).toBe(true);
     expect(parsed.trace[0].result_summary).not.toHaveProperty('plan_token');
 
@@ -306,8 +308,11 @@ describe('small-model live evaluation contract', () => {
     expect(classify(changed((item) => (item.arguments.approval_id = digest('wrong'))))).toBe(
       'apply_argument_approval_mismatch',
     );
-    expect(classify(changed((item) => (item.arguments.plan_token = 'wrong opaque value')))).toBe(
-      'apply_argument_plan_digest_mismatch',
+    expect(
+      classify(changed((item) => (item.arguments.plan_ref = `dmbpr1.${'0'.repeat(64)}`))),
+    ).toBe('apply_argument_plan_ref_mismatch');
+    expect(classify(changed((item) => (item.arguments.plan_token = 'raw-secret-token')))).toBe(
+      'apply_contract_failure',
     );
     expect(
       classify(
@@ -379,8 +384,10 @@ describe('small-model live evaluation contract', () => {
       expect(resumePrompt).toContain(`approval_id=${BINDING.approval_id}`);
       expect(resumePrompt).toContain(`plan_id=${BINDING.plan_id}`);
       expect(resumePrompt).toContain(`blueprint_id=${BINDING.blueprint_id}`);
-      expect(resumePrompt).toContain(`plan_token_digest=${BINDING.plan_digest}`);
-      expect(resumePrompt).toContain('byte-for-byte');
+      expect(resumePrompt).toContain(`plan_ref=${BINDING.plan_ref}`);
+      expect(resumePrompt).toContain('exact plan_ref');
+      expect(resumePrompt).not.toContain('plan_token');
+      expect(resumePrompt).not.toContain('plan_token_digest');
       expect(resumePrompt).not.toContain('opaque-plan-token-must-not-leak');
       expect(() =>
         buildSmallModelLiveArguments({
@@ -511,7 +518,8 @@ describe('small-model live evaluation contract', () => {
         'guild_blueprint_apply',
         'guild_blueprint_evidence',
       ]);
-      expect(validated[1].arguments.plan_token).toBe('opaque-plan-token-must-not-leak');
+      expect(validated[1].arguments.plan_ref).toBe(PLAN_REF);
+      expect(validated[1].arguments).not.toHaveProperty('plan_token');
       expect(result).not.toHaveProperty('raw');
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -547,9 +555,9 @@ describe('small-model live evaluation contract', () => {
             return {
               stdout: transformOutput(applyOutput(), (event) => {
                 if (event.item?.name === 'guild_blueprint_apply') {
-                  event.item.arguments.plan_token = 'wrong opaque value';
+                  event.item.arguments.plan_ref = `dmbpr1.${'0'.repeat(64)}`;
                   event.item.result.structured_content.error = {
-                    code: 'dmbp1.raw-opaque-plan-token',
+                    code: 'dmbpr1.ref-mismatch',
                   };
                 }
               }),
@@ -568,19 +576,18 @@ describe('small-model live evaluation contract', () => {
         failure = error;
       }
       expect(failure).toMatchObject({
-        code: 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
-        message: 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+        code: 'RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH',
+        message: 'RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH',
         diagnostic: {
           phase: 'resume',
           turn: 1,
-          classification: 'apply_argument_plan_digest_mismatch',
-          matches: { argument_plan_digest: false },
+          classification: 'apply_argument_plan_ref_mismatch',
+          matches: { argument_plan_ref: false },
         },
       });
       expect(validated.map((call) => call.tool)).toEqual(['build_discord_server']);
       expect(JSON.stringify(failure.diagnostic)).not.toContain('opaque-plan-token-must-not-leak');
-      expect(JSON.stringify(failure.diagnostic)).not.toContain('wrong opaque value');
-      expect(JSON.stringify(failure.diagnostic)).not.toContain('dmbp1.');
+      expect(JSON.stringify(failure.diagnostic)).toContain(PLAN_REF);
       expect(JSON.stringify(failure.diagnostic)).not.toContain(THREAD_ID);
     } finally {
       await rm(directory, { recursive: true, force: true });

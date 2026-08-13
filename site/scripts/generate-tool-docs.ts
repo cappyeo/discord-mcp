@@ -259,14 +259,22 @@ export function renderSchemaTable(
 export function renderJsonSchema(
   fields: Record<string, z.ZodTypeAny> | undefined,
   io: 'input' | 'output' = 'input',
+  toolName?: string,
 ): string {
   if (!fields) return '';
   try {
-    return JSON.stringify(
-      cleanJsonSchema(z.toJSONSchema(z.object(fields), { target: 'draft-2020-12', io })),
-      null,
-      2,
-    );
+    const schema = cleanJsonSchema(
+      z.toJSONSchema(z.object(fields), { target: 'draft-2020-12', io }),
+    ) as JsonSchema;
+    if (toolName === 'guild_blueprint_apply') {
+      Object.assign(schema, {
+        oneOf: [
+          { required: ['plan_ref'], not: { required: ['plan_token'] } },
+          { required: ['plan_token'], not: { required: ['plan_ref'] } },
+        ],
+      });
+    }
+    return JSON.stringify(schema, null, 2);
   } catch {
     return '';
   }
@@ -487,6 +495,14 @@ export function buildSchemaExample(
   if (options.toolName === 'interactions_create_response' && fields.data) {
     example.type = 4;
     example.data = { content: 'Hello from discord-mcp' };
+  }
+
+  // guild_blueprint_apply accepts exactly one credential. Prefer the local
+  // reference in copy-ready documentation; the legacy token remains a
+  // documented compatibility alternative in the field/schema table.
+  if (options.toolName === 'guild_blueprint_apply' && fields.plan_ref && fields.plan_token) {
+    example.plan_ref = `dmbpr1.${'f'.repeat(64)}`;
+    delete example.plan_token;
   }
 
   // Modify endpoints commonly make every mutable property optional. Publish
@@ -741,6 +757,7 @@ export function buildOutputExample(tool: ToolMetadata): Record<string, unknown> 
       plan_id: null,
       approval_id: null,
       plan_token: null,
+      plan_ref: null,
       summary: null,
       operations: [],
       bot_permissions: null,
@@ -866,7 +883,7 @@ export function renderToolMdx(tool: ToolMetadata, relatedTools: ToolMetadata[] =
     : tool.inputSchema;
   const inputTable = renderSchemaTable(publishedInputSchema);
   const outputTable = renderSchemaTable(tool.outputSchema, 'output');
-  const inputSchema = renderJsonSchema(publishedInputSchema, 'input');
+  const inputSchema = renderJsonSchema(publishedInputSchema, 'input', tool.name);
   const outputSchema = renderJsonSchema(tool.outputSchema, 'output');
   const generatedInputExample = buildSchemaExample(publishedInputSchema, { toolName: tool.name });
   const inputExample =

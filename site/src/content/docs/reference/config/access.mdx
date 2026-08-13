@@ -87,17 +87,24 @@ allowlist or startup fails.
 
 - **Type:** non-empty directory path
 - **Default:** the platform-specific local user-state directory
-- **Use:** Stores authenticated append-only checkpoints, apply locks, and completion-only Activity Evidence for the blueprint workflow.
+- **Use:** Stores authenticated caller-local plan envelopes, append-only checkpoints, apply locks, and completion-only Activity Evidence for the blueprint workflow.
 - **Example:** `MCP_BLUEPRINT_STATE_DIR=/var/lib/discord-mcp/blueprints`
 
-Use a private persistent directory when running in a container. Checkpoints
-contain Discord target IDs and resolved bindings; Activity Evidence also stores
-the trusted blueprint needed for restart-safe read-only verification. Neither
-contains the bot token or `plan_token`, but blueprint names and Components V2
-content are local application data and should remain private. A Discord bot-token
-rotation invalidates pending checkpoints and saved evidence, and an HTTP
-access-token rotation invalidates state created through that HTTP caller
-boundary. Create and apply a fresh `guild_blueprint_plan` after either rotation. See
+Use a private persistent directory when running in a container. Plan envelopes
+store the trusted payload behind a short `plan_ref`; checkpoints contain Discord
+target IDs and resolved bindings; Activity Evidence stores the trusted blueprint
+needed for restart-safe read-only verification. None contains the bot token or
+raw `plan_token`, but blueprint names and Components V2 content are local
+application data and should remain private. Every process that resolves the same
+caller-local reference must share this protected, correctly locked directory; a
+stateless multi-replica deployment can keep using the legacy self-contained
+`plan_token`. On Windows, the service account's directory ACL is the
+confidentiality boundary; do not grant other local users access. The reference
+cache is bounded to 256 records and 64 MiB, and fails back to the legacy token
+without automatically evicting resumable work. A Discord bot-token rotation invalidates pending references,
+checkpoints, and saved evidence, and an HTTP access-token rotation invalidates
+state created through that HTTP caller boundary. Create and apply a fresh
+`guild_blueprint_plan` after either rotation. See
 [Safe guild blueprints](/discord-mcp/operations/blueprints/).
 
 ## Guild boundary

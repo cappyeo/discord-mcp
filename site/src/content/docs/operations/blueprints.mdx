@@ -23,12 +23,13 @@ until the caller supplies one explicit `guild_id`.
    search results. It resolves `expected_bot_id` from the locked profile and
    resolves `guild_id` only from an allowlisted default or exactly one allowlisted
    guild. Explicit target IDs remain available for multi-guild profiles. This is
-   a read-only target-bound dry-run.
+   a target-bound dry-run that does not mutate Discord.
 2. Present its source evidence, blockers, operation summary, risks, and
    `approval_id` for review.
-3. After approval, call `guild_blueprint_apply` with the unchanged `plan_token`,
-   the same IDs and `approval_id`, `__confirm:true`, and an optional
-   `operation_budget` from 1 through 50.
+3. After approval, call `guild_blueprint_apply` with the unchanged caller-local
+   `plan_ref`, the same IDs and `approval_id`, `__confirm:true`, and an optional
+   `operation_budget` from 1 through 50. Portable and older clients may instead
+   pass the legacy self-contained `plan_token`, but never pass both.
 4. If apply returns `partial` or `busy`, retry the same apply call. If it returns
    `stale` or `blocked` with `next_action: replan`, create and review a new plan.
 5. A terminal `complete` or `already_current` result contains
@@ -37,10 +38,14 @@ until the caller supplies one explicit `guild_id`.
    `plan_id` for read-only revalidation. It does not accept `plan_token`,
    `__confirm`, or a Discord token argument.
 
-The token is authenticated to the active caller deployment. Treat it as private
-workflow state: it contains the compressed blueprint and is authenticated, not
-encrypted. discord-mcp redacts credential-shaped `*_token` arguments from audit
-events and never writes the plan token into its checkpoint.
+The preferred reference is a short deterministic HMAC bound to the active
+caller deployment. It is only a local locator, not standalone authorization:
+apply still requires the exact guild, bot, approval, caller boundary, and
+confirmation. The referenced payload is stored in an authenticated private
+local envelope; the raw legacy token is never written there. The legacy token
+contains the compressed blueprint and is authenticated, not encrypted, so keep
+it private. discord-mcp redacts credential-shaped `*_token` arguments from
+audit events and never writes a raw plan token into local state.
 
 ## What plan proves
 
@@ -57,7 +62,7 @@ valid live response existed. The catalog version binds the local candidate set.
 These records prove which Discord response informed selection without promoting
 third-party text or permission bitfields into trusted blueprint state.
 
-Before returning an apply token, plan verifies:
+Before returning an apply reference or token, plan verifies:
 
 - the active Discord credential matches `DISCORD_EXPECTED_BOT_ID`;
 - the resolved or explicit guild is in `ALLOWED_GUILDS`, with ambiguity rejected;
@@ -66,7 +71,11 @@ Before returning an apply token, plan verifies:
 - no bound resource has drifted; and
 - the preview is bound to a digest of the live Discord target.
 
-Plan never mutates Discord and never writes local checkpoint state.
+Plan never mutates Discord and never writes local checkpoint state. It may
+idempotently cache one authenticated plan envelope so the short `plan_ref`
+survives an MCP process restart. If that private write is unavailable, plan
+returns `plan_ref: null`, keeps the compatible `plan_token`, and reports a
+warning instead of weakening verification.
 
 ## Apply, resume, and single-use approval
 
@@ -99,17 +108,27 @@ rules channels keep this verification both fast and complete.
 
 ## Local state and credential rotation
 
-Checkpoints and Activity Evidence default to the platform user-state directory. Set
-`MCP_BLUEPRINT_STATE_DIR` to a persistent private directory for containers or
-tests. Checkpoints contain target IDs and bindings; the completion-only evidence
-sidecar also retains the trusted blueprint so it can be revalidated after a
-restart. These files never contain the bot token or plan token, but the trusted
-blueprint can include server names and Components V2 content, so keep the state
-directory private. File integrity is authenticated with the active caller secret.
+Plan envelopes, checkpoints, and Activity Evidence default to the platform
+user-state directory. Set `MCP_BLUEPRINT_STATE_DIR` to a persistent private
+directory for containers or tests. A plan envelope contains the trusted payload
+needed to resolve `plan_ref`; checkpoints contain target IDs and bindings; the
+completion-only evidence sidecar retains the trusted blueprint for later
+read-only verification. These files never contain the bot token or raw
+`plan_token`, but blueprint names and Components V2 content are local application
+data, so keep the directory private. File integrity is authenticated with the
+active caller secret.
 
-Rotating `DISCORD_TOKEN` invalidates pending plan tokens, checkpoints, and saved
-Activity Evidence by design. Finish or intentionally abandon pending work,
-rotate the credential, restart the MCP process once, and create a fresh plan.
+The local reference cache is bounded to 256 records and 64 MiB. Once either
+limit is reached, planning still returns a usable legacy `plan_token` with
+`plan_ref: null`; it does not evict a possibly resumable plan automatically.
+Operators may archive or remove reference records only for plans they know are
+completed or intentionally abandoned. This limit is per configured state
+directory, so separate caller deployments should use separate directories.
+
+Rotating `DISCORD_TOKEN` invalidates pending plan references, legacy plan tokens,
+checkpoints, and saved Activity Evidence by design. Finish or intentionally
+abandon pending work, rotate the credential, restart the MCP process once, and
+create a fresh plan.
 For HTTP deployments, rotating `DISCORD_MCP_ACCESS_TOKEN` also invalidates
 HTTP-minted state because the bearer credential defines that deployment's caller
 principal. Old sidecars are not migrated across caller boundaries; a fresh
@@ -119,6 +138,12 @@ One stdio process/profile is one trusted caller boundary. One HTTP bearer token
 is likewise one caller principal: do not give the same endpoint credential and
 bot to mutually untrusted users. Use separate deployments, access tokens, bot
 profiles, and state directories instead.
+
+A caller-local `plan_ref` also requires every process that may receive the
+resume call to share the same protected state directory. For a stateless
+multi-replica deployment without correctly shared and locked storage, use the
+legacy self-contained `plan_token`; a missing local reference fails closed and
+never falls back to another plan.
 
 ## Activity Evidence
 

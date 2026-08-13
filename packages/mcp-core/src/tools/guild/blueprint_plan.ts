@@ -16,12 +16,14 @@ import {
   GuildBlueprintPlanPayloadSchema,
 } from './_lib/blueprint.execution.schema.js';
 import { GuildBlueprintSchema } from './_lib/blueprint.js';
+import { saveBlueprintPlanReference } from './_lib/blueprint.plan-reference-store.js';
 import { encodeBlueprintPlan } from './_lib/blueprint.plan-token.js';
 import {
   reconcileGuildBlueprint,
   summarizeBlueprintOperations,
 } from './_lib/blueprint.reconcile.js';
 import { compileBlueprintRequest } from './_lib/blueprint.request.js';
+import { resolveBlueprintStateDirectory } from './_lib/blueprint.state-path.js';
 import { readBlueprintTargetSnapshot } from './_lib/blueprint.target.js';
 import { blueprintSigningSecret, blueprintTrustBoundary } from './_lib/blueprint.trust.js';
 
@@ -62,13 +64,13 @@ export default defineTool({
   name: 'guild_blueprint_plan',
   category: 'guild',
   description: [
-    '**Purpose**: Build, create, or design a complete Discord server from one natural-language request and return a target-bound, read-only execution preview. It compiles a safe blueprint, verifies the exact caller-owned bot and allowlisted guild, reads live state, blocks ambiguous resources or missing permissions, and returns a compact plan token for `guild_blueprint_apply`.',
+    '**Purpose**: Build, create, or design a complete Discord server from one natural-language request and return a target-bound execution preview without mutating Discord. It compiles a safe blueprint, verifies the exact caller-owned bot and allowlisted guild, reads live state, blocks ambiguous resources or missing permissions, and returns a compact local plan reference for `guild_blueprint_apply`.',
     '',
     '**When to use**: This is the required first step for an unqualified request to build, design, create, dựng, or tạo a gaming or community server. Call it immediately with the original request instead of asking which kind of server the user means or manually chaining template, role, channel, onboarding, AutoMod, and Components V2 tools. In this Discord integration, unqualified “server” means a Discord guild—not a VPS, hardware, or game-hosting machine—unless the user explicitly says otherwise. Examples include “build a professional gaming server” and “dựng cho tôi một server gaming chuyên nghiệp”.',
     '',
-    '**Safety**: This tool makes no Discord mutation and writes no checkpoint. It resolves the bot only from `DISCORD_EXPECTED_BOT_ID` and resolves an omitted guild only from `DISCORD_DEFAULT_GUILD_ID` or exactly one `ALLOWED_GUILDS` entry; multiple possible guilds fail closed. Explicit values are never overwritten and must match the locked profile. Existing unrelated resources are preserved; duplicate or mismatched unbound resources block the plan. The opaque token is authenticated to this bot profile; the displayed approval ID is not standalone authorization.',
+    '**Safety**: This tool makes no Discord mutation and writes no checkpoint. It may persist private, authenticated deterministic plan material locally so a caller can resume with `plan_ref`; the raw plan token is not persisted. It resolves the bot only from `DISCORD_EXPECTED_BOT_ID` and resolves an omitted guild only from `DISCORD_DEFAULT_GUILD_ID` or exactly one `ALLOWED_GUILDS` entry; multiple possible guilds fail closed. Explicit values are never overwritten and must match the locked profile. Existing unrelated resources are preserved; duplicate or mismatched unbound resources block the plan. The opaque token is authenticated to this bot profile; the displayed approval ID is not standalone authorization.',
     '',
-    '**Returns**: Verified source evidence, the complete blueprint, exact bot/guild binding, dry-run operations and risks, blockers, and a compressed `plan_token` accepted by the confirmed resumable apply tool.',
+    '**Returns**: Verified source evidence, the complete blueprint, exact bot/guild binding, dry-run operations and risks, blockers, and a local `plan_ref` (or a legacy compressed `plan_token`) accepted by the confirmed resumable apply tool.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.optional().describe(
@@ -116,7 +118,16 @@ export default defineTool({
       .string()
       .regex(/^sha256:[a-f0-9]{64}$/)
       .nullable(),
-    plan_token: z.string().max(65_536).nullable(),
+    plan_token: z
+      .string()
+      .max(65_536)
+      .nullable()
+      .describe('Legacy portable apply credential; prefer plan_ref when it is available'),
+    plan_ref: z
+      .string()
+      .regex(/^dmbpr1\.[a-f0-9]{64}$/)
+      .nullable()
+      .describe('Preferred caller-local apply reference; null only when local persistence failed'),
     summary: BlueprintPlanSummarySchema.nullable(),
     operations: z.array(BlueprintOperationSchema).max(128),
     bot_permissions: BotPermissionsSchema.nullable(),
@@ -154,6 +165,7 @@ export default defineTool({
           plan_id: null,
           approval_id: null,
           plan_token: null,
+          plan_ref: null,
           summary: null,
           operations: [],
           bot_permissions: null,
@@ -190,6 +202,7 @@ export default defineTool({
           plan_id: null,
           approval_id: null,
           plan_token: null,
+          plan_ref: null,
           summary: null,
           operations: [],
           bot_permissions: null,
@@ -229,6 +242,7 @@ export default defineTool({
           plan_id: null,
           approval_id: null,
           plan_token: null,
+          plan_ref: null,
           summary: null,
           operations: [],
           bot_permissions: null,
@@ -255,7 +269,7 @@ export default defineTool({
     const summary = summarizeBlueprintOperations(reconciled.operations);
     const warnings = [
       'No Discord resource was changed; this is an exact target-bound dry-run.',
-      'Keep the profile-authenticated plan token inside the same trusted caller session; it still requires the exact bot/guild locks and explicit confirmation.',
+      'Keep the caller-local plan reference and legacy plan token inside the same trusted caller boundary; neither bypasses the exact bot/guild locks or explicit confirmation.',
       ...reconciled.warnings,
     ];
     if (compiled.source_permission_risks.length > 0) {
@@ -266,7 +280,7 @@ export default defineTool({
     const target = { guild_id: guildId, bot_id: expectedBotId };
     if (reconciled.blockers.length > 0) {
       return dualResult({
-        text: `Blueprint dry-run found ${reconciled.blockers.length} blocker(s) and scheduled no apply token. No guild was changed.`,
+        text: `Blueprint dry-run found ${reconciled.blockers.length} blocker(s) and scheduled no apply credential. No guild was changed.`,
         data: {
           status: 'blocked' as const,
           request: args.request,
@@ -278,6 +292,7 @@ export default defineTool({
           plan_id: null,
           approval_id: null,
           plan_token: null,
+          plan_ref: null,
           summary,
           operations: reconciled.operations,
           bot_permissions: reconciled.bot_permissions,
@@ -316,6 +331,20 @@ export default defineTool({
       blueprintSigningSecret(container.config, trustBoundary),
     );
     const status = reconciled.operations.length === 0 ? 'already_current' : 'ready';
+    const planRefWarnings: string[] = [];
+    let planRef: string | null = null;
+    try {
+      planRef = await saveBlueprintPlanReference({
+        stateDirectory: resolveBlueprintStateDirectory(container.config),
+        planId: encoded.plan_id,
+        payload,
+        signingSecret: blueprintSigningSecret(container.config, trustBoundary),
+      });
+    } catch {
+      planRefWarnings.push(
+        'The private local plan reference could not be persisted; use the legacy plan_token in this trusted caller session.',
+      );
+    }
     return dualResult({
       text:
         status === 'already_current'
@@ -332,11 +361,12 @@ export default defineTool({
         plan_id: encoded.plan_id,
         approval_id: encoded.approval_id,
         plan_token: encoded.plan_token,
+        plan_ref: planRef,
         summary,
         operations: reconciled.operations,
         bot_permissions: reconciled.bot_permissions,
         blockers: [],
-        warnings,
+        warnings: [...warnings, ...planRefWarnings],
         verification: {
           ...verificationBase,
           blueprint_validation: 'passed' as const,

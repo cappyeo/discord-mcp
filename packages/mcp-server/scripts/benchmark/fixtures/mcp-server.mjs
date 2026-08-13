@@ -7,6 +7,7 @@ const PLAN_ID = `sha256:${'b'.repeat(64)}`;
 const BLUEPRINT_ID = `sha256:${'a'.repeat(64)}`;
 const SNAPSHOT_ID = `sha256:${'c'.repeat(64)}`;
 const APPROVAL_ID = `sha256:${'d'.repeat(64)}`;
+const PLAN_REF = `dmbpr1.${'f'.repeat(64)}`;
 const EVIDENCE_ID = `sha256:${'e'.repeat(64)}`;
 const TEMPLATE_CODE = 'WNSCpfHWnqXr';
 const CATALOG_VERSION = 'fixture-catalog-v1';
@@ -67,11 +68,16 @@ const APPLY_CONTRACT = {
       approval_id: { type: 'string' },
       expected_bot_id: { type: 'string' },
       guild_id: { type: 'string' },
+      plan_ref: { type: 'string' },
       plan_token: { type: 'string' },
       __confirm: { type: 'boolean' },
       operation_budget: { type: 'integer', minimum: 1, maximum: 50, default: 25 },
     },
-    required: ['approval_id', 'expected_bot_id', 'guild_id', 'plan_token'],
+    required: ['approval_id', 'expected_bot_id', 'guild_id'],
+    oneOf: [
+      { required: ['plan_ref'], not: { required: ['plan_token'] } },
+      { required: ['plan_token'], not: { required: ['plan_ref'] } },
+    ],
   },
   annotations: { readOnlyHint: false, destructiveHint: true },
 };
@@ -178,12 +184,12 @@ function nestedArgs(args, contract) {
       ? ['request']
       : contract.name === EVIDENCE_CONTRACT.name
         ? ['expected_bot_id', 'guild_id', 'plan_id']
-        : ['approval_id', 'expected_bot_id', 'guild_id', 'plan_token'];
+        : ['approval_id', 'expected_bot_id', 'guild_id'];
   const optional =
     contract.name === PLAN_CONTRACT.name
       ? ['expected_bot_id', 'guild_id', 'preferred_primary_code']
       : contract.name === APPLY_CONTRACT.name
-        ? ['__confirm', 'operation_budget']
+        ? ['plan_ref', 'plan_token', '__confirm', 'operation_budget']
         : [];
   if (!requiredAndOptionalKeys(args.args, expected, optional)) {
     return errorResult('VALIDATION_FAILED', `Nested args for ${contract.name} are invalid.`);
@@ -206,9 +212,16 @@ function nestedArgs(args, contract) {
   ) {
     return errorResult('VALIDATION_FAILED', 'Apply confirmation or operation budget is invalid.');
   }
-  for (const field of ['approval_id', 'plan_token', 'plan_id']) {
+  for (const field of ['approval_id', 'plan_ref', 'plan_token', 'plan_id']) {
     if (typeof args.args[field] !== 'undefined' && typeof args.args[field] !== 'string') {
       return errorResult('VALIDATION_FAILED', `${field} must be a string.`);
+    }
+  }
+  if (contract.name === APPLY_CONTRACT.name) {
+    const hasPlanRef = typeof args.args.plan_ref === 'string';
+    const hasPlanToken = typeof args.args.plan_token === 'string';
+    if (hasPlanRef === hasPlanToken) {
+      return errorResult('VALIDATION_FAILED', 'Apply requires exactly one plan credential.');
     }
   }
   return null;
@@ -242,7 +255,7 @@ function dispatch(dispatcher, args) {
       snapshot_id: SNAPSHOT_ID,
       plan_id: PLAN_ID,
       approval_id: APPROVAL_ID,
-      plan_token: 'fixture-plan-token',
+      plan_ref: PLAN_REF,
       blueprint: {
         roles: [],
         categories: [],

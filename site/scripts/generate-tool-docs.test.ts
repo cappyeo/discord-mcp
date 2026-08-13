@@ -268,6 +268,21 @@ describe('buildSchemaExample', () => {
       ),
     ).toEqual({ guild_id: '123456789012345678', name: 'Example name' });
   });
+
+  it('uses the preferred local plan reference for blueprint apply examples', () => {
+    const example = buildSchemaExample(
+      {
+        guild_id: z.string(),
+        expected_bot_id: z.string(),
+        plan_ref: z.string().optional(),
+        plan_token: z.string().optional(),
+        approval_id: z.string(),
+      },
+      { toolName: 'guild_blueprint_apply' },
+    );
+    expect(example).toMatchObject({ plan_ref: `dmbpr1.${'f'.repeat(64)}` });
+    expect(example).not.toHaveProperty('plan_token');
+  });
 });
 
 describe('renderToolMdx', () => {
@@ -332,6 +347,26 @@ describe('renderToolMdx', () => {
   it('renders confirm_required precondition when present', () => {
     const mdx = renderToolMdx({ ...sampleTool, preconditions: ['confirm_required'] });
     expect(mdx).toContain('__confirm:true');
+  });
+
+  it('renders the blueprint apply credential XOR contract and ref example', () => {
+    const mdx = renderToolMdx({
+      ...sampleTool,
+      name: 'guild_blueprint_apply',
+      category: 'guild',
+      description: '**Purpose**: Apply an approved blueprint.',
+      inputSchema: {
+        guild_id: z.string(),
+        expected_bot_id: z.string(),
+        plan_ref: z.string().optional(),
+        plan_token: z.string().optional(),
+        approval_id: z.string(),
+      },
+      preconditions: ['confirm_required'],
+    });
+    expect(mdx).toContain('"oneOf": [');
+    expect(mdx).toContain('"plan_ref": "dmbpr1.');
+    expect(mdx).not.toContain('"plan_token": "REPLACE_WITH_TOKEN"');
   });
 
   it('describes local-only tools without Discord permission boilerplate', () => {

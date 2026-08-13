@@ -23,6 +23,7 @@ import {
 import type { BlueprintBindings } from './_lib/blueprint.execution.schema.js';
 import { emptyBlueprintBindings } from './_lib/blueprint.execution.schema.js';
 import { blueprintFingerprint, compileGuildBlueprint } from './_lib/blueprint.js';
+import { saveBlueprintPlanReference } from './_lib/blueprint.plan-reference-store.js';
 import { encodeBlueprintPlan } from './_lib/blueprint.plan-token.js';
 import { reconcileGuildBlueprint } from './_lib/blueprint.reconcile.js';
 import type {
@@ -471,6 +472,17 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
         operation_budget: 50,
         __confirm: true,
       };
+      const planRef = await saveBlueprintPlanReference({
+        stateDirectory,
+        planId: encoded.plan_id,
+        payload: planPayload,
+        signingSecret: SIGNING_TOKEN,
+      });
+      const refArgs = {
+        ...args,
+        plan_ref: planRef,
+        plan_token: undefined,
+      };
       const wrongTarget = await client.callTool({
         name: 'guild_blueprint_apply',
         arguments: { ...args, expected_bot_id: '100000000000000099' },
@@ -499,7 +511,7 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       });
       expect(automodCreates + publicationCreates + roleCreates + channelCreates).toBe(0);
 
-      const first = await client.callTool({ name: 'guild_blueprint_apply', arguments: args });
+      const first = await client.callTool({ name: 'guild_blueprint_apply', arguments: refArgs });
       expect(first.isError).toBe(false);
       expect(first.structuredContent).toMatchObject({
         status: 'partial',
@@ -510,7 +522,7 @@ describe('guild_blueprint_apply resumable MCP journey', () => {
       expect(publicationCreates).toBe(0);
       expect(firstDiscordMutationSawDurableCheckpoint).toBe(true);
 
-      const second = await client.callTool({ name: 'guild_blueprint_apply', arguments: args });
+      const second = await client.callTool({ name: 'guild_blueprint_apply', arguments: refArgs });
       expect(second.isError).toBe(false);
       expect(second.structuredContent).toMatchObject({
         status: 'complete',

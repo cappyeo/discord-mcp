@@ -35,6 +35,7 @@ export const SMALL_MODEL_LIVE_RUN_SCHEMA = 'discord-mcp.small-model-live-run.v1'
 export const SMALL_MODEL_LIVE_FAILURE_SCHEMA = 'discord-mcp.small-model-live-failure.v1';
 export const SMALL_MODEL_LIVE_CONFIRMATION_PREFIX = 'APPROVE_SMALL_MODEL_LIVE:';
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
+const PLAN_REF = /^dmbpr1\.[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -65,7 +66,7 @@ const SAFE_FAILURE_CODES = new Set([
   'RESUME_APPLY_CONFIRMATION_FAILURE',
   'RESUME_APPLY_ARGUMENT_TARGET_MISMATCH',
   'RESUME_APPLY_ARGUMENT_APPROVAL_MISMATCH',
-  'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+  'RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH',
   'RESUME_APPLY_RESULT_TARGET_MISMATCH',
   'RESUME_APPLY_RESULT_BINDING_MISMATCH',
   'RESUME_APPLY_RESULT_INVALID',
@@ -100,7 +101,7 @@ const MATCH_KEYS = Object.freeze([
   'argument_guild',
   'argument_bot',
   'argument_approval',
-  'argument_plan_digest',
+  'argument_plan_ref',
   'result_guild',
   'result_bot',
   'result_plan',
@@ -145,13 +146,13 @@ function safeFailureDiagnostic(value) {
       approval_id: safeOptional(expected.approval_id, DIGEST),
       plan_id: safeOptional(expected.plan_id, DIGEST),
       blueprint_id: safeOptional(expected.blueprint_id, DIGEST),
-      plan_digest: safeOptional(expected.plan_digest, DIGEST),
+      plan_ref: safeOptional(expected.plan_ref, PLAN_REF),
     },
     observed: {
       guild_id: safeOptional(observed.guild_id, SNOWFLAKE),
       expected_bot_id: safeOptional(observed.expected_bot_id, SNOWFLAKE),
       approval_id: safeOptional(observed.approval_id, DIGEST),
-      plan_digest: safeOptional(observed.plan_digest, DIGEST),
+      plan_ref: safeOptional(observed.plan_ref, PLAN_REF),
       result_guild_id: safeOptional(observed.result_guild_id, SNOWFLAKE),
       result_bot_id: safeOptional(observed.result_bot_id, SNOWFLAKE),
       result_plan_id: safeOptional(observed.result_plan_id, DIGEST),
@@ -222,10 +223,6 @@ function requiredString(value, label) {
   return value.trim();
 }
 
-function sha256(value) {
-  return `sha256:${createHash('sha256').update(String(value), 'utf8').digest('hex')}`;
-}
-
 function wait(milliseconds) {
   return new Promise((resolveWait) => setTimeout(resolveWait, milliseconds));
 }
@@ -245,10 +242,21 @@ function rawCall(calls, phase, tool) {
   return [...calls].reverse().find((call) => call.phase === phase && call.tool === tool);
 }
 
+function validateLivePlan(plan, trial) {
+  validatePlan(plan, trial);
+  if (!PLAN_REF.test(plan.plan_ref ?? '')) throw new Error('LIVE_PLAN_INVALID');
+  return plan;
+}
+
+function validateLiveApply(result, plan, trial) {
+  validateApply(result, plan, trial);
+  return result;
+}
+
 function planFrom(call, trial) {
   const data = resultData(call?.result);
   if (!record(data)) throw new Error('LIVE_PLAN_MISSING');
-  validatePlan(data, trial);
+  validateLivePlan(data, trial);
   return data;
 }
 
@@ -259,12 +267,13 @@ function applyFrom(call, plan, trial) {
   if (
     args.guild_id !== trial.guild_id ||
     args.expected_bot_id !== trial.expected_bot_id ||
-    args.plan_token !== plan.plan_token ||
+    args.plan_ref !== plan.plan_ref ||
+    Object.hasOwn(args, 'plan_token') ||
     args.approval_id !== plan.approval_id ||
     args.__confirm !== true
   )
     throw new Error('LIVE_APPLY_BINDING_MISMATCH');
-  validateApply(data, plan, trial);
+  validateLiveApply(data, plan, trial);
   if (data.status !== 'complete' || data.progress.remaining !== 0)
     throw new Error('LIVE_APPLY_NOT_COMPLETE');
   return data;
@@ -325,6 +334,7 @@ function safeSummary(plan, apply, evidence, target, before, after, oracle, evalu
     plan: {
       plan_id: plan.plan_id,
       blueprint_id: plan.blueprint_id,
+      plan_ref: plan.plan_ref,
       operation_count: plan.operations.length,
       source: plan.source,
     },
@@ -515,6 +525,7 @@ export function verifySmallModelLiveArtifact({
     summary?.target?.bot_id !== CONTROLLED_BOT_ID ||
     !DIGEST.test(summary?.plan?.plan_id ?? '') ||
     !DIGEST.test(summary?.plan?.blueprint_id ?? '') ||
+    !PLAN_REF.test(summary?.plan?.plan_ref ?? '') ||
     !Number.isSafeInteger(summary?.plan?.operation_count) ||
     summary.plan.operation_count < 1 ||
     sourceValid !== true ||
@@ -546,9 +557,13 @@ export function verifySmallModelLiveArtifact({
     initialCall?.status !== 'completed' ||
     initialCall?.result_summary?.plan_id !== summary.plan.plan_id ||
     initialCall?.result_summary?.blueprint_id !== summary.plan.blueprint_id ||
+    initialCall?.result_summary?.plan_ref !== summary.plan.plan_ref ||
     !Array.isArray(summary?.evaluator?.trace) ||
     applyCall?.status !== 'completed' ||
     applyCall?.confirmed !== true ||
+    !applyCall.argument_keys?.includes('plan_ref') ||
+    applyCall.argument_keys?.includes('plan_token') ||
+    applyCall.argument_projection?.plan_ref !== summary.plan.plan_ref ||
     applyCall?.result_summary?.status !== 'complete' ||
     applyCall?.result_summary?.plan_id !== summary.plan.plan_id ||
     applyCall?.result_summary?.blueprint_id !== summary.plan.blueprint_id ||
@@ -672,7 +687,7 @@ export async function runSmallModelLiveTrial({
           summary?.plan_id !== plan?.plan_id ||
           summary?.blueprint_id !== plan?.blueprint_id ||
           summary?.approval_id !== plan?.approval_id ||
-          summary?.plan_digest !== sha256(plan?.plan_token)
+          summary?.plan_ref !== plan?.plan_ref
         )
           return false;
         approvalGranted = true;
@@ -690,7 +705,7 @@ export async function runSmallModelLiveTrial({
         ) {
           const result = resultData(call.result);
           try {
-            validateApply(result, plan, trial);
+            validateLiveApply(result, plan, trial);
             cleanup = cleanupFromBindings(plan, target, result.evidence.bindings, {
               requireComplete: result.status === 'complete' || result.status === 'already_current',
             });

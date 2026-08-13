@@ -1,7 +1,10 @@
-import { RateLimitError } from '@discordjs/rest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { RateLimitError, type REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { TaskCancelledError } from 'cockatiel';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../config.js';
 import { BlueprintExecutionError } from './_lib/blueprint.apply-executor.js';
 import GuildBlueprintApply, { safeApplyError } from './blueprint_apply.js';
@@ -107,5 +110,88 @@ describe('guild_blueprint_apply contract', () => {
       expect.objectContaining({ code: 'PLAN_TOKEN_INVALID' }),
     ]);
     expect(JSON.stringify(result)).not.toContain(planToken);
+  });
+
+  it.each([
+    ['missing both', {}],
+    [
+      'both references',
+      {
+        plan_ref: `dmbpr1.${'a'.repeat(64)}`,
+        plan_token: 'legacy-token',
+      },
+    ],
+  ])('enforces plan reference XOR before Discord access (%s)', async (_label, referenceArgs) => {
+    const previousConfig = container.config;
+    container.config = loadConfig({ DISCORD_TOKEN: 'test.discord.token.'.padEnd(64, 'x') });
+    let result: {
+      readonly isError: boolean;
+      readonly structuredContent: { readonly status: string; readonly blockers: unknown[] };
+    };
+    try {
+      result = (await tool().run(
+        {
+          guild_id: '100000000000000001',
+          expected_bot_id: '100000000000000002',
+          approval_id: `sha256:${'1'.repeat(64)}`,
+          operation_budget: 25,
+          ...referenceArgs,
+        },
+        { signal: new AbortController().signal },
+      )) as typeof result;
+    } finally {
+      container.config = previousConfig;
+    }
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent).toMatchObject({
+      status: 'blocked',
+      blockers: [expect.objectContaining({ code: 'PLAN_REFERENCE_XOR_REQUIRED' })],
+    });
+  });
+
+  it('rejects invalid and unknown references before Discord access', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'discord-mcp-apply-reference-'));
+    try {
+      const previousConfig = container.config;
+      const previousRest = container.rest;
+      const discordAccess = vi.fn(async () => {
+        throw new Error('unexpected Discord access');
+      });
+      try {
+        container.config = loadConfig({
+          DISCORD_TOKEN: 'wrong.profile.secret.'.padEnd(64, 'y'),
+          MCP_BLUEPRINT_STATE_DIR: stateDirectory,
+        });
+        container.rest = {
+          get: discordAccess,
+          post: discordAccess,
+          put: discordAccess,
+          patch: discordAccess,
+          delete: discordAccess,
+        } as unknown as REST;
+        for (const planRef of ['dmbpr1.invalid', `dmbpr1.${'f'.repeat(64)}`] as const) {
+          const result = (await tool().run(
+            {
+              guild_id: '100000000000000001',
+              expected_bot_id: '100000000000000002',
+              plan_ref: planRef,
+              approval_id: `sha256:${'1'.repeat(64)}`,
+              operation_budget: 25,
+            },
+            { signal: new AbortController().signal },
+          )) as { readonly isError: boolean; readonly structuredContent: { blockers: unknown[] } };
+          expect(result.isError).toBe(false);
+          expect(result.structuredContent.blockers).toEqual([
+            expect.objectContaining({ code: 'PLAN_REFERENCE_INVALID' }),
+          ]);
+        }
+        expect(discordAccess).not.toHaveBeenCalled();
+      } finally {
+        container.config = previousConfig;
+        container.rest = previousRest;
+      }
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
   });
 });

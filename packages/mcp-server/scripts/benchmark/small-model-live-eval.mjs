@@ -27,6 +27,7 @@ const DEFAULT_MAX_EXTERNAL_WAIT_MS = 15 * 60_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SNOWFLAKE = /^\d{17,20}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
+const PLAN_REF = /^dmbpr1\.[a-f0-9]{64}$/;
 const SAFE_TOOL = /^[A-Za-z0-9_.-]{1,128}$/;
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
 const INITIAL_TOOLS = Object.freeze(['build_discord_server']);
@@ -65,13 +66,17 @@ function safeString(value, maxLength = 128) {
   return typeof value === 'string' && value.length > 0 && value.length <= maxLength ? value : null;
 }
 
+function safePlanRef(value) {
+  return typeof value === 'string' && PLAN_REF.test(value) ? value : null;
+}
+
 function argumentProjection(value) {
   return {
     guild_id: safeId(value?.guild_id),
     expected_bot_id: safeId(value?.expected_bot_id),
     plan_id: safeId(value?.plan_id),
     approval_id: safeId(value?.approval_id),
-    plan_digest: typeof value?.plan_token === 'string' ? digest(value.plan_token) : null,
+    plan_ref: safePlanRef(value?.plan_ref),
   };
 }
 
@@ -205,6 +210,10 @@ function projectResult(result) {
     const value = safeId(data[key]);
     if (value !== null) summary[key] = value;
   }
+  const planRef = safePlanRef(data.plan_ref);
+  if (planRef !== null) summary.plan_ref = planRef;
+  // A digest of a raw token may be retained as initial evidence, but the raw
+  // value is never projected into a trace, prompt, argv, or artifact.
   if (typeof data.plan_token === 'string') summary.plan_digest = digest(data.plan_token);
   const evidenceId = safeId(data.evidence_id);
   if (evidenceId !== null) summary.evidence_id = evidenceId;
@@ -449,7 +458,7 @@ function validInitialTrace(parsed, target, request) {
     safeId(summary?.plan_id) !== null &&
     safeId(summary?.blueprint_id) !== null &&
     safeId(summary?.approval_id) !== null &&
-    DIGEST.test(summary?.plan_digest ?? '') &&
+    PLAN_REF.test(summary?.plan_ref ?? '') &&
     ['ready', 'already_current'].includes(summary?.status)
   );
 }
@@ -492,8 +501,13 @@ export function classifySmallModelLiveResume({
   const planId = binding?.plan_id ?? binding?.planId;
   const blueprintId = binding?.blueprint_id ?? binding?.blueprintId;
   const approvalId = binding?.approval_id ?? binding?.approvalId;
-  const planDigest = binding?.plan_digest ?? binding?.planDigest;
-  if (![planId, blueprintId, approvalId, planDigest].every((value) => DIGEST.test(value ?? '')))
+  const planRef = binding?.plan_ref ?? binding?.planRef;
+  if (
+    !DIGEST.test(planId ?? '') ||
+    !DIGEST.test(blueprintId ?? '') ||
+    !DIGEST.test(approvalId ?? '') ||
+    !PLAN_REF.test(planRef ?? '')
+  )
     return 'initial_binding_failure';
   const calls = completed(all);
   const newCalls = completed(parsed.trace);
@@ -507,11 +521,12 @@ export function classifySmallModelLiveResume({
   for (const call of applies) {
     const keys = new Set(call.argument_keys);
     if (
-      !['approval_id', 'expected_bot_id', 'guild_id', 'plan_token', '__confirm'].every((key) =>
+      !['approval_id', 'expected_bot_id', 'guild_id', 'plan_ref', '__confirm'].every((key) =>
         keys.has(key),
       )
     )
       return 'apply_contract_failure';
+    if (keys.has('plan_token')) return 'apply_contract_failure';
     if (call.confirmed !== true) return 'apply_confirmation_failure';
     if (
       call.argument_projection?.guild_id !== targetIds.guild_id ||
@@ -520,8 +535,7 @@ export function classifySmallModelLiveResume({
       return 'apply_argument_target_mismatch';
     if (call.argument_projection?.approval_id !== approvalId)
       return 'apply_argument_approval_mismatch';
-    if (call.argument_projection?.plan_digest !== planDigest)
-      return 'apply_argument_plan_digest_mismatch';
+    if (call.argument_projection?.plan_ref !== planRef) return 'apply_argument_plan_ref_mismatch';
     if (
       call.result_summary?.target?.guild_id !== targetIds.guild_id ||
       call.result_summary?.target?.bot_id !== targetIds.bot_id
@@ -574,11 +588,16 @@ function exactContinuationBinding(binding) {
     plan_id: binding?.plan_id ?? binding?.planId,
     blueprint_id: binding?.blueprint_id ?? binding?.blueprintId,
     approval_id: binding?.approval_id ?? binding?.approvalId,
-    plan_digest: binding?.plan_digest ?? binding?.planDigest,
+    plan_ref: binding?.plan_ref ?? binding?.planRef,
   };
-  if (!Object.values(normalized).every((value) => DIGEST.test(value ?? '')))
+  if (
+    !DIGEST.test(normalized.plan_id ?? '') ||
+    !DIGEST.test(normalized.blueprint_id ?? '') ||
+    !DIGEST.test(normalized.approval_id ?? '') ||
+    !PLAN_REF.test(normalized.plan_ref ?? '')
+  )
     throw new TypeError(
-      'resume binding must contain exact plan, blueprint, approval, and digest IDs',
+      'resume binding must contain exact plan, blueprint, approval IDs, and plan_ref',
     );
   return normalized;
 }
@@ -608,13 +627,13 @@ function resumeFailureDiagnostic({ classification, turn, sessionId, target, bind
       approval_id: expected.approval_id,
       plan_id: expected.plan_id,
       blueprint_id: expected.blueprint_id,
-      plan_digest: expected.plan_digest,
+      plan_ref: expected.plan_ref,
     },
     observed: {
       guild_id: argument.guild_id ?? null,
       expected_bot_id: argument.expected_bot_id ?? null,
       approval_id: argument.approval_id ?? null,
-      plan_digest: argument.plan_digest ?? null,
+      plan_ref: argument.plan_ref ?? null,
       result_guild_id: resultTarget.guild_id ?? null,
       result_bot_id: resultTarget.bot_id ?? null,
       result_plan_id: result.plan_id ?? null,
@@ -631,7 +650,7 @@ function resumeFailureDiagnostic({ classification, turn, sessionId, target, bind
       argument_guild: argument.guild_id === targetIds.guild_id,
       argument_bot: argument.expected_bot_id === targetIds.bot_id,
       argument_approval: argument.approval_id === expected.approval_id,
-      argument_plan_digest: argument.plan_digest === expected.plan_digest,
+      argument_plan_ref: argument.plan_ref === expected.plan_ref,
       result_guild: resultTarget.guild_id === targetIds.guild_id,
       result_bot: resultTarget.bot_id === targetIds.bot_id,
       result_plan: result.plan_id === expected.plan_id,
@@ -719,8 +738,8 @@ export function buildSmallModelLiveArguments({
         `approval_id=${continuation.approval_id}`,
         `plan_id=${continuation.plan_id}`,
         `blueprint_id=${continuation.blueprint_id}`,
-        `plan_token_digest=${continuation.plan_digest}`,
-        'Copy the opaque plan_token byte-for-byte from the immediately preceding build_discord_server result. Never invent, shorten, decode, derive, or retype it from its digest.',
+        `plan_ref=${continuation.plan_ref}`,
+        'Use this exact plan_ref for guild_blueprint_apply. Do not alter, shorten, derive, or replace it.',
         'In this resume turn call exactly one guild_blueprint_apply with __confirm:true. If it returns partial or busy, stop immediately and do not call another apply or evidence; the harness will resume after the requested delay. After complete or already_current, call guild_blueprint_evidence exactly once. Do not replan.',
       ].join('\n'),
     );
@@ -959,7 +978,7 @@ export async function runSmallModelLiveEvaluation({
       plan_id: initialSummary.plan_id,
       blueprint_id: initialSummary.blueprint_id,
       approval_id: initialSummary.approval_id,
-      plan_digest: initialSummary.plan_digest,
+      plan_ref: initialSummary.plan_ref,
     };
     if (onValidatedToolCall !== null)
       onValidatedToolCall({

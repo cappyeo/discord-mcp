@@ -316,6 +316,7 @@ const BLUEPRINT_FRONT_DOOR_OUTPUT_SCHEMA = {
         plan_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
         approval_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
         plan_token: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+        plan_ref: { anyOf: [{ type: 'string' }, { type: 'null' }] },
         summary: { anyOf: [{ type: 'object' }, { type: 'null' }] },
         operations: { type: 'array' },
         bot_permissions: { anyOf: [{ type: 'object' }, { type: 'null' }] },
@@ -334,6 +335,7 @@ const BLUEPRINT_FRONT_DOOR_OUTPUT_SCHEMA = {
         'plan_id',
         'approval_id',
         'plan_token',
+        'plan_ref',
         'summary',
         'operations',
         'bot_permissions',
@@ -441,6 +443,14 @@ function compileToolContracts(tool: Tool): ToolContractVariants {
     target: 'draft-2020-12',
     io: 'input',
   }) as McpTool['inputSchema'];
+  if (tool.name === 'guild_blueprint_apply') {
+    Object.assign(inputSchema, {
+      oneOf: [
+        { required: ['plan_ref'], not: { required: ['plan_token'] } },
+        { required: ['plan_token'], not: { required: ['plan_ref'] } },
+      ],
+    });
+  }
   if (tool.preconditions.includes('confirm_required')) {
     inputSchema.properties ??= {};
     (inputSchema.properties as Record<string, unknown>).__confirm = {
@@ -549,7 +559,7 @@ function listAdvertisedTools(
             ...blueprintFrontDoor,
             name: PROGRESSIVE_ARCHITECT_TOOL_NAME,
             description:
-              "Required first step for Discord server architecture. Immediately call this read-only tool exactly once with the user's original request when they ask to build, design, create, dựng, or tạo a gaming or community server. Do not ask which kind of server they mean, offer manual steps first, or repeat identical arguments. In this Discord integration an unqualified server means a Discord guild, not a VPS, hardware, or game-hosting machine, unless the user explicitly says otherwise. It returns a target-bound dry-run with template evidence, roles, channels, permissions, onboarding, AutoMod, Components V2, risks, and a resumable approval token.",
+              "Required first step for Discord server architecture. Immediately call this Discord-non-mutating tool exactly once with the user's original request when they ask to build, design, create, dựng, or tạo a gaming or community server. Do not ask which kind of server they mean, offer manual steps first, or repeat identical arguments. In this Discord integration an unqualified server means a Discord guild, not a VPS, hardware, or game-hosting machine, unless the user explicitly says otherwise. It returns a target-bound dry-run with template evidence, roles, channels, permissions, onboarding, AutoMod, Components V2, risks, and a caller-local plan_ref with a legacy plan_token fallback.",
             outputSchema: BLUEPRINT_FRONT_DOOR_OUTPUT_SCHEMA as McpTool['outputSchema'],
           },
         ];
@@ -1547,7 +1557,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
                 "exactly once with the user's original request before asking clarifying questions",
                 'or offering manual steps; do not repeat identical calls. It compiles, target-binds,',
                 'and previews the complete operation graph; only then call',
-                'the directly advertised guild_blueprint_apply with the returned token after',
+                'the directly advertised guild_blueprint_apply with the returned plan_ref after',
                 'explicit approval. Resume only as directed by next_action, then call the directly',
                 'advertised guild_blueprint_evidence after completion for independent live readback.',
               ]

@@ -5,26 +5,27 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.19.1 and contains 208 tools.
+The current source tree targets discord-mcp v0.20.0 and contains 208 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.19.1)
+## Current source evidence (v0.20.0)
 
 - The current source tree exposes 208 MCP tools across 31 categories; the
   preceding v0.18.1 packages exposed 203.
-- The v0.19.1 source exposes the production
+- The v0.20.0 source exposes the production
   `assertGuildBlueprintActivityEvidence` validator from `@discord-mcp/core` so
   independent verification can reuse the same semantic rules as the apply path.
   This is a public additive export and is covered by the frozen export contract.
-- The v0.19.0 foundation passed its official 20-trial real-server campaign. This
-  patch does not change product tools or schemas; a v0.19.1 tag is permitted only
-  after the new approved small-model live lifecycle and independent verifier pass
-  against the exact commit, with the controlled guild restored to its signed
-  baseline. This page does not predeclare that result; the signed evidence belongs
-  to the corresponding release artifacts.
+- The v0.19.0 foundation passed its official 20-trial real-server campaign. The
+  v0.20.0 source adds a caller-local `plan_ref` to remove opaque-token copying
+  from the small-model write path while preserving the legacy token contract.
+  A v0.20.0 tag is permitted only after the approved small-model live lifecycle
+  and independent verifier pass against the exact commit, with the controlled
+  guild restored to its signed baseline. This page does not predeclare that
+  result; the signed evidence belongs to the corresponding release artifacts.
 - More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
   and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
   remaining OTel parent-child integration seam.
@@ -35,7 +36,7 @@ unchecked items are real gates, not aspirational release notes.
   excluded from those two non-overlapping groups.
 - 6 existing reproducible performance benches cover message send, MCP pipeline,
   gateway debounce, REST policy, progressive tool discovery, and stateless HTTP
-  server construction. v0.19.1 adds a direct Architect CPU benchmark and an
+  server construction. v0.20.0 adds a direct Architect CPU benchmark and an
   approved small-model live lifecycle evidence harness; the harness defines
   independently verifiable evidence but this page does not predeclare a live
   result.

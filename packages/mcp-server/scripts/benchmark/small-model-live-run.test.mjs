@@ -24,6 +24,7 @@ const SNAPSHOT = `sha256:${'5'.repeat(64)}`;
 const COMMIT = 'a'.repeat(40);
 const TOKEN = 'test-token-only';
 const PLAN_TOKEN = 'opaque-plan-token-kept-in-memory';
+const PLAN_REF = `dmbpr1.${'f'.repeat(64)}`;
 const digest = (value) =>
   `sha256:${createHash('sha256').update(String(value), 'utf8').digest('hex')}`;
 
@@ -100,6 +101,7 @@ function plan() {
     snapshot_id: SNAPSHOT,
     approval_id: `sha256:${'3'.repeat(64)}`,
     plan_token: PLAN_TOKEN,
+    plan_ref: PLAN_REF,
     source: {
       catalog_version: 'fixture-catalog-v1',
       permission_policy: 'discard_source_and_regenerate',
@@ -312,7 +314,7 @@ function evaluation({
         plan_id: p.plan_id,
         blueprint_id: p.blueprint_id,
         approval_id: p.approval_id,
-        plan_digest: digest(p.plan_token),
+        plan_ref: p.plan_ref,
       },
     });
     if (approved !== true) return { status: 'not_approved' };
@@ -323,19 +325,19 @@ function evaluation({
     }
     if (bindingFailure) {
       const error = new Error(`unsafe detail ${PLAN_TOKEN} C:\\private\\auth.json`);
-      error.code = 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH';
+      error.code = 'RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH';
       error.diagnostic = {
         phase: 'resume',
         turn: 1,
-        classification: 'apply_argument_plan_digest_mismatch',
+        classification: 'apply_argument_plan_ref_mismatch',
         session_digest: digest('thread-secret'),
         tool: 'guild_blueprint_apply',
         call_count: 1,
         completed_call_count: 1,
         confirmed: true,
-        expected: { guild_id: GUILD, expected_bot_id: BOT, plan_digest: digest(PLAN_TOKEN) },
-        observed: { guild_id: GUILD, expected_bot_id: BOT, plan_digest: digest('wrong') },
-        matches: { argument_guild: true, argument_bot: true, argument_plan_digest: false },
+        expected: { guild_id: GUILD, expected_bot_id: BOT, plan_ref: PLAN_REF },
+        observed: { guild_id: GUILD, expected_bot_id: BOT, plan_ref: `dmbpr1.${'0'.repeat(64)}` },
+        matches: { argument_guild: true, argument_bot: true, argument_plan_ref: false },
         stdout: 'stdout-secret',
         auth_path: 'C:\\private\\auth.json',
       };
@@ -347,7 +349,7 @@ function evaluation({
       arguments: {
         guild_id: GUILD,
         expected_bot_id: BOT,
-        plan_token: p.plan_token,
+        plan_ref: p.plan_ref,
         approval_id: p.approval_id,
         __confirm: true,
       },
@@ -368,7 +370,11 @@ function evaluation({
         {
           tool: 'build_discord_server',
           status: 'completed',
-          result_summary: { plan_id: p.plan_id, blueprint_id: p.blueprint_id },
+          result_summary: {
+            plan_id: p.plan_id,
+            blueprint_id: p.blueprint_id,
+            plan_ref: p.plan_ref,
+          },
         },
       ],
       trace: [
@@ -376,6 +382,8 @@ function evaluation({
           tool: 'guild_blueprint_apply',
           status: 'completed',
           confirmed: true,
+          argument_keys: ['approval_id', 'expected_bot_id', 'guild_id', 'plan_ref', '__confirm'],
+          argument_projection: { plan_ref: p.plan_ref },
           result_summary: {
             status: 'complete',
             plan_id: p.plan_id,
@@ -556,7 +564,7 @@ describe('small-model-live-run', () => {
     expect(artifactPath).toBe('results/small-model-live.failure.json');
     expect(artifact.status).toBe('failed');
     expect(artifact.approved).toBe(true);
-    expect(artifact.failure_code).toBe('RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH');
+    expect(artifact.failure_code).toBe('RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH');
     expect(artifact.baseline.outcome).toBe('unchanged');
     expect(artifact.restoration.outcome).toBe('not_required');
     expect(artifact.lock_retained).toBe(false);
@@ -573,9 +581,9 @@ describe('small-model-live-run', () => {
     expect(artifact.diagnostic).toMatchObject({
       phase: 'resume',
       turn: 1,
-      classification: 'apply_argument_plan_digest_mismatch',
+      classification: 'apply_argument_plan_ref_mismatch',
       session_digest: digest('thread-secret'),
-      matches: { argument_plan_digest: false },
+      matches: { argument_plan_ref: false },
     });
   });
 
@@ -743,7 +751,7 @@ describe('small-model-live-run', () => {
         observed: {
           stdout: 'stdout-secret',
           session_id: 'thread-secret',
-          plan_digest: digest('safe-digest'),
+          plan_ref: PLAN_REF,
           error_code: 'dmbp1.raw-opaque-plan-token',
         },
         auth_path: 'C:\\private\\auth.json',
@@ -753,7 +761,7 @@ describe('small-model-live-run', () => {
     expect(artifact.diagnostic).toEqual({
       phase: 'resume',
       expected: { guild_id: GUILD },
-      observed: { plan_digest: digest('safe-digest') },
+      observed: { plan_ref: PLAN_REF },
     });
     expect(JSON.stringify(artifact)).not.toContain('stdout-secret');
     expect(JSON.stringify(artifact)).not.toContain('thread-secret');
@@ -764,31 +772,31 @@ describe('small-model-live-run', () => {
     const artifact = createSmallModelLiveFailureArtifact({
       expectedCommit: COMMIT,
       target: { guildId: GUILD, botId: BOT },
-      failureCode: 'RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH',
+      failureCode: 'RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH',
       baselineOutcome: 'unchanged',
       restorationOutcome: 'not_required',
       lockRetained: false,
       diagnostic: {
         phase: 'resume',
         turn: 1,
-        classification: 'apply_argument_plan_digest_mismatch',
+        classification: 'apply_argument_plan_ref_mismatch',
         session_digest: digest('thread-secret'),
         tool: 'guild_blueprint_apply',
         call_count: 1,
         completed_call_count: 1,
         confirmed: true,
-        expected: { guild_id: GUILD, plan_digest: digest('expected') },
-        observed: { guild_id: GUILD, plan_digest: digest('observed') },
+        expected: { guild_id: GUILD, plan_ref: PLAN_REF },
+        observed: { guild_id: GUILD, plan_ref: `dmbpr1.${'0'.repeat(64)}` },
         matches: {
           argument_guild: true,
           argument_bot: true,
           argument_approval: true,
-          argument_plan_digest: false,
+          argument_plan_ref: false,
         },
         error_code: 'DMBP1_RAW_OPAQUE_PLAN_TOKEN',
       },
     });
-    expect(artifact.failure_code).toBe('RESUME_APPLY_ARGUMENT_PLAN_DIGEST_MISMATCH');
+    expect(artifact.failure_code).toBe('RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH');
     expect(artifact.diagnostic).toMatchObject({
       phase: 'resume',
       turn: 1,
@@ -799,7 +807,7 @@ describe('small-model-live-run', () => {
         argument_guild: true,
         argument_bot: true,
         argument_approval: true,
-        argument_plan_digest: false,
+        argument_plan_ref: false,
       },
     });
     expect(JSON.stringify(artifact)).not.toContain('thread-secret');

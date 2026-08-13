@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { server as mockServer } from '@discord-mcp/server-mocks';
 import { REST } from '@discordjs/rest';
 import { Client } from '@modelcontextprotocol/client';
@@ -7,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../config.js';
 import { createLogger } from '../../logger.js';
 import { buildServer } from '../../server.js';
+import { loadBlueprintPlanReference } from './_lib/blueprint.plan-reference-store.js';
 
 const API = 'https://discord.com/api/v10';
 const GUILD_ID = '100000000000000001';
@@ -113,50 +117,182 @@ describe('guild_blueprint_plan public MCP journey', () => {
       }),
     );
 
-    const config = loadConfig({
-      DISCORD_TOKEN: TOKEN,
-      DISCORD_EXPECTED_BOT_ID: BOT_ID,
-      ALLOWED_GUILDS: GUILD_ID,
-      MCP_TOOL_SURFACE: 'progressive',
-      LOG_LEVEL: 'fatal',
-      MCP_AUDIT_ENABLED: 'false',
-    });
-    const rest = new REST({ version: '10', retries: 0, makeRequest: fetch }).setToken(TOKEN);
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const built = await buildServer({ rest, logger: createLogger(config), config });
-    const client = new Client(
-      { name: 'blueprint-plan-integration', version: '0.0.0' },
-      { capabilities: {} },
-    );
-    await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'discord-mcp-plan-integration-'));
     try {
-      const result = await client.callTool({
-        name: 'build_discord_server',
-        arguments: {
-          request: 'Dựng cho tôi một server gaming chuyên nghiệp có tìm đồng đội và voice',
-          preferred_primary_code: TEMPLATE_CODE,
-        },
+      const config = loadConfig({
+        DISCORD_TOKEN: TOKEN,
+        DISCORD_EXPECTED_BOT_ID: BOT_ID,
+        ALLOWED_GUILDS: GUILD_ID,
+        MCP_BLUEPRINT_STATE_DIR: stateDirectory,
+        MCP_TOOL_SURFACE: 'progressive',
+        LOG_LEVEL: 'fatal',
+        MCP_AUDIT_ENABLED: 'false',
       });
-      expect(result.isError).toBe(false);
-      expect(result.structuredContent).toMatchObject({
-        status: 'ready',
-        target: { guild_id: GUILD_ID, bot_id: BOT_ID },
-        source: { primary: { code: TEMPLATE_CODE } },
-        blueprint_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
-        snapshot_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
-        plan_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
-        approval_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
-        plan_token: expect.stringMatching(
-          /^dmbp1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
-        ),
-        verification: { blueprint_validation: 'passed', target_readback: 'passed' },
-      });
-      expect(result.structuredContent?.operations).toEqual(expect.any(Array));
-      expect(templateReads).toBeGreaterThan(0);
-      expect(templateReads).toBeLessThanOrEqual(8);
-      expect(mutations).toBe(0);
+      const rest = new REST({ version: '10', retries: 0, makeRequest: fetch }).setToken(TOKEN);
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      const built = await buildServer({ rest, logger: createLogger(config), config });
+      const client = new Client(
+        { name: 'blueprint-plan-integration', version: '0.0.0' },
+        { capabilities: {} },
+      );
+      await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
+      try {
+        const result = await client.callTool({
+          name: 'build_discord_server',
+          arguments: {
+            request: 'Dựng cho tôi một server gaming chuyên nghiệp có tìm đồng đội và voice',
+            preferred_primary_code: TEMPLATE_CODE,
+          },
+        });
+        expect(result.isError).toBe(false);
+        expect(result.structuredContent).toMatchObject({
+          status: 'ready',
+          target: { guild_id: GUILD_ID, bot_id: BOT_ID },
+          source: { primary: { code: TEMPLATE_CODE } },
+          blueprint_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          snapshot_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          plan_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          approval_id: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          plan_ref: expect.stringMatching(/^dmbpr1\.[a-f0-9]{64}$/),
+          plan_token: expect.stringMatching(
+            /^dmbp1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+          ),
+          verification: { blueprint_validation: 'passed', target_readback: 'passed' },
+        });
+        expect(result.structuredContent?.operations).toEqual(expect.any(Array));
+        const content = result.structuredContent as {
+          plan_id: string;
+          plan_ref: string;
+        };
+        const loaded = await loadBlueprintPlanReference({
+          stateDirectory,
+          planRef: content.plan_ref,
+          signingSecret: TOKEN,
+        });
+        expect(loaded.plan_id).toBe(content.plan_id);
+        expect(loaded.payload.target).toEqual({ guild_id: GUILD_ID, bot_id: BOT_ID });
+        expect(templateReads).toBeGreaterThan(0);
+        expect(templateReads).toBeLessThanOrEqual(8);
+        expect(mutations).toBe(0);
+      } finally {
+        await client.close();
+      }
     } finally {
-      await client.close();
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a ready plan usable with the legacy token when local reference storage fails', async () => {
+    let mutations = 0;
+    mockServer.use(
+      http.get(`${API}/guilds/templates/:code`, ({ params }) =>
+        HttpResponse.json(template(String(params.code))),
+      ),
+      http.get(`${API}/users/@me`, () => HttpResponse.json({ id: BOT_ID, bot: true })),
+      http.get(`${API}/guilds/:guildId`, ({ params }) =>
+        HttpResponse.json({
+          id: String(params.guildId),
+          name: 'Invalid State Path Guild',
+          owner_id: '100000000000000099',
+          description: null,
+          preferred_locale: 'en-US',
+          features: [],
+          verification_level: 0,
+          default_message_notifications: 0,
+          explicit_content_filter: 0,
+          rules_channel_id: null,
+          public_updates_channel_id: null,
+          safety_alerts_channel_id: null,
+        }),
+      ),
+      http.get(`${API}/guilds/:guildId/members/:userId`, () =>
+        HttpResponse.json({ user: { id: BOT_ID }, roles: [BOT_ROLE_ID] }),
+      ),
+      http.get(`${API}/guilds/:guildId/roles`, () =>
+        HttpResponse.json([
+          {
+            id: GUILD_ID,
+            name: '@everyone',
+            color: 0,
+            position: 0,
+            permissions: '0',
+            mentionable: false,
+            hoist: false,
+            managed: false,
+          },
+          {
+            id: BOT_ROLE_ID,
+            name: 'DevBot',
+            color: 0,
+            position: 100,
+            permissions: '8',
+            mentionable: false,
+            hoist: false,
+            managed: false,
+          },
+        ]),
+      ),
+      http.get(`${API}/guilds/:guildId/channels`, () => HttpResponse.json([])),
+      http.get(`${API}/guilds/:guildId/auto-moderation/rules`, () => HttpResponse.json([])),
+      http.get(`${API}/channels/:channelId/messages`, () => HttpResponse.json([])),
+      http.all(`${API}/guilds/:guildId/:rest*`, () => {
+        mutations += 1;
+        return HttpResponse.json({ message: 'unexpected Discord mutation' }, { status: 500 });
+      }),
+      http.all(`${API}/channels/:channelId/:rest*`, () => {
+        mutations += 1;
+        return HttpResponse.json({ message: 'unexpected Discord mutation' }, { status: 500 });
+      }),
+    );
+
+    const stateRoot = await mkdtemp(join(tmpdir(), 'discord-mcp-invalid-state-'));
+    const invalidStatePath = join(stateRoot, 'state-file');
+    await writeFile(invalidStatePath, 'not a directory', 'utf8');
+    try {
+      const config = loadConfig({
+        DISCORD_TOKEN: TOKEN,
+        DISCORD_EXPECTED_BOT_ID: BOT_ID,
+        ALLOWED_GUILDS: GUILD_ID,
+        MCP_BLUEPRINT_STATE_DIR: invalidStatePath,
+        MCP_TOOL_SURFACE: 'progressive',
+        LOG_LEVEL: 'fatal',
+        MCP_AUDIT_ENABLED: 'false',
+      });
+      const rest = new REST({ version: '10', retries: 0, makeRequest: fetch }).setToken(TOKEN);
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      const built = await buildServer({ rest, logger: createLogger(config), config });
+      const client = new Client(
+        { name: 'blueprint-plan-invalid-state-test', version: '0.0.0' },
+        { capabilities: {} },
+      );
+      await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
+      try {
+        const result = await client.callTool({
+          name: 'build_discord_server',
+          arguments: {
+            request: 'Dựng cho tôi một server gaming chuyên nghiệp',
+            preferred_primary_code: TEMPLATE_CODE,
+          },
+        });
+        expect(result.isError).toBe(false);
+        expect(result.structuredContent).toMatchObject({
+          status: 'ready',
+          plan_ref: null,
+          plan_token: expect.stringMatching(
+            /^dmbp1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+          ),
+        });
+        expect(result.structuredContent?.warnings).toEqual(
+          expect.arrayContaining([
+            expect.stringContaining('private local plan reference could not be persisted'),
+          ]),
+        );
+        expect(mutations).toBe(0);
+      } finally {
+        await client.close();
+      }
+    } finally {
+      await rm(stateRoot, { recursive: true, force: true });
     }
   });
 

@@ -9,26 +9,38 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
-## v0.19.1 - independently verifiable small-model live benchmark
+## v0.20.0 - caller-local plan references and verifiable small-model apply
 
-This patch adds independently verifiable benchmark tooling: an approved
-small-model live lifecycle harness and a local Architect planning CPU benchmark. The
-harnesses define evidence and verification paths; no live campaign result is
-predeclared here. The release does not change product tool or schema behavior.
+This minor release adds a short caller-local plan reference and independently
+verifiable benchmark tooling: an approved small-model live lifecycle harness
+and a local Architect planning CPU benchmark. The harnesses define evidence and
+verification paths; no live campaign result is predeclared here.
+
+- Added `plan_ref` to `guild_blueprint_plan` and `guild_blueprint_apply`. The
+  planner persists an immutable authenticated local payload, while apply accepts
+  exactly one short reference or legacy self-contained `plan_token`. A reference
+  remains bound to the active caller secret and is never standalone authority:
+  exact guild, bot, approval, confirmation, live identity, locks, reconciliation,
+  and final readback are still mandatory.
+- Kept raw plan tokens out of local state. Missing, malformed, tampered,
+  wrong-caller, and conflicting references fail closed before Discord access;
+  the legacy token path remains compatible for portable and stateless clients.
+- The approved small-model live lifecycle is the release gate for `plan_ref`.
+  The existing 20-trial campaign runner intentionally retains the self-contained
+  token path as backward-compatibility coverage rather than silently dropping it.
 
 - Added the small-model live lifecycle benchmark harness and verifier for
   independently checking an approved run when credentials and a real Discord
   server are available.
 - Bound every resumed model turn to the exact non-secret guild, bot, approval,
-  plan, blueprint, and plan-token digest while keeping the opaque plan token out
-  of prompts and artifacts. Approved failures now leave a bounded, HMAC-signed
+  plan, blueprint, and caller-local reference while keeping the opaque legacy
+  plan token out of prompts and artifacts. Approved failures now leave a bounded, HMAC-signed
   diagnostic capsule or retain the campaign lock if that capsule cannot be
   persisted.
 - Added a deterministic benchmark for the local compile, reconcile, summarize,
   and authenticated-plan encoding path. It explicitly excludes template lookup,
   Discord I/O, and network waits.
-- Kept the 208-tool registry, CLI surface, and existing product schemas
-  unchanged.
+- Kept the 208-tool registry and CLI surface unchanged.
 
 ## v0.19.0 - AI Discord Architect foundation
 

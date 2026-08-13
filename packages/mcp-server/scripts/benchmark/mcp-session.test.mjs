@@ -98,6 +98,10 @@ describe('openMcpBenchmarkSession', () => {
       expect(applySearch.matches[0]).toMatchObject({
         name: 'guild_blueprint_apply',
         dispatcher: 'mcp_tools_destructive',
+        inputSchema: {
+          required: ['approval_id', 'expected_bot_id', 'guild_id'],
+          oneOf: expect.any(Array),
+        },
       });
       const applyArgs = {
         approval_id: `sha256:${'a'.repeat(64)}`,
@@ -113,6 +117,28 @@ describe('openMcpBenchmarkSession', () => {
           args: applyArgs,
         }),
       ).resolves.toMatchObject({ status: 'complete', confirmed: true });
+      await expect(
+        session.callTool('mcp_tools_destructive', {
+          tool: 'guild_blueprint_apply',
+          args: {
+            ...applyArgs,
+            plan_token: undefined,
+            plan_ref: `dmbpr1.${'f'.repeat(64)}`,
+          },
+        }),
+      ).resolves.toMatchObject({ status: 'complete', confirmed: true });
+      await expect(
+        session.callTool('mcp_tools_destructive', {
+          tool: 'guild_blueprint_apply',
+          args: { ...applyArgs, plan_ref: `dmbpr1.${'f'.repeat(64)}` },
+        }),
+      ).rejects.toSatisfy((error) => error.code === 'VALIDATION_FAILED');
+      await expect(
+        session.callTool('mcp_tools_destructive', {
+          tool: 'guild_blueprint_apply',
+          args: { ...applyArgs, plan_token: undefined },
+        }),
+      ).rejects.toSatisfy((error) => error.code === 'VALIDATION_FAILED');
       await expect(
         session.callTool('mcp_tools_read', { tool: 'guild_blueprint_apply', args: applyArgs }),
       ).rejects.toSatisfy((error) => error.code === 'DISPATCH_MODE_MISMATCH');

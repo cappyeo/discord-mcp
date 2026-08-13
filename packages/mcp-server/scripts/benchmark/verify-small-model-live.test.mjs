@@ -16,6 +16,7 @@ const GUILD = '1537332825978568744';
 const BOT = '1533719084636700773';
 const PLAN = `sha256:${'1'.repeat(64)}`;
 const BLUEPRINT = `sha256:${'2'.repeat(64)}`;
+const PLAN_REF = `dmbpr1.${'f'.repeat(64)}`;
 const EVIDENCE = `sha256:${'3'.repeat(64)}`;
 const FINGERPRINT = `sha256:${'4'.repeat(64)}`;
 const TOKEN = 'fixture-integrity-key';
@@ -37,6 +38,7 @@ function summary() {
     plan: {
       plan_id: PLAN,
       blueprint_id: BLUEPRINT,
+      plan_ref: PLAN_REF,
       operation_count: 1,
       source: {
         permission_policy: 'discard_source_and_regenerate',
@@ -79,7 +81,7 @@ function summary() {
         {
           tool: 'build_discord_server',
           status: 'completed',
-          result_summary: { plan_id: PLAN, blueprint_id: BLUEPRINT },
+          result_summary: { plan_id: PLAN, blueprint_id: BLUEPRINT, plan_ref: PLAN_REF },
         },
       ],
       trace: [
@@ -87,6 +89,8 @@ function summary() {
           tool: 'guild_blueprint_apply',
           status: 'completed',
           confirmed: true,
+          argument_keys: ['approval_id', 'expected_bot_id', 'guild_id', 'plan_ref', '__confirm'],
+          argument_projection: { plan_ref: PLAN_REF },
           result_summary: { status: 'complete', plan_id: PLAN, blueprint_id: BLUEPRINT },
         },
         {

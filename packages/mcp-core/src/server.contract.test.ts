@@ -333,6 +333,20 @@ describe('MCP protocol contract', () => {
     expect(ungated?.inputSchema.properties).not.toHaveProperty('__confirm');
   });
 
+  it('advertises exactly one local reference or legacy token for blueprint apply', async () => {
+    const { tools } = await client.listTools();
+    const apply = tools.find((tool) => tool.name === 'guild_blueprint_apply');
+    expect(apply?.inputSchema).toMatchObject({
+      oneOf: [
+        { required: ['plan_ref'], not: { required: ['plan_token'] } },
+        { required: ['plan_token'], not: { required: ['plan_ref'] } },
+      ],
+    });
+    expect((apply?.inputSchema.required as string[]) ?? []).toEqual(
+      expect.arrayContaining(['guild_id', 'expected_bot_id', 'approval_id']),
+    );
+  });
+
   it('publishes outputSchema for every tool that declares one', async () => {
     // Most tools declare an outputSchema; tools/list must emit it so clients can validate results.
     // so clients could not use it and nothing validated against it.

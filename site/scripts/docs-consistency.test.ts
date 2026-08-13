@@ -310,6 +310,20 @@ describe('generated reference stays aligned with tool metadata', () => {
     );
   });
 
+  it('keeps blueprint apply docs bound to exactly one plan credential', async () => {
+    const tools = await loadAllTools();
+    const tool = tools.find(({ name }) => name === 'guild_blueprint_apply');
+    expect(tool).toBeDefined();
+    const rendered = renderToolMdx(tool!);
+    const example = buildSchemaExample(tool!.inputSchema, { toolName: tool!.name });
+
+    expect(rendered).toContain('"oneOf": [');
+    expect(example).toMatchObject({ plan_ref: expect.stringMatching(/^dmbpr1\.[a-f0-9]{64}$/) });
+    expect(example).not.toHaveProperty('plan_token');
+    expect(rendered).toContain(`"plan_ref": "${example?.plan_ref}"`);
+    expect(rendered).not.toContain('"plan_token": "REPLACE_WITH_TOKEN"');
+  });
+
   it('gives every modify example one explicit mutation beyond identity and audit fields', async () => {
     const tools = await loadAllTools();
     const identityField = /(^|_)(id|token)$|^audit_reason$|^__confirm$/;

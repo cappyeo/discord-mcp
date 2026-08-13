@@ -499,6 +499,9 @@ async function dispatchProgressiveTool(session, contract, args) {
 }
 
 function validatePlan(plan, trial) {
+  // The 20-trial campaign deliberately keeps the self-contained token path as
+  // backward-compatibility coverage. The separate approved small-model live
+  // lifecycle is the release gate for caller-local plan_ref execution.
   assertRecord(plan, 'PLAN_RESPONSE_INVALID');
   if (plan.status !== 'ready') {
     fail('PLAN_NOT_READY', {

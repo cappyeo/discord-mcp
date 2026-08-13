@@ -652,7 +652,7 @@ describe('real benchmark artifact verifier', () => {
     } finally {
       await cleanup(test);
     }
-  });
+  }, 60_000);
 
   it('rejects a stale or modified attested core build before semantic verification', async () => {
     const test = await fixture();

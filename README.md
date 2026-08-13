@@ -76,7 +76,7 @@ $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only
-the direct read-only `build_discord_server` architecture front door when
+the direct Discord-non-mutating `build_discord_server` architecture front door when
 authorized, its direct `guild_blueprint_apply` and `guild_blueprint_evidence`
 completion steps, plus `mcp_tools_search` and read, write, and destructive
 dispatchers. Other tools load as compact matches on demand. A single match
@@ -149,7 +149,8 @@ allowlisted default requires an explicit `guild_id` and is never guessed. It sel
 verified primary template plus 0–3 bounded inspirations, compiles regenerated permissions,
 onboarding, AutoMod, and Components V2 content,
 then returns a target-bound dry-run. Review its operations and `approval_id`; only then pass the
-unchanged `plan_token` and returned target IDs to `guild_blueprint_apply` with `__confirm:true`. Apply is
+unchanged caller-local `plan_ref` and returned target IDs to `guild_blueprint_apply` with `__confirm:true`.
+The legacy self-contained `plan_token` remains available for compatible or portable clients. Apply is
 locally checkpointed after every successful step, reconciled at each call or resume, independently
 read back at completion, and never deletes an existing resource. A completed approval is
 single-use: later drift requires a fresh plan. A terminal result persists authenticated Activity
@@ -222,7 +223,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.19.1**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.20.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)
