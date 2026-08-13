@@ -197,7 +197,7 @@ async function readJson(path, label, maxBytes, expectedDigest) {
   }
 }
 
-async function assertBuiltArtifactsMatch(manifest, repoRoot) {
+export async function assertBuiltArtifactsMatch(manifest, repoRoot) {
   const sourceRoot = await realpath(repoRoot);
   const verify = async (entrypoint, expectedDigest, label) => {
     const candidate = resolve(sourceRoot, entrypoint);

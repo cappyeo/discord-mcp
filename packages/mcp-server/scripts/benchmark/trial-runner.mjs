@@ -924,7 +924,13 @@ function emptyCleanup(input) {
   };
 }
 
-export { publicationTargets };
+export {
+  activityEvidenceSummary,
+  publicationTargets,
+  recoverCheckpointBindings,
+  validateApply,
+  validatePlan,
+};
 
 export async function runBenchmarkTrial(input) {
   validateInput(input);

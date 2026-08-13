@@ -9,6 +9,22 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.19.1 - independently verifiable small-model live benchmark
+
+This patch adds independently verifiable benchmark tooling: an approved
+small-model live lifecycle harness and a local Architect planning CPU benchmark. The
+harnesses define evidence and verification paths; no live campaign result is
+predeclared here. The release does not change product tool or schema behavior.
+
+- Added the small-model live lifecycle benchmark harness and verifier for
+  independently checking an approved run when credentials and a real Discord
+  server are available.
+- Added a deterministic benchmark for the local compile, reconcile, summarize,
+  and authenticated-plan encoding path. It explicitly excludes template lookup,
+  Discord I/O, and network waits.
+- Kept the 208-tool registry, CLI surface, and existing product schemas
+  unchanged.
+
 ## v0.19.0 - AI Discord Architect foundation
 
 The exact release date and tag commit are authoritative in

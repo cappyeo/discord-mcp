@@ -28,6 +28,9 @@
     "benchmark:verify": "node packages/mcp-server/scripts/benchmark/verify-real-benchmark.mjs",
     "benchmark:small-model": "node packages/mcp-server/scripts/benchmark/small-model-eval.mjs",
     "benchmark:small-model:verify": "node packages/mcp-server/scripts/benchmark/verify-small-model.mjs",
+    "benchmark:small-model:live": "node packages/mcp-server/scripts/benchmark/small-model-live-run.mjs",
+    "benchmark:small-model:live:verify": "node packages/mcp-server/scripts/benchmark/verify-small-model-live.mjs",
+    "benchmark:architect": "pnpm --filter @discord-mcp/core exec vitest bench src/tools/guild/_lib/blueprint-planning.bench.ts --run",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck"
