@@ -2,8 +2,7 @@ name: Verified outcome report
 description: Share a credential-safe Discord outcome, first friction, and whether discord-mcp was useful enough to reuse.
 title: "[Outcome]: "
 labels:
-  - enhancement
-  - help wanted
+  - verified-outcome
 body:
   - type: markdown
     attributes:

@@ -511,6 +511,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(guide).toContain(formUrl);
     expect(form).toContain('name: Verified outcome report');
     expect(form).toContain('is not product telemetry');
+    expect(form).toContain('  - verified-outcome');
 
     for (const id of [
       'outcome',
