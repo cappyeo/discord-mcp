@@ -17,7 +17,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
-
+import { sameFileIdentity } from './file-identity.mjs';
 import { assertBenchmarkSourceIntegrity } from './source-integrity.mjs';
 
 const execFile = promisify(nodeExecFile);
@@ -175,8 +175,7 @@ async function hashVerifiedArtifact({ root, entrypoint, label }) {
     const opened = await handle.stat();
     if (
       !opened.isFile() ||
-      opened.dev !== resolved.metadata.dev ||
-      opened.ino !== resolved.metadata.ino ||
+      !sameFileIdentity(resolved.metadata, opened) ||
       opened.size !== resolved.metadata.size
     ) {
       throw new Error(`${label} changed while opening`);
@@ -197,8 +196,7 @@ async function hashVerifiedArtifact({ root, entrypoint, label }) {
     const final = await handle.stat();
     if (
       !final.isFile() ||
-      final.dev !== resolved.metadata.dev ||
-      final.ino !== resolved.metadata.ino ||
+      !sameFileIdentity(resolved.metadata, final) ||
       final.size !== total ||
       total < 1
     ) {

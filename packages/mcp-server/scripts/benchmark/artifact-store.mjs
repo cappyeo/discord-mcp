@@ -14,7 +14,7 @@ import {
 } from 'node:fs/promises';
 import { homedir, hostname } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-
+import { sameFileIdentity } from './file-identity.mjs';
 import { assertSecretFreeJson, strictRfc3339Milliseconds } from './manifest.mjs';
 
 const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -132,12 +132,7 @@ async function readBoundedRegularFile(path, maxBytes, description) {
   const handle = await open(path, 'r');
   try {
     const opened = await handle.stat();
-    if (
-      !opened.isFile() ||
-      opened.dev !== metadata.dev ||
-      opened.ino !== metadata.ino ||
-      opened.size !== metadata.size
-    ) {
+    if (!opened.isFile() || !sameFileIdentity(metadata, opened) || opened.size !== metadata.size) {
       throw new Error(`${description} changed while opening`);
     }
     const buffer = Buffer.alloc(metadata.size + 1);
@@ -148,12 +143,7 @@ async function readBoundedRegularFile(path, maxBytes, description) {
       if (result.bytesRead === 0) break;
     }
     const final = await handle.stat();
-    if (
-      final.dev !== metadata.dev ||
-      final.ino !== metadata.ino ||
-      final.size !== total ||
-      total !== metadata.size
-    ) {
+    if (!sameFileIdentity(metadata, final) || final.size !== total || total !== metadata.size) {
       throw new Error(`${description} changed while reading`);
     }
     return buffer.subarray(0, total);

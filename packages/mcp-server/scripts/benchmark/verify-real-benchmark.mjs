@@ -12,6 +12,7 @@ import {
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CONTROLLED_BOT_ID, CONTROLLED_GUILD_IDS } from './campaign.mjs';
 import { verifyCampaignAttestation } from './campaign-attestation.mjs';
+import { sameFileIdentity } from './file-identity.mjs';
 import {
   assertBenchmarkManifest,
   assertSecretFreeJson,
@@ -151,8 +152,7 @@ async function readJson(path, label, maxBytes, expectedDigest) {
     if (
       !openedMetadata.isFile() ||
       openedMetadata.isSymbolicLink() ||
-      openedMetadata.dev !== pathMetadata.dev ||
-      openedMetadata.ino !== pathMetadata.ino
+      !sameFileIdentity(pathMetadata, openedMetadata)
     ) {
       throw new Error(`${label} changed while opening`);
     }
@@ -217,8 +217,7 @@ async function assertBuiltArtifactsMatch(manifest, repoRoot) {
       const opened = await handle.stat();
       if (
         !opened.isFile() ||
-        opened.dev !== metadata.dev ||
-        opened.ino !== metadata.ino ||
+        !sameFileIdentity(metadata, opened) ||
         opened.size !== metadata.size
       ) {
         throw new Error(`${label} changed while opening`);
@@ -237,12 +236,7 @@ async function assertBuiltArtifactsMatch(manifest, repoRoot) {
         chunks.push(Buffer.from(chunk));
       }
       const final = await handle.stat();
-      if (
-        final.dev !== metadata.dev ||
-        final.ino !== metadata.ino ||
-        final.size !== total ||
-        total < 1
-      ) {
+      if (!sameFileIdentity(metadata, final) || final.size !== total || total < 1) {
         throw new Error(`${label} changed while reading`);
       }
       const digest = `sha256:${hash.digest('hex')}`;

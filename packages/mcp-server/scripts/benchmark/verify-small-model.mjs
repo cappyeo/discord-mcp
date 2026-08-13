@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CONTROLLED_BOT_ID, CONTROLLED_GUILD_IDS } from './campaign.mjs';
+import { sameFileIdentity } from './file-identity.mjs';
 import { assertSecretFreeJson, canonicalJson } from './manifest.mjs';
 import {
   SMALL_MODEL_ATTESTATION_SCHEMA,
@@ -109,12 +110,7 @@ async function hashBuiltFile(path, label, maxBytes = MAX_ARTIFACT_BYTES) {
   const handle = await open(path, 'r');
   try {
     const opened = await handle.stat();
-    if (
-      !opened.isFile() ||
-      opened.dev !== metadata.dev ||
-      opened.ino !== metadata.ino ||
-      opened.size !== metadata.size
-    ) {
+    if (!opened.isFile() || !sameFileIdentity(metadata, opened) || opened.size !== metadata.size) {
       throw new Error(`${label} artifact changed while opening`);
     }
     const hash = createHash('sha256');
@@ -128,7 +124,7 @@ async function hashBuiltFile(path, label, maxBytes = MAX_ARTIFACT_BYTES) {
       hash.update(buffer.subarray(0, read.bytesRead));
     }
     const final = await handle.stat();
-    if (final.dev !== metadata.dev || final.ino !== metadata.ino || final.size !== total) {
+    if (!sameFileIdentity(metadata, final) || final.size !== total) {
       throw new Error(`${label} artifact changed while reading`);
     }
     return `sha256:${hash.digest('hex')}`;
@@ -541,8 +537,7 @@ async function readArtifact(path) {
     if (
       !opened.isFile() ||
       opened.isSymbolicLink() ||
-      opened.dev !== metadata.dev ||
-      opened.ino !== metadata.ino ||
+      !sameFileIdentity(metadata, opened) ||
       opened.size !== metadata.size
     ) {
       throw new Error('small-model artifact changed while opening');
@@ -559,7 +554,7 @@ async function readArtifact(path) {
     if (final.size > MAX_ARTIFACT_BYTES || bytesRead > MAX_ARTIFACT_BYTES) {
       throw new Error('small-model artifact is missing or outside the size bound');
     }
-    if (final.dev !== metadata.dev || final.ino !== metadata.ino || final.size !== bytesRead) {
+    if (!sameFileIdentity(metadata, final) || final.size !== bytesRead) {
       throw new Error('small-model artifact changed while reading');
     }
     text = bytes.subarray(0, bytesRead).toString('utf8');

@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { lstat, open, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-
+import { sameFileIdentity } from './file-identity.mjs';
 import { assertSecretFreeJson, canonicalJson } from './manifest.mjs';
 
 export const CAMPAIGN_ATTESTATION_SCHEMA = 'discord-mcp.real-benchmark-attestation.v1';
@@ -94,8 +94,7 @@ async function hashRegularFile(path, label, maxBytes) {
     if (
       !opened.isFile() ||
       opened.isSymbolicLink() ||
-      opened.dev !== metadata.dev ||
-      opened.ino !== metadata.ino ||
+      !sameFileIdentity(metadata, opened) ||
       opened.size < 2 ||
       opened.size > maxBytes
     ) {
@@ -113,8 +112,7 @@ async function hashRegularFile(path, label, maxBytes) {
     }
     const final = await handle.stat();
     if (
-      final.dev !== metadata.dev ||
-      final.ino !== metadata.ino ||
+      !sameFileIdentity(metadata, final) ||
       final.size !== total ||
       total < 2 ||
       total > maxBytes
@@ -226,12 +224,7 @@ async function readAttestation(path) {
   const handle = await open(path, 'r');
   try {
     const opened = await handle.stat();
-    if (
-      !opened.isFile() ||
-      opened.dev !== metadata.dev ||
-      opened.ino !== metadata.ino ||
-      opened.size !== metadata.size
-    ) {
+    if (!opened.isFile() || !sameFileIdentity(metadata, opened) || opened.size !== metadata.size) {
       throw new Error('campaign attestation changed while opening');
     }
     const buffer = Buffer.alloc(MAX_ATTESTATION_BYTES + 1);
@@ -243,8 +236,7 @@ async function readAttestation(path) {
     }
     const final = await handle.stat();
     if (
-      final.dev !== metadata.dev ||
-      final.ino !== metadata.ino ||
+      !sameFileIdentity(metadata, final) ||
       final.size !== total ||
       total < 2 ||
       total > MAX_ATTESTATION_BYTES
