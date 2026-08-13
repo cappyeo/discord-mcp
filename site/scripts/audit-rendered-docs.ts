@@ -308,9 +308,15 @@ const routes: RouteAudit[] = [
   {
     name: 'live demo',
     path: '/showcase/live-gaming-server/',
-    expectedText: ['Live demo: build a gaming server', 'What the walkthrough demonstrates'],
+    expectedText: [
+      'Live demo: build a gaming server',
+      'Shareable before-and-after teaser',
+      'What the walkthrough demonstrates',
+    ],
     verify: async (page) => {
-      const video = page.locator('video.live-demo-video');
+      const video = page.locator(
+        `video.live-demo-video:has(source[src="${BASE_PATH}/demo/live-gaming-server-build.mp4"])`,
+      );
       await requireCount(video, 1, 'live demo video');
       const videoSource = await video.locator('source[type="video/mp4"]').getAttribute('src');
       if (videoSource !== `${BASE_PATH}/demo/live-gaming-server-build.mp4`) {
@@ -377,6 +383,86 @@ const routes: RouteAudit[] = [
         ),
         1,
         'accessible video transcript',
+      );
+
+      const teaser = page.locator(
+        `video.live-demo-video:has(source[src="${BASE_PATH}/demo/live-gaming-server-before-after.mp4"])`,
+      );
+      await requireCount(teaser, 1, 'before-and-after teaser video');
+      const teaserSource = await teaser.locator('source[type="video/mp4"]').getAttribute('src');
+      const teaserAsset = await page.evaluate(async (source) => {
+        const response = await fetch(source, {
+          cache: 'no-store',
+          headers: { Range: 'bytes=0-1023' },
+        });
+        return {
+          status: response.status,
+          contentType: response.headers.get('content-type'),
+          bytes: (await response.arrayBuffer()).byteLength,
+        };
+      }, teaserSource);
+      if (
+        teaserAsset.status !== 206 ||
+        teaserAsset.contentType !== 'video/mp4' ||
+        teaserAsset.bytes !== 1024
+      ) {
+        throw new Error('before-and-after teaser MP4 range request is unavailable or invalid');
+      }
+      if ((await teaser.getAttribute('controls')) === null) {
+        throw new Error('before-and-after teaser lost its playback controls');
+      }
+      if ((await teaser.getAttribute('autoplay')) !== null) {
+        throw new Error('before-and-after teaser must not autoplay');
+      }
+      if (
+        (await teaser.getAttribute('poster')) !==
+        `${BASE_PATH}/demo/live-gaming-server-before-after-poster.webp`
+      ) {
+        throw new Error('before-and-after teaser poster is missing or unexpected');
+      }
+      if ((await teaser.getAttribute('aria-describedby')) !== 'before-after-description') {
+        throw new Error('before-and-after teaser lost its accessible description');
+      }
+      const teaserCaptionTrack = teaser.locator('track[kind="captions"][srclang="en"]');
+      await requireCount(teaserCaptionTrack, 1, 'before-and-after teaser caption track');
+      const teaserCaptionSource = await teaserCaptionTrack.getAttribute('src');
+      if (teaserCaptionSource !== `${BASE_PATH}/demo/live-gaming-server-before-after.en.vtt`) {
+        throw new Error('before-and-after teaser caption source is missing or unexpected');
+      }
+      const teaserCaptionAsset = await page.evaluate(async (source) => {
+        const response = await fetch(source, { cache: 'no-store' });
+        return {
+          ok: response.ok,
+          contentType: response.headers.get('content-type'),
+          body: await response.text(),
+        };
+      }, teaserCaptionSource);
+      if (
+        !teaserCaptionAsset.ok ||
+        !teaserCaptionAsset.contentType?.startsWith('text/vtt') ||
+        !teaserCaptionAsset.body.startsWith('WEBVTT')
+      ) {
+        throw new Error('before-and-after teaser caption asset is unavailable or invalid');
+      }
+      await requireCount(
+        page.locator('#before-after-description'),
+        1,
+        'before-and-after teaser description',
+      );
+      await requireCount(
+        page.locator(`[src="${BASE_PATH}/demo/live-gaming-server-before-after.gif"]`),
+        0,
+        'autoplaying before-and-after GIF',
+      );
+      await requireCount(
+        page.getByRole('link', { name: 'Download the 10-second MP4 (159 KB)' }),
+        1,
+        'teaser MP4 download link',
+      );
+      await requireCount(
+        page.getByRole('link', { name: 'the shareable GIF (1.0 MB)' }),
+        1,
+        'shareable GIF download link',
       );
     },
   },
