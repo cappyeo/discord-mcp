@@ -744,6 +744,7 @@ export function classifySmallModelTrial({
   contractErrors = [],
   clarificationDetected = false,
   exitCode = 0,
+  signal = null,
   timedOut = false,
   spawnError = false,
   truncated = false,
@@ -753,7 +754,8 @@ export function classifySmallModelTrial({
 } = {}) {
   if (!Array.isArray(trace)) throw new TypeError('trace must be an array');
   if (!frontDoorAvailable) return 'product_front_door_missing';
-  if (spawnError || timedOut || truncated || exitCode !== 0) return 'host_invalid';
+  if (spawnError || timedOut || truncated || signal !== null || exitCode !== 0)
+    return 'host_invalid';
   if (!Array.isArray(contractErrors) || contractErrors.length > 0) return 'tool_contract_failure';
   if (trace.some((call) => call?.contract_invalid === true)) return 'tool_contract_failure';
   if (trace.some((call) => !ENABLED_TOOLS.includes(call.tool))) return 'unsafe_tool_call';
@@ -798,6 +800,16 @@ export function classifySmallModelTrial({
     return 'pass';
   }
   return 'tool_contract_failure';
+}
+
+function hostDiagnostics({ exitCode, signal, timedOut, spawnError, stdoutTruncated } = {}) {
+  const diagnostics = [];
+  if (spawnError) diagnostics.push('host_spawn_error');
+  if (timedOut) diagnostics.push('host_timeout');
+  if (stdoutTruncated) diagnostics.push('host_stdout_truncated');
+  if (typeof signal === 'string' && signal !== '') diagnostics.push('host_signal');
+  if (Number.isInteger(exitCode) && exitCode !== 0) diagnostics.push('host_nonzero_exit');
+  return diagnostics;
 }
 
 export function buildCodexArguments({ cliPath, cwd, target, policy = SMALL_MODEL_POLICY } = {}) {
@@ -1086,12 +1098,14 @@ async function oneTrial({
     };
   }
   const { parsed } = parsedResult;
+  const contractErrors = [...parsed.contract_errors, ...hostDiagnostics(result)];
   const classification = classifySmallModelTrial({
     trace: parsed.trace,
     malformedJsonLines: parsed.malformed_json_lines,
-    contractErrors: parsed.contract_errors,
+    contractErrors,
     clarificationDetected: parsed.clarification_detected,
     exitCode: result.exitCode,
+    signal: result.signal,
     timedOut: result.timedOut,
     spawnError: result.spawnError,
     truncated: result.stdoutTruncated,
@@ -1104,7 +1118,7 @@ async function oneTrial({
     usage: parsed.usage,
     trace: parsed.trace,
     clarification_detected: parsed.clarification_detected,
-    contract_errors: parsed.contract_errors,
+    contract_errors: contractErrors,
   };
 }
 

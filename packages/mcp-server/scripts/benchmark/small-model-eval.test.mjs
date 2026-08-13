@@ -294,6 +294,7 @@ describe('small-model evaluation contract', () => {
     expect(classifySmallModelTrial({ trace: [] })).toBe('model_no_tool_call');
     const complete = parseCodexJsonl(directOutput()).trace;
     expect(classifySmallModelTrial({ trace: complete, truncated: true })).toBe('host_invalid');
+    expect(classifySmallModelTrial({ trace: [], signal: 'SIGTERM' })).toBe('host_invalid');
     expect(
       classifySmallModelTrial({
         trace: [
@@ -713,6 +714,7 @@ describe('small-model evaluation contract', () => {
         },
       });
       expect(spawnErrorArtifact.trials[0]?.classification).toBe('host_invalid');
+      expect(spawnErrorArtifact.trials[0]?.contract_errors).toEqual(['host_spawn_error']);
       expect(
         JSON.parse(await readFile(join(directory, 'spawn-error.json'))).aggregate,
       ).toMatchObject({
@@ -743,9 +745,63 @@ describe('small-model evaluation contract', () => {
       });
       expect(timeoutArtifact.trials[0]?.classification).toBe('host_invalid');
       expect(timeoutArtifact.trials[0]?.trace).toEqual([]);
+      expect(timeoutArtifact.trials[0]?.contract_errors).toEqual(['host_timeout', 'host_signal']);
       expect(timeoutSignals).toEqual(['SIGTERM', 'SIGTERM', 'SIGTERM', 'SIGTERM', 'SIGTERM']);
       expect(timeoutSpawnOptions).toHaveLength(5);
       expect(timeoutSpawnOptions.every((options) => options.detached === true)).toBe(true);
+
+      const nonzeroExitChild = () => {
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => child.emit('close', 17, null));
+        return child;
+      };
+      const nonzeroExitArtifact = await runSmallModelEvaluation({
+        ...common,
+        output: join(directory, 'nonzero-exit.json'),
+        spawn: nonzeroExitChild,
+      });
+      expect(nonzeroExitArtifact.trials[0]?.classification).toBe('host_invalid');
+      expect(nonzeroExitArtifact.trials[0]?.contract_errors).toEqual(['host_nonzero_exit']);
+
+      const truncatedChild = () => {
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          child.stdout.emit('data', Buffer.alloc(8 * 1024 * 1024 + 1, 'x'));
+          child.emit('close', 0, null);
+        });
+        return child;
+      };
+      const truncatedArtifact = await runSmallModelEvaluation({
+        ...common,
+        output: join(directory, 'stdout-truncated.json'),
+        spawn: truncatedChild,
+      });
+      expect(truncatedArtifact.trials[0]?.classification).toBe('host_invalid');
+      expect(truncatedArtifact.trials[0]?.contract_errors).toEqual(['host_stdout_truncated']);
+
+      const passingChild = () => {
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          child.stdout.emit('data', directOutput());
+          child.emit('close', 0, null);
+        });
+        return child;
+      };
+      const passingArtifact = await runSmallModelEvaluation({
+        ...common,
+        output: join(directory, 'passing.json'),
+        spawn: passingChild,
+      });
+      expect(passingArtifact.trials.every((trial) => trial.classification === 'pass')).toBe(true);
+      expect(passingArtifact.trials.every((trial) => trial.contract_errors.length === 0)).toBe(
+        true,
+      );
 
       let stuckSpawnCount = 0;
       const stuckSignals = [];
