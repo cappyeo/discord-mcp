@@ -43,6 +43,9 @@ verification paths; no live campaign result is predeclared here.
   plan token out of prompts and artifacts. After the harness records explicit
   caller approval, its non-interactive Codex resume pre-approves only
   `guild_blueprint_apply`; it does not weaken the server-wide MCP tool policy.
+  The verifier rebuilds the complete, digest-bound Activity Evidence only from
+  the production tool's public proof plus the already locked plan before
+  passing it to the attested core validator.
   Approved failures now leave a bounded, HMAC-signed diagnostic capsule or
   retain the campaign lock if that capsule cannot be persisted.
 - Added a deterministic benchmark for the local compile, reconcile, summarize,

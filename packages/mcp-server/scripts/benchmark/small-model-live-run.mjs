@@ -722,9 +722,11 @@ export async function runSmallModelLiveTrial({
     const applyCall = rawCall(calls, 'resume', 'guild_blueprint_apply');
     const apply = applyFrom(applyCall, plan, trial);
     const evidenceCall = rawCall(calls, 'resume', 'guild_blueprint_evidence');
-    const evidenceRaw = resultData(evidenceCall.result);
     const evidence = evidenceFrom(evidenceCall, plan, trial);
-    validateAttestedActivity({ ...evidenceRaw.record, evidence_id: evidenceRaw.evidence_id });
+    validateAttestedActivity({
+      ...evidence.evidence_body,
+      evidence_id: evidence.evidence_id,
+    });
     cleanup = cleanupFromBindings(plan, target, apply.evidence.bindings, {
       requireComplete: true,
     });
@@ -766,10 +768,9 @@ export async function runSmallModelLiveTrial({
       plan,
       trial,
     );
-    const independentEvidenceData = resultData(independentEvidence);
     validateAttestedActivity({
-      ...independentEvidenceData.record,
-      evidence_id: independentEvidenceData.evidence_id,
+      ...independentEvidenceSummary.evidence_body,
+      evidence_id: independentEvidenceSummary.evidence_id,
     });
     if (
       evidence.evidence_id !== independentEvidenceSummary.evidence_id ||

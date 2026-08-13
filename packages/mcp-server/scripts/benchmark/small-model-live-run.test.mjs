@@ -186,13 +186,20 @@ function activityRecord(
 }
 
 function evidence(p) {
-  const record = activityRecord(p);
+  const activity = activityRecord(p);
+  const record = {
+    schema_version: activity.schema_version,
+    recorded_at: activity.recorded_at,
+    initial_operation_count: activity.initial_operation_count,
+    plan_invariants: activity.plan_invariants,
+    observed: activity.observed,
+  };
   return {
     status: 'verified',
     plan_id: p.plan_id,
     blueprint_id: p.blueprint_id,
     target: p.target,
-    evidence_id: record.evidence_id,
+    evidence_id: activity.evidence_id,
     record,
     verification: {
       identity_verified: true,
