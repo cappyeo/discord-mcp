@@ -70,7 +70,7 @@ const RAW_TEMPLATE = {
 function planSummary() {
   return {
     status: 'ready',
-    target: { guild_id: '1533998797863256165', bot_id: '1533457669384306858' },
+    target: { guild_id: '1533998797863256165', bot_id: '1533719084636700773' },
     counts: {
       roles: 9,
       categories: 5,
@@ -143,7 +143,7 @@ function directOutput() {
         result: {
           structured_content: {
             status: 'ready',
-            target: { guild_id: '1533998797863256165', bot_id: '1533457669384306858' },
+            target: { guild_id: '1533998797863256165', bot_id: '1533719084636700773' },
             ...liveResult(),
           },
         },
@@ -159,7 +159,7 @@ function directOutput() {
         result: {
           structured_content: {
             status: 'ready',
-            target: { guild_id: '1533998797863256165', bot_id: '1533457669384306858' },
+            target: { guild_id: '1533998797863256165', bot_id: '1533719084636700773' },
             ...liveResult(),
           },
         },
@@ -377,7 +377,7 @@ describe('small-model evaluation contract', () => {
     const args = buildCodexArguments({
       cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
       cwd: 'C:/repo',
-      target: { guildId: '1533998797863256165', botId: '1533457669384306858' },
+      target: { guildId: '1533998797863256165', botId: '1533719084636700773' },
     });
     expect(args).toEqual(
       expect.arrayContaining([
@@ -488,7 +488,7 @@ describe('small-model evaluation contract', () => {
         env: {
           DISCORD_TOKEN: 'x'.repeat(60),
           ALLOWED_GUILDS: '1533998797863256165',
-          DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+          DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
         },
         run: async () => ({ stdout: `${'a'.repeat(40)}\n` }),
         attest: async () => ({
@@ -549,7 +549,7 @@ describe('small-model evaluation contract', () => {
             DISCORD_TOKEN: 'x'.repeat(60),
             ALLOWED_GUILDS: '1533478783867420712',
             DISCORD_DEFAULT_GUILD_ID: '1533478783867420712',
-            DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+            DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
           },
           run: async () => {
             hostCalls += 1;
@@ -576,7 +576,7 @@ describe('small-model evaluation contract', () => {
         env: {
           DISCORD_TOKEN: 'x'.repeat(60),
           ALLOWED_GUILDS: '1533998797863256165',
-          DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+          DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
         },
         run: async (_command, _args, options) => {
           runCalls += 1;
@@ -626,7 +626,7 @@ describe('small-model evaluation contract', () => {
           env: {
             DISCORD_TOKEN: 'x'.repeat(60),
             ALLOWED_GUILDS: '1533998797863256165',
-            DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+            DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
           },
           run: async () => ({ stdout: `${'a'.repeat(40)}\n` }),
           attest: async () => ({
@@ -653,7 +653,7 @@ describe('small-model evaluation contract', () => {
           env: {
             DISCORD_TOKEN: 'x'.repeat(60),
             ALLOWED_GUILDS: '1533998797863256165',
-            DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+            DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
           },
           run: async () => ({ stdout: `${'a'.repeat(40)}\n` }),
           attest: async () => ({
@@ -687,7 +687,7 @@ describe('small-model evaluation contract', () => {
       env: {
         DISCORD_TOKEN: 'x'.repeat(60),
         ALLOWED_GUILDS: '1533998797863256165',
-        DISCORD_EXPECTED_BOT_ID: '1533457669384306858',
+        DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
       },
       platform: 'linux',
       run: async (_command, args) => ({

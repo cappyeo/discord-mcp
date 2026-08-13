@@ -8,7 +8,7 @@ import {
 import { BenchmarkQuotaPreflightError, MAX_QUOTA_PREFLIGHT_WAIT_MS } from './quota-preflight.mjs';
 
 export const CONTROLLED_GUILD_IDS = Object.freeze(['1533989004406558851', '1533998797863256165']);
-export const CONTROLLED_BOT_ID = '1533457669384306858';
+export const CONTROLLED_BOT_ID = '1533719084636700773';
 export const DEFAULT_BENCHMARK_REQUEST =
   'Build a professional gaming Discord community with LFG, voice rooms, events, safe onboarding, moderation, and polished welcome content.';
 const RESTORE_RECOVERY_DELAYS_MS = Object.freeze([0, 1_000, 2_000, 4_000, 8_000, 16_000]);
