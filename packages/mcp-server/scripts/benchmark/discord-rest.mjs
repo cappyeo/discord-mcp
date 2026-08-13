@@ -22,6 +22,21 @@ export class DiscordRestError extends Error {
   }
 }
 
+async function readWelcomeScreen(rest, guildId, signal) {
+  try {
+    return await rest.get(`/guilds/${guildId}/welcome-screen`, { signal });
+  } catch (error) {
+    if (
+      error instanceof DiscordRestError &&
+      error.status === 404 &&
+      String(error.code) === '10069'
+    ) {
+      return { description: null, welcome_channels: [] };
+    }
+    throw error;
+  }
+}
+
 function restFailure(
   message,
   {
@@ -388,7 +403,7 @@ export async function readDiscordSnapshot(
   const [onboarding, welcomeScreen] = community
     ? await Promise.all([
         rest.get(`/guilds/${guildId}/onboarding`, { signal }),
-        rest.get(`/guilds/${guildId}/welcome-screen`, { signal }),
+        readWelcomeScreen(rest, guildId, signal),
       ])
     : [null, null];
   if (onboarding !== null) assertScopedId(onboarding?.guild_id, guildId, 'onboarding');

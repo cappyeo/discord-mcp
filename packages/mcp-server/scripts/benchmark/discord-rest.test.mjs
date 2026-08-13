@@ -338,6 +338,54 @@ describe('Discord benchmark REST snapshot', () => {
     expect(snapshot.publication_history_complete[channelId]).toBe(true);
   });
 
+  it('normalizes only Discord code 10069 when a Community welcome screen is absent', async () => {
+    const fetchImpl = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === `/api/v10/guilds/${GUILD_ID}`) {
+        return response({ id: GUILD_ID, name: 'Benchmark', features: ['COMMUNITY'] });
+      }
+      if (url.pathname.endsWith('/onboarding')) {
+        return response({
+          guild_id: GUILD_ID,
+          enabled: false,
+          prompts: [],
+          default_channel_ids: [],
+          mode: 0,
+        });
+      }
+      if (url.pathname.endsWith('/welcome-screen')) {
+        return response({ code: 10069, message: 'Unknown Guild Welcome Screen' }, 404);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const rest = createDiscordRestClient({ token: TOKEN, fetchImpl });
+
+    await expect(
+      readDiscordSnapshot(rest, { guildId: GUILD_ID, botId: BOT_ID }),
+    ).resolves.toMatchObject({
+      welcome_screen: { description: null, welcome_channels: [] },
+    });
+
+    const wrongCodeFetch = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === `/api/v10/guilds/${GUILD_ID}`) {
+        return response({ id: GUILD_ID, name: 'Benchmark', features: ['COMMUNITY'] });
+      }
+      if (url.pathname.endsWith('/onboarding')) {
+        return response({ guild_id: GUILD_ID, enabled: false, prompts: [] });
+      }
+      if (url.pathname.endsWith('/welcome-screen')) {
+        return response({ code: 10004, message: 'Unknown Guild' }, 404);
+      }
+      return response(basePayload(url.pathname));
+    });
+    const wrongCodeRest = createDiscordRestClient({ token: TOKEN, fetchImpl: wrongCodeFetch });
+
+    await expect(
+      readDiscordSnapshot(wrongCodeRest, { guildId: GUILD_ID, botId: BOT_ID }),
+    ).rejects.toMatchObject({ status: 404, code: 10004 });
+  });
+
   it('allows only an explicit restore read to treat a missing publication channel as gone', async () => {
     const missingChannelId = '666000666000666000';
     const fetchImpl = fetchForBase();

@@ -185,6 +185,31 @@ function statusCode(error: unknown): number | null {
   return typeof status === 'number' ? status : null;
 }
 
+function discordErrorCode(error: unknown): string | null {
+  const candidate = error as {
+    code?: unknown;
+    rawError?: { code?: unknown };
+    data?: { code?: unknown };
+  } | null;
+  const code = candidate?.code ?? candidate?.rawError?.code ?? candidate?.data?.code;
+  return code === undefined || code === null ? null : String(code);
+}
+
+async function readWelcomeScreen(
+  rest: REST,
+  guildId: string,
+  signal?: AbortSignal,
+): Promise<TargetWelcomeScreen> {
+  try {
+    return (await rest.get(Routes.guildWelcomeScreen(guildId), { signal })) as TargetWelcomeScreen;
+  } catch (error) {
+    if (statusCode(error) === 404 && discordErrorCode(error) === '10069') {
+      return { description: null, welcome_channels: [] };
+    }
+    throw error;
+  }
+}
+
 async function readPublicationHistory(
   rest: REST,
   guildId: string,
@@ -293,7 +318,7 @@ export async function readBlueprintTargetSnapshot(
   const [onboarding, welcomeScreen] = community
     ? ((await Promise.all([
         rest.get(Routes.guildOnboarding(guildId), { signal }),
-        rest.get(Routes.guildWelcomeScreen(guildId), { signal }),
+        readWelcomeScreen(rest, guildId, signal),
       ])) as [TargetOnboarding, TargetWelcomeScreen])
     : [null, null];
   if (onboarding !== null) assertTargetId('Onboarding', guildId, onboarding.guild_id);

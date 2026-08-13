@@ -302,6 +302,71 @@ describe('blueprint publication target readback', () => {
     expect(snapshot.automod_rules.map((rule) => rule.id)).toEqual(['1030554520465440819']);
   });
 
+  it('normalizes only Discord code 10069 when a Community welcome screen is absent', async () => {
+    const base = fakeRest('200000000000000001', [], undefined);
+    const baseGet = base.get.bind(base);
+    const rest = {
+      get: async (route: string, options?: { signal?: AbortSignal }) => {
+        if (route === Routes.guild(guildId)) {
+          return {
+            ...(await baseGet(route, options)),
+            features: ['COMMUNITY'],
+          };
+        }
+        if (route === Routes.guildOnboarding(guildId)) {
+          return {
+            guild_id: guildId,
+            enabled: false,
+            prompts: [],
+            default_channel_ids: [],
+            mode: 0,
+          };
+        }
+        if (route === Routes.guildWelcomeScreen(guildId)) {
+          throw Object.assign(new Error('Unknown Guild Welcome Screen'), {
+            status: 404,
+            code: 10069,
+          });
+        }
+        return baseGet(route, options);
+      },
+    } as unknown as REST;
+
+    await expect(
+      readBlueprintTargetSnapshot(rest, guildId, botId, blueprint),
+    ).resolves.toMatchObject({
+      welcome_screen: { description: null, welcome_channels: [] },
+    });
+
+    const wrongCodeRest = {
+      get: async (route: string, options?: { signal?: AbortSignal }) => {
+        if (route === Routes.guild(guildId)) {
+          return {
+            ...(await baseGet(route, options)),
+            features: ['COMMUNITY'],
+          };
+        }
+        if (route === Routes.guildOnboarding(guildId)) {
+          return {
+            guild_id: guildId,
+            enabled: false,
+            prompts: [],
+            default_channel_ids: [],
+            mode: 0,
+          };
+        }
+        if (route === Routes.guildWelcomeScreen(guildId)) {
+          throw Object.assign(new Error('Unknown Guild'), { status: 404, code: 10004 });
+        }
+        return baseGet(route, options);
+      },
+    } as unknown as REST;
+
+    await expect(
+      readBlueprintTargetSnapshot(wrongCodeRest, guildId, botId, blueprint),
+    ).rejects.toMatchObject({ status: 404, code: 10004 });
+  });
+
   it('treats an exact-message 404 as a safe replacement opportunity', async () => {
     const { publication, channelId, bindings } = publicationFixture();
     const snapshot = await readBlueprintTargetSnapshot(
