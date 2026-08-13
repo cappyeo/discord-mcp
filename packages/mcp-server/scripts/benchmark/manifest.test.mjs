@@ -475,6 +475,28 @@ test('allows numeric model usage counters without allowing token-shaped credenti
   );
 });
 
+test('allows repeated JSON references while still rejecting true cycles', () => {
+  const sharedCounts = { roles: 4, channels: 12 };
+  assert.doesNotThrow(() =>
+    assertSecretFreeJson({
+      activity_evidence: {
+        evidence_body: { plan_invariants: { expected_counts: sharedCounts } },
+        expected_counts: sharedCounts,
+      },
+    }),
+  );
+
+  const sharedSecret = { token: 'credential-value' };
+  assert.throws(
+    () => assertSecretFreeJson({ first: sharedSecret, second: sharedSecret }),
+    /secret-bearing key is not allowed/i,
+  );
+
+  const cyclic = { status: 'complete' };
+  cyclic.self = cyclic;
+  assert.throws(() => assertSecretFreeJson(cyclic), /cyclic values are not allowed/i);
+});
+
 test('refuses to claim the gate without all 20 aligned results and safety cases', () => {
   const manifest = makeManifest();
   assert.throws(() => createBenchmarkReport(manifest, [], safetyCases()), /20 trial results/i);

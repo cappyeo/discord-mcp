@@ -201,7 +201,7 @@ function isSecretKey(key) {
   return SECRET_KEY_WORDS.some((word) => normalized.includes(word));
 }
 
-function scanSecrets(value, path = '$', seen = new WeakSet(), errors = []) {
+function scanSecrets(value, path = '$', ancestors = new WeakSet(), errors = []) {
   if (typeof value === 'string') {
     if (SECRET_VALUE_RE.test(value) || DISCORD_TOKEN_VALUE_RE.test(value)) {
       errors.push(`${path}: secret-bearing value is not allowed`);
@@ -214,31 +214,36 @@ function scanSecrets(value, path = '$', seen = new WeakSet(), errors = []) {
     errors.push(`${path}: only JSON values are allowed`);
     return errors;
   }
-  if (seen.has(value)) {
+  if (ancestors.has(value)) {
     errors.push(`${path}: cyclic values are not allowed`);
     return errors;
   }
-  seen.add(value);
+  ancestors.add(value);
 
-  if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      scanSecrets(item, `${path}[${index}]`, seen, errors);
+  try {
+    if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        scanSecrets(item, `${path}[${index}]`, ancestors, errors);
+      }
+      return errors;
+    }
+    if (!isRecord(value)) {
+      errors.push(`${path}: only plain JSON objects are allowed`);
+      return errors;
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      const childPath = `${path}.${key}`;
+      const isSafeUsageCount =
+        SAFE_USAGE_KEYS.has(key) && Number.isSafeInteger(child) && child >= 0;
+      if (!isSafeUsageCount && isSecretKey(key))
+        errors.push(`${childPath}: secret-bearing key is not allowed`);
+      scanSecrets(child, childPath, ancestors, errors);
     }
     return errors;
+  } finally {
+    ancestors.delete(value);
   }
-  if (!isRecord(value)) {
-    errors.push(`${path}: only plain JSON objects are allowed`);
-    return errors;
-  }
-
-  for (const [key, child] of Object.entries(value)) {
-    const childPath = `${path}.${key}`;
-    const isSafeUsageCount = SAFE_USAGE_KEYS.has(key) && Number.isSafeInteger(child) && child >= 0;
-    if (!isSafeUsageCount && isSecretKey(key))
-      errors.push(`${childPath}: secret-bearing key is not allowed`);
-    scanSecrets(child, childPath, seen, errors);
-  }
-  return errors;
 }
 
 export function assertSecretFreeJson(value, path = '$') {
