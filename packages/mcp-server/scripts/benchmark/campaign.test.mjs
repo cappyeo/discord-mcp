@@ -57,6 +57,25 @@ function manifest() {
 }
 
 function result(trial, serious = []) {
+  const initialOperationCount = 25;
+  const expectedCounts = {
+    identity: 2,
+    roles: 4,
+    categories: 5,
+    channels: 16,
+    ordering: 2,
+    guild: 1,
+    welcome_screen: 1,
+    onboarding: 5,
+    automod: 3,
+    components_v2: 3,
+  };
+  const safetyPolicy = {
+    source_permissions_applied: false,
+    dangerous_generated_permissions: 0,
+    bot_permission_grants: 0,
+    discord_managed_role_mutations: 0,
+  };
   const evidenceBody = {
     schema_version: 'guild_blueprint_activity_evidence.v1',
     recorded_at: '2026-08-12T00:00:00.000Z',
@@ -64,9 +83,22 @@ function result(trial, serious = []) {
     blueprint_id: `sha256:${'b'.repeat(64)}`,
     target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
     blueprint: {},
-    initial_operation_count: 25,
-    plan_invariants: {},
-    observed: {},
+    initial_operation_count: initialOperationCount,
+    plan_invariants: {
+      expected_counts: { ...expectedCounts },
+      safety_policy: { ...safetyPolicy },
+    },
+    observed: {
+      initial_snapshot_id: `sha256:${'c'.repeat(64)}`,
+      final_snapshot_id: `sha256:${'d'.repeat(64)}`,
+      checkpoint_version: initialOperationCount,
+      completed_operation_ids: Array.from(
+        { length: initialOperationCount },
+        (_, index) => `operation:${index}`,
+      ),
+      bindings: {},
+      blueprint_readback_match: true,
+    },
   };
   return {
     trial_id: trial.trial_id,
@@ -135,33 +167,17 @@ function result(trial, serious = []) {
       initial_snapshot_id: `sha256:${'c'.repeat(64)}`,
       final_snapshot_id: `sha256:${'d'.repeat(64)}`,
       current_snapshot_id: `sha256:${'d'.repeat(64)}`,
-      initial_operation_count: 25,
-      checkpoint_version: 25,
-      completed_operation_count: 25,
+      initial_operation_count: initialOperationCount,
+      checkpoint_version: initialOperationCount,
+      completed_operation_count: evidenceBody.observed.completed_operation_ids.length,
       blueprint_readback_match: true,
       identity_verified: true,
       guild_verified: true,
       readback: 'match',
       snapshot_unchanged: true,
       evidence_body: evidenceBody,
-      expected_counts: {
-        identity: 2,
-        roles: 4,
-        categories: 5,
-        channels: 16,
-        ordering: 2,
-        guild: 1,
-        welcome_screen: 1,
-        onboarding: 5,
-        automod: 3,
-        components_v2: 3,
-      },
-      safety_policy: {
-        source_permissions_applied: false,
-        dangerous_generated_permissions: 0,
-        bot_permission_grants: 0,
-        discord_managed_role_mutations: 0,
-      },
+      expected_counts: { ...expectedCounts },
+      safety_policy: { ...safetyPolicy },
       blueprint_counts: {
         roles: 4,
         categories: 5,

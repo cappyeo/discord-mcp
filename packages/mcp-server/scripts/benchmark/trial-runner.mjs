@@ -321,7 +321,6 @@ function validateActivityRecord(activity, plan, code, { requireEvidenceId = true
     observed.checkpoint_version < 0 ||
     !Array.isArray(observed.completed_operation_ids) ||
     new Set(observed.completed_operation_ids).size !== observed.completed_operation_ids.length ||
-    observed.completed_operation_ids.length !== plan.operations.length ||
     observed.completed_operation_ids.some(
       (operationId) => !plan.operations.some((operation) => operation.operation_id === operationId),
     ) ||

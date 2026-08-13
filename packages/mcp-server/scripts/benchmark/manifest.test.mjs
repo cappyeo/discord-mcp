@@ -97,6 +97,29 @@ function templateEvidence() {
 }
 
 function activityEvidence(trial) {
+  const initialOperationCount = 25;
+  const expectedCounts = {
+    identity: 2,
+    roles: 4,
+    categories: 5,
+    channels: 16,
+    ordering: 2,
+    guild: 1,
+    welcome_screen: 1,
+    onboarding: 5,
+    automod: 3,
+    components_v2: 3,
+  };
+  const safetyPolicy = {
+    source_permissions_applied: false,
+    dangerous_generated_permissions: 0,
+    bot_permission_grants: 0,
+    discord_managed_role_mutations: 0,
+  };
+  const completedOperationIds = Array.from(
+    { length: initialOperationCount },
+    (_, index) => `operation:${index}`,
+  );
   const body = {
     schema_version: 'guild_blueprint_activity_evidence.v1',
     recorded_at: '2026-08-12T00:00:00.000Z',
@@ -104,9 +127,19 @@ function activityEvidence(trial) {
     blueprint_id: `sha256:${'b'.repeat(64)}`,
     target: { guild_id: trial.guild_id, bot_id: trial.expected_bot_id },
     blueprint: {},
-    initial_operation_count: 25,
-    plan_invariants: {},
-    observed: {},
+    initial_operation_count: initialOperationCount,
+    plan_invariants: {
+      expected_counts: { ...expectedCounts },
+      safety_policy: { ...safetyPolicy },
+    },
+    observed: {
+      initial_snapshot_id: `sha256:${'c'.repeat(64)}`,
+      final_snapshot_id: `sha256:${'d'.repeat(64)}`,
+      checkpoint_version: initialOperationCount,
+      completed_operation_ids: completedOperationIds,
+      bindings: {},
+      blueprint_readback_match: true,
+    },
   };
   return {
     schema_version: 'guild_blueprint_activity_evidence.v1',
@@ -119,33 +152,17 @@ function activityEvidence(trial) {
     initial_snapshot_id: `sha256:${'c'.repeat(64)}`,
     final_snapshot_id: `sha256:${'d'.repeat(64)}`,
     current_snapshot_id: `sha256:${'d'.repeat(64)}`,
-    initial_operation_count: 25,
-    checkpoint_version: 25,
-    completed_operation_count: 25,
+    initial_operation_count: initialOperationCount,
+    checkpoint_version: initialOperationCount,
+    completed_operation_count: completedOperationIds.length,
     blueprint_readback_match: true,
     identity_verified: true,
     guild_verified: true,
     readback: 'match',
     snapshot_unchanged: true,
     evidence_body: body,
-    expected_counts: {
-      identity: 2,
-      roles: 4,
-      categories: 5,
-      channels: 16,
-      ordering: 2,
-      guild: 1,
-      welcome_screen: 1,
-      onboarding: 5,
-      automod: 3,
-      components_v2: 3,
-    },
-    safety_policy: {
-      source_permissions_applied: false,
-      dangerous_generated_permissions: 0,
-      bot_permission_grants: 0,
-      discord_managed_role_mutations: 0,
-    },
+    expected_counts: { ...expectedCounts },
+    safety_policy: { ...safetyPolicy },
     blueprint_counts: {
       roles: 4,
       categories: 5,
@@ -659,13 +676,49 @@ test('rejects Activity Evidence envelopes with extra or missing fields', () => {
   }
 });
 
-test('rejects incomplete activity operations and count mappings', () => {
+test('accepts reconciled operation subsets backed by matching evidence', () => {
+  const manifest = makeManifest();
+  const reconciled = makeResults(manifest);
+  const activity = reconciled[0].activity_evidence;
+  activity.evidence_body.observed.completed_operation_ids.pop();
+  activity.completed_operation_count -= 1;
+  activity.evidence_id = activityDigest(activity.evidence_body);
+
+  assert.doesNotThrow(() => createBenchmarkReport(manifest, reconciled, safetyCases()));
+});
+
+test('rejects inconsistent activity operations and count mappings', () => {
   const manifest = makeManifest();
 
   const incomplete = makeResults(manifest);
   incomplete[0].activity_evidence.completed_operation_count = 24;
   assert.throws(
     () => createBenchmarkReport(manifest, incomplete, safetyCases()),
+    /activity_evidence: is invalid/,
+  );
+
+  const overrun = makeResults(manifest);
+  overrun[0].activity_evidence.evidence_body.observed.completed_operation_ids.push(
+    'operation:overrun',
+  );
+  overrun[0].activity_evidence.completed_operation_count += 1;
+  overrun[0].activity_evidence.evidence_id = activityDigest(
+    overrun[0].activity_evidence.evidence_body,
+  );
+  assert.throws(
+    () => createBenchmarkReport(manifest, overrun, safetyCases()),
+    /activity_evidence: is invalid/,
+  );
+
+  const oversizedId = makeResults(manifest);
+  oversizedId[0].activity_evidence.evidence_body.observed.completed_operation_ids[0] = 'x'.repeat(
+    161,
+  );
+  oversizedId[0].activity_evidence.evidence_id = activityDigest(
+    oversizedId[0].activity_evidence.evidence_body,
+  );
+  assert.throws(
+    () => createBenchmarkReport(manifest, oversizedId, safetyCases()),
     /activity_evidence: is invalid/,
   );
 

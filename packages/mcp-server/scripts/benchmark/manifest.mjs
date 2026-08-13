@@ -507,6 +507,7 @@ function validActivityEvidence(value) {
     value.checkpoint_version < 0 ||
     !Number.isInteger(value.completed_operation_count) ||
     value.completed_operation_count < 0 ||
+    value.completed_operation_count > value.initial_operation_count ||
     value.blueprint_readback_match !== true ||
     value.identity_verified !== true ||
     value.guild_verified !== true ||
@@ -541,14 +542,30 @@ function validActivityEvidence(value) {
     body.target.bot_id !== value.target.bot_id ||
     !isRecord(body.blueprint) ||
     !nonnegativeInteger(body.initial_operation_count) ||
+    body.initial_operation_count !== value.initial_operation_count ||
     !isRecord(body.plan_invariants) ||
+    !isRecord(body.plan_invariants.expected_counts) ||
+    !sameJson(body.plan_invariants.expected_counts, value.expected_counts) ||
+    !isRecord(body.plan_invariants.safety_policy) ||
+    !sameJson(body.plan_invariants.safety_policy, value.safety_policy) ||
     !isRecord(body.observed) ||
+    body.observed.initial_snapshot_id !== value.initial_snapshot_id ||
+    body.observed.final_snapshot_id !== value.final_snapshot_id ||
+    body.observed.checkpoint_version !== value.checkpoint_version ||
+    body.observed.blueprint_readback_match !== value.blueprint_readback_match ||
+    !Array.isArray(body.observed.completed_operation_ids) ||
+    body.observed.completed_operation_ids.length !== value.completed_operation_count ||
+    body.observed.completed_operation_ids.some(
+      (operationId) =>
+        typeof operationId !== 'string' || operationId.length === 0 || operationId.length > 160,
+    ) ||
+    new Set(body.observed.completed_operation_ids).size !==
+      body.observed.completed_operation_ids.length ||
     canonicalDigest(body) !== value.evidence_id
   ) {
     return false;
   }
   return (
-    value.completed_operation_count === value.initial_operation_count &&
     (value.snapshot_unchanged === false || value.current_snapshot_id === value.final_snapshot_id) &&
     value.expected_counts.onboarding ===
       1 + value.blueprint_counts.onboarding_prompts + value.blueprint_counts.onboarding_options

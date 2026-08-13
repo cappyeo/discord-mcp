@@ -275,6 +275,7 @@ function harness(
     retriableReplayResponses = 0,
     nonRetriableApplyResponse = false,
     operationsPlanned = 2,
+    plannedOperationIds = null,
     nonProgressingMainApplyResponses = 0,
     completeBindingsOverride = null,
     completeCompletedOperationIds = null,
@@ -288,23 +289,26 @@ function harness(
 ) {
   const readableBaselineChannelIds =
     baselineChannelIds.length > 0 ? baselineChannelIds : baselineChannel ? [CHANNEL_ID] : [];
+  const approvedOperationIds =
+    plannedOperationIds ??
+    Array.from({ length: operationsPlanned }, (_, index) =>
+      index === 0
+        ? 'channel:create:general'
+        : index === 1
+          ? 'publication:welcome'
+          : `fixture:${index}`,
+    );
+  assert.equal(approvedOperationIds.length, operationsPlanned);
   const sessions = [];
   const applyBudgets = [];
   const fixtureApplyResult = (...args) => {
     const result = applyResult(...args);
     if (result.status === 'complete' || result.status === 'already_current') {
-      const operationIds = Array.from({ length: operationsPlanned }, (_, index) =>
-        index === 0
-          ? 'channel:create:general'
-          : index === 1
-            ? 'publication:welcome'
-            : `fixture:${index}`,
-      );
       result.evidence.activity = activity(
         args[3],
         args[4],
         result.evidence.bindings,
-        operationIds,
+        completeCompletedOperationIds ?? approvedOperationIds,
         operationsPlanned,
       );
       if (activityRecordOverride !== null) {
@@ -389,25 +393,19 @@ function harness(
               });
             }
             const fixturePlan = plan();
-            fixturePlan.operations = Array.from({ length: operationsPlanned }, (_, index) => ({
-              operation_id: fixturePlan.operations[index]?.operation_id ?? `fixture:${index}`,
-            }));
+            fixturePlan.operations = approvedOperationIds.map((operation_id) => ({ operation_id }));
             return fixturePlan;
           }
           assert.equal(args.tool, 'guild_blueprint_evidence');
           const finalEvidence = structuredClone(evidenceResult);
           if (finalEvidence.record?.observed !== undefined) {
-            const operationIds = Array.from({ length: operationsPlanned }, (_, index) =>
-              index === 0
-                ? 'channel:create:general'
-                : index === 1
-                  ? 'publication:welcome'
-                  : `fixture:${index}`,
-            );
             finalEvidence.record.initial_operation_count = operationsPlanned;
-            finalEvidence.record.observed.completed_operation_ids = operationIds;
+            finalEvidence.record.observed.completed_operation_ids =
+              completeCompletedOperationIds ?? approvedOperationIds;
             const evidencePlan = plan();
-            evidencePlan.operations = operationIds.map((operation_id) => ({ operation_id }));
+            evidencePlan.operations = approvedOperationIds.map((operation_id) => ({
+              operation_id,
+            }));
             finalEvidence.evidence_id = activityEvidenceDigest(evidencePlan, finalEvidence.record);
           }
           return finalEvidence;
@@ -1244,6 +1242,36 @@ describe('real benchmark trial orchestration', () => {
     assert.ok(
       test.sessions.every((session) => session.options.env.MCP_TOOL_SURFACE === 'progressive'),
     );
+  });
+
+  it('accepts exact final readback when a planned operation became a reconciled no-op', async () => {
+    const missingOperationId = 'channel_order:managed_channels:ensure';
+    const plannedOperationIds = [
+      'channel:create:general',
+      'publication:welcome',
+      ...Array.from({ length: 39 }, (_, index) => `fixture:${index + 2}`),
+      missingOperationId,
+    ];
+    const completedOperationIds = plannedOperationIds.filter(
+      (operationId) => operationId !== missingOperationId,
+    );
+    const test = harness('forced_resume', {
+      operationsPlanned: 42,
+      plannedOperationIds,
+      completeCompletedOperationIds: completedOperationIds,
+    });
+    const outcome = await runBenchmarkTrial(input('forced_resume', test.dependencies));
+
+    assert.equal(outcome.result.terminal_status, 'complete');
+    assert.equal(outcome.result.oracle_match, true);
+    assert.equal(outcome.result.activity_evidence.initial_operation_count, 42);
+    assert.equal(outcome.result.activity_evidence.completed_operation_count, 41);
+    assert.deepEqual(
+      outcome.result.activity_evidence.evidence_body.observed.completed_operation_ids,
+      completedOperationIds,
+    );
+    assert.deepEqual(outcome.result.functional_failures, []);
+    assert.deepEqual(outcome.result.serious_permission_failures, []);
   });
 
   it('uses an independent five-step recovery budget for every forced, main, and replay phase', async () => {

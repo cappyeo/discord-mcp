@@ -5,23 +5,24 @@ sidebar:
   order: 5
 ---
 
-discord-mcp v0.18.1 remains the current public release. The current source tree
-prepares v0.19.0 and contains 208 tools. v1.0.0 commits to API stability
-for 6+ months. Tagging v1.0.0 from `main` happens **only** when every required box
-below is ticked. Re-evaluate the evidence before each release; unchecked items are
-real gates, not aspirational release notes.
+The current source tree targets discord-mcp v0.19.0 and contains 208 tools.
+Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
+API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
+required box below is ticked. Re-evaluate the evidence before each release;
+unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (release candidate: v0.19.0; public release: v0.18.1)
+## Current source evidence (v0.19.0)
 
-- The current source tree exposes 208 MCP tools across 31 categories; the public
-  v0.18.1 packages expose 203.
-- The v0.19.0 candidate exposes the production
+- The current source tree exposes 208 MCP tools across 31 categories; the
+  preceding v0.18.1 packages exposed 203.
+- The v0.19.0 source exposes the production
   `assertGuildBlueprintActivityEvidence` validator from `@discord-mcp/core` so
   independent verification can reuse the same semantic rules as the apply path.
   This is a public additive export and is covered by the frozen export contract.
-- The official 20-trial real-server campaign is not complete yet. No success
-  rate, permission-error rate, or Activity Evidence campaign result is claimed
-  until the cooldown, campaign, and independent verifier gates pass.
+- A v0.19.0 tag is permitted only after the official 20-trial real-server
+  campaign and independent verifier pass for that exact commit. This source page
+  does not predeclare a success rate, permission-error rate, or Activity Evidence
+  result; the signed result belongs to the corresponding release artifacts.
 - More than 1,300 passing tests across `@discord-mcp/core`, `@discord-mcp/cli`,
   and `site`, 0 unconditional skips, and 1 documented `it.todo` for the
   remaining OTel parent-child integration seam.
@@ -38,8 +39,9 @@ real gates, not aspirational release notes.
   [HTTP transport security audit](/discord-mcp/operations/security-audit-2026-08-08/)
   covers authentication, Host/Origin, resource exhaustion, session and bot
   isolation, safety-policy parity, redaction and the reverse-proxy boundary.
-- `@discord-mcp/core@0.18.1` and `@discord-mcp/cli@0.18.1` are public on npm with
-  provenance. MCP Registry metadata and the public documentation are deployed.
+- Published `@discord-mcp/core` and `@discord-mcp/cli` packages use npm
+  provenance. MCP Registry metadata and the public documentation are deployed by
+  the release workflows.
 
 ## Pre-conditions for v1.0.0 tag
 
@@ -85,8 +87,8 @@ real gates, not aspirational release notes.
 - [x] CI fails if the `workspace:` protocol survives into a published
       manifest - npm does not rewrite it, and such a tarball is unrecoverable
       without a deprecate + republish
-- [x] `@discord-mcp/core` published to npm registry (current: 0.18.1)
-- [x] `@discord-mcp/cli` published to npm registry (current: 0.18.1)
+- [x] `@discord-mcp/core` published to npm registry with provenance
+- [x] `@discord-mcp/cli` published to npm registry with provenance
 - [x] `discord-mcp init` quickstart works after a clean global npm install -
       manually verified from the public 0.16.9 package on 2026-08-08
 - [x] CI installs both freshly packed tarballs into an empty consumer project,
