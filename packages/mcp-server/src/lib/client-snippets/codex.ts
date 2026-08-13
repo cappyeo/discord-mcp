@@ -33,6 +33,7 @@ function renderCodexToml(cfg: SnippetConfig): string {
     '[mcp_servers.discord-mcp]',
     `command = ${tomlString(cfg.serverPath)}`,
     `args = ${renderTomlStringArray(args)}`,
+    'tool_timeout_sec = 180',
   ];
 
   if (cfg.serverPath === 'npx') {

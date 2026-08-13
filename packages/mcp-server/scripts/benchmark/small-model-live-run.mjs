@@ -67,6 +67,7 @@ const SAFE_FAILURE_CODES = new Set([
   'RESUME_APPLY_ARGUMENT_TARGET_MISMATCH',
   'RESUME_APPLY_ARGUMENT_APPROVAL_MISMATCH',
   'RESUME_APPLY_ARGUMENT_PLAN_REF_MISMATCH',
+  'RESUME_APPLY_TOOL_ERROR',
   'RESUME_APPLY_RESULT_TARGET_MISMATCH',
   'RESUME_APPLY_RESULT_BINDING_MISMATCH',
   'RESUME_APPLY_RESULT_INVALID',
@@ -140,6 +141,7 @@ function safeFailureDiagnostic(value) {
     call_count: safeCount(value.call_count),
     completed_call_count: safeCount(value.completed_call_count),
     confirmed: typeof value.confirmed === 'boolean' ? value.confirmed : null,
+    tool_error: typeof value.tool_error === 'boolean' ? value.tool_error : null,
     expected: {
       guild_id: safeOptional(expected.guild_id, SNOWFLAKE),
       expected_bot_id: safeOptional(expected.expected_bot_id, SNOWFLAKE),

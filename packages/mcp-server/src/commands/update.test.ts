@@ -121,11 +121,40 @@ describe('updateAction', () => {
         targetVersion: NEXT,
         applied: true,
         restart_required: true,
+        settings_migrated: ['tool_timeout_sec'],
       },
     });
     const config = readFileSync(configPath, 'utf8');
     expect(config).toContain(`@discord-mcp/cli@${NEXT}", "serve", "--profile", "devbot`);
     expect(config).toContain(`@discord-mcp/cli@${CURRENT}", "serve", "--profile", "otherbot`);
+    expect(config.match(/^tool_timeout_sec = 180$/gm)).toHaveLength(1);
+  });
+
+  it('preserves a caller-defined Codex tool timeout during an update', async () => {
+    createProfile();
+    const configured = generatedLauncher().replace(
+      'env_vars = ["DISCORD_TOKEN"]',
+      'tool_timeout_sec = 60\nenv_vars = ["DISCORD_TOKEN"]',
+    );
+    writeFileSync(configPath, configured);
+    registry();
+
+    await updateAction({
+      profile: 'devbot',
+      apply: true,
+      config: configPath,
+      profileDirectory,
+      json: true,
+    });
+
+    expect(output()).toMatchObject({
+      ok: true,
+      data: { settings_migrated: [] },
+    });
+    const config = readFileSync(configPath, 'utf8');
+    expect(config).toContain(`@discord-mcp/cli@${NEXT}`);
+    expect(config).toContain('tool_timeout_sec = 60');
+    expect(config).not.toContain('tool_timeout_sec = 180');
   });
 
   it('lets a newer CLI update an older pinned launcher', async () => {

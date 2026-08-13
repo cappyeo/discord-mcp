@@ -360,6 +360,11 @@ version silently. A successful JSON `--apply` result includes
 stdio process cannot load that version until Codex restarts. The explicit apply
 step preserves caller control over bot behavior and Discord permissions.
 
+When an older generated launcher lacks `tool_timeout_sec`, `--apply` also adds
+the recommended `tool_timeout_sec = 180` and reports it in
+`data.settings_migrated`. An existing caller-defined value is preserved; custom
+or ambiguous launchers still fail closed without modification.
+
 ## `profile`
 
 ```bash

@@ -814,6 +814,35 @@ describe('small-model-live-run', () => {
     expect(JSON.stringify(artifact)).not.toContain('dmbp1.');
   });
 
+  it('preserves the bounded apply tool-error classification without its raw message', () => {
+    const artifact = createSmallModelLiveFailureArtifact({
+      expectedCommit: COMMIT,
+      target: { guildId: GUILD, botId: BOT },
+      failureCode: 'RESUME_APPLY_TOOL_ERROR',
+      baselineOutcome: 'unchanged',
+      restorationOutcome: 'not_required',
+      lockRetained: false,
+      diagnostic: {
+        phase: 'resume',
+        turn: 1,
+        classification: 'apply_tool_error',
+        tool: 'guild_blueprint_apply',
+        tool_error: true,
+        raw_error: 'MCP tool timed out with sensitive local diagnostics',
+      },
+    });
+
+    expect(artifact.failure_code).toBe('RESUME_APPLY_TOOL_ERROR');
+    expect(artifact.diagnostic).toMatchObject({
+      phase: 'resume',
+      turn: 1,
+      classification: 'apply_tool_error',
+      tool: 'guild_blueprint_apply',
+      tool_error: true,
+    });
+    expect(JSON.stringify(artifact)).not.toContain('sensitive local diagnostics');
+  });
+
   it('preserves the bounded JSONL failure code without trusting arbitrary diagnostics', () => {
     const artifact = createSmallModelLiveFailureArtifact({
       expectedCommit: COMMIT,

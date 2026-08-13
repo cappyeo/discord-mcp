@@ -17,6 +17,7 @@ describe('codexGenerator', () => {
     expect(snippet.content).toContain('[mcp_servers.discord-mcp]');
     expect(snippet.content).toContain('command = "node"');
     expect(snippet.content).toContain('args = ["/opt/discord-mcp/cli.js"]');
+    expect(snippet.content).toContain('tool_timeout_sec = 180');
     expect(snippet.content).toContain('env_vars = ["DISCORD_TOKEN"]');
     expect(snippet.content).not.toContain('[mcp_servers.discord-mcp.env]');
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal placeholder must not reach Codex TOML

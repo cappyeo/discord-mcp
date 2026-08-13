@@ -7,6 +7,7 @@ import { type DiscordMcpProfile, loadProfile } from '../lib/profiles.js';
 
 const PACKAGE_NAME = '@discord-mcp/cli';
 const REGISTRY_URL = 'https://registry.npmjs.org/@discord-mcp%2fcli';
+const RECOMMENDED_CODEX_TOOL_TIMEOUT_SEC = 180;
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
@@ -248,6 +249,33 @@ function topLevelTomlTable(section: string): string {
   const afterHeader = section.slice(firstNewline + 1);
   const nextTable = afterHeader.search(/^\[/m);
   return nextTable === -1 ? section : section.slice(0, firstNewline + 1 + nextTable);
+}
+
+function migrateGeneratedCodexLauncherSettings(
+  config: string,
+  launcher: LauncherMatch,
+): { config: string; settingsMigrated: readonly string[] } {
+  const section = config.slice(launcher.sectionStart, launcher.sectionEnd);
+  if (/^tool_timeout_sec\s*=/m.test(topLevelTomlTable(section))) {
+    return { config, settingsMigrated: [] };
+  }
+
+  const lineFeed = config.indexOf('\n', launcher.argsEnd);
+  if (lineFeed !== -1 && lineFeed < launcher.sectionEnd) {
+    const newline = config[lineFeed - 1] === '\r' ? '\r\n' : '\n';
+    const insertionPoint = lineFeed + 1;
+    return {
+      config: `${config.slice(0, insertionPoint)}tool_timeout_sec = ${RECOMMENDED_CODEX_TOOL_TIMEOUT_SEC}${newline}${config.slice(insertionPoint)}`,
+      settingsMigrated: ['tool_timeout_sec'],
+    };
+  }
+
+  const insertionPoint = launcher.sectionEnd;
+  const separator = config.slice(0, insertionPoint).endsWith('\n') ? '' : '\n';
+  return {
+    config: `${config.slice(0, insertionPoint)}${separator}tool_timeout_sec = ${RECOMMENDED_CODEX_TOOL_TIMEOUT_SEC}\n${config.slice(insertionPoint)}`,
+    settingsMigrated: ['tool_timeout_sec'],
+  };
 }
 
 function readGeneratedCodexLauncher(
@@ -571,12 +599,13 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
     return;
   }
 
-  const args = inspection.config.slice(inspection.launcher.argsStart, inspection.launcher.argsEnd);
+  const migration = migrateGeneratedCodexLauncherSettings(inspection.config, inspection.launcher);
+  const args = migration.config.slice(inspection.launcher.argsStart, inspection.launcher.argsEnd);
   const nextArgs = args.replace(
     `${PACKAGE_NAME}@${inspection.launcher.currentVersion}`,
     `${PACKAGE_NAME}@${inspection.targetVersion}`,
   );
-  const updatedConfig = `${inspection.config.slice(0, inspection.launcher.argsStart)}${nextArgs}${inspection.config.slice(inspection.launcher.argsEnd)}`;
+  const updatedConfig = `${migration.config.slice(0, inspection.launcher.argsStart)}${nextArgs}${migration.config.slice(inspection.launcher.argsEnd)}`;
   try {
     writeAtomically(inspection.configPath, updatedConfig);
   } catch (error) {
@@ -600,6 +629,9 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
       details: [
         `Profile: ${profile.name}`,
         `Server: ${inspection.launcher.configName}`,
+        ...(migration.settingsMigrated.length === 0
+          ? []
+          : ['Codex settings: added tool_timeout_sec = 180.']),
         'Restart Codex to start the newly pinned version.',
       ],
       data: {
@@ -610,6 +642,7 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
         updateAvailable: true,
         applied: true,
         restart_required: true,
+        settings_migrated: migration.settingsMigrated,
       },
     },
     options.json === true,

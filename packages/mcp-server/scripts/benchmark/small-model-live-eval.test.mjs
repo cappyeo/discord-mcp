@@ -323,6 +323,31 @@ describe('small-model live evaluation contract', () => {
     ).toBe('apply_result_binding_mismatch');
   });
 
+  it('classifies a completed Codex MCP tool error without retaining its message', () => {
+    const stdout = transformOutput(applyOutput(), (event) => {
+      if (event.item?.name !== 'guild_blueprint_apply') return;
+      delete event.item.result;
+      event.item.error = 'MCP tool timed out with sensitive local diagnostics';
+    });
+    const parsed = parseSmallModelLiveJsonl(stdout);
+
+    expect(parsed.trace[0]).toMatchObject({
+      tool: 'guild_blueprint_apply',
+      status: 'completed',
+      tool_error: true,
+    });
+    expect(parsed.trace[0]).not.toHaveProperty('result_summary');
+    expect(JSON.stringify(parsed)).not.toContain('sensitive local diagnostics');
+    expect(
+      classifySmallModelLiveResume({
+        parsed,
+        sessionId: THREAD_ID,
+        target: { guildId: GUILD_ID, botId: BOT_ID },
+        binding: BINDING,
+      }),
+    ).toBe('apply_tool_error');
+  });
+
   it('accepts camelCase structured results and JSON-string arguments from Codex JSONL', () => {
     const stdout = transformOutput(applyOutput(), (event) => {
       if (!event.item?.name) return;
@@ -373,6 +398,8 @@ describe('small-model live evaluation contract', () => {
       expect(initial.join('\n')).toContain('MCP_WRITE_MODE="allow"');
       expect(initial.join('\n')).toContain('MCP_TOOL_SURFACE="progressive"');
       expect(resume.join('\n')).toContain('MCP_TOOL_SURFACE="full"');
+      expect(initial.join('\n')).toContain('mcp_servers.discord_mcp.tool_timeout_sec=180');
+      expect(resume.join('\n')).toContain('mcp_servers.discord_mcp.tool_timeout_sec=180');
       expect(initial.join('\n')).toContain(directory.replaceAll('\\', '\\\\'));
       expect(initial.join('\n')).toContain('["build_discord_server"]');
       expect(initial.join('\n')).toContain('calling build_discord_server exactly once');

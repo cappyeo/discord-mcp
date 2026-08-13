@@ -20,7 +20,7 @@ export const SMALL_MODEL_LIVE_REQUEST = 'Dựng cho tôi một server gaming chu
 const execFile = promisify(nodeExecFile);
 const MAX_STDOUT_BYTES = 8 * 1024 * 1024;
 const MAX_LINES = 100_000;
-const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_TIMEOUT_MS = 240_000;
 const DEFAULT_TERMINATION_GRACE_MS = 2_000;
 const DEFAULT_MAX_RESUME_TURNS = 8;
 const DEFAULT_MAX_EXTERNAL_WAIT_MS = 15 * 60_000;
@@ -170,6 +170,7 @@ function toolCandidate(event) {
       name: safeToolName(name),
       args: node.arguments ?? node.input ?? node.args ?? node.parameters,
       result: node.result,
+      toolError: node.error !== undefined && node.error !== null,
       phase,
     };
   }
@@ -342,6 +343,7 @@ export function parseSmallModelLiveJsonl(stdout, { includeRaw = false } = {}) {
         request_digest: parsed.requestDigest,
         argument_projection: parsed.argumentProjection,
         status: candidate.phase,
+        ...(candidate.toolError ? { tool_error: true } : {}),
         ...(parsed.confirmed === null ? {} : { confirmed: parsed.confirmed }),
         ...(parsed.targetTool === null ? {} : { target_tool: parsed.targetTool }),
         _contract: {
@@ -384,6 +386,7 @@ export function parseSmallModelLiveJsonl(stdout, { includeRaw = false } = {}) {
       trace.contract_invalid = true;
     }
     trace.status = 'completed';
+    if (candidate.toolError) trace.tool_error = true;
     if (parsed.requestDigest !== null) trace.request_digest = parsed.requestDigest;
     trace.argument_projection = parsed.argumentProjection;
     if (parsed.targetTool !== null) trace.target_tool = parsed.targetTool;
@@ -536,6 +539,7 @@ export function classifySmallModelLiveResume({
     if (call.argument_projection?.approval_id !== approvalId)
       return 'apply_argument_approval_mismatch';
     if (call.argument_projection?.plan_ref !== planRef) return 'apply_argument_plan_ref_mismatch';
+    if (call.tool_error === true) return 'apply_tool_error';
     if (
       call.result_summary?.target?.guild_id !== targetIds.guild_id ||
       call.result_summary?.target?.bot_id !== targetIds.bot_id
@@ -621,6 +625,7 @@ function resumeFailureDiagnostic({ classification, turn, sessionId, target, bind
     call_count: parsed.trace.length,
     completed_call_count: completed(parsed.trace).length,
     confirmed: apply?.confirmed ?? null,
+    tool_error: apply?.tool_error === true,
     expected: {
       guild_id: targetIds.guild_id,
       expected_bot_id: targetIds.bot_id,
@@ -688,6 +693,7 @@ function codexConfig({ cliPath, cwd, target, stateDirectory, enabledTools }) {
     `mcp_servers.discord_mcp.enabled_tools=${JSON.stringify(enabledTools)}`,
     'mcp_servers.discord_mcp.required=true',
     'mcp_servers.discord_mcp.startup_timeout_sec=60',
+    'mcp_servers.discord_mcp.tool_timeout_sec=180',
   ];
 }
 
