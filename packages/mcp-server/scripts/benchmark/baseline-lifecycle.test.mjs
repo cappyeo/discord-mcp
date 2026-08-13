@@ -433,8 +433,15 @@ describe('benchmark baseline lifecycle', () => {
     expect(mutations).toHaveLength(0);
   });
 
-  it('initializes a non-Community disposable guild before deleting referenced resources', async () => {
+  it.each([
+    { currentVerificationLevel: 0, expectedVerificationLevel: 1 },
+    { currentVerificationLevel: 3, expectedVerificationLevel: 3 },
+  ])('initializes a non-Community disposable guild at verification level $currentVerificationLevel before deleting referenced resources', async ({
+    currentVerificationLevel,
+    expectedVerificationLevel,
+  }) => {
     const state = { snapshot: currentSnapshot() };
+    state.snapshot.guild.verification_level = currentVerificationLevel;
     state.snapshot.roles.push(
       {
         id: EQUAL_POSITION_ABOVE_ROLE,
@@ -566,6 +573,11 @@ describe('benchmark baseline lifecycle', () => {
     const guildPatch = calls.findIndex(
       ([method, path]) => method === 'PATCH' && path === `/guilds/${GUILD}`,
     );
+    expect(calls[guildPatch]?.[2].body).toMatchObject({
+      verification_level: expectedVerificationLevel,
+      default_message_notifications: 1,
+      explicit_content_filter: 2,
+    });
     const firstChannelDelete = calls.findIndex(
       ([method, path]) => method === 'DELETE' && path.startsWith('/channels/'),
     );

@@ -1026,8 +1026,17 @@ export async function initializeBenchmarkBaseline({
   snapshot = await readCanarySnapshot(readSnapshot, guildId, botId, canaryChannelId);
   assertSnapshot(snapshot, guildId, botId);
   validateCanary(snapshot, canaryRoleId, canaryChannelId, guildId);
+  const verificationLevel = Math.max(snapshot.guild.verification_level ?? 0, 1);
+  const defaultMessageNotifications = Math.max(
+    snapshot.guild.default_message_notifications ?? 0,
+    1,
+  );
+  const explicitContentFilter = Math.max(snapshot.guild.explicit_content_filter ?? 0, 2);
   const routeResponse = await mutate(rest, 'PATCH', `/guilds/${guildId}`, {
     body: {
+      verification_level: verificationLevel,
+      default_message_notifications: defaultMessageNotifications,
+      explicit_content_filter: explicitContentFilter,
       rules_channel_id: canaryChannelId,
       public_updates_channel_id: canaryChannelId,
       safety_alerts_channel_id: canaryChannelId,
@@ -1037,6 +1046,9 @@ export async function initializeBenchmarkBaseline({
   });
   const configuredGuild = responseGuild(routeResponse, guildId, 'guild Community route');
   if (
+    configuredGuild.verification_level !== verificationLevel ||
+    configuredGuild.default_message_notifications !== defaultMessageNotifications ||
+    configuredGuild.explicit_content_filter !== explicitContentFilter ||
     configuredGuild.rules_channel_id !== canaryChannelId ||
     configuredGuild.public_updates_channel_id !== canaryChannelId ||
     configuredGuild.safety_alerts_channel_id !== canaryChannelId ||
