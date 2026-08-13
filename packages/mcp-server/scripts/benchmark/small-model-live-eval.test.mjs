@@ -377,7 +377,12 @@ describe('small-model live evaluation contract', () => {
       expect(initial.join('\n')).toContain('["build_discord_server"]');
       expect(initial.join('\n')).toContain('calling build_discord_server exactly once');
       expect(initial.join('\n')).toContain('Stop after the preview');
+      expect(initial.join('\n')).toContain('initial turn only');
+      expect(initial.join('\n')).toContain('later resumed after explicit caller approval');
+      expect(initial.join('\n')).toContain('initial-turn preview-only rule no longer applies');
       expect(resume.join('\n')).toContain('["guild_blueprint_apply","guild_blueprint_evidence"]');
+      expect(resume.join('\n')).toContain('explicitly approved continuation turn');
+      expect(resume.join('\n')).toContain('initial-turn preview-only rule no longer applies');
       const resumePrompt = resume.at(-1);
       expect(resumePrompt).toContain(`guild_id=${GUILD_ID}`);
       expect(resumePrompt).toContain(`expected_bot_id=${BOT_ID}`);

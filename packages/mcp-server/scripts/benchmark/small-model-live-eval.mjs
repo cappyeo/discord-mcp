@@ -663,8 +663,8 @@ function resumeFailureDiagnostic({ classification, turn, sessionId, target, bind
 function codexConfig({ cliPath, cwd, target, stateDirectory, enabledTools }) {
   const isInitialPhase = enabledTools.includes('build_discord_server');
   const developerInstructions = isInitialPhase
-    ? 'Fulfill the caller request by calling build_discord_server exactly once with the complete natural-language request. Do not answer without the tool call. Stop after the preview and do not apply changes.'
-    : 'Use only the explicitly enabled Discord tools. Do not replan or call tools outside the requested phase.';
+    ? 'On the initial turn only, fulfill the caller request by calling build_discord_server exactly once with the complete natural-language request. Do not answer without the tool call. Stop after the preview and do not apply changes. If this session is later resumed after explicit caller approval, follow the continuation-turn instructions; the initial-turn preview-only rule no longer applies.'
+    : 'This is an explicitly approved continuation turn; the initial-turn preview-only rule no longer applies. Use only the explicitly enabled Discord tools. Do not replan or call tools outside the requested phase.';
   return [
     'model_reasoning_effort="low"',
     'features.shell_tool=false',
