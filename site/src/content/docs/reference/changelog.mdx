@@ -9,6 +9,28 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.20.1 - outcome-led onboarding and discovery
+
+This patch makes the existing verified guild-build lifecycle discoverable and
+followable without changing the runtime or 208-tool contract.
+
+- Repositioned the README, documentation landing page, package metadata, MCP
+  Registry metadata, structured discovery data, and `llms.txt` around
+  caller-owned Discord operations rather than tool count alone. Activity
+  Evidence remains explicitly scoped to completed guild blueprint workflows;
+  ordinary write tools do not gain a new verification guarantee.
+- Added a first verified-outcome tutorial that links the prerequisite connection
+  track, shows the exact Codex and JSON environment merge for confirmed apply,
+  handles caller-local `plan_ref` and legacy `plan_token` fallback, and finishes
+  with a separate read-only `guild_blueprint_evidence` call.
+- Added a voluntary GitHub outcome report for time-to-value, repeat use, first
+  friction, and the next recurring community job. The form prohibits
+  credentials, Discord identifiers, plan/evidence identifiers, screenshots,
+  logs, and exported files. discord-mcp sends no product telemetry from an
+  installation.
+- Added rendered desktop/mobile coverage for the primary verified-outcome CTA
+  and regression tests for the activation contract and credential-safe report.
+
 ## v0.20.0 - caller-local plan references and verifiable small-model apply
 
 This minor release adds a short caller-local plan reference and independently

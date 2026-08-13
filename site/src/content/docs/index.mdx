@@ -1,18 +1,18 @@
 ---
-title: Discord tools for AI clients
-description: Connect an MCP-compatible AI client to Discord through a typed, observable bot server running locally or over Streamable HTTP.
+title: Connect your AI to Discord
+description: Do real Discord community work through a caller-owned bot, with typed operations, explicit safety boundaries, and verifiable guild outcomes.
 type: landing
 template: splash
 hero:
-  tagline: Give your AI client a typed Discord toolset while keeping the bot token and server process under your control.
+  tagline: Do real community work safely through a caller-owned bot. Plan high-risk guild changes, approve the exact target, and verify complete builds against Discord.
   actions:
-    - text: Get started
-      link: /discord-mcp/start/
+    - text: Get a verified result
+      link: /discord-mcp/start/activity-evidence/
       icon: right-arrow
       variant: primary
-    - text: Browse tools
-      link: /discord-mcp/tools/
-      icon: magnifier
+    - text: Set up discord-mcp
+      link: /discord-mcp/start/
+      icon: rocket
       variant: secondary
 ---
 
@@ -21,39 +21,40 @@ import ClientTabs from '../../components/docs/ClientTabs.astro';
 import DocsCardGrid from '../../components/docs/DocsCardGrid.astro';
 
 <p class="product-facts">
-  <Badge text="208 tools · 31 categories" variant="success" />
-  <Badge text="stdio + Streamable HTTP" variant="note" />
-  <Badge text="Structured results" variant="tip" />
+  <Badge text="Caller-owned bot" variant="success" />
+  <Badge text="208 tools · 31 categories" variant="note" />
+  <Badge text="stdio + authenticated HTTP" variant="tip" />
+  <Badge text="Activity Evidence for guild builds" variant="success" />
   <Badge text="Pre-1.0" variant="caution" />
 </p>
 
-## From a prompt to Discord
+## From intent to verified Discord work
 
-discord-mcp runs locally as a child process by default. It can also expose a
-bearer-protected Streamable HTTP endpoint for a remote MCP client. In either
-case, the client discovers typed tools, sends structured arguments, and receives
-machine-readable results after the server calls Discord's API. There is no hosted
-relay and no separate account to create.
+Your AI host owns the conversation, reasoning, and scheduling. discord-mcp owns the Discord
+boundary: typed operations, exact bot and guild scope, resumable execution, and live readback.
+It runs locally as a child process by default or as a bearer-protected Streamable HTTP endpoint.
+There is no hosted bot relay and no separate discord-mcp account.
 
 <CardGrid>
-  <Card title="1. Your client chooses a tool" icon="seti:json">
-    Tool descriptions and JSON Schemas tell the client when a tool fits and which Discord IDs
-    it requires.
+  <Card title="1. Observe through your bot" icon="discord">
+    The caller supplies one dedicated Discord bot. Server-side allowlists bind operations to the
+    intended guild while structured reads give the AI current Discord context.
   </Card>
-  <Card title="2. discord-mcp enforces the contract" icon="approve-check-circle">
-    Validation, category controls, resilience, telemetry, and configured safety checks run
-    before and around the Discord request.
+  <Card title="2. Propose and approve" icon="approve-check-circle">
+    Typed contracts constrain every call. Complete guild builds begin with a target-bound dry run
+    and require approval of the exact bot, guild, plan, and operation summary.
   </Card>
-  <Card title="3. Discord returns structured data" icon="discord">
-    IDs, jump URLs, counts, and timestamps can feed the next tool call without being rebuilt
-    from conversational prose.
+  <Card title="3. Act, resume, and verify" icon="seti:json">
+    Discord returns reusable structured data. Approved guild builds checkpoint every step and
+    finish with Activity Evidence backed by an independent live readback.
   </Card>
 </CardGrid>
 
 ## Get connected
 
-The full tutorial covers bot creation, CLI installation, guided setup, and client configuration.
-Its first live-tool flow begins with a read-only identity check before any message is sent.
+The tutorial covers bot creation, CLI installation, guided setup, and client configuration. Its
+connection track begins with a read-only identity check. An optional final unit then walks through
+one complete plan, approval, apply, resume, and Activity Evidence lifecycle in a private test guild.
 
 <ClientTabs>
   <div slot="claude-desktop">
@@ -99,17 +100,19 @@ Its first live-tool flow begins with a read-only identity check before any messa
 </ClientTabs>
 
 Requires Node.js 22.12 or newer. You also need a Discord bot installed in a test server.
-[Follow the full setup tutorial →](/discord-mcp/start/)
+[Follow the setup tutorial →](/discord-mcp/start/) or
+[go directly to the verified-outcome track →](/discord-mcp/start/activity-evidence/)
 
 ## Start from your goal
 
 <DocsCardGrid
   links={[
-    { title: 'Connect for the first time', href: '/discord-mcp/start/', description: 'Create a least-privilege Discord bot, install the CLI, connect a client, and verify two real calls.' },
+    { title: 'Get a verified Discord result', href: '/discord-mcp/start/activity-evidence/', description: 'Turn one request into a reviewed guild plan, resumable apply, and independently revalidated Activity Evidence.' },
+    { title: 'Connect for the first time', href: '/discord-mcp/start/', description: 'Create a least-privilege Discord bot, install the CLI, connect an AI client, and prove the real MCP path.' },
     { title: 'Find the right tool', href: '/discord-mcp/tools/', description: 'Search 208 tool contracts by task, category, or technical identifier without expanding a giant sidebar.' },
-    { title: 'Build a workflow', href: '/discord-mcp/recipes/', description: 'Combine tools for moderation, rich messages, webhooks, intelligence, pipelines, and live events.' },
+    { title: 'Operate a community', href: '/discord-mcp/recipes/', description: 'Combine Discord operations for moderation, announcements, webhooks, intelligence, and live events.' },
+    { title: 'Watch a real build', href: '/discord-mcp/showcase/live-gaming-server/', description: 'See an AI agent turn a fresh guild into a complete gaming community through a caller-owned bot.' },
     { title: 'Run it in production', href: '/discord-mcp/operations/', description: 'Configure least privilege, telemetry, retries, timeouts, and the documented audit boundaries.' },
-    { title: 'Connect OpenAI remotely', href: '/discord-mcp/operations/openai/', description: 'Publish a bearer-protected HTTPS MCP endpoint for the Responses API or Codex, with its shared-bot boundary explicit.' },
   ]}
 />
 

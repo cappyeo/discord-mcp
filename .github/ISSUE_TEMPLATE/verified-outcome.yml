@@ -1,0 +1,146 @@
+name: Verified outcome report
+description: Share a credential-safe Discord outcome, first friction, and whether discord-mcp was useful enough to reuse.
+title: "[Outcome]: "
+labels:
+  - enhancement
+  - help wanted
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping validate discord-mcp with real use. Report only coarse, redacted facts. Never include or attach a bot token, authorization header, client config, webhook credential, screenshot, terminal log, exported file, Discord ID, server/channel name, username, message content, plan reference/token, plan ID, approval ID, evidence ID, or private Activity Evidence file.
+
+        A public issue is optional and is not product telemetry. discord-mcp does not send this report from your installation.
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Furthest verified outcome
+      description: Choose the furthest trustworthy state you observed.
+      options:
+        - Activity Evidence returned verified
+        - Apply completed but later evidence reported drift
+        - Plan was ready but I did not apply it
+        - Blocked before the plan became ready
+        - Blocked during apply or resume
+        - Blocked while reading Activity Evidence
+        - I used a different Discord workflow without Activity Evidence
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ai_host
+    attributes:
+      label: AI host or MCP client
+      options:
+        - Codex
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - ChatGPT
+        - Hermes Agent
+        - Another MCP-compatible client
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Connection mode
+      options:
+        - Local stdio
+        - Streamable HTTP
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Community job
+      description: What outcome were you trying to achieve?
+      options:
+        - Build or redesign a server
+        - Community briefing or unanswered-question review
+        - Support triage
+        - Moderation review
+        - Announcement or event operation
+        - Another Discord operation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: time_to_outcome
+    attributes:
+      label: Time to the outcome above
+      options:
+        - Under 10 minutes
+        - 10 to 30 minutes
+        - 31 to 60 minutes
+        - More than 60 minutes
+        - I did not reach the intended outcome
+    validations:
+      required: true
+
+  - type: dropdown
+    id: repeat_use
+    attributes:
+      label: Repeat use
+      description: This helps distinguish first-run curiosity from recurring value.
+      options:
+        - First day using discord-mcp
+        - Used on 2 different days
+        - Used on 3 or more different days
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: What changed for your community?
+      description: Describe the useful result without names, IDs, message content, or private server details.
+      placeholder: The agent created a reviewed gaming-server structure and the independent evidence call returned verified.
+    validations:
+      required: true
+
+  - type: textarea
+    id: first_friction
+    attributes:
+      label: First point of friction
+      description: Name the first instruction, permission, client behavior, or tool result that slowed or blocked you. Write "None" if the path was clear.
+    validations:
+      required: true
+
+  - type: textarea
+    id: next_job
+    attributes:
+      label: What would make you use it again next week?
+      description: Prefer one concrete recurring community job over a feature wishlist.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: showcase_permission
+    attributes:
+      label: May the project quote this redacted report?
+      description: Your issue is public either way; this controls reuse in project showcases or launch material.
+      options:
+        - No
+        - Yes, with my GitHub handle
+        - Yes, without naming my GitHub handle
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-report safety
+      options:
+        - label: I did not include any credential, client config, Discord ID, private name, message content, plan material, evidence ID, or Activity Evidence file.
+          required: true
+        - label: I did not attach a screenshot, terminal log, exported file, or other artifact containing private or identifying data.
+          required: true
+        - label: This report describes my own caller-controlled bot and an authorized Discord server.
+          required: true
+        - label: This is not a suspected security vulnerability or authorization-boundary failure; I will report those privately instead.
+          required: true

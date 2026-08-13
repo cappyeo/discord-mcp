@@ -12,12 +12,13 @@
 </p>
 
 <p align="center">
-  <strong>Connect your AI client to Discord through a typed, production-ready MCP server.</strong><br />
-  208 tools for Discord operations, Guild Templates, and explicit Emoji.gg inspiration discovery.
+  <strong>Connect any MCP-compatible AI to Discord. Do real community work safely. Verify complete guild builds.</strong><br />
+  Caller-owned bot · local by default · 208 typed tools · resumable guild builds with Activity Evidence.
 </p>
 
 <p align="center">
-  <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
+  <a href="https://cappyeo.github.io/discord-mcp/start/activity-evidence/"><strong>Get a verified result</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 208 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
@@ -37,6 +38,15 @@ community from a fresh Discord server through its caller-owned bot. It covers
 channels, safe role permissions, Community, Welcome Screen, onboarding,
 AutoMod, Components V2 cards, and final API readback. Watch the
 [full demo in the docs](https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/).
+
+The current blueprint lifecycle adds a target-bound dry run, exact human approval,
+checkpointed resume, and authenticated Activity Evidence after final Discord readback.
+[Complete the verified-outcome tutorial](https://cappyeo.github.io/discord-mcp/start/activity-evidence/)
+in a private test guild.
+
+Completed it—or found the first blocker? Share a voluntary,
+[credential-safe outcome report](https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml).
+discord-mcp sends no report from your installation.
 
 ## How it works
 
@@ -223,7 +233,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.20.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.20.1**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

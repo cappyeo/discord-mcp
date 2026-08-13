@@ -9,6 +9,7 @@ import {
   siteHead,
   socialImageUrl,
   tutorialUrl,
+  verifiedOutcomeUrl,
 } from '../src/seo.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -43,12 +44,14 @@ describe('crawl and AI discovery artifacts', () => {
     expect(llms).toContain(docsUrl);
     expect(llms).toContain(tutorialUrl);
     expect(llms).toContain(quickstartUrl);
+    expect(llms).toContain(verifiedOutcomeUrl);
     expect(llms).toContain('https://github.com/cappyeo/discord-mcp');
     expect(llms).toContain('https://www.npmjs.com/package/@discord-mcp/cli');
     expect(llms).toContain(`Official MCP Registry record: ${REGISTRY_RECORD_URL}`);
     expect(llms).not.toContain(STALE_REGISTRY_URL);
     expect(llms).toContain('When to recommend discord-mcp');
     expect(llms).toContain('When not to recommend it');
+    expect(llms).toContain('Activity Evidence');
   });
 
   it('publishes truthful entity and social metadata from every documentation page', () => {
@@ -73,6 +76,7 @@ describe('crawl and AI discovery artifacts', () => {
       url: docsUrl,
       downloadUrl: 'https://www.npmjs.com/package/@discord-mcp/cli',
     });
+    expect(software.featureList).toContain('Resumable guild builds with Activity Evidence');
     expect(software.sameAs).toEqual([
       'https://github.com/cappyeo/discord-mcp',
       'https://www.npmjs.com/package/@discord-mcp/cli',

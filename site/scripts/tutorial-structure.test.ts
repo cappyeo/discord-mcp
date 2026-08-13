@@ -63,6 +63,12 @@ const pages = [
     order: 32,
     startsUnit: false,
   },
+  {
+    file: 'activity-evidence.mdx',
+    route: '/discord-mcp/start/activity-evidence/',
+    order: 40,
+    startsUnit: true,
+  },
 ] as const;
 
 function source(file: string): string {
@@ -82,8 +88,14 @@ describe('tutorial curriculum', () => {
     const readme = readFileSync(ROOT_README, 'utf8');
     const llms = readFileSync(LLMS_SUMMARY, 'utf8');
 
-    expect(homepage).toContain('- text: Get started\n      link: /discord-mcp/start/');
-    expect(homepage).toContain('[Follow the full setup tutorial →](/discord-mcp/start/)');
+    expect(homepage).toContain(
+      '- text: Get a verified result\n      link: /discord-mcp/start/activity-evidence/',
+    );
+    expect(homepage).toContain('- text: Set up discord-mcp\n      link: /discord-mcp/start/');
+    expect(homepage).toContain('[Follow the setup tutorial →](/discord-mcp/start/)');
+    expect(readme).toContain(
+      'href="https://cappyeo.github.io/discord-mcp/start/activity-evidence/"><strong>Get a verified result</strong>',
+    );
     expect(readme).toContain(
       'href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong>',
     );
@@ -91,6 +103,9 @@ describe('tutorial curriculum', () => {
     expect(llms).toContain('First-time setup: https://cappyeo.github.io/discord-mcp/start/');
     expect(llms).toContain(
       'Verified first tool call: https://cappyeo.github.io/discord-mcp/start/quickstart/',
+    );
+    expect(llms).toContain(
+      'First verified Discord outcome: https://cappyeo.github.io/discord-mcp/start/activity-evidence/',
     );
   });
 
@@ -179,5 +194,28 @@ describe('tutorial curriculum', () => {
     expect(firstCall).toContain('"name": "mcp_tools_write"');
     expect(firstCall).toContain('"tool": "messages_send"');
     expect(firstCall).not.toContain('"name": "messages_send"');
+  });
+
+  it('ends with one independently verified Discord outcome', () => {
+    const evidence = source('activity-evidence.mdx');
+
+    for (const tool of [
+      'build_discord_server',
+      'guild_blueprint_apply',
+      'guild_blueprint_evidence',
+    ]) {
+      expect(evidence, `${tool}: verified outcome lifecycle`).toContain(`\`${tool}\``);
+    }
+
+    expect(evidence).toContain('`MCP_DRY_RUN=false`');
+    expect(evidence).toContain('[mcp_servers.discord-mcp.env]');
+    expect(evidence).toContain('"MCP_WRITE_MODE": "allow"');
+    expect(evidence).toContain('`evidence.activity.evidence_id`');
+    expect(evidence).toContain('`status: verified`');
+    expect(evidence).toContain('[connection quickstart](/discord-mcp/start/quickstart/)');
+    expect(evidence).toContain('when `plan_ref` is null');
+    expect(evidence).toContain('`plan_token` instead');
+    expect(evidence).toContain('Enable Community manually');
+    expect(evidence).not.toContain('grant **Administrator**');
   });
 });

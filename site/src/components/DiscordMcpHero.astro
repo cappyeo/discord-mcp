@@ -13,7 +13,7 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
   <div class="glow glow-secondary" aria-hidden="true"></div>
   <div class="content">
     <div class="hero-copy sl-flex">
-      <p class="eyebrow">Discord tools for MCP clients</p>
+      <p class="eyebrow">Caller-owned Discord operations</p>
       <div class="copy sl-flex">
         <h1 id="_top" data-page-title set:html={title} />
         {tagline && <div class="tagline" set:html={tagline} />}
@@ -37,19 +37,20 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
       <div class="preview-topline">
         <Image src={logo} alt="" width={46} height={46} />
         <div>
-          <strong>Local stdio server</strong>
-          <span>No hosted relay</span>
+          <strong>Example guild-build lifecycle</strong>
+          <span>Through a caller-owned bot</span>
         </div>
-        <span class="status">ready</span>
+        <span class="status">target locked</span>
       </div>
       <div class="flow" aria-hidden="true">
-        <span>AI client</span><b>→</b><span>discord-mcp</span><b>→</b><span>Discord API</span>
+        <span>Observe</span><b>→</b><span>Approve</span><b>→</b><span>Act</span><b>→</b><span>Verify</span>
       </div>
-      <pre><code><span class="muted">tool</span>  messages_send
-<span class="muted">input</span> &#123; channel_id, content &#125;
-<span class="muted">out</span>   &#123; message_id, jump_url &#125;</code></pre>
+      <pre><code><span class="muted">request</span> build a professional community
+<span class="muted">plan</span>    ready · exact bot + guild
+<span class="muted">apply</span>   checkpointed · resumable
+<span class="muted">verify</span>  blueprint evidence · verified</code></pre>
       <div class="preview-footer">
-        <span>typed schemas</span><span>least privilege</span><span>structured output</span>
+        <span>typed contracts</span><span>least privilege</span><span>live readback</span>
       </div>
     </div>
   </div>

@@ -2,24 +2,24 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.cappyeo/discord-mcp",
   "title": "Discord MCP",
-  "description": "Connect AI clients to a caller-owned Discord bot with 208 tools over stdio or authenticated HTTP.",
+  "description": "Caller-owned Discord operations for AI agents: 208 typed tools, explicit safety controls, resumable guild builds, and Activity Evidence.",
   "repository": {
     "url": "https://github.com/cappyeo/discord-mcp",
     "source": "github",
     "id": "1223078565",
     "subfolder": "packages/mcp-server"
   },
-  "version": "0.20.0",
+  "version": "0.20.1",
   "websiteUrl": "https://cappyeo.github.io/discord-mcp/",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.20.0/site/src/assets/discord-mcp-logo-light.png",
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.20.1/site/src/assets/discord-mcp-logo-light.png",
       "mimeType": "image/png",
       "sizes": ["1024x1024"],
       "theme": "light"
     },
     {
-      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.20.0/site/src/assets/discord-mcp-logo-dark.png",
+      "src": "https://raw.githubusercontent.com/cappyeo/discord-mcp/v0.20.1/site/src/assets/discord-mcp-logo-dark.png",
       "mimeType": "image/png",
       "sizes": ["1024x1024"],
       "theme": "dark"
@@ -29,7 +29,7 @@
     {
       "registryType": "npm",
       "identifier": "@discord-mcp/cli",
-      "version": "0.20.0",
+      "version": "0.20.1",
       "transport": {
         "type": "stdio"
       },

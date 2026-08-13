@@ -1,9 +1,9 @@
 {
   "name": "@discord-mcp/core",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "private": false,
   "type": "module",
-  "description": "Production-grade Discord MCP server core - 208 tools, OTel-instrumented, cockatiel-resilient.",
+  "description": "Typed caller-owned Discord operations for AI agents, with safety controls, resilience, and verifiable guild builds.",
   "keywords": [
     "mcp",
     "model-context-protocol",

@@ -1,0 +1,184 @@
+---
+title: Get your first verified Discord outcome
+description: Plan, approve, apply, and independently verify one complete Discord guild build through a caller-owned bot.
+type: tutorial
+unitTitle: Turn a request into verified Discord work
+sidebar:
+  order: 40
+prev:
+  link: /discord-mcp/start/first-tool-call/
+  label: Understand the tool call
+next: false
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import TutorialBox from '../../../components/docs/TutorialBox.astro';
+import TutorialChecklist from '../../../components/docs/TutorialChecklist.astro';
+import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
+
+This optional final unit goes beyond proving that one tool call works. It turns one natural-language
+request into a reviewed guild blueprint, applies it through your caller-owned bot, and reads Discord
+back again to produce Activity Evidence.
+
+<Aside type="caution">
+Use an empty, private test guild. This workflow creates roles, categories, channels, AutoMod rules,
+onboarding, and Components V2 messages. It never deletes existing resources, so it deliberately
+blocks on conflicting names instead of guessing what may be overwritten.
+</Aside>
+
+## What success looks like
+
+The complete lifecycle is:
+
+```text
+request → dry-run plan → human approval → resumable apply → Discord readback → Activity Evidence
+```
+
+You are finished only when apply returns `evidence.activity.evidence_id` and a separate
+`guild_blueprint_evidence` call returns `status: verified`. That result proves the current guild
+still conforms to the approved blueprint; it is not a hosted certification or a replacement for
+Discord's audit log.
+
+<TutorialPreCheck>
+
+- Complete the [connection quickstart](/discord-mcp/start/quickstart/) with the recommended
+  `progressive` tool surface. If you have not connected a bot yet, begin with the
+  [setup tutorial](/discord-mcp/start/) and return here afterward.
+- Use a dedicated test profile for this journey. Do not reuse its write-enabled settings for a
+  production guild.
+- Keep the bot and every mutation inside one empty private test guild in `ALLOWED_GUILDS`.
+- Enable Community manually in Discord before planning. If Discord asks for rules and update
+  channels, give those temporary channels names that do not collide with `rules`, `announcements`,
+  `general`, or `welcome`.
+- Rename any default channel whose name would collide with the requested design. The planner
+  preserves unrelated channels but fails closed on a same-name conflict.
+- Put the bot's dedicated role above every role it may manage. Do not grant Administrator; the
+  read-only plan reports the exact narrower permissions still missing.
+
+</TutorialPreCheck>
+
+<Steps>
+
+1. **Allow only an explicitly confirmed blueprint apply.**
+
+   `guild_blueprint_apply` requires both `MCP_DRY_RUN=false` in the MCP server environment and
+   `__confirm:true` in the approved call. For local stdio, merge these keys into the existing
+   `discord-mcp` entry in your MCP client config; do not replace its command, arguments, token
+   forwarding, or other environment keys.
+
+   ```toml title="Codex config.toml"
+   [mcp_servers.discord-mcp.env]
+   MCP_DRY_RUN = "false"
+   MCP_WRITE_MODE = "allow"
+   ```
+
+   ```json title="JSON-based MCP clients"
+   {
+     "mcpServers": {
+       "discord-mcp": {
+         "env": {
+           "MCP_DRY_RUN": "false",
+           "MCP_WRITE_MODE": "allow"
+         }
+       }
+     }
+   }
+   ```
+
+   The JSON block shows only the keys to merge into your already generated server entry. For
+   Streamable HTTP, set the same variables on the discord-mcp server deployment instead. Follow
+   the [client setup locations](/discord-mcp/start/client-setup/), then restart the MCP client or
+   HTTP deployment once.
+
+   The setting alone does not authorize a build: the exact bot, guild, plan reference, approval
+   ID, and confirmation must still agree. Ordinary write tools are a separate boundary and may
+   execute immediately, so keep this profile restricted to the test guild.
+
+2. **Ask for a read-only plan.**
+
+   Send this request to your AI client, replacing the community type if you want:
+
+   > In my allowlisted private test guild, build a professional gaming community. First call
+   > `build_discord_server` with this request. Show me the exact bot and guild, selected source
+   > evidence, operation summary, missing permissions, blockers, warnings, risks, and
+   > `approval_id`. Do not apply or call any unrelated Discord tool until I approve this exact
+   > plan.
+
+   `build_discord_server` is the progressive alias of `guild_blueprint_plan`. It reads the live
+   guild and returns a target-bound dry run without changing Discord.
+
+3. **Resolve only reported blockers.**
+
+   A ready plan has `status: ready`, no blockers, an exact target, `plan_id`, `approval_id`, and
+   normally a short caller-local `plan_ref`. If it reports `MISSING_PERMISSIONS`, grant only the
+   names in `bot_permissions.missing` to the bot role, keep that role above generated roles, and
+   ask for a fresh plan. If it reports a resource conflict, rename the conflicting unbound
+   resource rather than asking the agent to overwrite it.
+
+4. **Review before approving.**
+
+   Check that the displayed bot ID and guild ID are yours, the source is live-verified,
+   `source.permission_policy` is `discard_source_and_regenerate`, and the blueprint reports
+   `blueprint.safety.source_permissions_discarded: true`,
+   `blueprint.safety.source_overwrites_discarded: true`,
+   `blueprint.safety.severe_generated_role_permissions: 0`, and
+   `blueprint.bot_boundary.auto_grant_permissions: false`. Confirm that the
+   operation summary matches the community you requested. Do not approve a blocked or surprising
+   plan.
+
+5. **Approve and apply that exact plan.**
+
+   Prefer the returned `plan_ref`. If it is `null` because local reference persistence was
+   unavailable, use the returned legacy `plan_token` instead; pass exactly one of those fields,
+   never both.
+
+   > I approve the exact displayed `approval_id`. Call `guild_blueprint_apply` with the returned
+   > `guild_id`, `expected_bot_id`, and `approval_id`, plus the unchanged `plan_ref` (or only the
+   > legacy `plan_token` when `plan_ref` is null) and `__confirm:true`. If it returns `partial` or
+   > `busy`, resume the same plan without changing any argument until it is complete. Do not call
+   > unrelated tools.
+
+   Apply checkpoints every successful operation and reconciles Discord before each resume. A
+   `stale` or `blocked` result with `next_action: replan` requires a new preview and approval;
+   never fabricate a replacement reference.
+
+6. **Independently verify the outcome.**
+
+   After apply returns `complete` or `already_current`, keep its `plan_id` and
+   `evidence.activity.evidence_id`, then ask:
+
+   > Call `guild_blueprint_evidence` with the completed plan's exact `guild_id`,
+   > `expected_bot_id`, and `plan_id`. Do not change Discord. Report the status, evidence ID,
+   > current resource counts, snapshot result, remaining operations, blockers, and warnings.
+
+   The expected result is `status: verified`, `readback: match`, zero remaining operations, and
+   no blockers. You can repeat this read-only call later to detect drift after the MCP process
+   restarts.
+
+</Steps>
+
+<Aside type="note">
+The CLI command `discord-mcp activity` shows a private local onboarding journal for setup,
+doctor, and smoke. It is not Activity Evidence. Blueprint Activity Evidence is an authenticated
+completion record read through `guild_blueprint_evidence`.
+</Aside>
+
+<TutorialBox>
+
+## Verified-outcome checklist
+
+<TutorialChecklist>
+
+- [ ] The plan named the exact caller-owned bot and allowlisted private guild.
+- [ ] I reviewed a ready dry run and approved its exact `approval_id`.
+- [ ] Apply completed, including any checkpointed resumes, without unrelated tool calls.
+- [ ] The terminal result contained `evidence.activity.evidence_id`.
+- [ ] A separate `guild_blueprint_evidence` call returned `status: verified` with no remaining operations or blockers.
+
+</TutorialChecklist>
+
+</TutorialBox>
+
+Next, watch the [live gaming-server demo](/discord-mcp/showcase/live-gaming-server/) or read the
+full [safe blueprint contract](/discord-mcp/operations/blueprints/). If you completed or were
+blocked by this journey, [share a credential-safe outcome report](https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml).

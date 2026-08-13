@@ -1,10 +1,10 @@
 {
   "name": "@discord-mcp/cli",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",
-  "description": "Discord MCP server - stdio and Streamable HTTP transport CLI",
+  "description": "Caller-owned Discord operations for AI agents, with 208 typed tools, safety controls, and verifiable guild builds.",
   "bin": {
     "discord-mcp": "./dist/cli.js",
     "discord-mcp-server": "./dist/cli.js"

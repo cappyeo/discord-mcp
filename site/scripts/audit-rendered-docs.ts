@@ -74,33 +74,37 @@ const routes: RouteAudit[] = [
   {
     name: 'homepage',
     path: '/',
-    expectedText: ['Discord tools for AI clients', 'Get started', '208 tools'],
+    expectedText: ['Connect your AI to Discord', 'Get a verified result', '208 tools'],
   },
   {
-    name: 'first-time entry journey',
+    name: 'first verified outcome journey',
     path: '/',
-    expectedText: ['Discord tools for AI clients', 'Get started', '208 tools'],
+    expectedText: ['Connect your AI to Discord', 'Get a verified result', 'Activity Evidence'],
     verify: async (page) => {
-      const getStarted = page.getByRole('link', { name: 'Get started', exact: true });
-      await requireCount(getStarted, 1, 'primary first-time entry');
-      await getStarted.click();
-      await page.waitForURL((url) => url.pathname === `${BASE_PATH}/start/`);
+      const getVerified = page.getByRole('link', { name: 'Get a verified result', exact: true });
+      await requireCount(getVerified, 1, 'primary verified-outcome entry');
+      await getVerified.click();
+      await page.waitForURL((url) => url.pathname === `${BASE_PATH}/start/activity-evidence/`);
       await requireCount(
-        page.getByRole('heading', { level: 1, name: 'Discord MCP tutorial', exact: true }),
+        page.getByRole('heading', {
+          level: 1,
+          name: 'Get your first verified Discord outcome',
+          exact: true,
+        }),
         1,
-        'tutorial introduction heading',
+        'verified outcome heading',
       );
       await requireCount(
-        page.getByRole('link', { name: 'Create a Discord bot', exact: true }),
+        page.getByRole('heading', { level: 2, name: 'What success looks like', exact: true }),
         1,
-        'first setup prerequisite',
+        'verified outcome success contract',
       );
     },
   },
   {
     name: 'site search journey',
     path: '/',
-    expectedText: ['Discord tools for AI clients', 'Start from your goal'],
+    expectedText: ['Connect your AI to Discord', 'Start from your goal'],
     verify: async (page, viewport) => {
       const journey =
         viewport.width < 800

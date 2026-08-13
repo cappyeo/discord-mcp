@@ -50,6 +50,7 @@ export default defineConfig({
             { label: 'Unit 1 - Discord setup', slug: 'start/discord-setup' },
             { label: 'Unit 2 - Local setup', slug: 'start/local-setup' },
             { label: 'Unit 3 - Verification', slug: 'start/verify-setup' },
+            { label: 'Unit 4 - Verified outcome', slug: 'start/activity-evidence' },
             { label: 'Troubleshooting', slug: 'start/troubleshooting' },
           ],
         },

@@ -3,6 +3,7 @@ export const siteBasePath = '/discord-mcp';
 export const docsUrl = `${siteOrigin}${siteBasePath}/`;
 export const tutorialUrl = `${docsUrl}start/`;
 export const quickstartUrl = `${docsUrl}start/quickstart/`;
+export const verifiedOutcomeUrl = `${docsUrl}start/activity-evidence/`;
 export const socialImageUrl =
   'https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/discord-mcp-banner.jpg';
 
@@ -15,7 +16,7 @@ const structuredData = {
       name: 'discord-mcp documentation',
       url: docsUrl,
       description:
-        'Documentation for discord-mcp, a local Model Context Protocol server for Discord.',
+        'Connect MCP-compatible AI clients to Discord through caller-owned bots, typed operations, and verifiable guild outcomes.',
       inLanguage: 'en',
     },
     {
@@ -25,16 +26,16 @@ const structuredData = {
       alternateName: 'Discord MCP',
       url: docsUrl,
       description:
-        'A local, typed Model Context Protocol server that lets MCP-compatible AI clients use a Discord bot through the Discord REST API.',
+        'A caller-owned Discord operations layer for MCP-compatible AI clients, with typed tools, explicit safety boundaries, resumable guild builds, and Activity Evidence.',
       applicationCategory: 'DeveloperApplication',
       isAccessibleForFree: true,
       license: 'https://github.com/cappyeo/discord-mcp/blob/main/LICENSE',
       downloadUrl: 'https://www.npmjs.com/package/@discord-mcp/cli',
       featureList: [
-        'Typed Discord REST API tools',
-        'Local stdio transport',
-        'Category and confirmation safety controls',
-        'OpenTelemetry and audit logging',
+        '208 typed Discord operations',
+        'Caller-owned bot over local stdio or authenticated HTTP',
+        'Guild and category scope plus confirmation safety controls',
+        'Resumable guild builds with Activity Evidence',
       ],
       sameAs: [
         'https://github.com/cappyeo/discord-mcp',

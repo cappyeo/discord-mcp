@@ -46,6 +46,7 @@ const EXTERNAL_REVIEW_MDX = join(
   'site/src/content/docs/reference/external-documentation-review.mdx',
 );
 const EXTERNAL_REVIEW_FORM = join(ROOT, '.github/ISSUE_TEMPLATE/documentation-review.yml');
+const VERIFIED_OUTCOME_FORM = join(ROOT, '.github/ISSUE_TEMPLATE/verified-outcome.yml');
 const BUG_REPORT_FORM = join(ROOT, '.github/ISSUE_TEMPLATE/bug-report.yml');
 const ISSUE_TEMPLATE_CONFIG = join(ROOT, '.github/ISSUE_TEMPLATE/config.yml');
 const SECURITY_POLICY = join(ROOT, 'SECURITY.md');
@@ -497,6 +498,39 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(form).not.toMatch(/\bid:\s*(?:discord_)?token\b/i);
     expect(form).toContain('Never include a bot token');
     expect(review).toContain('Never paste a bot token');
+  });
+
+  it('collects voluntary outcome evidence without requesting private artifacts', () => {
+    const readme = readFileSync(ROOT_README, 'utf8');
+    const guide = readFileSync(join(DOCS_DIR, 'start/activity-evidence.mdx'), 'utf8');
+    const form = readFileSync(VERIFIED_OUTCOME_FORM, 'utf8');
+    const formUrl =
+      'https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml';
+
+    expect(readme).toContain(formUrl);
+    expect(guide).toContain(formUrl);
+    expect(form).toContain('name: Verified outcome report');
+    expect(form).toContain('is not product telemetry');
+
+    for (const id of [
+      'outcome',
+      'ai_host',
+      'transport',
+      'workflow',
+      'time_to_outcome',
+      'repeat_use',
+      'result',
+      'first_friction',
+      'next_job',
+      'showcase_permission',
+      'safety',
+    ]) {
+      expect(form, `outcome form field ${id}`).toContain(`id: ${id}`);
+    }
+
+    expect(form).not.toMatch(/\bid:\s*(?:discord_)?token\b/i);
+    expect(form).toContain('Never include or attach a bot token');
+    expect(form).toContain('I did not attach a screenshot, terminal log, exported file');
   });
 
   it('routes vulnerabilities privately and keeps public bug reports credential-safe', () => {

@@ -5,16 +5,21 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.20.0 and contains 208 tools.
+The current source tree targets discord-mcp v0.20.1 and contains 208 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.20.0)
+## Current source evidence (v0.20.1)
 
 - The current source tree exposes 208 MCP tools across 31 categories; the
   preceding v0.18.1 packages exposed 203.
+- v0.20.1 keeps the runtime and 208-tool contract unchanged while giving new
+  users one outcome-led path from setup to a reviewed blueprint, resumable
+  apply, and independently revalidated Activity Evidence. Its voluntary public
+  outcome report requests only coarse redacted facts; no adoption telemetry is
+  sent from an installation.
 - The v0.20.0 source exposes the production
   `assertGuildBlueprintActivityEvidence` validator from `@discord-mcp/core` so
   independent verification can reuse the same semantic rules as the apply path.
