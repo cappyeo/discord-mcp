@@ -212,6 +212,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | --- | --- |
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
 | `discord-mcp catalog` | Expose all 208 real tool schemas without a token; every tool call fails closed with `CATALOG_ONLY`. |
+| `discord-mcp catalog --check [--json]` | Check the real local MCP catalog contract without a token, Discord request, or Discord write. This is catalog validation only—not Activity Evidence. |
 | `discord-mcp setup` | Verify one caller-owned bot, save a non-secret profile, and generate its client configuration. |
 | `discord-mcp activity [--report]` | Show the local, privacy-safe evidence journal; `--report` prints the optional GitHub outcome-form URL. |
 | `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
@@ -230,6 +231,25 @@ security review, and contract inspection. It advertises the same 208 schemas as
 the full server, never reads a bot token, never contacts Discord, and returns
 `CATALOG_ONLY` for every `tools/call`. It is not an operational Discord server;
 use `discord-mcp serve` with your caller-owned bot when an AI agent should act.
+
+To validate that the installed package exposes the real catalog contract, run:
+
+```bash
+discord-mcp catalog --check
+discord-mcp catalog --check --json
+```
+
+`catalog --check` is intentionally credential-free and local: it needs no Discord
+token, does not read `DISCORD_TOKEN`, performs no Discord request or write (and no
+other network request), and does not count as Activity Evidence. A successful check
+only proves catalog discovery; continue to [set up a caller-owned bot](https://cappyeo.github.io/discord-mcp/start/)
+to reach the first verified Discord outcome.
+
+With `--json`, the result uses schema `discord-mcp.catalog-check.v1` and reports the
+expected 208 tools, 6 static resources, `execution_guard: "CATALOG_ONLY"`,
+`credentials_required: false`, `discord_execution: "disabled"`, and
+`activity_evidence_created: false`. It proves the installed catalog contract only;
+it does not prove that an AI host or a live Discord connection is configured.
 
 The repository's root `Dockerfile` intentionally defaults to this catalog-only
 mode so automated registry scanners can inspect the project safely. Images built
@@ -267,7 +287,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.22.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.23.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

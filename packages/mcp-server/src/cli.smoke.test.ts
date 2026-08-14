@@ -14,7 +14,7 @@
  * fresh worktrees, in CI, and during local dev.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -87,6 +87,39 @@ describe('cli binary smoke (post-build)', () => {
     const parsed = JSON.parse(stdout) as { ok: boolean; exitCode: number };
     expect(parsed.ok).toBe(false);
     expect(parsed.exitCode).toBe(2);
+  });
+
+  it('catalog --check validates the built package without credentials or local evidence writes', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'discord-mcp-cli-catalog-check-'));
+    try {
+      const { stdout, stderr, status } = runCli(['catalog', '--check', '--json'], {
+        APPDATA: appData,
+        XDG_CONFIG_HOME: appData,
+        DISCORD_TOKEN: 'ambient-token-that-must-not-be-read',
+        DISCORD_MCP_ACTIVITY: '',
+        GATEWAY: 'true',
+        OTEL_ENABLED: 'true',
+        MCP_CATEGORIES: 'not-a-real-category',
+      });
+      expect(status).toBe(0);
+      expect(stderr).toBe('');
+      expect(JSON.parse(stdout)).toMatchObject({
+        ok: true,
+        data: {
+          schema_version: 'discord-mcp.catalog-check.v1',
+          tool_count: 208,
+          resource_count: 6,
+          execution_guard: 'CATALOG_ONLY',
+          credentials_required: false,
+          discord_execution: 'disabled',
+          activity_evidence_created: false,
+        },
+        exitCode: 0,
+      });
+      expect(existsSync(join(appData, 'discord-mcp', 'activity.jsonl'))).toBe(false);
+    } finally {
+      rmSync(appData, { recursive: true, force: true });
+    }
   });
 
   it('records a filtered local result that the built activity command can read', () => {

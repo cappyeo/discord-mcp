@@ -255,6 +255,36 @@ try {
     assert.match(help, new RegExp(`\\b${command}\\b`));
   }
 
+  const catalogCheckState = join(tempRoot, 'catalog-check-state');
+  mkdirSync(catalogCheckState);
+  const catalogCheck = JSON.parse(
+    runCli(['catalog', '--check', '--json'], {
+      env: safeChildEnvironment({
+        APPDATA: catalogCheckState,
+        XDG_CONFIG_HOME: catalogCheckState,
+        DISCORD_TOKEN: 'ambient-token-that-must-not-be-read',
+        GATEWAY: 'true',
+        MCP_CATEGORIES: 'not-a-real-category',
+        OTEL_ENABLED: 'true',
+      }),
+    }),
+  );
+  assert.equal(catalogCheck.ok, true);
+  assert.deepEqual(catalogCheck.data, {
+    schema_version: 'discord-mcp.catalog-check.v1',
+    tool_count: 208,
+    resource_count: 6,
+    execution_guard: 'CATALOG_ONLY',
+    credentials_required: false,
+    discord_execution: 'disabled',
+    activity_evidence_created: false,
+  });
+  assert.equal(
+    existsSync(join(catalogCheckState, 'discord-mcp', 'activity.jsonl')),
+    false,
+    'packed catalog check must not create Activity Evidence or a local activity journal',
+  );
+
   const initResult = JSON.parse(
     runCli([
       'init',

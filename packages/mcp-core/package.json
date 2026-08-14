@@ -1,6 +1,6 @@
 {
   "name": "@discord-mcp/core",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "private": false,
   "type": "module",
   "description": "Typed caller-owned Discord operations for AI agents, with safety controls, resilience, and verifiable guild builds.",

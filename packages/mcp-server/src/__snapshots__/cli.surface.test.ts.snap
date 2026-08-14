@@ -14,7 +14,10 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
     {
       "isDefault": false,
       "name": "catalog",
-      "options": [],
+      "options": [
+        "--check",
+        "--json",
+      ],
     },
     {
       "isDefault": false,

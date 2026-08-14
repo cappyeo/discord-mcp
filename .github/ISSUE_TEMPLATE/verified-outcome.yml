@@ -1,5 +1,5 @@
 name: Verified outcome report
-description: Share a credential-safe Discord outcome, first friction, and whether discord-mcp was useful enough to reuse.
+description: Share a credential-safe activation checkpoint or Discord outcome, first friction, and whether discord-mcp was useful enough to continue or reuse.
 title: "[Outcome]: "
 labels:
   - verified-outcome
@@ -17,6 +17,7 @@ body:
       label: Furthest verified outcome
       description: Choose the furthest trustworthy state you observed.
       options:
+        - Catalog check passed (no Discord access)
         - Activity Evidence returned verified
         - Apply completed but later evidence reported drift
         - Plan was ready but I did not apply it
@@ -28,10 +29,28 @@ body:
       required: true
 
   - type: dropdown
+    id: activation_stage
+    attributes:
+      label: Activation stage reached
+      description: Choose the furthest privacy-safe stage you reached. A catalog check alone is not Activity Evidence.
+      options:
+        - CLI installed
+        - Catalog check passed (no Discord access)
+        - AI client connected
+        - First read-only Discord check completed
+        - Blueprint dry run ready
+        - Approved apply completed
+        - Activity Evidence returned verified
+        - Reused a verified Discord workflow
+    validations:
+      required: true
+
+  - type: dropdown
     id: ai_host
     attributes:
       label: AI host or MCP client
       options:
+        - CLI only (no AI host)
         - Codex
         - Claude Desktop
         - Claude Code
@@ -47,6 +66,7 @@ body:
     attributes:
       label: Connection mode
       options:
+        - Not applicable - catalog check only
         - Local stdio
         - Streamable HTTP
         - Not sure
@@ -56,9 +76,10 @@ body:
   - type: dropdown
     id: workflow
     attributes:
-      label: Community job
-      description: What outcome were you trying to achieve?
+      label: Intended job
+      description: What outcome or activation checkpoint were you trying to achieve?
       options:
+        - Validate installation/catalog only
         - Build or redesign a server
         - Community briefing or unanswered-question review
         - Support triage
@@ -96,9 +117,9 @@ body:
   - type: textarea
     id: result
     attributes:
-      label: What changed for your community?
-      description: Describe the useful result without names, IDs, message content, or private server details.
-      placeholder: The agent created a reviewed gaming-server structure and the independent evidence call returned verified.
+      label: What happened?
+      description: Describe the checkpoint or useful result without names, IDs, message content, or private server details.
+      placeholder: The credential-free catalog check passed, or the agent completed a reviewed Discord workflow and independent evidence returned verified.
     validations:
       required: true
 
@@ -113,8 +134,8 @@ body:
   - type: textarea
     id: next_job
     attributes:
-      label: What would make you use it again next week?
-      description: Prefer one concrete recurring community job over a feature wishlist.
+      label: What would make you continue or use it again next week?
+      description: If you only checked the catalog, name what would help you connect a bot. Otherwise, prefer one recurring community job over a feature wishlist.
     validations:
       required: true
 
@@ -139,7 +160,7 @@ body:
           required: true
         - label: I did not attach a screenshot, terminal log, exported file, or other artifact containing private or identifying data.
           required: true
-        - label: This report describes my own caller-controlled bot and an authorized Discord server.
+        - label: This report either covers the catalog-only check with no Discord access, or describes my own caller-controlled bot and an authorized Discord server.
           required: true
         - label: This is not a suspected security vulnerability or authorization-boundary failure; I will report those privately instead.
           required: true

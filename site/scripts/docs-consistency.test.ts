@@ -512,9 +512,17 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(form).toContain('name: Verified outcome report');
     expect(form).toContain('is not product telemetry');
     expect(form).toContain('  - verified-outcome');
+    expect(form).toContain('Catalog check passed (no Discord access)');
+    expect(form).toContain('CLI only (no AI host)');
+    expect(form).toContain('Not applicable - catalog check only');
+    expect(form).toContain('Validate installation/catalog only');
+    expect(form).toContain(
+      'This report either covers the catalog-only check with no Discord access',
+    );
 
     for (const id of [
       'outcome',
+      'activation_stage',
       'ai_host',
       'transport',
       'workflow',
@@ -532,6 +540,48 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(form).not.toMatch(/\bid:\s*(?:discord_)?token\b/i);
     expect(form).toContain('Never include or attach a bot token');
     expect(form).toContain('I did not attach a screenshot, terminal log, exported file');
+  });
+
+  it('documents the credential-free catalog check as discovery, not Activity Evidence', () => {
+    const readme = readFileSync(ROOT_README, 'utf8');
+    const homepage = readFileSync(join(DOCS_DIR, 'index.mdx'), 'utf8');
+    const installation = readFileSync(join(DOCS_DIR, 'start/installation.mdx'), 'utf8');
+    const llms = readFileSync(join(ROOT, 'site/public/llms.txt'), 'utf8');
+    const sources = { readme, homepage, installation, llms };
+
+    for (const [name, source] of Object.entries(sources)) {
+      expect(source, `${name} must document the command`).toContain('discord-mcp catalog --check');
+      expect(source, `${name} must show JSON mode`).toContain('catalog --check --json');
+      expect(source, `${name} must say no token is needed`).toMatch(/no\s+(?:Discord\s+)?token/i);
+      expect(source, `${name} must exclude Discord requests`).toMatch(
+        /no\s+Discord\s+(?:or other network\s+)?request/i,
+      );
+      expect(source, `${name} must exclude Discord writes`).toMatch(
+        /no\s+Discord\s+(?:request or )?write/i,
+      );
+      expect(source, `${name} must distinguish Activity Evidence`).toMatch(
+        /(?:not\s+Activity Evidence|does\s+not\s+count\s+as\s+Activity Evidence)/i,
+      );
+      expect(source, `${name} must continue to setup`).toMatch(/setup/i);
+    }
+
+    expect(readme).toContain('real local MCP catalog');
+    expect(homepage).toContain('real MCP catalog');
+    expect(llms).toContain('real MCP catalog');
+    for (const [name, source] of Object.entries({ readme, installation, llms })) {
+      expect(source, `${name} must document the catalog-check schema`).toContain(
+        'discord-mcp.catalog-check.v1',
+      );
+      expect(source, `${name} must document the catalog-check counts`).toContain('208 tools');
+      expect(source, `${name} must document the resource count`).toContain('6 static resources');
+      expect(source, `${name} must document the execution guard`).toContain('CATALOG_ONLY');
+      expect(source, `${name} must document disabled Discord execution`).toContain(
+        'discord_execution',
+      );
+      expect(source, `${name} must document no Activity Evidence`).toContain(
+        'activity_evidence_created: false',
+      );
+    }
   });
 
   it('routes vulnerabilities privately and keeps public bug reports credential-safe', () => {

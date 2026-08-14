@@ -66,9 +66,11 @@ export function buildProgram(): Command {
   program
     .command('catalog')
     .description('Discover the MCP tool schema (Discord execution disabled)')
-    .action(async () => {
+    .option('--check', 'Validate the credential-free catalog contract and exit')
+    .option('--json', 'Emit machine-readable JSON for --check')
+    .action(async (options: { check?: boolean; json?: boolean }) => {
       const { catalogAction } = await import('./commands/catalog.js');
-      await catalogAction();
+      await catalogAction(options);
     });
 
   program

@@ -9,6 +9,21 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.23.0 - credential-free activation checkpoint
+
+- Added `discord-mcp catalog --check [--json]`, a bounded local MCP handshake
+  that verifies the packaged 208-tool catalog, six static resources, resource
+  reads, and the `CATALOG_ONLY` execution guard without loading a Discord token
+  or contacting Discord or another network service.
+- The check exits instead of waiting for stdio frames and emits the stable
+  `discord-mcp.catalog-check.v1` result in JSON mode. It proves only the
+  installed catalog contract: it neither proves AI-host or live Discord
+  connectivity nor creates Activity Evidence.
+- Added the credential-free checkpoint to onboarding and the optional public
+  outcome form. Reports can now identify the furthest activation stage without
+  attaching credentials, Discord identifiers, screenshots, logs, exported
+  files, or Activity Evidence payloads.
+
 ## v0.22.0 - privacy-safe outcome feedback
 
 - Extended the private local activity journal with coarse blueprint plan,

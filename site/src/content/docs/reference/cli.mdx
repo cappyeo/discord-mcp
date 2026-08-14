@@ -104,6 +104,7 @@ Every other sub-command sets
 
 ```bash
 discord-mcp catalog
+discord-mcp catalog --check [--json]
 ```
 
 Start a credential-free stdio MCP server for schema discovery. It exposes the
@@ -121,12 +122,26 @@ The root `Dockerfile` defaults to `catalog` for safe automated introspection.
 If you build that image from source for operational use, explicitly override
 the command with `serve` and provide the caller-owned token and safety settings.
 
+`--check` runs a bounded in-process MCP handshake and exits. It requires the
+packaged catalog to expose exactly 208 tools and six static resources, reads the
+six Components V2 JSON resources, and proves both a listed and unknown tool call
+fail with `CATALOG_ONLY`. It does not read `DISCORD_TOKEN`, contact Discord or
+another network service, write a profile or activity journal, prove AI-host
+connectivity, or create Activity Evidence. Add `--json` for the stable
+`discord-mcp.catalog-check.v1` result; `--json` without `--check` fails closed.
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--check` | boolean | `false` | Validate the installed credential-free catalog contract and exit. |
+| `--json` | boolean | `false` | Emit a machine-readable result for `--check`; invalid without it. |
+
 ### Exit codes
 
 | Code | Meaning |
 | ---- | ------- |
-| `0` | The catalog transport ran and shut down normally. |
-| `1` | Startup or shutdown failed; the message is written to stderr. |
+| `0` | The catalog transport shut down normally, or the bounded check passed. |
+| `1` | Long-running catalog startup or shutdown failed; the message is written to stderr. |
+| `2` | The bounded catalog contract failed or `--json` was used without `--check`. |
 
 ## `doctor`
 

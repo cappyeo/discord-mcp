@@ -68,6 +68,24 @@ There is no `version` subcommand. `serve` is registered as commander's
 that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
 :::
 
+### Optional catalog check
+
+Before configuring a Discord bot, validate the installed package's real MCP catalog:
+
+```bash
+discord-mcp catalog --check
+discord-mcp catalog --check --json
+```
+
+This command requires no Discord token and performs no Discord request or write. It is
+catalog validation only; it does not count as Activity Evidence. Continue to
+[guided setup](/discord-mcp/start/) when you are ready to connect a caller-owned bot.
+
+The JSON result uses schema `discord-mcp.catalog-check.v1` and reports 208 tools,
+6 static resources, a `CATALOG_ONLY` execution guard, `discord_execution: "disabled"`,
+and `activity_evidence_created: false`. It validates the installed catalog contract;
+it does not prove AI-host connectivity or a live Discord connection.
+
 `discord-mcp --help` lists ten subcommands:
 
 | Subcommand | What it does |

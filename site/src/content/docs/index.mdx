@@ -103,6 +103,20 @@ Requires Node.js 22.12 or newer. You also need a Discord bot installed in a test
 [Follow the setup tutorial →](/discord-mcp/start/) or
 [go directly to the verified-outcome track →](/discord-mcp/start/activity-evidence/)
 
+## Inspect before connecting
+
+You can validate the real MCP catalog before creating or configuring a Discord bot:
+
+```bash
+discord-mcp catalog --check
+# or: discord-mcp catalog --check --json
+```
+
+This check needs no Discord token, performs no Discord request or write, and does not
+count as Activity Evidence. It only confirms that the installed package exposes the real
+catalog contract. When it passes, continue with the [setup tutorial →](/discord-mcp/start/)
+to connect a caller-owned bot and reach a verified Discord outcome.
+
 ## Start from your goal
 
 <DocsCardGrid
