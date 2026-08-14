@@ -85,7 +85,7 @@ verification paths; no live campaign result is predeclared here.
   token path as backward-compatibility coverage rather than silently dropping it.
 - Guided Codex setup now emits `tool_timeout_sec = 180`. This keeps bounded
   blueprint apply calls from being cut off by Codex's
-  [60-second default MCP tool timeout](https://learn.chatgpt.com/docs/extend/mcp#other-configuration-options)
+  [60-second default MCP tool timeout](https://learn.chatgpt.com/codex/extend/mcp#other-configuration-options)
   while leaving short calls and the server's own safety bounds unchanged.
   `discord-mcp update --apply` adds the setting when an older generated launcher
   lacks it, but preserves any caller-defined value and every custom launcher.

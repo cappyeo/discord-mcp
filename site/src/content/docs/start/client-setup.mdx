@@ -105,7 +105,7 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
   `DISCORD_EXPECTED_BOT_ID`, `ALLOWED_GUILDS`, and progressive tool surface at
   runtime. It also sets `tool_timeout_sec = 180`, so a bounded multi-step
   blueprint apply is not cut off by Codex's
-  [60-second default MCP tool timeout](https://learn.chatgpt.com/docs/extend/mcp#other-configuration-options).
+  [60-second default MCP tool timeout](https://learn.chatgpt.com/codex/extend/mcp#other-configuration-options).
   Short calls still return immediately. If the bot can see multiple guilds in a
   non-interactive run, rerun
   with `--allowed-guilds <id>` to make the target explicit.
