@@ -11,6 +11,7 @@ import {
   canonicalActivationAttestationDigest,
   verifyActivationAttestation,
 } from './activation-attestation.mjs';
+import { sameFileIdentity } from './file-identity.mjs';
 import { assertSecretFreeJson } from './manifest.mjs';
 
 export const ACTIVATION_VERIFIER_SCHEMA = 'discord-mcp.activation-trials-verifier.v1';
@@ -69,6 +70,12 @@ async function assertNoSymlinkRegular(path, label, { directory = false } = {}) {
   return stat;
 }
 
+async function assertSameRegularPath(path, initial, label) {
+  const current = await assertNoSymlinkRegular(path, label);
+  if (current.size !== initial.size || current.dev !== initial.dev || current.ino !== initial.ino)
+    throw new Error(`${label} changed during read`);
+}
+
 async function readBoundedJson(path, label, maxBytes) {
   assertAbsolutePath(path, label);
   const initial = await assertNoSymlinkRegular(path, label);
@@ -81,10 +88,10 @@ async function readBoundedJson(path, label, maxBytes) {
       !before.isFile() ||
       before.size !== initial.size ||
       before.size > maxBytes ||
-      before.dev !== initial.dev ||
-      before.ino !== initial.ino
+      !sameFileIdentity(initial, before)
     )
       throw new Error(`${label} changed during read`);
+    await assertSameRegularPath(path, initial, label);
     const buffer = Buffer.alloc(before.size);
     let offset = 0;
     while (offset < buffer.length) {
@@ -100,6 +107,7 @@ async function readBoundedJson(path, label, maxBytes) {
       after.ino !== before.ino
     )
       throw new Error(`${label} changed during read`);
+    await assertSameRegularPath(path, initial, label);
     let parsed;
     try {
       parsed = JSON.parse(buffer.toString('utf8'));

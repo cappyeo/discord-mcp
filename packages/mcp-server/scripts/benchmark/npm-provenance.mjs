@@ -2,6 +2,7 @@ import { execFile as nodeExecFile } from 'node:child_process';
 import { promises as fs, constants as fsConstants } from 'node:fs';
 import { join, posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
+import { sameFileIdentity } from './file-identity.mjs';
 
 const execFile = promisify(nodeExecFile);
 
@@ -307,11 +308,15 @@ async function readPackageLock(installRoot) {
   try {
     handle = await fs.open(path, fsConstants.O_RDONLY);
     const before = await handle.stat();
+    if (!before.isFile() || before.size !== initial.size || !sameFileIdentity(initial, before))
+      throw new Error('installed package lock changed during read');
+    const openedPath = await fs.lstat(path);
     if (
-      !before.isFile() ||
-      before.size !== initial.size ||
-      before.dev !== initial.dev ||
-      before.ino !== initial.ino
+      openedPath.isSymbolicLink() ||
+      !openedPath.isFile() ||
+      openedPath.size !== initial.size ||
+      openedPath.dev !== initial.dev ||
+      openedPath.ino !== initial.ino
     )
       throw new Error('installed package lock changed during read');
     const contents = await handle.readFile({ encoding: 'utf8' });
@@ -321,6 +326,15 @@ async function readPackageLock(installRoot) {
       after.dev !== before.dev ||
       after.ino !== before.ino ||
       Buffer.byteLength(contents, 'utf8') !== before.size
+    )
+      throw new Error('installed package lock changed during read');
+    const finalPath = await fs.lstat(path);
+    if (
+      finalPath.isSymbolicLink() ||
+      !finalPath.isFile() ||
+      finalPath.size !== initial.size ||
+      finalPath.dev !== initial.dev ||
+      finalPath.ino !== initial.ino
     )
       throw new Error('installed package lock changed during read');
     try {

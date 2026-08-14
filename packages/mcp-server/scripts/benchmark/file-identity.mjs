@@ -11,6 +11,7 @@ export function sameFileIdentity(expected, actual, platform = process.platform) 
   if (expected === null || typeof expected !== 'object') return false;
   if (actual === null || typeof actual !== 'object') return false;
   if (expected.ino !== actual.ino) return false;
+  if (platform === 'win32' && expected.ino === 0) return false;
   if (expected.dev === actual.dev) return true;
   return platform === 'win32' && expected.ino !== 0 && (expected.dev === 0 || actual.dev === 0);
 }

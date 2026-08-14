@@ -25,6 +25,7 @@ import {
   createActivationAttestation,
   verifyActivationAttestation,
 } from './activation-attestation.mjs';
+import { sameFileIdentity } from './file-identity.mjs';
 import {
   createNpmAuditEnvironment,
   NPM_REGISTRY_URL,
@@ -499,11 +500,15 @@ async function readPackageFile(path) {
   try {
     handle = await open(path, flags);
     const before = await handle.stat();
+    if (!before.isFile() || before.size !== initial.size || !sameFileIdentity(initial, before))
+      throw new Error('installed package changed while hashing');
+    const openedPath = await lstat(path);
     if (
-      !before.isFile() ||
-      before.size !== initial.size ||
-      before.dev !== initial.dev ||
-      before.ino !== initial.ino
+      openedPath.isSymbolicLink() ||
+      !openedPath.isFile() ||
+      openedPath.size !== initial.size ||
+      openedPath.dev !== initial.dev ||
+      openedPath.ino !== initial.ino
     )
       throw new Error('installed package changed while hashing');
     const bytes = await handle.readFile();
@@ -513,6 +518,15 @@ async function readPackageFile(path) {
       after.size !== before.size ||
       after.dev !== before.dev ||
       after.ino !== before.ino
+    )
+      throw new Error('installed package changed while hashing');
+    const finalPath = await lstat(path);
+    if (
+      finalPath.isSymbolicLink() ||
+      !finalPath.isFile() ||
+      finalPath.size !== initial.size ||
+      finalPath.dev !== initial.dev ||
+      finalPath.ino !== initial.ino
     )
       throw new Error('installed package changed while hashing');
     return bytes;

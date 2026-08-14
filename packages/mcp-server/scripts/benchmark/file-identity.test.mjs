@@ -12,6 +12,7 @@ describe('descriptor file identity', () => {
     expect(sameFileIdentity({ dev: 0, ino: 2 }, { dev: 42, ino: 2 }, 'win32')).toBe(true);
     expect(sameFileIdentity({ dev: 42, ino: 2 }, { dev: 0, ino: 2 }, 'win32')).toBe(true);
     expect(sameFileIdentity({ dev: 0, ino: 0 }, { dev: 42, ino: 0 }, 'win32')).toBe(false);
+    expect(sameFileIdentity({ dev: 42, ino: 0 }, { dev: 42, ino: 0 }, 'win32')).toBe(false);
     expect(sameFileIdentity({ dev: 0, ino: 2 }, { dev: 42, ino: 3 }, 'win32')).toBe(false);
   });
 
