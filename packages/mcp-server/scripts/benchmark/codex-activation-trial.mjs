@@ -15,7 +15,8 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { activationTrialDigest, createActivationTrialArtifact } from './activation-artifact.mjs';
@@ -25,6 +26,7 @@ import {
   createActivationAttestation,
   verifyActivationAttestation,
 } from './activation-attestation.mjs';
+import { CONTROLLED_BOT_ID, CONTROLLED_GUILD_IDS } from './campaign.mjs';
 import { createCodexActivationLiveAdapter } from './codex-activation-live-adapter.mjs';
 import { sameFileIdentity } from './file-identity.mjs';
 import {
@@ -66,6 +68,16 @@ const APPLY_SUCCESS = new Set(['complete', 'already_current']);
 const EXECUTION_MODES = new Set(['live', 'test']);
 const TRUSTED_LIVE_DEPENDENCIES = new WeakSet();
 const EXECUTION_PROVENANCE_KEYS = ['abortable', 'adapter_id', 'execution_mode', 'package_source'];
+const ACTIVATION_CLI_FLAGS = new Set([
+  '--release',
+  '--run-id',
+  '--trial-id',
+  '--host-version',
+  '--source-commit',
+  '--guild',
+  '--confirmation',
+  '--write-approval',
+]);
 
 function record(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -1267,4 +1279,90 @@ export async function runCodexActivationTrial(options = {}) {
     },
   });
   return { ok: passed, artifact };
+}
+
+export function parseCodexActivationArgs(argv) {
+  if (!Array.isArray(argv)) throw new TypeError('activation arguments must be an array');
+  const values = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    if (!ACTIVATION_CLI_FLAGS.has(flag)) throw new TypeError('invalid activation arguments');
+    if (Object.hasOwn(values, flag)) throw new TypeError('invalid activation arguments');
+    const value = argv[++index];
+    if (typeof value !== 'string' || value === '' || value.startsWith('--')) {
+      throw new TypeError('invalid activation arguments');
+    }
+    values[flag] = value;
+  }
+  for (const flag of ACTIVATION_CLI_FLAGS) {
+    if (!Object.hasOwn(values, flag)) throw new TypeError('invalid activation arguments');
+  }
+  if (!CONTROLLED_GUILD_IDS.includes(values['--guild'])) {
+    throw new TypeError('invalid activation arguments');
+  }
+  return {
+    release: values['--release'],
+    runId: values['--run-id'],
+    trialId: values['--trial-id'],
+    hostVersion: values['--host-version'],
+    sourceCommit: values['--source-commit'],
+    guildId: values['--guild'],
+    operatorConfirmation: values['--confirmation'],
+    writeApproval: values['--write-approval'],
+  };
+}
+
+function activationCliToken(environment) {
+  const token = environment.DISCORD_TESTBOT_B_TOKEN?.trim();
+  if (!token) throw new Error('activation environment is incomplete');
+  return token.startsWith('Bot ') ? token.slice(4) : token;
+}
+
+function activationCliFailure() {
+  return {
+    schema_version: 'discord-mcp.activation-trial-cli.v1',
+    ok: false,
+    error: 'activation trial failed',
+  };
+}
+
+/** Secret-free operator boundary for one authoritative Codex activation trial. */
+export async function main({
+  argv = process.argv.slice(2),
+  environment = process.env,
+  stdout = process.stdout,
+  runTrial = runCodexActivationTrial,
+} = {}) {
+  try {
+    const options = parseCodexActivationArgs(argv);
+    const token = activationCliToken(environment);
+    const result = await runTrial({
+      release: options.release,
+      runId: options.runId,
+      trialId: options.trialId,
+      hostVersion: options.hostVersion,
+      sourceCommit: options.sourceCommit,
+      target: {
+        guildId: options.guildId,
+        botId: CONTROLLED_BOT_ID,
+        controlled: true,
+        callerOwned: true,
+      },
+      operatorConfirmation: options.operatorConfirmation,
+      writeApproval: options.writeApproval,
+      token,
+      executionMode: 'live',
+    });
+    stdout.write(`${JSON.stringify(result)}\n`);
+    return result.ok ? 0 : 1;
+  } catch {
+    stdout.write(`${JSON.stringify(activationCliFailure())}\n`);
+    return 1;
+  }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().then((code) => {
+    process.exitCode = code;
+  });
 }

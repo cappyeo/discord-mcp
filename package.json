@@ -30,6 +30,7 @@
     "benchmark:small-model:verify": "node packages/mcp-server/scripts/benchmark/verify-small-model.mjs",
     "benchmark:small-model:live": "node packages/mcp-server/scripts/benchmark/small-model-live-run.mjs",
     "benchmark:small-model:live:verify": "node packages/mcp-server/scripts/benchmark/verify-small-model-live.mjs",
+    "benchmark:activation": "node packages/mcp-server/scripts/benchmark/codex-activation-trial.mjs",
     "benchmark:architect": "pnpm --filter @discord-mcp/core exec vitest bench src/tools/guild/_lib/blueprint-planning.bench.ts --run",
     "lint": "biome check .",
     "format": "biome format --write .",
