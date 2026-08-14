@@ -232,14 +232,7 @@ export function activationTrialDigest(value) {
 /** Validate and return the same artifact. Throws before any benchmark claim is trusted. */
 export function assertActivationTrialArtifact(value) {
   assertRecord(value, '$');
-  // The shared sanitizer deliberately treats every key containing "secret"
-  // as credential-bearing. `safety.secret_free` is this artifact's boolean
-  // attestation, so validate the rest through the shared boundary and handle
-  // this fixed safety block through the strict schema below.
-  const withoutSafety = Object.fromEntries(
-    Object.entries(value).filter(([key]) => key !== 'safety'),
-  );
-  assertSecretFreeJson(withoutSafety);
+  assertSecretFreeJson(value);
   scanPublicLabels(value);
   assertKeys(value, ARTIFACT_KEYS, '$');
   for (const key of ARTIFACT_KEYS) {

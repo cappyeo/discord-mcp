@@ -236,7 +236,8 @@ function scanSecrets(value, path = '$', ancestors = new WeakSet(), errors = []) 
       const childPath = `${path}.${key}`;
       const isSafeUsageCount =
         SAFE_USAGE_KEYS.has(key) && Number.isSafeInteger(child) && child >= 0;
-      if (!isSafeUsageCount && isSecretKey(key))
+      const isSecretFreeAttestation = key === 'secret_free' && typeof child === 'boolean';
+      if (!isSafeUsageCount && !isSecretFreeAttestation && isSecretKey(key))
         errors.push(`${childPath}: secret-bearing key is not allowed`);
       scanSecrets(child, childPath, ancestors, errors);
     }

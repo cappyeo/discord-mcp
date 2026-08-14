@@ -492,6 +492,15 @@ test('allows numeric model usage counters without allowing token-shaped credenti
   );
 });
 
+test('allows only a boolean secret-free attestation under the reserved public key', () => {
+  assert.doesNotThrow(() => assertSecretFreeJson({ safety: { secret_free: true } }));
+  assert.doesNotThrow(() => assertSecretFreeJson({ safety: { secret_free: false } }));
+  assert.throws(
+    () => assertSecretFreeJson({ safety: { secret_free: 'credential-value' } }),
+    /secret-bearing/i,
+  );
+});
+
 test('allows repeated JSON references while still rejecting true cycles', () => {
   const sharedCounts = { roles: 4, channels: 12 };
   assert.doesNotThrow(() =>
