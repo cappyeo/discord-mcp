@@ -1,5 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -359,7 +359,8 @@ describe('Codex activation campaign', () => {
   });
 
   it('reserves the run id before trial one and rejects reuse', async () => {
-    const artifactRoot = await mkdtemp(join(tmpdir(), 'discord-mcp-activation-campaign-'));
+    const temporaryBase = process.platform === 'win32' ? homedir() : tmpdir();
+    const artifactRoot = await mkdtemp(join(temporaryBase, 'discord-mcp-activation-campaign-'));
     const options = request({ artifactRoot });
     let index = 0;
     const runTrial = vi.fn(async ({ trialId }) => ({
