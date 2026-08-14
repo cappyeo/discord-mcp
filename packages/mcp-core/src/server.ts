@@ -267,6 +267,36 @@ export interface BuildServerDeps {
   transport?: 'stdio' | 'http';
   /** Optional process-scoped sink reused by stateless HTTP request servers. */
   auditSink?: AuditSink;
+  /**
+   * Best-effort, already-sanitized observation of a blueprint lifecycle call.
+   * The observer must never be required for the MCP result to succeed.
+   */
+  onBlueprintLifecycle?: (observation: BlueprintLifecycleObservation) => void;
+}
+
+/**
+ * Privacy-safe lifecycle signal for local adoption measurement.
+ *
+ * This deliberately contains no tool arguments, result payload, Discord
+ * identifiers, plan references, content, or error details.
+ */
+export interface BlueprintLifecycleObservation {
+  readonly stage: 'plan' | 'apply' | 'evidence';
+  readonly status:
+    | 'ready'
+    | 'already_current'
+    | 'complete'
+    | 'partial'
+    | 'busy'
+    | 'stale'
+    | 'verified'
+    | 'drifted'
+    | 'not_found'
+    | 'blocked'
+    | 'no_match'
+    | 'error';
+  readonly outcome: 'success' | 'in_progress' | 'blocked' | 'drifted' | 'failure';
+  readonly transport: 'stdio' | 'http';
 }
 
 export interface BuildServerResult {
@@ -549,6 +579,85 @@ function listVisibleTools(
     );
   }
   return visible;
+}
+
+function blueprintLifecycleStage(
+  toolName: string,
+): BlueprintLifecycleObservation['stage'] | undefined {
+  if (toolName === 'build_discord_server' || toolName === 'guild_blueprint_plan') return 'plan';
+  if (toolName === 'guild_blueprint_apply') return 'apply';
+  if (toolName === 'guild_blueprint_evidence') return 'evidence';
+  return undefined;
+}
+
+function blueprintLifecycleObservation(
+  toolName: string,
+  result: CallToolResult,
+  transport: 'stdio' | 'http',
+): BlueprintLifecycleObservation | undefined {
+  const stage = blueprintLifecycleStage(toolName);
+  if (stage === undefined) return undefined;
+
+  if (result.isError === true) {
+    return { stage, status: 'error', outcome: 'failure', transport };
+  }
+
+  const structured = result.structuredContent;
+  const status =
+    structured !== null && typeof structured === 'object' && !Array.isArray(structured)
+      ? (structured as { status?: unknown }).status
+      : undefined;
+  if (typeof status !== 'string') {
+    return { stage, status: 'error', outcome: 'failure', transport };
+  }
+
+  if (stage === 'plan') {
+    if (status === 'ready' || status === 'already_current') {
+      return { stage, status, outcome: 'success', transport };
+    }
+    if (status === 'blocked' || status === 'no_match') {
+      return { stage, status, outcome: 'blocked', transport };
+    }
+  } else if (stage === 'apply') {
+    if (status === 'complete' || status === 'already_current') {
+      return { stage, status, outcome: 'success', transport };
+    }
+    if (status === 'partial') {
+      return { stage, status, outcome: 'in_progress', transport };
+    }
+    if (status === 'busy' || status === 'stale' || status === 'blocked') {
+      return { stage, status, outcome: 'blocked', transport };
+    }
+  } else {
+    if (status === 'verified') {
+      return { stage, status, outcome: 'success', transport };
+    }
+    if (status === 'drifted') {
+      return { stage, status, outcome: 'drifted', transport };
+    }
+    if (status === 'not_found' || status === 'blocked') {
+      return { stage, status, outcome: 'blocked', transport };
+    }
+  }
+
+  return { stage, status: 'error', outcome: 'failure', transport };
+}
+
+function observeBlueprintLifecycle(
+  observer: BuildServerDeps['onBlueprintLifecycle'],
+  toolName: string,
+  result: CallToolResult,
+  transport: 'stdio' | 'http',
+): void {
+  if (observer === undefined) return;
+  const observation = blueprintLifecycleObservation(toolName, result, transport);
+  if (observation === undefined) return;
+  try {
+    observer(observation);
+  } catch {
+    // A local adoption recorder is strictly best-effort. Never alter or delay
+    // the MCP result because the caller's recorder failed.
+  }
 }
 
 function listAdvertisedTools(
@@ -1726,8 +1835,9 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         samplingSupported,
       } as never);
     });
+    let result: CallToolResult;
     try {
-      return (await dispatch(middlewareCtx)) as CallToolResult;
+      result = (await dispatch(middlewareCtx)) as CallToolResult;
     } catch (e) {
       // outputSchema violations are asserted in defineTool (test-only) and must
       // escape to the runner rather than be reshaped into a plausible-looking
@@ -1747,8 +1857,10 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         },
         'tool error',
       );
-      return formatErrorForUser(e, { toolName: tool.name, transport });
+      result = formatErrorForUser(e, { toolName: tool.name, transport });
     }
+    observeBlueprintLifecycle(deps.onBlueprintLifecycle, tool.name, result, transport);
+    return result;
   };
 
   server.setRequestHandler('tools/call', async (req, ctx) => {

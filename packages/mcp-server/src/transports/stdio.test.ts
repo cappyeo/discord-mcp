@@ -13,6 +13,9 @@
  * bypass a process.stderr spy) and `createGatewayClient` (which would
  * otherwise open a real Discord websocket).
  */
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
@@ -40,6 +43,7 @@ vi.mock('../otel.js', () => ({
 }));
 
 import { createGatewayClient, createLogger, wrapRestWithResilience } from '@discord-mcp/core';
+import { readActivity, resolveActivityPath } from '../lib/activity.js';
 import { startOtel } from '../otel.js';
 import { startStdio } from './stdio.js';
 
@@ -47,6 +51,7 @@ const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
 const HALF_OPEN_MS = 12_345;
 
 const savedEnv = { ...process.env };
+let activityRoot: string;
 
 type LoggerStub = ReturnType<typeof makeLoggerStub>;
 
@@ -81,15 +86,20 @@ function fakeGateway(start: Mock): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  activityRoot = mkdtempSync(join(tmpdir(), 'discord-mcp-stdio-activity-'));
+  process.env.APPDATA = activityRoot;
+  process.env.XDG_CONFIG_HOME = activityRoot;
   process.env.DISCORD_TOKEN = VALID_TOKEN;
   process.env.MCP_CIRCUIT_HALF_OPEN_AFTER_MS = String(HALF_OPEN_MS);
   process.env.MCP_AUDIT_ENABLED = 'false';
   delete process.env.DISCORD_EXPECTED_BOT_ID;
   delete process.env.GATEWAY;
   delete process.env.OTEL_ENABLED;
+  delete process.env.DISCORD_MCP_ACTIVITY;
 });
 
 afterEach(() => {
+  rmSync(activityRoot, { recursive: true, force: true });
   process.env = { ...savedEnv };
 });
 
@@ -123,6 +133,35 @@ describe('startStdio', () => {
       const { tools } = await client.listTools();
       expect(tools.length).toBeGreaterThan(0);
       expect(readyRecord()).toMatchObject({ tools: tools.length, gateway: false });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('records one coarse blueprint result without retaining MCP arguments', async () => {
+    const client = await boot();
+    try {
+      const result = await client.callTool({
+        name: 'guild_blueprint_evidence',
+        arguments: {
+          guild_id: 'must-not-be-recorded',
+          expected_bot_id: 'must-not-be-recorded',
+          plan_id: 'must-not-be-recorded',
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(readActivity()).toEqual([
+        expect.objectContaining({
+          version: 2,
+          kind: 'blueprint',
+          stage: 'evidence',
+          status: 'error',
+          outcome: 'failure',
+          transport: 'stdio',
+        }),
+      ]);
+      expect(readFileSync(resolveActivityPath(), 'utf8')).not.toContain('must-not-be-recorded');
     } finally {
       await client.close();
     }

@@ -165,6 +165,7 @@ describe('cli - activity sub-command', () => {
     const out = stdoutOutput();
     expect(out).toContain('privacy-safe');
     expect(out).toContain('--json');
+    expect(out).toContain('--report');
   });
 });
 

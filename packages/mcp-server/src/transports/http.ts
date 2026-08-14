@@ -17,6 +17,7 @@ import {
   toNodeHandler,
 } from '@modelcontextprotocol/node';
 import { createMcpHandler } from '@modelcontextprotocol/server';
+import { recordBlueprintActivity } from '../lib/activity.js';
 import type { OtelHandle } from '../otel.js';
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -136,6 +137,7 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           config,
           transport: 'http',
           auditSink,
+          onBlueprintLifecycle: recordBlueprintActivity,
         })
       ).server,
     {

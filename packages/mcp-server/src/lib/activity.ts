@@ -4,30 +4,73 @@
  * This is deliberately not product telemetry: records never leave the
  * caller's machine and contain no token, Discord identity, guild ID, path,
  * raw error, or command argument. The journal lets an operator see whether
- * setup, doctor, and first smoke runs are actually succeeding before the
- * project makes broader onboarding decisions.
+ * setup, doctor, smoke, and blueprint lifecycle calls are succeeding before
+ * the project makes broader onboarding and adoption decisions.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { BlueprintLifecycleObservation } from '@discord-mcp/core';
 import type { CommandResult } from './output.js';
 import { type ProfileLocationOptions, resolveProfileDirectory } from './profiles.js';
 
 const ACTIVITY_VERSION = 1;
+const BLUEPRINT_ACTIVITY_VERSION = 2;
 export const ACTIVITY_RETENTION = 200;
 const RECENT_ACTIVITY_LIMIT = 10;
 const ACTIVITY_COMMANDS = ['setup', 'doctor', 'smoke'] as const;
 const ACTIVITY_OUTCOMES = ['success', 'warning', 'failure'] as const;
+const BLUEPRINT_ACTIVITY_STAGES = ['plan', 'apply', 'evidence'] as const;
+const BLUEPRINT_ACTIVITY_STATUSES = [
+  'ready',
+  'already_current',
+  'complete',
+  'partial',
+  'busy',
+  'stale',
+  'verified',
+  'drifted',
+  'not_found',
+  'blocked',
+  'no_match',
+  'error',
+] as const;
+const BLUEPRINT_ACTIVITY_TRANSPORTS = ['stdio', 'http'] as const;
+const BLUEPRINT_ACTIVITY_OUTCOMES = [
+  'success',
+  'in_progress',
+  'blocked',
+  'drifted',
+  'failure',
+] as const;
 
 export type ActivityCommand = (typeof ACTIVITY_COMMANDS)[number];
 export type ActivityOutcome = (typeof ACTIVITY_OUTCOMES)[number];
+export type BlueprintActivityStage = (typeof BLUEPRINT_ACTIVITY_STAGES)[number];
+export type BlueprintActivityStatus = (typeof BLUEPRINT_ACTIVITY_STATUSES)[number];
+export type BlueprintActivityTransport = (typeof BLUEPRINT_ACTIVITY_TRANSPORTS)[number];
+export type BlueprintActivityOutcome = (typeof BLUEPRINT_ACTIVITY_OUTCOMES)[number];
 
-export interface ActivityEvent {
+export interface LegacyActivityEvent {
   readonly version: 1;
   readonly at: string;
   readonly command: ActivityCommand;
   readonly outcome: ActivityOutcome;
   readonly signals: readonly string[];
 }
+
+export interface BlueprintActivityEvent {
+  readonly version: 2;
+  readonly kind: 'blueprint';
+  readonly at: string;
+  readonly stage: BlueprintActivityStage;
+  readonly status: BlueprintActivityStatus;
+  readonly outcome: BlueprintActivityOutcome;
+  readonly transport: BlueprintActivityTransport;
+}
+
+export type ActivityEvent = LegacyActivityEvent | BlueprintActivityEvent;
+
+export type BlueprintActivityObservation = BlueprintLifecycleObservation;
 
 export interface ActivityContext extends ProfileLocationOptions {
   readonly command: ActivityCommand;
@@ -51,9 +94,57 @@ function isActivityOutcome(value: unknown): value is ActivityOutcome {
   return typeof value === 'string' && ACTIVITY_OUTCOMES.includes(value as ActivityOutcome);
 }
 
+function isBlueprintActivityStage(value: unknown): value is BlueprintActivityStage {
+  return (
+    typeof value === 'string' && BLUEPRINT_ACTIVITY_STAGES.includes(value as BlueprintActivityStage)
+  );
+}
+
+function isBlueprintActivityStatus(value: unknown): value is BlueprintActivityStatus {
+  return (
+    typeof value === 'string' &&
+    BLUEPRINT_ACTIVITY_STATUSES.includes(value as BlueprintActivityStatus)
+  );
+}
+
+function isBlueprintActivityTransport(value: unknown): value is BlueprintActivityTransport {
+  return (
+    typeof value === 'string' &&
+    BLUEPRINT_ACTIVITY_TRANSPORTS.includes(value as BlueprintActivityTransport)
+  );
+}
+
+function isBlueprintActivityOutcome(value: unknown): value is BlueprintActivityOutcome {
+  return (
+    typeof value === 'string' &&
+    BLUEPRINT_ACTIVITY_OUTCOMES.includes(value as BlueprintActivityOutcome)
+  );
+}
+
 function parseActivityEvent(value: unknown): ActivityEvent | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
+  if (record.version === BLUEPRINT_ACTIVITY_VERSION && record.kind === 'blueprint') {
+    if (
+      typeof record.at !== 'string' ||
+      Number.isNaN(Date.parse(record.at)) ||
+      !isBlueprintActivityStage(record.stage) ||
+      !isBlueprintActivityStatus(record.status) ||
+      !isBlueprintActivityOutcome(record.outcome) ||
+      !isBlueprintActivityTransport(record.transport)
+    ) {
+      return undefined;
+    }
+    return {
+      version: BLUEPRINT_ACTIVITY_VERSION,
+      kind: 'blueprint',
+      at: record.at,
+      stage: record.stage,
+      status: record.status,
+      outcome: record.outcome,
+      transport: record.transport,
+    };
+  }
   if (
     record.version !== ACTIVITY_VERSION ||
     typeof record.at !== 'string' ||
@@ -122,6 +213,38 @@ export function recordActivity(event: ActivityEvent, options: ProfileLocationOpt
   } catch {
     // Activity evidence must never change a command's visible result.
   }
+}
+
+/**
+ * Record one coarse blueprint lifecycle observation. The event is rebuilt from
+ * the allowlisted observation fields so raw MCP arguments/results can never
+ * enter the local journal through this API.
+ */
+export function recordBlueprintActivity(
+  observation: BlueprintActivityObservation,
+  options: ProfileLocationOptions = {},
+): void {
+  if (process.env.DISCORD_MCP_ACTIVITY === 'off') return;
+  if (
+    !isBlueprintActivityStage(observation.stage) ||
+    !isBlueprintActivityStatus(observation.status) ||
+    !isBlueprintActivityOutcome(observation.outcome) ||
+    !isBlueprintActivityTransport(observation.transport)
+  ) {
+    return;
+  }
+  recordActivity(
+    {
+      version: BLUEPRINT_ACTIVITY_VERSION,
+      kind: 'blueprint',
+      at: new Date().toISOString(),
+      stage: observation.stage,
+      status: observation.status,
+      outcome: observation.outcome,
+      transport: observation.transport,
+    },
+    options,
+  );
 }
 
 function outcomeFor(result: CommandResult): ActivityOutcome {
@@ -249,6 +372,12 @@ export interface ActivitySummary {
   readonly total: number;
   readonly retention: number;
   readonly commands: Record<ActivityCommand, Record<ActivityOutcome, number>>;
+  readonly blueprint: {
+    readonly total: number;
+    readonly stages: Record<BlueprintActivityStage, number>;
+    readonly outcomes: Record<BlueprintActivityOutcome, number>;
+    readonly verifiedDays: number;
+  };
   readonly recent: readonly ActivityEvent[];
 }
 
@@ -259,11 +388,41 @@ export function summarizeActivity(events: readonly ActivityEvent[]): ActivitySum
       { success: 0, warning: 0, failure: 0 } satisfies Record<ActivityOutcome, number>,
     ]),
   ) as Record<ActivityCommand, Record<ActivityOutcome, number>>;
-  for (const event of events) commands[event.command][event.outcome] += 1;
+  const stages = Object.fromEntries(BLUEPRINT_ACTIVITY_STAGES.map((stage) => [stage, 0])) as Record<
+    BlueprintActivityStage,
+    number
+  >;
+  const outcomes = Object.fromEntries(
+    BLUEPRINT_ACTIVITY_OUTCOMES.map((outcome) => [outcome, 0]),
+  ) as Record<BlueprintActivityOutcome, number>;
+  const verifiedDays = new Set<string>();
+  let blueprintTotal = 0;
+  for (const event of events) {
+    if (event.version === BLUEPRINT_ACTIVITY_VERSION && event.kind === 'blueprint') {
+      blueprintTotal += 1;
+      stages[event.stage] += 1;
+      outcomes[event.outcome] += 1;
+      if (
+        event.stage === 'evidence' &&
+        event.status === 'verified' &&
+        event.outcome === 'success'
+      ) {
+        verifiedDays.add(event.at.slice(0, 10));
+      }
+    } else if (event.version === ACTIVITY_VERSION) {
+      commands[event.command][event.outcome] += 1;
+    }
+  }
   return {
     total: events.length,
     retention: ACTIVITY_RETENTION,
     commands,
+    blueprint: {
+      total: blueprintTotal,
+      stages,
+      outcomes,
+      verifiedDays: verifiedDays.size,
+    },
     recent: events.slice(-RECENT_ACTIVITY_LIMIT).reverse(),
   };
 }

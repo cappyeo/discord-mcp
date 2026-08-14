@@ -316,14 +316,16 @@ least-privilege warning.
 ## `activity`
 
 ```bash
-discord-mcp activity [--json]
+discord-mcp activity [--json] [--report]
 ```
 
-Show the local evidence journal created by `setup`, `doctor`, and `smoke`.
-It is an operator-facing record, not telemetry: discord-mcp never sends it
-anywhere. Each record contains only time, command, outcome, and a small set of
-predefined technical signals. It never contains bot tokens, Discord identities,
-guild IDs, configuration paths, command arguments, or raw errors.
+Show the local evidence journal created by `setup`, `doctor`, `smoke`, and
+blueprint plan/apply/evidence calls through stdio or authenticated HTTP. It is
+an operator-facing record, not telemetry: discord-mcp never sends it anywhere.
+Each record contains only a timestamp plus predefined command or blueprint-stage,
+status, outcome, transport, and signal values. It never contains bot tokens,
+Discord identities, guild IDs, configuration paths, command arguments, result
+payloads, or raw errors.
 
 The journal is capped at 200 recent records and lives beside the profile folder:
 `%APPDATA%\discord-mcp\activity.jsonl` on Windows,
@@ -340,6 +342,28 @@ discord-mcp activity
 # Use the stable summary in automation or when sharing a redacted diagnosis.
 discord-mcp activity --json
 ```
+
+### Optional outcome report shortcut
+
+```bash
+discord-mcp activity --report
+discord-mcp activity --report --json
+```
+
+`--report` prints the fixed URL for the voluntary
+[verified outcome form](https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml)
+without reading or exporting the journal. It is deliberately URL-only: the command
+never opens a browser, accesses the network, pre-fills fields, creates an issue, or
+submits a report. `--report --json` exposes the URL with
+`submitted: false` and `network_accessed: false` for scripts.
+
+The operator must review and complete the form manually. The journal cannot
+establish the furthest verified outcome, AI host, transport, community job,
+time-to-outcome, repeat use, or showcase consent, so the CLI never guesses
+those fields. Local records contain only timestamps plus predefined command or
+blueprint-stage, status, outcome, transport, and signal values. They exclude tokens,
+Discord IDs, names, message content, configuration paths, and raw errors. A public
+report is optional and is not product telemetry.
 
 Use this before changing the onboarding flow: it distinguishes completed setup,
 token/discovery failures, the safe `administrator-warning` least-privilege

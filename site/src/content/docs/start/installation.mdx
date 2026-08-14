@@ -75,7 +75,7 @@ that then sits waiting for JSON-RPC frames on stdin. Use `--version`.
 | `serve` | Start the local stdio MCP server. **Default** - a bare `discord-mcp` runs this. Use `serve --http` for a bearer-protected remote endpoint. |
 | `catalog` | Expose all 208 real tool schemas without credentials or Discord access; execution always returns `CATALOG_ONLY`. |
 | `setup` | Verify one caller-owned bot, save non-secret profile metadata, and generate its client config. |
-| `activity` | Show the local, privacy-safe evidence journal for setup and verification outcomes. |
+| `activity` | Show the local, privacy-safe journal for setup, doctor, smoke, and blueprint lifecycle outcomes; `--report` prints the optional manual outcome-form URL. |
 | `update` | Check a generated Codex launcher for a new release; `--apply` is always explicit. |
 | `profile` | List, show, or remove local non-secret bot profiles. |
 | `doctor` | Diagnose config, token shape, connectivity, and the update status of a generated Codex launcher when run with `--online --profile`. |

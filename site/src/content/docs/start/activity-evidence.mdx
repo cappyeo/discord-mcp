@@ -158,9 +158,15 @@ Discord's audit log.
 </Steps>
 
 <Aside type="note">
-The CLI command `discord-mcp activity` shows a private local onboarding journal for setup,
-doctor, and smoke. It is not Activity Evidence. Blueprint Activity Evidence is an authenticated
-completion record read through `guild_blueprint_evidence`.
+The CLI command `discord-mcp activity` shows a private local journal for setup,
+doctor, smoke, and coarse blueprint plan/apply/evidence outcomes. It is not Activity Evidence.
+Blueprint Activity Evidence is an authenticated completion record read through
+`guild_blueprint_evidence`. If you choose to share
+feedback, `discord-mcp activity --report` only prints the fixed optional GitHub
+outcome-form URL; it never opens a browser, accesses the network, or submits a
+report. The journal remains local and contains only timestamps plus predefined
+command or blueprint-stage, status, outcome, transport, and signal values. It
+contains no Discord IDs, names, message content, tokens, paths, or raw errors.
 </Aside>
 
 <TutorialBox>

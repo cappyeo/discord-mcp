@@ -163,7 +163,8 @@ export function buildProgram(): Command {
     .command('activity')
     .description('Show local, privacy-safe setup and verification outcomes')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
-    .action(async (options: { json?: boolean }) => {
+    .option('--report', 'Prepare an explicit, manual handoff to the fixed GitHub report template')
+    .action(async (options: { json?: boolean; report?: boolean }) => {
       const { activityAction } = await import('./commands/activity.js');
       activityAction(options);
     });

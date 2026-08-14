@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { recordActivity } from '../lib/activity.js';
+import { recordActivity, resolveActivityPath } from '../lib/activity.js';
 import { activityAction } from './activity.js';
 
 const originalExitCode = process.exitCode;
@@ -50,5 +50,24 @@ describe('activityAction', () => {
       ok: true,
       data: { total: 1, commands: { setup: { success: 1 } } },
     });
+  });
+
+  it('returns an explicit report handoff without network access or journal writes', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    activityAction({ json: true, report: true });
+
+    const result = JSON.parse(stdoutWrites.join(''));
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        submitted: false,
+        network_accessed: false,
+        report_url:
+          'https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml',
+      },
+    });
+    expect(result.data).not.toHaveProperty('prefill');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(existsSync(resolveActivityPath())).toBe(false);
   });
 });

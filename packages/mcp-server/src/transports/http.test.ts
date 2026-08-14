@@ -1,10 +1,14 @@
 import { once } from 'node:events';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { request } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createConnection } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readActivity, resolveActivityPath } from '../lib/activity.js';
 import { startHttp } from './http.js';
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
@@ -12,6 +16,7 @@ const ACCESS_TOKEN = 'test-access-token-with-at-least-32-characters';
 const savedEnv = { ...process.env };
 
 let server: Server | undefined;
+let activityRoot: string;
 
 function endpoint(): URL {
   const address = server?.address() as AddressInfo | null;
@@ -61,6 +66,9 @@ async function postChunked(
 }
 
 beforeEach(() => {
+  activityRoot = mkdtempSync(join(tmpdir(), 'discord-mcp-http-activity-'));
+  process.env.APPDATA = activityRoot;
+  process.env.XDG_CONFIG_HOME = activityRoot;
   process.env.DISCORD_TOKEN = VALID_TOKEN;
   process.env.DISCORD_MCP_ACCESS_TOKEN = ACCESS_TOKEN;
   process.env.LOG_LEVEL = 'fatal';
@@ -69,10 +77,12 @@ beforeEach(() => {
   delete process.env.MCP_HTTP_MAX_BODY_BYTES;
   delete process.env.MCP_HTTP_MAX_IN_FLIGHT;
   delete process.env.MCP_WRITE_MODE;
+  delete process.env.DISCORD_MCP_ACTIVITY;
 });
 
 afterEach(async () => {
   await closeServer();
+  rmSync(activityRoot, { recursive: true, force: true });
   process.env = { ...savedEnv };
 });
 
@@ -84,6 +94,7 @@ describe('startHttp', () => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toBe('Bearer');
+    expect(readActivity()).toEqual([]);
   });
 
   it('rejects wrong bearer credentials and accepts the case-insensitive auth scheme', async () => {
@@ -215,6 +226,44 @@ describe('startHttp', () => {
     } finally {
       await client.close();
       fetchSpy.mockRestore();
+    }
+  });
+
+  it('records one coarse authenticated blueprint result and no private arguments', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false });
+    const transport = new StreamableHTTPClientTransport(endpoint(), {
+      requestInit: { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } },
+    });
+    const client = new Client(
+      { name: 'http-activity-test', version: '0.0.0' },
+      { versionNegotiation: { mode: 'auto' } },
+    );
+
+    await client.connect(transport as never);
+    try {
+      const result = await client.callTool({
+        name: 'guild_blueprint_evidence',
+        arguments: {
+          guild_id: 'must-not-be-recorded',
+          expected_bot_id: 'must-not-be-recorded',
+          plan_id: 'must-not-be-recorded',
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(readActivity()).toEqual([
+        expect.objectContaining({
+          version: 2,
+          kind: 'blueprint',
+          stage: 'evidence',
+          status: 'error',
+          outcome: 'failure',
+          transport: 'http',
+        }),
+      ]);
+      expect(readFileSync(resolveActivityPath(), 'utf8')).not.toContain('must-not-be-recorded');
+    } finally {
+      await client.close();
     }
   });
 

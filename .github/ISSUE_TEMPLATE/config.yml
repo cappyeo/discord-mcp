@@ -1,5 +1,11 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Ask a setup or usage question
+    url: https://github.com/cappyeo/discord-mcp/discussions/categories/q-a
+    about: Use Discussions for credential-safe setup, permissions, client integration, and workflow questions.
+  - name: Share a redacted result
+    url: https://github.com/cappyeo/discord-mcp/discussions/categories/show-and-tell
+    about: Show what you built or operated without IDs, private content, logs, screenshots, or credentials.
   - name: Report a security vulnerability privately
     url: https://github.com/cappyeo/discord-mcp/security/advisories/new
     about: Do not disclose vulnerabilities or credentials in a public issue.

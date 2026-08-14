@@ -89,6 +89,7 @@ export {
   wrapRestWithResilience,
 } from './rest/resilient.js';
 export {
+  type BlueprintLifecycleObservation,
   type BuildCatalogServerResult,
   type BuildServerDeps,
   type BuildServerResult,

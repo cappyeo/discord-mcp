@@ -10,6 +10,7 @@ import {
 import { REST } from '@discordjs/rest';
 import type { Transport } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { recordBlueprintActivity } from '../lib/activity.js';
 import type { OtelHandle } from '../otel.js';
 
 /**
@@ -57,6 +58,7 @@ export async function startStdio(
     rest,
     logger,
     config,
+    onBlueprintLifecycle: recordBlueprintActivity,
   });
 
   let gatewayClient: GatewayClient | null = null;

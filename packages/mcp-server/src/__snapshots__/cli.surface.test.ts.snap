@@ -8,6 +8,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "name": "activity",
       "options": [
         "--json",
+        "--report",
       ],
     },
     {

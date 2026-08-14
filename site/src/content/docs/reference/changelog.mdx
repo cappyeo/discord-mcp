@@ -9,6 +9,19 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.22.0 - privacy-safe outcome feedback
+
+- Extended the private local activity journal with coarse blueprint plan,
+  apply, and evidence lifecycle outcomes for both stdio and authenticated HTTP.
+  Records contain only timestamps and predefined enum values; no MCP arguments,
+  result payloads, Discord identifiers, content, credentials, paths, or raw
+  errors are retained.
+- Added the opt-in `discord-mcp activity --report` shortcut. It prints the
+  fixed voluntary outcome-form URL but never reads or exports the journal,
+  opens a browser, accesses the network, pre-fills fields, or submits a report.
+- Opened GitHub Discussions for credential-safe Q&A, recurring-workflow ideas,
+  and consent-based redacted showcases.
+
 ## v0.21.0 - credential-free catalog discovery
 
 This minor release makes the complete MCP contract safely discoverable by

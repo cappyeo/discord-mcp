@@ -21,6 +21,7 @@
   · <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 208 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
+  · <a href="https://github.com/cappyeo/discord-mcp/discussions"><strong>Join the community</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/"><strong>Documentation</strong></a>
 </p>
@@ -47,6 +48,25 @@ in a private test guild.
 Completed it—or found the first blocker? Share a voluntary,
 [credential-safe outcome report](https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml).
 discord-mcp sends no report from your installation.
+
+If you want a shortcut after a local run, `discord-mcp activity --report` prints
+that fixed URL without reading or exporting the journal. It does not open a browser,
+access the network, prefill or submit an issue, or expose journal records. Review every
+field and submit the form yourself. The local journal contains only timestamps plus
+predefined command or blueprint-stage, status, outcome, transport, and signal values;
+it contains no Discord IDs, names, message content, tokens, paths, or raw errors.
+
+## Community and feedback
+
+Use [GitHub Discussions](https://github.com/cappyeo/discord-mcp/discussions) for setup Q&A,
+recurring-workflow ideas, and redacted showcases. Start with the
+[community welcome](https://github.com/cappyeo/discord-mcp/discussions/21) or watch and discuss the
+[official live-build showcase](https://github.com/cappyeo/discord-mcp/discussions/22).
+
+Never post a bot token, authorization header, client configuration, Discord ID, private server or
+channel name, message content, screenshot, terminal log, plan material, evidence ID, or Activity
+Evidence file. Report authorization or security issues through
+[GitHub's private advisory form](https://github.com/cappyeo/discord-mcp/security/advisories/new).
 
 ## How it works
 
@@ -193,7 +213,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
 | `discord-mcp catalog` | Expose all 208 real tool schemas without a token; every tool call fails closed with `CATALOG_ONLY`. |
 | `discord-mcp setup` | Verify one caller-owned bot, save a non-secret profile, and generate its client configuration. |
-| `discord-mcp activity` | Show the local, privacy-safe evidence journal for setup and verification outcomes. |
+| `discord-mcp activity [--report]` | Show the local, privacy-safe evidence journal; `--report` prints the optional GitHub outcome-form URL. |
 | `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
 | `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
 | `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
@@ -247,7 +267,7 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.21.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.22.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

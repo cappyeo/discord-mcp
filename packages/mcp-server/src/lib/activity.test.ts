@@ -1,12 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ACTIVITY_RETENTION,
   captureActivity,
   readActivity,
   recordActivity,
+  recordBlueprintActivity,
   resolveActivityPath,
   summarizeActivity,
 } from './activity.js';
@@ -186,6 +187,106 @@ describe('activity evidence', () => {
     expect(readActivity(options)).toEqual([]);
   });
 
+  it('records a coarse blueprint v2 event without accepting raw data', () => {
+    const options = location();
+    recordBlueprintActivity(
+      {
+        stage: 'evidence',
+        status: 'verified',
+        outcome: 'success',
+        transport: 'stdio',
+      },
+      options,
+    );
+
+    expect(readActivity(options)).toEqual([
+      expect.objectContaining({
+        version: 2,
+        kind: 'blueprint',
+        stage: 'evidence',
+        status: 'verified',
+        outcome: 'success',
+        transport: 'stdio',
+      }),
+    ]);
+    expect(readFileSync(resolveActivityPath(options), 'utf8')).not.toContain('guild');
+  });
+
+  it('keeps parsing legacy v1 events and summarizes blueprint counts by verified day', () => {
+    const options = location();
+    mkdirSync(dirname(resolveActivityPath(options)), { recursive: true });
+    writeFileSync(
+      resolveActivityPath(options),
+      `${[
+        JSON.stringify({
+          version: 1,
+          at: '2026-08-03T00:00:00.000Z',
+          command: 'setup',
+          outcome: 'success',
+          signals: [],
+        }),
+        JSON.stringify({
+          version: 2,
+          kind: 'blueprint',
+          at: '2026-08-04T00:00:00.000Z',
+          stage: 'plan',
+          status: 'ready',
+          outcome: 'success',
+          transport: 'stdio',
+        }),
+        JSON.stringify({
+          version: 2,
+          kind: 'blueprint',
+          at: '2026-08-04T01:00:00.000Z',
+          stage: 'evidence',
+          status: 'verified',
+          outcome: 'success',
+          transport: 'http',
+        }),
+        '{malformed',
+      ].join('\n')}\n`,
+    );
+
+    const summary = summarizeActivity(readActivity(options));
+    expect(summary.total).toBe(3);
+    expect(summary.blueprint).toMatchObject({
+      total: 2,
+      stages: { plan: 1, apply: 0, evidence: 1 },
+      verifiedDays: 1,
+    });
+  });
+
+  it('honors the caller opt-out for blueprint activity', () => {
+    const options = location();
+    const previous = process.env.DISCORD_MCP_ACTIVITY;
+    process.env.DISCORD_MCP_ACTIVITY = 'off';
+    try {
+      recordBlueprintActivity(
+        { stage: 'plan', status: 'ready', outcome: 'success', transport: 'stdio' },
+        options,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.DISCORD_MCP_ACTIVITY;
+      else process.env.DISCORD_MCP_ACTIVITY = previous;
+    }
+    expect(readActivity(options)).toEqual([]);
+  });
+
+  it('rejects a runtime observation outside the coarse enum allowlist', () => {
+    const options = location();
+    recordBlueprintActivity(
+      {
+        stage: 'evidence',
+        status: 'verified:123456789012345678',
+        outcome: 'success',
+        transport: 'stdio',
+      } as never,
+      options,
+    );
+
+    expect(readActivity(options)).toEqual([]);
+  });
+
   it('summarizes outcomes and returns the newest events first', () => {
     const summary = summarizeActivity([
       {
@@ -205,6 +306,6 @@ describe('activity evidence', () => {
     ]);
     expect(summary.commands.setup.success).toBe(1);
     expect(summary.commands.smoke.failure).toBe(1);
-    expect(summary.recent[0]?.command).toBe('smoke');
+    expect(summary.recent[0]).toMatchObject({ command: 'smoke' });
   });
 });
