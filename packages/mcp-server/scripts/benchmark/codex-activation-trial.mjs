@@ -25,6 +25,7 @@ import {
   createActivationAttestation,
   verifyActivationAttestation,
 } from './activation-attestation.mjs';
+import { createCodexActivationLiveAdapter } from './codex-activation-live-adapter.mjs';
 import { sameFileIdentity } from './file-identity.mjs';
 import {
   createNpmAuditEnvironment,
@@ -257,9 +258,11 @@ function defaultWorkspace() {
       const home = join(root, 'codex-home');
       const installRoot = join(root, 'public-install');
       const profileRoot = join(root, process.platform === 'win32' ? 'appdata' : 'xdg-config');
+      const stateDirectory = join(root, 'blueprint-state');
       await mkdir(home, { recursive: true });
       await mkdir(installRoot, { recursive: true });
       await mkdir(profileRoot, { recursive: true });
+      await mkdir(stateDirectory, { recursive: true });
       return {
         root,
         home,
@@ -267,6 +270,7 @@ function defaultWorkspace() {
         profileRoot,
         profileEnvironmentKey: profileEnvironmentKey(),
         configPath: join(home, 'config.toml'),
+        stateDirectory,
         cleanProfile: true,
       };
     },
@@ -286,10 +290,9 @@ function defaultWorkspace() {
 }
 
 /**
- * Public package adapter. Install and guided setup are intentionally real and
- * disposable. The live Codex/Discord lifecycle remains fail-closed until an
- * audited adapter is implemented in this module; arbitrary injected adapters
- * cannot mint authoritative live evidence.
+ * Public package adapter. Install, guided setup, Codex execution, Discord
+ * readback, and restoration are real and disposable. Arbitrary injected
+ * adapters still cannot mint authoritative live evidence.
  */
 export function createDefaultCodexActivationDependencies(options = {}) {
   if (!record(options)) throw new TypeError('dependency options must be an object');
@@ -309,6 +312,27 @@ export function createDefaultCodexActivationDependencies(options = {}) {
     env: environment,
     nodeExecPath: process.execPath,
     platform: process.platform,
+  });
+  const liveAdapter = createCodexActivationLiveAdapter({
+    environment,
+    verifyRuntimePackage: async ({ installRoot, install }) => {
+      if (
+        !record(install) ||
+        !DIGEST.test(install.cliDigest ?? '') ||
+        !DIGEST.test(install.coreDigest ?? '')
+      ) {
+        throw new Error('installed runtime provenance is unavailable');
+      }
+      const cliRoot = join(installRoot, 'node_modules', '@discord-mcp', 'cli');
+      const coreRoot = join(installRoot, 'node_modules', '@discord-mcp', 'core');
+      const [cliDigest, coreDigest] = await Promise.all([hashTree(cliRoot), hashTree(coreRoot)]);
+      if (cliDigest !== install.cliDigest || coreDigest !== install.coreDigest)
+        throw new Error('installed runtime changed after provenance verification');
+      return {
+        cliPath: join(cliRoot, 'dist', 'cli.js'),
+        corePath: join(coreRoot, 'dist', 'index.js'),
+      };
+    },
   });
   const dependencies = {
     workspace: Object.freeze(workspace),
@@ -451,27 +475,7 @@ export function createDefaultCodexActivationDependencies(options = {}) {
       await writeFile(configPath, updated, 'utf8');
       return { config: updated };
     },
-    async launch() {
-      throw new Error('CODEX_LIFECYCLE_ADAPTER_REQUIRED');
-    },
-    async closeSession() {
-      throw new Error('CODEX_LIFECYCLE_ADAPTER_REQUIRED');
-    },
-    async apply() {
-      throw new Error('CODEX_LIFECYCLE_ADAPTER_REQUIRED');
-    },
-    async evidence() {
-      throw new Error('CODEX_LIFECYCLE_ADAPTER_REQUIRED');
-    },
-    async captureBaseline() {
-      throw new Error('DISCORD_BASELINE_ADAPTER_REQUIRED');
-    },
-    async restoreBaseline() {
-      throw new Error('DISCORD_BASELINE_ADAPTER_REQUIRED');
-    },
-    async verifyBaseline() {
-      throw new Error('DISCORD_BASELINE_ADAPTER_REQUIRED');
-    },
+    ...liveAdapter,
   };
   Object.freeze(dependencies);
   if (usesOnlyBuiltIns) TRUSTED_LIVE_DEPENDENCIES.add(dependencies);
@@ -836,7 +840,14 @@ export async function runCodexActivationTrial(options = {}) {
       workspace.create({ trialId: request.trialId, signal }),
     );
     baseline = await boundedCall('captureBaseline', ({ signal }) =>
-      dependencies.captureBaseline({ target: request.target, signal }),
+      dependencies.captureBaseline({
+        target: request.target,
+        token: request.token,
+        runId: request.runId,
+        trialId: request.trialId,
+        sourceCommit: request.sourceCommit,
+        signal,
+      }),
     );
     const capturedDigest = baseline?.beforeDigest ?? baseline?.digest;
     if (!record(baseline) || !DIGEST.test(capturedDigest ?? '')) {
@@ -926,6 +937,9 @@ export async function runCodexActivationTrial(options = {}) {
           profileRoot: workspaceState.profileRoot,
           profileEnvironmentKey: workspaceState.profileEnvironmentKey ?? profileEnvironmentKey(),
           installRoot: workspaceState.installRoot,
+          install: installResult,
+          hostVersion: request.hostVersion,
+          stateDirectory: workspaceState.stateDirectory,
           env: {
             CODEX_HOME: workspaceState.home,
             [workspaceState.profileEnvironmentKey ?? profileEnvironmentKey()]:
@@ -1006,7 +1020,10 @@ export async function runCodexActivationTrial(options = {}) {
             throw new Error('Activity Evidence target binding mismatch');
           if (typeof dependencies.validateActivityEvidence !== 'function')
             throw new Error('Activity Evidence validator is required');
-          const valid = await dependencies.validateActivityEvidence(activityEvidence, { signal });
+          const valid = await dependencies.validateActivityEvidence(activityEvidence, {
+            session,
+            signal,
+          });
           if (valid === false) throw new Error('Activity Evidence validation failed');
           activityEvidenceValidated = true;
           return result;
@@ -1047,6 +1064,7 @@ export async function runCodexActivationTrial(options = {}) {
           const restored = await dependencies.restoreBaseline({
             target: request.target,
             baseline,
+            session,
             signal,
           });
           const verification = await dependencies.verifyBaseline({

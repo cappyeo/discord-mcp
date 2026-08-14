@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +10,7 @@ import {
   classifySmallModelLiveInitial,
   classifySmallModelLiveResume,
   parseSmallModelLiveJsonl,
+  runBoundedCodexProcess,
   runSmallModelLiveEvaluation,
 } from './small-model-live-eval.mjs';
 
@@ -443,6 +445,93 @@ describe('small-model live evaluation contract', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it('builds phase-exact apply and evidence resume commands for activation timing', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'discord-mcp-live-phases-'));
+    try {
+      const common = {
+        phase: 'resume',
+        cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',
+        cwd: 'C:/repo',
+        stateDirectory: directory,
+        target: { guildId: GUILD_ID, botId: BOT_ID },
+        sessionId: THREAD_ID,
+        binding: BINDING,
+      };
+      const apply = buildSmallModelLiveArguments({ ...common, resumeMode: 'apply' });
+      const evidence = buildSmallModelLiveArguments({ ...common, resumeMode: 'evidence' });
+
+      expect(apply.join('\n')).toContain('["guild_blueprint_apply"]');
+      expect(apply.join('\n')).not.toContain(
+        'mcp_servers.discord_mcp.enabled_tools=["guild_blueprint_evidence"]',
+      );
+      expect(apply.at(-1)).toContain('then stop immediately after its result');
+      expect(evidence.join('\n')).toContain('["guild_blueprint_evidence"]');
+      expect(evidence.join('\n')).not.toContain(
+        'mcp_servers.discord_mcp.tools.guild_blueprint_apply.approval_mode',
+      );
+      expect(evidence.at(-1)).toContain('Do not call guild_blueprint_apply');
+      expect(evidence.at(-1)).not.toContain('plan_ref for guild_blueprint_apply');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('terminates and settles the Codex process tree when the caller aborts', async () => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    const termination = [];
+    const controller = new AbortController();
+    const running = runBoundedCodexProcess({
+      launcher: { command: 'codex', prefix_args: [] },
+      args: ['exec'],
+      cwd: process.cwd(),
+      env: {},
+      timeoutMs: 60_000,
+      terminationGraceMs: 50,
+      signal: controller.signal,
+      spawn: () => child,
+      terminate: async ({ force }) => {
+        termination.push(force);
+        queueMicrotask(() => child.emit('close', null, force ? 'SIGKILL' : 'SIGTERM'));
+      },
+    });
+
+    controller.abort();
+    await expect(running).resolves.toMatchObject({
+      aborted: true,
+      timedOut: false,
+      spawnError: false,
+    });
+    expect(termination).toEqual([false]);
+  });
+
+  it('fails closed when an aborted Codex process tree cannot be proven closed', async () => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    const termination = [];
+    const controller = new AbortController();
+    const running = runBoundedCodexProcess({
+      launcher: { command: 'codex', prefix_args: [] },
+      args: ['exec'],
+      cwd: process.cwd(),
+      env: {},
+      timeoutMs: 60_000,
+      terminationGraceMs: 1,
+      signal: controller.signal,
+      spawn: () => child,
+      terminate: async ({ force }) => {
+        termination.push(force);
+      },
+      sleep: async () => undefined,
+    });
+
+    controller.abort();
+    await expect(running).rejects.toMatchObject({ code: 'CODEX_PROCESS_DID_NOT_CLOSE' });
+    expect(termination).toEqual([false, true]);
   });
 
   it('rejects targets outside the controlled guild and bot pair', async () => {

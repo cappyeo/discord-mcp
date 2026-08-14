@@ -20,6 +20,7 @@ import { assertSecretFreeJson, strictRfc3339Milliseconds } from './manifest.mjs'
 const RUN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const RELATIVE_ARTIFACT = /^[a-zA-Z0-9._/-]+$/;
 const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
+const MAX_ACTIVATION_ATTESTATION_BYTES = 1024 * 1024;
 const BASELINE_INTEGRITY_ALGORITHM = 'hmac-sha256';
 const BASELINE_INTEGRITY_CONTEXT = 'discord-mcp-benchmark-baseline:v1';
 const LEGACY_BASELINE_SUFFIX = '.legacy.json';
@@ -723,6 +724,44 @@ export async function prepareArtifactStore({ cwd, artifactRoot, runId }) {
       return target;
     },
   };
+}
+
+/** Persist one private activation attestation under a digest-addressed filename. */
+export async function writeActivationAttestationArtifact({
+  cwd,
+  artifactRoot,
+  runId,
+  trialId,
+  digest,
+  attestation,
+}) {
+  if (typeof runId !== 'string' || !RUN_ID.test(runId)) throw new TypeError('runId is invalid');
+  if (typeof trialId !== 'string' || !RUN_ID.test(trialId))
+    throw new TypeError('trialId is invalid');
+  const match = /^sha256:([a-f0-9]{64})$/.exec(digest ?? '');
+  if (match === null) throw new TypeError('attestation digest is invalid');
+  if (
+    attestation === null ||
+    typeof attestation !== 'object' ||
+    Array.isArray(attestation) ||
+    attestation.run_id !== runId ||
+    attestation.trial_id !== trialId
+  ) {
+    throw new TypeError('attestation identity does not match its destination');
+  }
+  assertSecretFreeJson(attestation, 'activation_attestation');
+  if (Buffer.byteLength(JSON.stringify(attestation), 'utf8') > MAX_ACTIVATION_ATTESTATION_BYTES) {
+    throw new Error('activation attestation exceeds the size bound');
+  }
+  const root = await ensureArtifactRoot({ cwd, artifactRoot });
+  const evidenceDirectory = await ensurePrivateDirectory(
+    join(root, 'activation-evidence', runId),
+    'activation evidence directory',
+  );
+  const path = join(evidenceDirectory, `${match[1]}.json`);
+  await assertNoSymlinkPath(path, 'activation attestation target');
+  await writeJsonExclusive(path, attestation);
+  return { persisted: true, digest, evidenceDirectory };
 }
 
 export async function writeBaselineArtifact({ cwd, artifactRoot, baseline, integrityKey: key }) {

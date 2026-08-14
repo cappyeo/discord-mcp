@@ -32,6 +32,7 @@ const SAFE_TOOL = /^[A-Za-z0-9_.-]{1,128}$/;
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
 const INITIAL_TOOLS = Object.freeze(['build_discord_server']);
 const RESUME_TOOLS = Object.freeze(['guild_blueprint_apply', 'guild_blueprint_evidence']);
+const RESUME_MODES = new Set(['combined', 'apply', 'evidence']);
 const APPLY_STATUSES = new Set([
   'complete',
   'already_current',
@@ -694,9 +695,9 @@ function codexConfig({ cliPath, cwd, target, stateDirectory, enabledTools }) {
     'mcp_servers.discord_mcp.required=true',
     'mcp_servers.discord_mcp.startup_timeout_sec=60',
     'mcp_servers.discord_mcp.tool_timeout_sec=180',
-    ...(isInitialPhase
-      ? []
-      : ['mcp_servers.discord_mcp.tools.guild_blueprint_apply.approval_mode="approve"']),
+    ...(enabledTools.includes('guild_blueprint_apply')
+      ? ['mcp_servers.discord_mcp.tools.guild_blueprint_apply.approval_mode="approve"']
+      : []),
   ];
 }
 
@@ -709,15 +710,27 @@ export function buildSmallModelLiveArguments({
   request = SMALL_MODEL_LIVE_REQUEST,
   sessionId = null,
   binding = null,
+  resumeMode = 'combined',
 } = {}) {
   if (!['initial', 'resume'].includes(phase))
     throw new TypeError('phase must be initial or resume');
+  if (!RESUME_MODES.has(resumeMode)) throw new TypeError('resumeMode is invalid');
+  if (phase === 'initial' && resumeMode !== 'combined')
+    throw new TypeError('resumeMode is only valid for resume');
   if (typeof cliPath !== 'string' || typeof cwd !== 'string')
     throw new TypeError('cliPath and cwd are required');
   if (!isAbsolute(stateDirectory)) throw new TypeError('stateDirectory must be absolute');
   const targetIds = controlledTarget(expectedTarget(target));
   const continuation = phase === 'resume' ? exactContinuationBinding(binding) : null;
   if (phase === 'resume') exactUuid(sessionId, 'session_id');
+  const enabledTools =
+    phase === 'initial'
+      ? INITIAL_TOOLS
+      : resumeMode === 'apply'
+        ? ['guild_blueprint_apply']
+        : resumeMode === 'evidence'
+          ? ['guild_blueprint_evidence']
+          : RESUME_TOOLS;
   const args = [
     'exec',
     ...(phase === 'resume' ? ['resume'] : []),
@@ -733,7 +746,7 @@ export function buildSmallModelLiveArguments({
       cwd,
       target: targetIds,
       stateDirectory,
-      enabledTools: phase === 'initial' ? INITIAL_TOOLS : RESUME_TOOLS,
+      enabledTools,
     }).flatMap((value) => ['-c', value]),
   ];
   if (phase === 'resume')
@@ -748,8 +761,14 @@ export function buildSmallModelLiveArguments({
         `plan_id=${continuation.plan_id}`,
         `blueprint_id=${continuation.blueprint_id}`,
         `plan_ref=${continuation.plan_ref}`,
-        'Use this exact plan_ref for guild_blueprint_apply. Do not alter, shorten, derive, or replace it.',
-        'In this resume turn call exactly one guild_blueprint_apply with __confirm:true. If it returns partial or busy, stop immediately and do not call another apply or evidence; the harness will resume after the requested delay. After complete or already_current, call guild_blueprint_evidence exactly once. Do not replan.',
+        resumeMode === 'evidence'
+          ? 'Use the exact plan_id above for guild_blueprint_evidence.'
+          : 'Use this exact plan_ref for guild_blueprint_apply. Do not alter, shorten, derive, or replace it.',
+        resumeMode === 'apply'
+          ? 'In this resume turn call exactly one guild_blueprint_apply with __confirm:true, then stop immediately after its result. Do not call guild_blueprint_evidence; the harness measures that separately. Do not replan.'
+          : resumeMode === 'evidence'
+            ? 'The approved apply is complete. In this resume turn call exactly one guild_blueprint_evidence for the exact plan_id, then stop. Do not call guild_blueprint_apply or replan.'
+            : 'In this resume turn call exactly one guild_blueprint_apply with __confirm:true. If it returns partial or busy, stop immediately and do not call another apply or evidence; the harness will resume after the requested delay. After complete or already_current, call guild_blueprint_evidence exactly once. Do not replan.',
       ].join('\n'),
     );
   else args.push(request);
@@ -760,7 +779,7 @@ function wait(milliseconds) {
   return new Promise((resolveWait) => setTimeout(resolveWait, milliseconds));
 }
 
-async function preparePrivateCodexHome({ env }) {
+export async function preparePrivateCodexHome({ env }) {
   const sourceHome = env.CODEX_HOME?.trim() || join(homedir(), '.codex');
   const sourceAuth = join(sourceHome, 'auth.json');
   const privateHome = await mkdtemp(join(tmpdir(), 'discord-mcp-codex-home-'));
@@ -789,6 +808,7 @@ export async function runBoundedCodexProcess({
   spawn = nodeSpawn,
   terminate = terminateCodexProcessTree,
   sleep = wait,
+  signal: abortSignal,
 } = {}) {
   if (!record(launcher) || typeof launcher.command !== 'string')
     throw new TypeError('launcher is required');
@@ -796,13 +816,28 @@ export async function runBoundedCodexProcess({
     throw new TypeError('timeoutMs must be positive');
   if (!Number.isSafeInteger(terminationGraceMs) || terminationGraceMs < 1)
     throw new TypeError('terminationGraceMs must be positive');
+  if (abortSignal !== undefined && !(abortSignal instanceof AbortSignal))
+    throw new TypeError('signal must be an AbortSignal');
+  if (abortSignal?.aborted === true) {
+    return {
+      stdout: '',
+      exitCode: null,
+      signal: null,
+      timedOut: false,
+      aborted: true,
+      spawnError: false,
+      truncated: false,
+    };
+  }
   return new Promise((resolveResult, rejectResult) => {
     const chunks = [];
     let bytes = 0;
     let truncated = false;
     let timedOut = false;
+    let aborted = false;
     let spawnError = false;
     let settled = false;
+    let stopPromise;
     let timer;
     let child;
     let resolveClosed;
@@ -813,14 +848,55 @@ export async function runBoundedCodexProcess({
       if (settled) return;
       settled = true;
       if (timer !== undefined) clearTimeout(timer);
+      abortSignal?.removeEventListener('abort', onAbort);
       resolveResult({
         stdout: Buffer.concat(chunks).toString('utf8'),
         exitCode,
         signal,
         timedOut,
+        aborted,
         spawnError,
         truncated,
       });
+    };
+    const stop = ({ timeout = false, abort = false } = {}) => {
+      if (timeout) timedOut = true;
+      if (abort) aborted = true;
+      if (stopPromise !== undefined) return stopPromise;
+      stopPromise = (async () => {
+        try {
+          await terminate({ child, platform, force: false });
+        } catch {
+          // The close proof below remains authoritative.
+        }
+        const closedGracefully = await Promise.race([
+          closed.then(() => true),
+          sleep(terminationGraceMs).then(() => false),
+        ]);
+        if (!closedGracefully) {
+          try {
+            await terminate({ child, platform, force: true });
+          } catch {
+            // The close proof below remains authoritative.
+          }
+          const closedAfterForce = await Promise.race([
+            closed.then(() => true),
+            sleep(terminationGraceMs).then(() => false),
+          ]);
+          if (!closedAfterForce && !settled) {
+            settled = true;
+            if (timer !== undefined) clearTimeout(timer);
+            abortSignal?.removeEventListener('abort', onAbort);
+            rejectResult(new LiveEvalFailure('CODEX_PROCESS_DID_NOT_CLOSE'));
+            return;
+          }
+        }
+        finish(null, null);
+      })();
+      return stopPromise;
+    };
+    const onAbort = () => {
+      void stop({ abort: true });
     };
     try {
       child = spawn(launcher.command, invocationArgs(launcher, args), {
@@ -856,36 +932,9 @@ export async function runBoundedCodexProcess({
       resolveClosed();
       finish(code, signal);
     });
-    timer = setTimeout(async () => {
-      timedOut = true;
-      try {
-        await terminate({ child, platform, force: false });
-      } catch {
-        // The close proof below remains authoritative.
-      }
-      const closedGracefully = await Promise.race([
-        closed.then(() => true),
-        sleep(terminationGraceMs).then(() => false),
-      ]);
-      if (!closedGracefully) {
-        try {
-          await terminate({ child, platform, force: true });
-        } catch {
-          // The close proof below remains authoritative.
-        }
-        const closedAfterForce = await Promise.race([
-          closed.then(() => true),
-          sleep(terminationGraceMs).then(() => false),
-        ]);
-        if (!closedAfterForce && !settled) {
-          settled = true;
-          clearTimeout(timer);
-          rejectResult(new LiveEvalFailure('CODEX_PROCESS_DID_NOT_CLOSE'));
-          return;
-        }
-      }
-      finish(null, null);
-    }, timeoutMs);
+    timer = setTimeout(() => void stop({ timeout: true }), timeoutMs);
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
+    if (abortSignal?.aborted === true) onAbort();
   });
 }
 
@@ -893,6 +942,7 @@ function hostFailure(result) {
   return (
     result.spawnError ||
     result.timedOut ||
+    result.aborted ||
     result.truncated ||
     result.signal !== null ||
     result.exitCode !== 0

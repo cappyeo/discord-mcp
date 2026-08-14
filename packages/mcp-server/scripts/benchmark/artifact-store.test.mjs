@@ -23,6 +23,7 @@ import {
   readBaselineArtifact,
   recoverCampaignLock,
   recoverLegacyBaselineArtifact,
+  writeActivationAttestationArtifact,
   writeBaselineArtifact,
 } from './artifact-store.mjs';
 
@@ -95,6 +96,41 @@ afterAll(async () => {
 });
 
 describe('benchmark artifact store', () => {
+  it('persists private activation attestations by digest under the campaign run', async () => {
+    const cwd = await directory('discord-mcp-activation-source-');
+    const artifactRoot = await directory('discord-mcp-activation-artifacts-');
+    const digest = `sha256:${'a'.repeat(64)}`;
+    const attestation = {
+      schema_version: 'discord-mcp.activation-attestation.v1',
+      run_id: 'activation-run-001',
+      trial_id: 'trial-001',
+    };
+
+    const written = await writeActivationAttestationArtifact({
+      cwd,
+      artifactRoot,
+      runId: attestation.run_id,
+      trialId: attestation.trial_id,
+      digest,
+      attestation,
+    });
+
+    expect(written).toMatchObject({ persisted: true, digest });
+    await expect(
+      readFile(join(written.evidenceDirectory, `${'a'.repeat(64)}.json`), 'utf8'),
+    ).resolves.toContain('discord-mcp.activation-attestation.v1');
+    await expect(
+      writeActivationAttestationArtifact({
+        cwd,
+        artifactRoot,
+        runId: attestation.run_id,
+        trialId: attestation.trial_id,
+        digest,
+        attestation: { ...attestation, trial_id: 'trial-002' },
+      }),
+    ).rejects.toThrow(/identity/);
+  });
+
   it('locks the controlled pool across artifact roots and releases on success or failure', async () => {
     const cwd = await directory('discord-mcp-campaign-lock-source-');
     const artifactRoot = await directory('discord-mcp-campaign-lock-');
