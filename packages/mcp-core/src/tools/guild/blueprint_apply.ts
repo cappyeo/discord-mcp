@@ -40,6 +40,7 @@ import {
 } from './_lib/blueprint.reconcile.js';
 import { resolveBlueprintStateDirectory } from './_lib/blueprint.state-path.js';
 import { readBlueprintTargetSnapshot } from './_lib/blueprint.target.js';
+import { appendBlueprintTextReceipt } from './_lib/blueprint.text-receipt.js';
 import { blueprintSigningSecret } from './_lib/blueprint.trust.js';
 
 const Digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -266,7 +267,29 @@ async function persistTerminalActivityEvidence(
 }
 
 function response(text: string, data: ApplyData) {
-  return dualResult({ text, data });
+  return dualResult({
+    text: appendBlueprintTextReceipt(text, 'apply', {
+      status: data.status,
+      target: data.target,
+      plan_id: data.plan_id,
+      blueprint_id: data.blueprint_id,
+      progress: {
+        completed_total: data.progress.completed_total,
+        remaining: data.progress.remaining,
+        checkpoint_version: data.progress.checkpoint_version,
+      },
+      error:
+        data.error === null
+          ? null
+          : {
+              code: data.error.code,
+              retry_after_ms: data.error.retry_after_ms ?? null,
+            },
+      evidence_id: data.evidence.activity?.evidence_id ?? null,
+      next_action: data.next_action,
+    }),
+    data,
+  });
 }
 
 export default defineTool({

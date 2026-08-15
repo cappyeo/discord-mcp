@@ -25,6 +25,7 @@ import {
 import { compileBlueprintRequest } from './_lib/blueprint.request.js';
 import { resolveBlueprintStateDirectory } from './_lib/blueprint.state-path.js';
 import { readBlueprintTargetSnapshot } from './_lib/blueprint.target.js';
+import { appendBlueprintTextReceipt } from './_lib/blueprint.text-receipt.js';
 import { blueprintSigningSecret, blueprintTrustBoundary } from './_lib/blueprint.trust.js';
 
 const BotPermissionsSchema = z
@@ -345,34 +346,43 @@ export default defineTool({
         'The private local plan reference could not be persisted; use the legacy plan_token in this trusted caller session.',
       );
     }
-    return dualResult({
-      text:
-        status === 'already_current'
-          ? `Blueprint ${compiled.blueprint_id} already matches the locked target; no Discord mutation is needed.`
-          : `Blueprint dry-run is ready for bot ${expectedBotId} in guild ${guildId}: ${summary.total_operations} operation(s), including ${summary.high_risk_operations} explicitly confirmed high-risk replacement(s). No guild was changed.`,
-      data: {
-        status,
-        request: args.request,
-        source,
-        target,
-        blueprint_id: compiled.blueprint_id,
-        blueprint: compiled.blueprint,
-        snapshot_id: reconciled.snapshot_id,
-        plan_id: encoded.plan_id,
-        approval_id: encoded.approval_id,
-        plan_token: encoded.plan_token,
-        plan_ref: planRef,
-        summary,
-        operations: reconciled.operations,
-        bot_permissions: reconciled.bot_permissions,
-        blockers: [],
-        warnings: [...warnings, ...planRefWarnings],
-        verification: {
-          ...verificationBase,
-          blueprint_validation: 'passed' as const,
-          target_readback: 'passed' as const,
-        },
+    const data = {
+      status,
+      request: args.request,
+      source,
+      target,
+      blueprint_id: compiled.blueprint_id,
+      blueprint: compiled.blueprint,
+      snapshot_id: reconciled.snapshot_id,
+      plan_id: encoded.plan_id,
+      approval_id: encoded.approval_id,
+      plan_token: encoded.plan_token,
+      plan_ref: planRef,
+      summary,
+      operations: reconciled.operations,
+      bot_permissions: reconciled.bot_permissions,
+      blockers: [],
+      warnings: [...warnings, ...planRefWarnings],
+      verification: {
+        ...verificationBase,
+        blueprint_validation: 'passed' as const,
+        target_readback: 'passed' as const,
       },
+    };
+    const text =
+      status === 'already_current'
+        ? `Blueprint ${compiled.blueprint_id} already matches the locked target; no Discord mutation is needed.`
+        : `Blueprint dry-run is ready for bot ${expectedBotId} in guild ${guildId}: ${summary.total_operations} operation(s), including ${summary.high_risk_operations} explicitly confirmed high-risk replacement(s). No guild was changed.`;
+    return dualResult({
+      text: appendBlueprintTextReceipt(text, 'plan', {
+        status,
+        target,
+        plan_id: encoded.plan_id,
+        blueprint_id: compiled.blueprint_id,
+        approval_id: encoded.approval_id,
+        plan_ref: planRef,
+      }),
+      data,
     });
   },
 });

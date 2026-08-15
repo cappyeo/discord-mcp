@@ -23,9 +23,10 @@
  *
  * `discordToken` is the literal value placed in `env.DISCORD_TOKEN`.
  * When omitted, most JSON clients inherit `DISCORD_TOKEN` from their launch
- * environment and Codex forwards it with `env_vars`. Gemini CLI is the
- * exception: its generator emits an explicit interpolation reference because
- * Gemini sanitizes inherited sensitive variables before spawning MCP servers.
+ * environment and Codex forwards it with `env_vars`. Gemini CLI emits an
+ * explicit interpolation reference because Gemini sanitizes inherited sensitive
+ * variables before spawning MCP servers. Antigravity CLI inherits the launch
+ * environment and deliberately omits the token from its MCP JSON.
  * Stateless `init` retains its legacy placeholder for compatible generators.
  *
  * `gateway` adds `--gateway` to the args when true. `envVars` is merged

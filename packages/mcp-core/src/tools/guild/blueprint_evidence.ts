@@ -27,6 +27,7 @@ import {
   type BlueprintTargetSnapshot,
   readBlueprintTargetSnapshot,
 } from './_lib/blueprint.target.js';
+import { appendBlueprintTextReceipt } from './_lib/blueprint.text-receipt.js';
 import { blueprintSigningSecret } from './_lib/blueprint.trust.js';
 
 const Digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -184,19 +185,35 @@ export default defineTool({
       record: ReturnType<typeof publicRecord> | null,
       verification: EvidenceVerification,
       text: string,
-    ) =>
-      dualResult({
-        text,
-        data: {
+    ) => {
+      const data = {
+        status,
+        plan_id: args.plan_id,
+        blueprint_id: blueprintId,
+        evidence_id: evidenceId,
+        target,
+        record,
+        verification,
+      };
+      return dualResult({
+        text: appendBlueprintTextReceipt(text, 'evidence', {
           status,
+          target,
           plan_id: args.plan_id,
           blueprint_id: blueprintId,
           evidence_id: evidenceId,
-          target,
-          record,
-          verification,
-        },
+          verification: {
+            identity_verified: verification.identity_verified,
+            guild_verified: verification.guild_verified,
+            readback: verification.readback,
+            snapshot_unchanged: verification.snapshot_unchanged,
+            remaining: verification.remaining_operations.length,
+            blockers: verification.blockers.length,
+          },
+        }),
+        data,
       });
+    };
 
     const boundaryBlockers = blueprintBoundaryBlockers(
       container.config,

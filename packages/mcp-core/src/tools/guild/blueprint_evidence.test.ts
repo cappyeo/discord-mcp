@@ -238,6 +238,7 @@ async function run(planId: string, guildId = GUILD_ID, signal = new AbortControl
     { guild_id: guildId, expected_bot_id: BOT_ID, plan_id: planId },
     { signal },
   ) as Promise<{
+    readonly content: readonly { readonly type: string; readonly text?: string }[];
     readonly structuredContent: {
       readonly status: string;
       readonly blockers?: readonly { readonly code: string }[];
@@ -289,6 +290,10 @@ describe('guild_blueprint_evidence', () => {
     const result = await run(`sha256:${'1'.repeat(64)}`);
 
     expect(result.structuredContent.status).toBe('not_found');
+    const text = result.content.find((block) => block.type === 'text')?.text ?? '';
+    expect(text).toContain('MCP_BLUEPRINT_RECEIPT ');
+    expect(text).toContain('"phase":"evidence"');
+    expect(text).toContain('"status":"not_found"');
     expect(mocks.verifyIdentity).not.toHaveBeenCalled();
     expect(mocks.readTarget).not.toHaveBeenCalled();
     expect(mutationVerbs).toBe(0);

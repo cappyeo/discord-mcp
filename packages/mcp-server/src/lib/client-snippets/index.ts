@@ -3,7 +3,7 @@
  *
  * Order is intentional: Claude Desktop first (most common entry point
  * for new users), Claude Code second (Anthropic CLI), Codex third,
- * Gemini CLI fourth, Cursor fifth, Generic last (fallback). The numeric
+ * Antigravity CLI fourth, Gemini CLI fifth, Cursor sixth, Generic last (fallback). The numeric
  * order also drives the default index in interactive `init` choice
  * prompts.
  *
@@ -11,6 +11,7 @@
  * under this directory, register the singleton here, and add a test.
  * No other surface needs to change - `init` reads from this array.
  */
+import { antigravityCliGenerator } from './antigravity-cli.js';
 import { claudeCodeGenerator } from './claude-code.js';
 import { claudeDesktopGenerator } from './claude-desktop.js';
 import { codexGenerator } from './codex.js';
@@ -25,6 +26,7 @@ export const ALL_GENERATORS: readonly ClientGenerator[] = [
   claudeDesktopGenerator,
   claudeCodeGenerator,
   codexGenerator,
+  antigravityCliGenerator,
   geminiCliGenerator,
   cursorGenerator,
   genericGenerator,

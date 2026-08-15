@@ -215,6 +215,17 @@ describe('initAction - explicit flags', () => {
     expect(snippet.mcpServers['discord-mcp'].env.DISCORD_TOKEN).toBe('${DISCORD_TOKEN}');
   });
 
+  it('with --client antigravity-cli inherits the token without persisting a reference', async () => {
+    await initAction({ json: true, client: 'antigravity-cli', token: 'Bot should-not-persist' });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(parsed.data?.client).toBe('antigravity-cli');
+    expect(parsed.data?.configFilePath).toContain('.gemini/config/mcp_config.json');
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    expect(snippet.mcpServers['discord-mcp'].env).toBeUndefined();
+    expect(parsed.data?.content).not.toContain('should-not-persist');
+    expect(parsed.data?.content).not.toContain('DISCORD_TOKEN');
+  });
+
   it('with --client codex emits the safe TOML environment-forwarding fragment', async () => {
     await initAction({ json: true, client: 'codex' });
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;

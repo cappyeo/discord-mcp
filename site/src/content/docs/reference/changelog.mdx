@@ -9,6 +9,14 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## Unreleased
+
+- Added first-class Google Antigravity CLI setup and offline config auditing.
+  Generated `mcp_config.json` fragments inherit the caller's launch environment
+  and never persist `DISCORD_TOKEN`; doctor fails closed if that field appears.
+- Kept Gemini CLI as an enterprise and paid API-key compatibility target while
+  moving the primary Google consumer path to Antigravity CLI.
+
 ## v0.23.0 - credential-free activation checkpoint
 
 - Added `discord-mcp catalog --check [--json]`, a bounded local MCP handshake

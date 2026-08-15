@@ -87,6 +87,7 @@ describe('guild_blueprint_apply contract', () => {
     container.config = loadConfig({ DISCORD_TOKEN: 'test.discord.token.'.padEnd(64, 'x') });
     let result: {
       readonly isError: boolean;
+      readonly content: readonly { readonly type: string; readonly text?: string }[];
       readonly structuredContent: { readonly status: string; readonly blockers: unknown[] };
     };
     try {
@@ -109,6 +110,10 @@ describe('guild_blueprint_apply contract', () => {
     expect(result.structuredContent.blockers).toEqual([
       expect.objectContaining({ code: 'PLAN_TOKEN_INVALID' }),
     ]);
+    const text = result.content.find((block) => block.type === 'text')?.text ?? '';
+    expect(text).toContain('MCP_BLUEPRINT_RECEIPT ');
+    expect(text).toContain('"phase":"apply"');
+    expect(text).toContain('"status":"blocked"');
     expect(JSON.stringify(result)).not.toContain(planToken);
   });
 

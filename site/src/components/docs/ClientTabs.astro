@@ -1,4 +1,5 @@
 ---
+
 import { TabItem, Tabs } from '@astrojs/starlight/components';
 ---
 
@@ -11,6 +12,9 @@ import { TabItem, Tabs } from '@astrojs/starlight/components';
   </TabItem>
   <TabItem label="Codex">
     <slot name="codex" />
+  </TabItem>
+  <TabItem label="Antigravity CLI">
+    <slot name="antigravity-cli" />
   </TabItem>
   <TabItem label="Gemini CLI">
     <slot name="gemini-cli" />

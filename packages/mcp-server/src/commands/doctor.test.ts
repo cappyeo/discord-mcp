@@ -212,6 +212,55 @@ function createGeminiProfileFixture(tokenReference = '${DISCORD_TOKEN}'): {
   return { directory, profileDirectory, configPath };
 }
 
+function createAntigravityProfileFixture(token?: string): {
+  directory: string;
+  profileDirectory: string;
+  configPath: string;
+} {
+  const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-doctor-antigravity-'));
+  const profileDirectory = join(directory, 'profiles');
+  const configDirectory = join(directory, '.gemini', 'config');
+  const configPath = join(configDirectory, 'mcp_config.json');
+  mkdirSync(configDirectory, { recursive: true });
+  saveProfile(
+    {
+      version: 1,
+      name: 'devbot',
+      bot: { id: '123456789012345678', username: 'doctor-antigravity-bot' },
+      credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+      allowedGuilds: ['987654321098765432'],
+      client: 'antigravity-cli',
+      toolSurface: 'progressive',
+      gateway: false,
+    },
+    { directory: profileDirectory },
+  );
+  writeFileSync(
+    configPath,
+    `${JSON.stringify(
+      {
+        mcpServers: {
+          'discord-mcp': {
+            command: 'npx',
+            args: [
+              '--yes',
+              '--loglevel=error',
+              '@discord-mcp/cli@0.23.0',
+              'serve',
+              '--profile',
+              'devbot',
+            ],
+            ...(token === undefined ? {} : { env: { DISCORD_TOKEN: token } }),
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { directory, profileDirectory, configPath };
+}
+
 function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: string | URL | Request): Promise<Response> => {
     const url = String(input);
@@ -687,6 +736,79 @@ describe('doctorAction - Gemini CLI credential audit', () => {
     const parsed = JSON.parse(out) as { exitCode: number; summary: string };
     expect(parsed.exitCode).toBe(2);
     expect(parsed.summary).toBe('--client gemini-cli requires --profile <name>');
+  });
+});
+
+describe('doctorAction - Antigravity CLI credential audit', () => {
+  it('accepts inherited environment forwarding without requiring the token to inspect config', async () => {
+    const fixture = createAntigravityProfileFixture();
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'antigravity-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      expect(
+        parsed.data.checks.find((check) => check.id === 'antigravity-cli-client-config'),
+      ).toMatchObject({
+        status: 'ok',
+        details: {
+          profile: 'devbot',
+          audited: true,
+          server: 'discord-mcp',
+          version: '0.23.0',
+          environmentForwarding: 'inherited',
+          credentialPersisted: false,
+        },
+      });
+      expect(out).not.toContain(VALID_TOKEN);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when Antigravity config contains a token and never echoes it', async () => {
+    const secret = `Bot ${'q'.repeat(60)}`;
+    const fixture = createAntigravityProfileFixture(secret);
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'antigravity-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string }> };
+      };
+      expect(parsed.exitCode).toBe(2);
+      expect(
+        parsed.data.checks.find((check) => check.id === 'antigravity-cli-client-config'),
+      ).toMatchObject({ status: 'fail' });
+      expect(out).not.toContain(secret);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a saved profile before auditing Antigravity CLI', async () => {
+    const out = await runAndCapture(() => doctorAction({ json: true, client: 'antigravity-cli' }));
+
+    const parsed = JSON.parse(out) as { exitCode: number; summary: string };
+    expect(parsed.exitCode).toBe(2);
+    expect(parsed.summary).toBe('--client antigravity-cli requires --profile <name>');
   });
 });
 

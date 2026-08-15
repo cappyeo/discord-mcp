@@ -587,7 +587,9 @@ export async function initAction(opts: InitOptions): Promise<void> {
           '',
         ];
   const clientAudit =
-    generator.id === 'codex' || generator.id === 'gemini-cli' ? ` --client ${generator.id}` : '';
+    generator.id === 'codex' || generator.id === 'antigravity-cli' || generator.id === 'gemini-cli'
+      ? ` --client ${generator.id}`
+      : '';
 
   emitResult(
     {

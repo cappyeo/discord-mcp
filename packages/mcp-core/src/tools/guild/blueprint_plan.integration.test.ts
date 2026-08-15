@@ -163,7 +163,14 @@ describe('guild_blueprint_plan public MCP journey', () => {
         const content = result.structuredContent as {
           plan_id: string;
           plan_ref: string;
+          plan_token: string;
         };
+        const text = result.content.find((block) => block.type === 'text')?.text ?? '';
+        expect(text).toContain('MCP_BLUEPRINT_RECEIPT ');
+        expect(text).toContain('"phase":"plan"');
+        expect(text).toContain(`"plan_id":"${content.plan_id}"`);
+        expect(text).toContain(`"plan_ref":"${content.plan_ref}"`);
+        expect(text).not.toContain(content.plan_token);
         const loaded = await loadBlueprintPlanReference({
           stateDirectory,
           planRef: content.plan_ref,

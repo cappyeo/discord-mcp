@@ -148,6 +148,7 @@ connectivity, or create Activity Evidence. Add `--json` for the stable
 ```bash
 discord-mcp doctor [--profile <name>] [--json] [--online]
 discord-mcp doctor --profile <name> --client codex [--config <path>] [--json]
+discord-mcp doctor --profile <name> --client antigravity-cli [--config <path>] [--json]
 ```
 
 Diagnose configuration, token, and connectivity issues. Runs a registry of
@@ -161,8 +162,8 @@ against npm `latest`.
 | `--json`    | boolean | `false` | Emit machine-readable JSON instead of pretty TTY output. Use this in CI.                                                                       |
 | `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). With a generated Codex profile, also performs one read-only npm version check. Without this flag only offline checks run, so doctor stays cheap. |
 | `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. A generated Codex profile enables launcher update discovery with `--online`. |
-| `--client <id>` | string | unset | Audit a saved MCP client configuration locally. Supports `codex` and `gemini-cli`; both require `--profile` and neither calls npm or Discord. Gemini audit fails if `DISCORD_TOKEN` was materialized into settings. |
-| `--config <path>` | string | selected client's user config | Override the Codex `config.toml` or Gemini `settings.json` path; useful for a nonstandard client home or CI fixture. |
+| `--client <id>` | string | unset | Audit a saved MCP client configuration locally. Supports `codex`, `antigravity-cli`, and `gemini-cli`; each requires `--profile` and does not call npm or Discord. Antigravity audit fails if its MCP JSON contains `DISCORD_TOKEN`; Gemini audit fails if the variable was materialized into settings. |
+| `--config <path>` | string | selected client's user config | Override the Codex `config.toml`, Antigravity `mcp_config.json`, or Gemini `settings.json` path; useful for a nonstandard client home or CI fixture. |
 
 ### Examples
 
@@ -308,7 +309,7 @@ metadata, and generates a client snippet that starts `serve --profile <name>`.
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--profile <name>` | string | prompt if TTY; required otherwise | Stable lowercase profile name. Allows letters, digits, dots, underscores, and hyphens. |
-| `--client <id>` | string | prompt if TTY, else `generic` | One of `claude-desktop`, `claude-code`, `codex`, `gemini-cli`, `cursor`, `generic`. |
+| `--client <id>` | string | prompt if TTY, else `generic` | One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `gemini-cli`, `cursor`, `generic`. |
 | `--tool-surface <mode>` | string | `progressive` | Store `full` or `progressive` as the runtime presentation layer. |
 | `--allowed-guilds <ids>` | string | sole guild or interactive choice | Verify and store an explicit comma-separated guild allowlist. Ambiguous non-interactive selection fails closed. |
 | `--gateway` | boolean | `false` | Store Gateway subscriptions for stdio startup. |
@@ -471,7 +472,7 @@ reusable bot profile and safer credential lifecycle.
 
 | Flag             | Type    | Default                                              | Description                                                                                                                                                                                                          |
 | ---------------- | ------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `codex`, `gemini-cli`, `cursor`, `generic`.                                                                                                                |
+| `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `gemini-cli`, `cursor`, `generic`.                                                                                             |
 | `--token <token>`| string  | `${env:DISCORD_TOKEN}` placeholder                   | Discord bot token. **Warning**: writes the value into the snippet unredacted. Omit to leave the env-var interpolation placeholder so users don't accidentally commit a real secret.                                  |
 | `--gateway`      | boolean | `false`                                              | Append `--gateway` to the generated snippet so the server enables Gateway subscriptions on boot.                                                                                                                     |
 | `--tool-surface <mode>` | string | `full`                                        | Set `progressive` to add `MCP_TOOL_SURFACE=progressive` to the generated client snippet; useful for hosts without native deferred MCP loading.                                                                        |
@@ -494,7 +495,10 @@ discord-mcp init --client claude-desktop
 # Non-interactive: print a Codex TOML fragment that forwards DISCORD_TOKEN.
 discord-mcp init --client codex
 
-# Non-interactive: print Gemini settings with an explicit, non-secret env reference.
+# Non-interactive: print Antigravity MCP config with inherited credentials.
+discord-mcp init --client antigravity-cli
+
+# Compatibility: print Gemini settings with an explicit, non-secret env reference.
 discord-mcp init --client gemini-cli
 
 # Recommended: verify the bot and derive a progressive, guild-scoped Codex fragment.

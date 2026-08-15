@@ -25,6 +25,10 @@
 import { type Config, loadConfig } from '@discord-mcp/core';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
 import {
+  AntigravityCliConfigError,
+  inspectAntigravityCliConfig,
+} from '../lib/client-snippets/antigravity-cli-inspector.js';
+import {
   GeminiCliConfigError,
   inspectGeminiCliConfig,
 } from '../lib/client-snippets/gemini-cli-inspector.js';
@@ -200,14 +204,55 @@ function geminiCliClientConfigCheck(profile: DiscordMcpProfile, config?: string)
   }
 }
 
+function antigravityCliClientConfigCheck(profile: DiscordMcpProfile, config?: string): CheckResult {
+  try {
+    const inspection = inspectAntigravityCliConfig(profile, {
+      ...(config === undefined ? {} : { config }),
+    });
+    return {
+      id: 'antigravity-cli-client-config',
+      status: 'ok',
+      message: `Configured Antigravity CLI launcher is secret-safe for profile ${profile.name}.`,
+      details: {
+        profile: profile.name,
+        audited: true,
+        server: inspection.configName,
+        version: inspection.currentVersion,
+        environmentForwarding: inspection.environmentForwarding,
+        credentialPersisted: inspection.credentialPersisted,
+      },
+    };
+  } catch (error) {
+    const persisted =
+      error instanceof AntigravityCliConfigError && error.kind === 'credential-persisted';
+    return {
+      id: 'antigravity-cli-client-config',
+      status: 'fail',
+      message: persisted
+        ? 'Antigravity CLI MCP config contains DISCORD_TOKEN. Remove that field, keep the token in the launch environment, and rotate any materialized credential.'
+        : 'Could not verify a secret-safe generated Antigravity CLI launcher.',
+      details: {
+        profile: profile.name,
+        audited: false,
+        credentialPersisted: persisted ? true : null,
+      },
+    };
+  }
+}
+
 export async function doctorAction(opts: DoctorOptions): Promise<void> {
-  if (opts.client !== undefined && opts.client !== 'codex' && opts.client !== 'gemini-cli') {
+  if (
+    opts.client !== undefined &&
+    opts.client !== 'codex' &&
+    opts.client !== 'antigravity-cli' &&
+    opts.client !== 'gemini-cli'
+  ) {
     emitResult(
       {
         ok: false,
         exitCode: 2,
         summary: `unsupported client audit: ${opts.client}`,
-        errors: ['Supported client audits: codex, gemini-cli.'],
+        errors: ['Supported client audits: codex, antigravity-cli, gemini-cli.'],
       },
       opts.json === true,
     );
@@ -232,7 +277,7 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
       const profileOptions = {
         ...(opts.profileDirectory === undefined ? {} : { directory: opts.profileDirectory }),
       };
-      if (opts.client === 'gemini-cli') {
+      if (opts.client === 'gemini-cli' || opts.client === 'antigravity-cli') {
         profile = loadProfile(opts.profile, profileOptions);
         const token = process.env[profile.credential.variable];
         if (token !== undefined && token !== '') {
@@ -288,6 +333,9 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
   }
   if (opts.client === 'gemini-cli' && profile !== undefined) {
     results.push(geminiCliClientConfigCheck(profile, opts.config));
+  }
+  if (opts.client === 'antigravity-cli' && profile !== undefined) {
+    results.push(antigravityCliClientConfigCheck(profile, opts.config));
   }
 
   if (opts.online === true && profile?.client === 'codex') {
