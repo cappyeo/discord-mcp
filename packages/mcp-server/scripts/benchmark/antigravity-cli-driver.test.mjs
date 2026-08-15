@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -139,7 +139,10 @@ describe('Antigravity CLI private driver', () => {
       platform: process.platform,
       command: paths.launcherPath,
     });
-    expect(resolved).toMatchObject({ command: resolve(paths.launcherPath), kind: 'native' });
+    expect(resolved).toMatchObject({
+      command: resolve(await realpath(paths.launcherPath)),
+      kind: 'native',
+    });
     if (process.platform === 'win32') {
       const shim = join(paths.root, 'agy.cmd');
       await writeFile(shim, '@echo off');
