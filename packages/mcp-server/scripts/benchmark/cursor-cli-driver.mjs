@@ -202,13 +202,17 @@ function insideInstallRoot(path, root, platform) {
 async function officialCursorLauncher(path, { environment, platform }) {
   const canonical = await candidate(path, platform);
   if (canonical === null) return null;
+  let canonicalRoot;
+  try {
+    canonicalRoot = resolve(await realpath(cursorInstallRoot(environment, platform)));
+  } catch {
+    return null;
+  }
   const name = basename(canonical).toLowerCase();
   const expectedNames =
     platform === 'win32' ? new Set(['agent.exe', 'cursor-agent.exe']) : new Set(['cursor-agent']);
   if (!expectedNames.has(name)) return null;
-  return insideInstallRoot(canonical, cursorInstallRoot(environment, platform), platform)
-    ? canonical
-    : null;
+  return insideInstallRoot(canonical, canonicalRoot, platform) ? canonical : null;
 }
 
 /** Resolve only an official Cursor installer path, including native Windows. */

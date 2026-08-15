@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -212,6 +212,8 @@ describe('Cursor Agent CLI activation driver', () => {
 
   it('resolves the official native Windows launcher without a shell fallback', async () => {
     const item = await fixture();
+    const canonicalLauncher = await realpath(item.windowsLauncher);
+    const canonicalLegacyLauncher = await realpath(item.windowsLegacyLauncher);
     const run = vi.fn(async () => ({ stdout: `${item.rogueWindowsLauncher}\n` }));
     await expect(
       resolveCursorCliLauncher({
@@ -219,7 +221,7 @@ describe('Cursor Agent CLI activation driver', () => {
         environment: { LOCALAPPDATA: item.root },
         run,
       }),
-    ).resolves.toEqual({ command: item.windowsLauncher, prefix_args: [], kind: 'native' });
+    ).resolves.toEqual({ command: canonicalLauncher, prefix_args: [], kind: 'native' });
     expect(run).not.toHaveBeenCalled();
     await expect(
       resolveCursorCliLauncher({
@@ -229,7 +231,7 @@ describe('Cursor Agent CLI activation driver', () => {
         run,
       }),
     ).resolves.toEqual({
-      command: item.windowsLegacyLauncher,
+      command: canonicalLegacyLauncher,
       prefix_args: [],
       kind: 'native',
     });
