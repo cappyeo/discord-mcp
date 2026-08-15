@@ -251,6 +251,42 @@ describe('Codex activation trial seam', () => {
     expect(JSON.stringify(result.artifact)).not.toMatch(/153733282597856874[45]/);
   });
 
+  it('preserves the platform profile environment fallback for custom workspaces', async () => {
+    let observedSetupProfileEnvironmentKey;
+    let observedLaunchProfileEnvironmentKey;
+    const dependencies = fakeDependencies({
+      async setup(args) {
+        dependencies.calls.push('setup');
+        observedSetupProfileEnvironmentKey = args.profileEnvironmentKey;
+        return {
+          exitCode: 0,
+          config: CONFIG,
+          administratorWarning: false,
+          binding: { guildId: TARGET.guildId, botId: TARGET.botId },
+          bindingVerified: true,
+        };
+      },
+      async launch(args) {
+        dependencies.calls.push('launch');
+        observedLaunchProfileEnvironmentKey = args.profileEnvironmentKey;
+        return {
+          binding: TARGET,
+          clientReady: true,
+          firstRequest: true,
+          isolated: true,
+          sessionDigest: DIGEST('c'),
+        };
+      },
+    });
+
+    const result = await runCodexActivationTrial(request({ dependencies }));
+
+    expect(result.ok).toBe(true);
+    const expected = process.platform === 'win32' ? 'APPDATA' : 'XDG_CONFIG_HOME';
+    expect(observedSetupProfileEnvironmentKey).toBe(expected);
+    expect(observedLaunchProfileEnvironmentKey).toBe(expected);
+  });
+
   it('normalizes one optional Bot prefix before every dependency boundary', async () => {
     let observedSetupToken;
     let observedLaunchToken;
@@ -328,9 +364,50 @@ describe('Codex activation trial seam', () => {
       });
       expect(setup.bindingVerified).toBe(true);
       expect(setup.binding).toEqual({ guildId: TARGET.guildId, botId: TARGET.botId });
+
+      const tooBroad = createDefaultCodexActivationDependencies({
+        runCommand: async () => ({
+          code: 0,
+          stdout: JSON.stringify({
+            ok: true,
+            exitCode: 0,
+            data: {
+              allowedGuilds: [TARGET.guildId, '1533719084636700775'],
+              discord: { bot: { id: TARGET.botId } },
+            },
+          }),
+        }),
+      });
+      await expect(
+        tooBroad.setup({
+          release: RELEASE,
+          profile: 'activation-trial-001',
+          target: TARGET,
+          configPath,
+          home: root,
+          profileRoot: root,
+          installRoot: root,
+          token: 'raw-token',
+        }),
+      ).rejects.toThrow(/exactly match/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('runs auth preflight before workspace or Discord baseline side effects', async () => {
+    const dependencies = fakeDependencies();
+    await expect(
+      runCodexActivationTrial(
+        request({
+          dependencies,
+          authPreflight: async () => {
+            throw new Error('authentication is unavailable');
+          },
+        }),
+      ),
+    ).rejects.toThrow('authentication is unavailable');
+    expect(dependencies.calls).toEqual([]);
   });
 
   it('does not brand a factory with injected seams as authoritative live execution', async () => {
@@ -341,6 +418,44 @@ describe('Codex activation trial seam', () => {
         return { code: 0 };
       },
     });
+    await expect(
+      runCodexActivationTrial(request({ dependencies, executionMode: 'live' })),
+    ).rejects.toThrow(/built-in audited dependency adapter/);
+    expect(commandCalled).toBe(false);
+  });
+
+  it('rejects inherited activation seams before branding or command execution', () => {
+    let commandCalled = false;
+    const inherited = Object.create({
+      runCommand: async () => {
+        commandCalled = true;
+        return { code: 0 };
+      },
+      environment: { PATH: process.env.PATH },
+      resolveNpmCli: async () => 'injected-npm-cli.js',
+    });
+    expect(() => createDefaultCodexActivationDependencies(inherited)).toThrow(
+      /must not inherit activation seams/,
+    );
+    expect(commandCalled).toBe(false);
+  });
+
+  it('does not brand a proxy-hidden activation seam as trusted', async () => {
+    let commandCalled = false;
+    const injected = async () => {
+      commandCalled = true;
+      return { code: 0 };
+    };
+    const options = new Proxy(
+      {},
+      {
+        get(target, property, receiver) {
+          if (property === 'runCommand') return injected;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const dependencies = createDefaultCodexActivationDependencies(options);
     await expect(
       runCodexActivationTrial(request({ dependencies, executionMode: 'live' })),
     ).rejects.toThrow(/built-in audited dependency adapter/);

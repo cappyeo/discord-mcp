@@ -13,6 +13,15 @@
 import { renderMcpServersJson } from './_shared.js';
 import type { ClientGenerator, Snippet, SnippetConfig } from './types.js';
 
+// `init` keeps one legacy placeholder for JSON clients. Claude Code expands
+// `${VAR}` (not `${env:VAR}`), so normalize only that sentinel here. Guided
+// profile setup leaves `discordToken` undefined and therefore remains
+// secret-free with no `env.DISCORD_TOKEN` entry.
+// biome-ignore lint/suspicious/noTemplateCurlyInString: literal legacy placeholder
+const LEGACY_TOKEN_PLACEHOLDER = '${env:DISCORD_TOKEN}';
+// biome-ignore lint/suspicious/noTemplateCurlyInString: literal Claude Code placeholder
+const CLAUDE_CODE_TOKEN_PLACEHOLDER = '${DISCORD_TOKEN}';
+
 const CONFIG_PATH = [
   'User-level (preferred):  ~/.claude.json',
   'Project-level:           <project>/.mcp.json',
@@ -22,13 +31,23 @@ const CONFIG_PATH = [
 const INSTRUCTIONS =
   'Easiest: `claude mcp add discord-mcp -- <command> [args...]`. Manual: merge into the `mcpServers` object in ~/.claude.json (or the project-level .mcp.json).';
 
+function renderClaudeCodeMcpServersJson(cfg: SnippetConfig): string {
+  const { discordToken, ...withoutToken } = cfg;
+  if (discordToken === undefined) return renderMcpServersJson(withoutToken);
+  return renderMcpServersJson({
+    ...withoutToken,
+    discordToken:
+      discordToken === LEGACY_TOKEN_PLACEHOLDER ? CLAUDE_CODE_TOKEN_PLACEHOLDER : discordToken,
+  });
+}
+
 export const claudeCodeGenerator: ClientGenerator = {
   id: 'claude-code',
   displayName: 'Claude Code',
   generate(cfg: SnippetConfig): Snippet {
     return {
       format: 'json',
-      content: renderMcpServersJson(cfg),
+      content: renderClaudeCodeMcpServersJson(cfg),
       configFilePath: CONFIG_PATH,
       instructions: INSTRUCTIONS,
     };

@@ -14,7 +14,7 @@ interface ParsedDoc {
     'discord-mcp': {
       command: string;
       args: string[];
-      env: Record<string, string>;
+      env?: Record<string, string>;
     };
   };
 }
@@ -37,11 +37,19 @@ describe('claudeCodeGenerator', () => {
     expect(parsed.mcpServers['discord-mcp']).toBeDefined();
   });
 
-  it('places token in env.DISCORD_TOKEN', () => {
+  it('uses Claude Code environment interpolation for the legacy placeholder', () => {
     const snippet = claudeCodeGenerator.generate(baseConfig);
     const env = parseSnippet(snippet.content).mcpServers['discord-mcp'].env;
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal placeholder, not JS interpolation
-    expect(env.DISCORD_TOKEN).toBe('${env:DISCORD_TOKEN}');
+    expect(env?.DISCORD_TOKEN).toBe('${DISCORD_TOKEN}');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal legacy placeholder, not JS interpolation
+    expect(snippet.content).not.toContain('${env:DISCORD_TOKEN}');
+  });
+
+  it('keeps guided profile setup secret-free when no token is supplied', () => {
+    const { discordToken: _omitted, ...withoutToken } = baseConfig;
+    const snippet = claudeCodeGenerator.generate(withoutToken);
+    expect(parseSnippet(snippet.content).mcpServers['discord-mcp'].env).toBeUndefined();
   });
 
   it('handles npx-style serverPath/args', () => {
