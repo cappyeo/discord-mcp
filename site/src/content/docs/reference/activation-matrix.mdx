@@ -1,0 +1,70 @@
+---
+title: AI host activation matrix
+description: Independently verify the five-host production benchmark from private campaign attestations and Activity Evidence.
+sidebar:
+  order: 5
+---
+
+The production activation matrix is the final technical gate for Codex, Claude
+Code, Antigravity CLI, Cursor Agent CLI, and Grok Build CLI. It does not run a
+model or mutate Discord. It independently verifies five already-completed live
+campaigns and emits one public, secret-free summary.
+
+Each host must contribute exactly three unique live trials. All 15 trials must
+use the same release, source commit, verified package build, caller-owned bot,
+and guild binding. Every trial must finish setup, apply or resume, independent
+Activity Evidence validation, and exact disposable-guild baseline restoration
+in under ten minutes. With 15 fixed trials, the production target of at least
+95% requires 15/15 passes because 14/15 is only 93.3%.
+
+The matrix revalidates every private HMAC attestation instead of trusting the
+per-host public summaries. It then aggregates the original trial records again,
+so reusing a trial ID, client session, attestation envelope, or Activity
+Evidence identity across hosts fails closed.
+
+## Prerequisites
+
+Run each host's three-trial campaign with a unique run ID and the same:
+
+- released package and source commit;
+- caller-owned Discord bot and disposable guild;
+- private activation artifact root;
+- exact target and write approvals.
+
+Live campaigns can incur model-provider cost and Discord writes. They require
+fresh operator approval at execution time. CI fixtures, parser tests, catalog
+checks, and offline host inspection do not satisfy this gate.
+
+## Verify the five campaigns
+
+Keep the bot token in the process environment. The verifier uses it only to
+authenticate the private campaign envelopes and prints neither the token nor
+private Discord identifiers, paths, or Activity Evidence payloads.
+
+```bash
+export DISCORD_TESTBOT_B_TOKEN='<caller-owned bot token used by the campaigns>'
+export DISCORD_ACTIVATION_GUILD_ID='<disposable guild id>'
+export DISCORD_EXPECTED_BOT_ID='<expected bot id>'
+
+pnpm benchmark:activation:matrix:verify -- \
+  --artifact-root /private/discord-mcp-activation \
+  --expected-release 0.24.0 \
+  --expected-commit '<40-character source commit>' \
+  --expected-build-digest 'sha256:<64 hex characters>' \
+  --codex-run-id codex-activation-live-001 \
+  --claude-code-run-id claude-code-activation-live-001 \
+  --antigravity-cli-run-id antigravity-cli-activation-live-001 \
+  --cursor-cli-run-id cursor-cli-activation-live-001 \
+  --grok-cli-run-id grok-cli-activation-live-001
+```
+
+A successful result uses
+`discord-mcp.activation-trials-verifier.v1`, reports `verified: true`,
+`host_count: 5`, and contains five three-trial host summaries. Any missing,
+mixed, duplicated, tampered, non-live, unsafe, incomplete, slow, or
+baseline-drifting campaign produces one generic failure envelope and a nonzero
+exit code.
+
+The public summary is useful release evidence, but the private envelopes remain
+caller-owned. Do not upload the artifact root, bot token, guild identifiers, or
+raw Activity Evidence.

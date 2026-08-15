@@ -285,6 +285,13 @@ pnpm test
 
 The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_TOKEN` and run `node packages/mcp-server/dist/cli.js`; the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is useful for verifying `tools/list` interactively.
 
+Maintainers can use the
+[AI host activation matrix](https://cappyeo.github.io/discord-mcp/reference/activation-matrix/)
+to independently verify three live trials for each of Codex, Claude Code,
+Antigravity CLI, Cursor Agent, and Grok Build against one exact release build.
+It consumes existing private campaign attestations; it does not launch models
+or write to Discord by itself.
+
 ## Project status
 
 `discord-mcp` is pre-1.0. This source tree targets **v0.23.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.

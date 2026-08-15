@@ -20,8 +20,10 @@ import {
   ACTIVATION_MAX_DURATION_MS,
   ACTIVATION_VERIFIER_SCHEMA,
   main,
+  PRODUCTION_ACTIVATION_HOSTS,
   verifyActivationTrialAggregate,
   verifyActivationTrialsBundle,
+  verifyProductionActivationMatrix,
 } from './verify-activation-trials.mjs';
 
 const DIGEST = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
@@ -92,31 +94,43 @@ function three(overrides = []) {
 const BINDING = { guildId: '1537332825978568744', botId: '1533998797863256165' };
 const KEY = 'activation-test-integrity-key';
 
-function attestedBundle({ reuseEvidence = false } = {}) {
+function attestedBundle({
+  reuseEvidence = false,
+  host = 'codex',
+  hostVersion = '0.147.0',
+  runId = 'activation-run-001',
+  trialPrefix = 'trial',
+  identityNamespace = '',
+} = {}) {
   const evidenceDirPromise = mkdtemp(join(tmpdir(), 'discord-mcp-activation-verifier-'));
   return evidenceDirPromise.then(async (root) => {
     const evidenceDir = join(root, 'evidence');
     await mkdir(evidenceDir);
     const publicTrials = [];
+    const namespace = identityNamespace === '' ? '' : `${identityNamespace}-`;
+    const sessionNamespace = identityNamespace === '' ? '' : `${host}-`;
     for (const index of [1, 2, 3]) {
       const evidence = {
         schema_version: 'guild_blueprint_activity_evidence.v1',
         status: 'verified',
-        evidence_id: DIGEST(`evidence-record-${reuseEvidence ? 1 : index}`),
+        evidence_id: DIGEST(`${namespace}evidence-record-${reuseEvidence ? 1 : index}`),
         target: { guild_id: BINDING.guildId, bot_id: BINDING.botId },
       };
       const value = trial(index, {
+        host,
+        host_version: hostVersion,
+        trial_id: `${trialPrefix}-${String(index).padStart(3, '0')}`,
         digests: {
           build: DIGEST('public-package'),
           evidence: evidence.evidence_id,
-          session: DIGEST(`session-${index}`),
+          session: DIGEST(`${sessionNamespace}session-${index}`),
         },
       });
       const attestation = createActivationAttestation({
         envelope: {
           schema_version: ACTIVATION_ATTESTATION_SCHEMA,
           context: ACTIVATION_ATTESTATION_CONTEXT,
-          run_id: 'activation-run-001',
+          run_id: runId,
           trial_id: value.trial_id,
           host: value.host,
           host_version: value.host_version,
@@ -124,7 +138,7 @@ function attestedBundle({ reuseEvidence = false } = {}) {
           source_commit: value.source_commit,
           execution_provenance: {
             execution_mode: value.execution_mode,
-            adapter_id: 'codex-adapter',
+            adapter_id: `${host}-adapter`,
             abortable: true,
             package_source: 'verified_npm_provenance',
           },
@@ -159,8 +173,40 @@ function attestedBundle({ reuseEvidence = false } = {}) {
       inputPath,
       JSON.stringify({ schema_version: ACTIVATION_BUNDLE_SCHEMA, trials: publicTrials }),
     );
-    return { root, inputPath, evidenceDir, publicTrials };
+    return { root, inputPath, evidenceDir, publicTrials, runId };
   });
+}
+
+async function attestedProductionMatrix({ sharedEvidenceHosts = [] } = {}) {
+  const fixtures = await Promise.all(
+    PRODUCTION_ACTIVATION_HOSTS.map((host) =>
+      attestedBundle({
+        host,
+        hostVersion: '1.0.0',
+        runId: `${host}-activation-run-001`,
+        trialPrefix: `${host}-trial`,
+        identityNamespace: sharedEvidenceHosts.includes(host) ? 'shared' : host,
+      }),
+    ),
+  );
+  return {
+    fixtures,
+    campaigns: Object.fromEntries(
+      fixtures.map((fixture, index) => [
+        PRODUCTION_ACTIVATION_HOSTS[index],
+        {
+          inputPath: fixture.inputPath,
+          evidenceDir: fixture.evidenceDir,
+          expectedRunId: fixture.runId,
+        },
+      ]),
+    ),
+    async cleanup() {
+      await Promise.all(
+        fixtures.map((fixture) => rm(fixture.root, { recursive: true, force: true })),
+      );
+    },
+  };
 }
 
 describe('activation trial aggregate verifier', () => {
@@ -351,6 +397,77 @@ describe('activation trial aggregate verifier', () => {
         trials: three([{ release: '0.22.1' }]),
       }),
     ).toThrow(/release/);
+  });
+});
+
+describe('production activation host matrix verifier', () => {
+  it('independently verifies all five hosts and aggregates all fifteen trials', async () => {
+    const matrix = await attestedProductionMatrix();
+    try {
+      const result = await verifyProductionActivationMatrix({
+        campaigns: matrix.campaigns,
+        integrityKey: KEY,
+        expectedBinding: BINDING,
+        expectedRelease: '0.22.0',
+        expectedCommit: 'a'.repeat(40),
+        expectedBuildDigest: DIGEST('public-package'),
+        validateActivityEvidence: (value) => value.status === 'verified',
+      });
+      expect(result).toMatchObject({
+        schema_version: ACTIVATION_VERIFIER_SCHEMA,
+        verified: true,
+        host_count: 5,
+      });
+      expect(result.hosts.map(({ host }) => host).sort()).toEqual(
+        [...PRODUCTION_ACTIVATION_HOSTS].sort(),
+      );
+      expect(result.hosts.reduce((total, host) => total + host.trial_count, 0)).toBe(15);
+      expect(JSON.stringify(result)).not.toContain(BINDING.guildId);
+      expect(JSON.stringify(result)).not.toContain(BINDING.botId);
+    } finally {
+      await matrix.cleanup();
+    }
+  });
+
+  it('rejects a missing host before treating a partial matrix as production evidence', async () => {
+    const matrix = await attestedProductionMatrix();
+    try {
+      delete matrix.campaigns['grok-cli'];
+      await expect(
+        verifyProductionActivationMatrix({
+          campaigns: matrix.campaigns,
+          integrityKey: KEY,
+          expectedBinding: BINDING,
+          expectedRelease: '0.22.0',
+          expectedCommit: 'a'.repeat(40),
+          expectedBuildDigest: DIGEST('public-package'),
+          validateActivityEvidence: (value) => value.status === 'verified',
+        }),
+      ).rejects.toThrow(/campaigns\.grok-cli/);
+    } finally {
+      await matrix.cleanup();
+    }
+  });
+
+  it('rejects Activity Evidence reused across independently valid host campaigns', async () => {
+    const matrix = await attestedProductionMatrix({
+      sharedEvidenceHosts: ['codex', 'claude-code'],
+    });
+    try {
+      await expect(
+        verifyProductionActivationMatrix({
+          campaigns: matrix.campaigns,
+          integrityKey: KEY,
+          expectedBinding: BINDING,
+          expectedRelease: '0.22.0',
+          expectedCommit: 'a'.repeat(40),
+          expectedBuildDigest: DIGEST('public-package'),
+          validateActivityEvidence: (value) => value.status === 'verified',
+        }),
+      ).rejects.toThrow(/reuses Activity Evidence identity/);
+    } finally {
+      await matrix.cleanup();
+    }
   });
 });
 

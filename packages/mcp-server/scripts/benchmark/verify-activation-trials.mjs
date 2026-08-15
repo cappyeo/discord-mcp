@@ -20,6 +20,13 @@ export const ACTIVATION_BUNDLE_SCHEMA = 'discord-mcp.activation-trials-bundle.v1
 export const ACTIVATION_MAX_BUNDLE_BYTES = 2 * 1024 * 1024;
 export const ACTIVATION_MAX_ENVELOPE_BYTES = 1024 * 1024;
 export const ACTIVATION_MAX_TRIALS = 256;
+export const PRODUCTION_ACTIVATION_HOSTS = Object.freeze([
+  'codex',
+  'claude-code',
+  'antigravity-cli',
+  'cursor-cli',
+  'grok-cli',
+]);
 
 const DIGEST_RE = /^sha256:([a-f0-9]{64})$/;
 const SNOWFLAKE_RE = /^\d{17,20}$/;
@@ -335,7 +342,7 @@ export function verifyActivationTrialAggregate({
  * campaign orchestrator must supply a freshly generated expectedRunId; repeat
  * verification of that same run remains intentionally idempotent.
  */
-export async function verifyActivationTrialsBundle({
+async function verifyActivationTrialsBundleDetailed({
   inputPath,
   evidenceDir,
   integrityKey,
@@ -388,9 +395,67 @@ export async function verifyActivationTrialsBundle({
   if (runIds.size !== 1) throw new Error('activation bundle mixes private campaign run ids');
   // Aggregate only after private envelopes establish the release authority;
   // public artifacts provide the host-level measurements and safety fields.
-  return verifyActivationTrialAggregate({
+  const summary = verifyActivationTrialAggregate({
     trials: publicTrials,
     expectedHosts,
+    expectedRelease,
+    expectedCommit,
+    expectedBuildDigest,
+    maxDurationMs,
+  });
+  return { summary, trials: publicTrials };
+}
+
+export async function verifyActivationTrialsBundle(options = {}) {
+  return (await verifyActivationTrialsBundleDetailed(options)).summary;
+}
+
+/**
+ * Verify the complete production host matrix without trusting per-host public
+ * summaries. Each campaign is authenticated independently, then all public
+ * trials are aggregated again so cross-host evidence/session reuse fails.
+ */
+export async function verifyProductionActivationMatrix({
+  campaigns,
+  integrityKey,
+  expectedBinding,
+  expectedRelease,
+  expectedCommit,
+  expectedBuildDigest,
+  maxDurationMs = ACTIVATION_MAX_DURATION_MS,
+  validateActivityEvidence,
+} = {}) {
+  assertPlainKeys(campaigns, new Set(PRODUCTION_ACTIVATION_HOSTS), 'campaigns');
+  const runIds = new Set();
+  const trials = [];
+  for (const host of PRODUCTION_ACTIVATION_HOSTS) {
+    const campaign = campaigns[host];
+    assertPlainKeys(
+      campaign,
+      new Set(['evidenceDir', 'expectedRunId', 'inputPath']),
+      `campaigns.${host}`,
+    );
+    const runId = assertExpectedRunId(campaign.expectedRunId);
+    if (runIds.has(runId)) throw new Error('production activation matrix reuses a campaign run id');
+    runIds.add(runId);
+    const verified = await verifyActivationTrialsBundleDetailed({
+      inputPath: campaign.inputPath,
+      evidenceDir: campaign.evidenceDir,
+      integrityKey,
+      expectedBinding,
+      expectedRunId: runId,
+      expectedHosts: [host],
+      expectedRelease,
+      expectedCommit,
+      expectedBuildDigest,
+      maxDurationMs,
+      validateActivityEvidence,
+    });
+    trials.push(...verified.trials);
+  }
+  return verifyActivationTrialAggregate({
+    trials,
+    expectedHosts: PRODUCTION_ACTIVATION_HOSTS,
     expectedRelease,
     expectedCommit,
     expectedBuildDigest,

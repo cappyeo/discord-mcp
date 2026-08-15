@@ -26,6 +26,11 @@ commit history and downloadable artifacts, see
   and a three-trial activation campaign over the shared Activity Evidence
   lifecycle. This is code and CI evidence only; no live Grok model or Discord
   campaign is predeclared here.
+- Added a fail-closed five-host activation matrix verifier. It independently
+  authenticates three live campaign trials for each first-class coding host,
+  requires one exact release/commit/package build, and rejects cross-host reuse
+  of trial IDs, client sessions, attestation envelopes, or Activity Evidence.
+  The gate does not predeclare that the live 15-trial matrix has passed.
 - Added the first Cursor Agent CLI activation adapter over the shared
   setup → plan → approve → apply/resume → Activity Evidence lifecycle. Its
   benchmark driver uses the official `stream-json` events, exact MCP argument

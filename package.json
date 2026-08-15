@@ -41,6 +41,7 @@
     "benchmark:activation:antigravity-cli:campaign": "node packages/mcp-server/scripts/benchmark/antigravity-cli-activation-campaign.mjs",
     "benchmark:activation:cursor-cli:campaign": "node packages/mcp-server/scripts/benchmark/cursor-cli-activation-campaign.mjs",
     "benchmark:activation:grok-cli:campaign": "node packages/mcp-server/scripts/benchmark/grok-cli-activation-campaign.mjs",
+    "benchmark:activation:matrix:verify": "node packages/mcp-server/scripts/benchmark/verify-activation-matrix.mjs",
     "benchmark:architect": "pnpm --filter @discord-mcp/core exec vitest bench src/tools/guild/_lib/blueprint-planning.bench.ts --run",
     "lint": "biome check .",
     "format": "biome format --write .",
