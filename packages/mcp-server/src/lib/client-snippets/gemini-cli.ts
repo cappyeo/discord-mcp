@@ -34,7 +34,7 @@ function renderGeminiMcpServersJson(cfg: SnippetConfig): string {
 
 export const geminiCliGenerator: ClientGenerator = {
   id: 'gemini-cli',
-  displayName: 'Gemini CLI',
+  displayName: 'Gemini CLI (enterprise compatibility)',
   generate(cfg: SnippetConfig): Snippet {
     return {
       format: 'json',

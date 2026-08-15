@@ -21,6 +21,7 @@ const CLIENT_IDS = [
   'claude-code',
   'codex',
   'antigravity-cli',
+  'cursor-cli',
   'gemini-cli',
   'cursor',
   'generic',

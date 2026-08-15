@@ -102,7 +102,7 @@ On PowerShell, set the token before running the same `setup` and verification co
 $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 ```
 
-`setup` supports Codex, Claude Desktop, Claude Code, Google Antigravity CLI, Gemini CLI, Cursor, and a generic MCP client. It sends the current token only to Discord, verifies the bot identity, chooses a guild boundary, and saves a versioned local profile containing only non-secret metadata. The generated client fragment runs a pinned `@discord-mcp/cli` package through `npx`, then `serve --profile devbot`, so it does not depend on an absolute installation or cache path. It forwards `DISCORD_TOKEN` from the caller's launch environment; neither the profile nor the generated fragment stores the token value. Antigravity inherits the launch environment and keeps the token entirely out of `mcp_config.json`. Gemini's compatibility fragment includes only `${DISCORD_TOKEN}` because Gemini sanitizes inherited sensitive variables unless its MCP entry explicitly opts in. A profile is locked to its first verified bot ID, so `--force` cannot silently reassign it to another bot. Use `profile list`, `profile show`, and `profile remove` for lifecycle management. The older `init` command remains available as a stateless snippet generator. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
+`setup` supports Codex, Claude Desktop, Claude Code, Google Antigravity CLI, Cursor Agent CLI, legacy Gemini CLI enterprise/API-key deployments, the Cursor editor, and a generic MCP client. It sends the current token only to Discord, verifies the bot identity, chooses a guild boundary, and saves a versioned local profile containing only non-secret metadata. The generated client fragment runs a pinned `@discord-mcp/cli` package through `npx`, then `serve --profile devbot`, so it does not depend on an absolute installation or cache path. It forwards `DISCORD_TOKEN` from the caller's launch environment; neither the profile nor the generated fragment stores the token value. Antigravity and Cursor Agent inherit the launch environment and keep credentials entirely out of their MCP JSON. Gemini's compatibility fragment includes only `${DISCORD_TOKEN}` because Gemini sanitizes inherited sensitive variables unless its MCP entry explicitly opts in. A profile is locked to its first verified bot ID, so `--force` cannot silently reassign it to another bot. Use `profile list`, `profile show`, and `profile remove` for lifecycle management. The older `init` command remains available as a stateless snippet generator. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
 
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only
@@ -130,7 +130,7 @@ guild in that result does not authorize operations against it.
 To run without a global install:
 
 ```bash
-npx -y @discord-mcp/cli init --client cursor
+npx -y @discord-mcp/cli init --client cursor-cli
 ```
 
 ## Remote OpenAI / Codex MCP

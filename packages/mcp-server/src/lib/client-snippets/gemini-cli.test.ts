@@ -26,7 +26,7 @@ function parseSnippet(content: string): ParsedDoc {
 describe('geminiCliGenerator', () => {
   it('exposes the stable client identity', () => {
     expect(geminiCliGenerator.id).toBe('gemini-cli');
-    expect(geminiCliGenerator.displayName).toBe('Gemini CLI');
+    expect(geminiCliGenerator.displayName).toBe('Gemini CLI (enterprise compatibility)');
   });
 
   it('emits a parseable Gemini settings document', () => {

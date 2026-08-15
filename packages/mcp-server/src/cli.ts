@@ -81,7 +81,7 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Load a caller-owned bot profile before checks')
     .option(
       '--client <id>',
-      'Audit one saved MCP client configuration (codex|antigravity-cli|gemini-cli)',
+      'Audit one saved MCP client configuration (codex|antigravity-cli|cursor-cli|gemini-cli)',
     )
     .option('--config <path>', 'Override the client configuration path for --client')
     .action(
@@ -136,7 +136,7 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Stable local profile name (required when not interactive)')
     .option(
       '--client <id>',
-      'MCP client (claude-desktop|claude-code|codex|antigravity-cli|gemini-cli|cursor|generic). Default: prompt if TTY, else "generic".',
+      'MCP client (claude-desktop|claude-code|codex|antigravity-cli|cursor-cli|gemini-cli|cursor|generic). Default: prompt if TTY, else "generic".',
     )
     .option('--gateway', 'Enable Discord Gateway resource subscriptions for this profile')
     .option(
@@ -227,11 +227,11 @@ export function buildProgram(): Command {
   program
     .command('init')
     .description(
-      'Generate an MCP client config snippet (Claude Desktop / Claude Code / Codex / Antigravity CLI / Gemini CLI / Cursor / Generic)',
+      'Generate an MCP client config snippet (Claude Desktop / Claude Code / Codex / Antigravity CLI / Cursor Agent CLI / Gemini CLI compatibility / Cursor editor / Generic)',
     )
     .option(
       '--client <id>',
-      'MCP client (claude-desktop|claude-code|codex|antigravity-cli|gemini-cli|cursor|generic). Default: prompt if TTY, else "generic".',
+      'MCP client (claude-desktop|claude-code|codex|antigravity-cli|cursor-cli|gemini-cli|cursor|generic). Default: prompt if TTY, else "generic".',
     )
     .option(
       '--token <token>',

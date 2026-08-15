@@ -1,5 +1,4 @@
 ---
-
 import { TabItem, Tabs } from '@astrojs/starlight/components';
 ---
 
@@ -16,10 +15,13 @@ import { TabItem, Tabs } from '@astrojs/starlight/components';
   <TabItem label="Antigravity CLI">
     <slot name="antigravity-cli" />
   </TabItem>
-  <TabItem label="Gemini CLI">
+  <TabItem label="Cursor Agent CLI">
+    <slot name="cursor-cli" />
+  </TabItem>
+  <TabItem label="Gemini CLI (compatibility)">
     <slot name="gemini-cli" />
   </TabItem>
-  <TabItem label="Cursor">
+  <TabItem label="Cursor editor">
     <slot name="cursor" />
   </TabItem>
   <TabItem label="Generic MCP">

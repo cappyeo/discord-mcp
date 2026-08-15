@@ -205,6 +205,17 @@ describe('initAction - explicit flags', () => {
     expect(parsed.data?.configFilePath).toContain('.cursor/mcp.json');
   });
 
+  it('with --client cursor-cli inherits credentials without persisting references', async () => {
+    await initAction({ json: true, client: 'cursor-cli', token: 'Bot should-not-persist' });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(parsed.data?.client).toBe('cursor-cli');
+    expect(parsed.data?.configFilePath).toContain('.cursor/mcp.json');
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    expect(snippet.mcpServers['discord-mcp'].env).toBeUndefined();
+    expect(parsed.data?.content).not.toContain('should-not-persist');
+    expect(parsed.data?.content).not.toMatch(/DISCORD_TOKEN|CURSOR_API_KEY/iu);
+  });
+
   it('with --client gemini-cli emits explicit secret-safe environment forwarding', async () => {
     await initAction({ json: true, client: 'gemini-cli' });
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;

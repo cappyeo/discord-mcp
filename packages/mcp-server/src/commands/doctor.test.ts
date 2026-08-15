@@ -261,6 +261,55 @@ function createAntigravityProfileFixture(token?: string): {
   return { directory, profileDirectory, configPath };
 }
 
+function createCursorCliProfileFixture(credential?: { name: string; value: string }): {
+  directory: string;
+  profileDirectory: string;
+  configPath: string;
+} {
+  const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-doctor-cursor-cli-'));
+  const profileDirectory = join(directory, 'profiles');
+  const configDirectory = join(directory, '.cursor');
+  const configPath = join(configDirectory, 'mcp.json');
+  mkdirSync(configDirectory, { recursive: true });
+  saveProfile(
+    {
+      version: 1,
+      name: 'devbot',
+      bot: { id: '123456789012345678', username: 'doctor-cursor-cli-bot' },
+      credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+      allowedGuilds: ['987654321098765432'],
+      client: 'cursor-cli',
+      toolSurface: 'progressive',
+      gateway: false,
+    },
+    { directory: profileDirectory },
+  );
+  writeFileSync(
+    configPath,
+    `${JSON.stringify(
+      {
+        mcpServers: {
+          'discord-mcp': {
+            command: 'npx',
+            args: [
+              '--yes',
+              '--loglevel=error',
+              '@discord-mcp/cli@0.23.0',
+              'serve',
+              '--profile',
+              'devbot',
+            ],
+            ...(credential === undefined ? {} : { env: { [credential.name]: credential.value } }),
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { directory, profileDirectory, configPath };
+}
+
 function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: string | URL | Request): Promise<Response> => {
     const url = String(input);
@@ -809,6 +858,82 @@ describe('doctorAction - Antigravity CLI credential audit', () => {
     const parsed = JSON.parse(out) as { exitCode: number; summary: string };
     expect(parsed.exitCode).toBe(2);
     expect(parsed.summary).toBe('--client antigravity-cli requires --profile <name>');
+  });
+});
+
+describe('doctorAction - Cursor Agent CLI credential audit', () => {
+  it('accepts inherited credentials without requiring a token to inspect config', async () => {
+    const fixture = createCursorCliProfileFixture();
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'cursor-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      expect(
+        parsed.data.checks.find((check) => check.id === 'cursor-cli-client-config'),
+      ).toMatchObject({
+        status: 'ok',
+        details: {
+          profile: 'devbot',
+          audited: true,
+          server: 'discord-mcp',
+          version: '0.23.0',
+          environmentForwarding: 'inherited',
+          credentialPersisted: false,
+        },
+      });
+      expect(out).not.toContain(VALID_TOKEN);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'discord_token',
+    'CURSOR_API_KEY',
+  ])('fails when Cursor Agent config contains %s and never echoes it', async (name) => {
+    const secret = `secret-${'q'.repeat(60)}`;
+    const fixture = createCursorCliProfileFixture({ name, value: secret });
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'cursor-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string }> };
+      };
+      expect(parsed.exitCode).toBe(2);
+      expect(
+        parsed.data.checks.find((check) => check.id === 'cursor-cli-client-config'),
+      ).toMatchObject({ status: 'fail' });
+      expect(out).not.toContain(secret);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a saved profile before auditing Cursor Agent CLI', async () => {
+    const out = await runAndCapture(() => doctorAction({ json: true, client: 'cursor-cli' }));
+
+    const parsed = JSON.parse(out) as { exitCode: number; summary: string };
+    expect(parsed.exitCode).toBe(2);
+    expect(parsed.summary).toBe('--client cursor-cli requires --profile <name>');
   });
 });
 

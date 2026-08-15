@@ -1,6 +1,6 @@
 ---
 title: Client setup
-description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Antigravity CLI, Gemini CLI, Cursor, or any generic MCP client.
+description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Antigravity CLI, Cursor Agent CLI, legacy Gemini CLI, the Cursor editor, or any generic MCP client.
 type: tutorial
 sidebar:
   order: 22
@@ -39,7 +39,7 @@ recommended local stdio + progressive path.
 <Aside type="caution">
 `setup` does not edit your client config and has no token flag. The current `DISCORD_TOKEN` is sent only
 to Discord to verify the bot and its guild membership; it is not copied into the generated fragment or
-profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment. Antigravity CLI and most
+profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment. Antigravity CLI, Cursor Agent CLI, and most
 JSON fragments use the environment inherited by the client process and omit a token field. Gemini CLI instead emits
 the non-secret `${DISCORD_TOKEN}` reference because Gemini removes inherited sensitive variables
 from MCP child processes unless the server entry explicitly opts in. The older
@@ -149,6 +149,26 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
   [June 18, 2026 consumer transition](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/).
 
   </div>
+  <div slot="cursor-cli">
+
+  ```bash
+  discord-mcp setup --profile devbot --client cursor-cli
+  ```
+
+  Merge the generated `discord-mcp` entry into `~/.cursor/mcp.json` for
+  user-level configuration or `<project>/.cursor/mcp.json` for one project.
+  Launch `cursor-agent` from a terminal that contains both `DISCORD_TOKEN` and
+  your Cursor authentication. The generated MCP JSON deliberately stores
+  neither `DISCORD_TOKEN` nor `CURSOR_API_KEY`. For automation, place
+  deny-by-default rules in `.cursor/cli.json` and allow only the exact
+  `Mcp(discord-mcp:tool_name)` calls required by the workflow. Verify the saved
+  launcher locally with
+  `discord-mcp doctor --client cursor-cli --profile devbot`.
+
+  Cursor's documented `agent` command may collide with another program already
+  on `PATH`; the `cursor-agent` alias keeps the intended host explicit.
+
+  </div>
   <div slot="gemini-cli">
 
   ```bash
@@ -174,7 +194,7 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
   discord-mcp setup --profile devbot --client cursor
   ```
 
-  Merge the output into `~/.cursor/mcp.json` for global access or
+  This tab configures the Cursor editor rather than Cursor Agent CLI. Merge the output into `~/.cursor/mcp.json` for global access or
   `<project>/.cursor/mcp.json` for one project. Restart Cursor after changing it.
 
   </div>

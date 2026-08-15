@@ -3,9 +3,9 @@
  *
  * Order is intentional: Claude Desktop first (most common entry point
  * for new users), Claude Code second (Anthropic CLI), Codex third,
- * Antigravity CLI fourth, Gemini CLI fifth, Cursor sixth, Generic last (fallback). The numeric
- * order also drives the default index in interactive `init` choice
- * prompts.
+ * Antigravity CLI fourth, Cursor Agent CLI fifth, Gemini CLI sixth, Cursor
+ * editor seventh, Generic last (fallback). The numeric order also drives the
+ * default index in interactive `init` choice prompts.
  *
  * To add a new client: implement {@link ClientGenerator} in a new file
  * under this directory, register the singleton here, and add a test.
@@ -16,6 +16,7 @@ import { claudeCodeGenerator } from './claude-code.js';
 import { claudeDesktopGenerator } from './claude-desktop.js';
 import { codexGenerator } from './codex.js';
 import { cursorGenerator } from './cursor.js';
+import { cursorCliGenerator } from './cursor-cli.js';
 import { geminiCliGenerator } from './gemini-cli.js';
 import { genericGenerator } from './generic.js';
 import type { ClientGenerator } from './types.js';
@@ -27,6 +28,7 @@ export const ALL_GENERATORS: readonly ClientGenerator[] = [
   claudeCodeGenerator,
   codexGenerator,
   antigravityCliGenerator,
+  cursorCliGenerator,
   geminiCliGenerator,
   cursorGenerator,
   genericGenerator,

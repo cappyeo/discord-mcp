@@ -178,6 +178,28 @@ describe('guided caller-owned bot setup', () => {
     );
   });
 
+  it('configures Cursor Agent CLI without persisting either credential', async () => {
+    await setupAction({
+      profile: 'devbot',
+      client: 'cursor-cli',
+      json: true,
+      profileDirectory: directory,
+    });
+
+    const parsed = result();
+    const content = JSON.parse(parsed.data?.content ?? '{}');
+    expect(parsed.ok).toBe(true);
+    expect(content.mcpServers['discord-mcp'].command).toBe('npx');
+    expect(content.mcpServers['discord-mcp'].env).toBeUndefined();
+    expect(parsed.data?.content).not.toContain(TOKEN);
+    expect(parsed.data?.content).not.toMatch(/DISCORD_TOKEN|CURSOR_API_KEY/iu);
+    expect(loadProfile('devbot', { directory }).client).toBe('cursor-cli');
+    expect(readFileSync(parsed.data?.profile?.path ?? '', 'utf8')).not.toContain(TOKEN);
+    expect(parsed.details).toContain(
+      'Verify: discord-mcp doctor --profile devbot --client cursor-cli --online',
+    );
+  });
+
   it('does not let --force reassign an existing profile to another bot', async () => {
     await setupAction({
       profile: 'devbot',

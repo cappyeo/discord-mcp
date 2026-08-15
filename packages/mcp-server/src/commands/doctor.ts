@@ -29,6 +29,10 @@ import {
   inspectAntigravityCliConfig,
 } from '../lib/client-snippets/antigravity-cli-inspector.js';
 import {
+  CursorCliConfigError,
+  inspectCursorCliConfig,
+} from '../lib/client-snippets/cursor-cli-inspector.js';
+import {
   GeminiCliConfigError,
   inspectGeminiCliConfig,
 } from '../lib/client-snippets/gemini-cli-inspector.js';
@@ -240,11 +244,48 @@ function antigravityCliClientConfigCheck(profile: DiscordMcpProfile, config?: st
   }
 }
 
+function cursorCliClientConfigCheck(profile: DiscordMcpProfile, config?: string): CheckResult {
+  try {
+    const inspection = inspectCursorCliConfig(profile, {
+      ...(config === undefined ? {} : { config }),
+    });
+    return {
+      id: 'cursor-cli-client-config',
+      status: 'ok',
+      message: `Configured Cursor Agent CLI launcher is secret-safe for profile ${profile.name}.`,
+      details: {
+        profile: profile.name,
+        audited: true,
+        server: inspection.configName,
+        version: inspection.currentVersion,
+        environmentForwarding: inspection.environmentForwarding,
+        credentialPersisted: inspection.credentialPersisted,
+      },
+    };
+  } catch (error) {
+    const persisted =
+      error instanceof CursorCliConfigError && error.kind === 'credential-persisted';
+    return {
+      id: 'cursor-cli-client-config',
+      status: 'fail',
+      message: persisted
+        ? 'Cursor Agent MCP config contains a credential field. Remove it, keep DISCORD_TOKEN and CURSOR_API_KEY in the launch environment, and rotate any materialized credential.'
+        : 'Could not verify a secret-safe generated Cursor Agent CLI launcher.',
+      details: {
+        profile: profile.name,
+        audited: false,
+        credentialPersisted: persisted ? true : null,
+      },
+    };
+  }
+}
+
 export async function doctorAction(opts: DoctorOptions): Promise<void> {
   if (
     opts.client !== undefined &&
     opts.client !== 'codex' &&
     opts.client !== 'antigravity-cli' &&
+    opts.client !== 'cursor-cli' &&
     opts.client !== 'gemini-cli'
   ) {
     emitResult(
@@ -252,7 +293,7 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
         ok: false,
         exitCode: 2,
         summary: `unsupported client audit: ${opts.client}`,
-        errors: ['Supported client audits: codex, antigravity-cli, gemini-cli.'],
+        errors: ['Supported client audits: codex, antigravity-cli, cursor-cli, gemini-cli.'],
       },
       opts.json === true,
     );
@@ -277,7 +318,11 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
       const profileOptions = {
         ...(opts.profileDirectory === undefined ? {} : { directory: opts.profileDirectory }),
       };
-      if (opts.client === 'gemini-cli' || opts.client === 'antigravity-cli') {
+      if (
+        opts.client === 'gemini-cli' ||
+        opts.client === 'antigravity-cli' ||
+        opts.client === 'cursor-cli'
+      ) {
         profile = loadProfile(opts.profile, profileOptions);
         const token = process.env[profile.credential.variable];
         if (token !== undefined && token !== '') {
@@ -336,6 +381,9 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
   }
   if (opts.client === 'antigravity-cli' && profile !== undefined) {
     results.push(antigravityCliClientConfigCheck(profile, opts.config));
+  }
+  if (opts.client === 'cursor-cli' && profile !== undefined) {
+    results.push(cursorCliClientConfigCheck(profile, opts.config));
   }
 
   if (opts.online === true && profile?.client === 'codex') {
