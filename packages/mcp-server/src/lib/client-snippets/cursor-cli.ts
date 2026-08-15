@@ -14,7 +14,7 @@ const CONFIG_PATH = [
 ].join('\n');
 
 const INSTRUCTIONS =
-  'Merge the snippet into Cursor mcp.json and launch cursor-agent with DISCORD_TOKEN set. Authenticate Cursor normally; if you use CURSOR_API_KEY, keep it in the launch environment. Neither credential is stored in mcp.json. For automation, define deny-by-default permissions in .cursor/cli.json and allow only the exact discord-mcp tools required by the workflow. Verify the saved launcher with `discord-mcp doctor --client cursor-cli --profile <name>`.';
+  'Merge the snippet into Cursor mcp.json and launch the official `agent` command with DISCORD_TOKEN set. Cursor CLI supports macOS, Linux, WSL, and native Windows. Authenticate Cursor normally; if you use CURSOR_API_KEY, keep it in the launch environment. Neither credential is stored in mcp.json. For automation, define deny-by-default permissions in .cursor/cli.json and allow only the exact discord-mcp tools required by the workflow. Verify the saved launcher with `discord-mcp doctor --client cursor-cli --profile <name>`.';
 
 export const cursorCliGenerator: ClientGenerator = {
   id: 'cursor-cli',

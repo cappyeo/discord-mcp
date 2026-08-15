@@ -48,7 +48,8 @@ describe('cursorCliGenerator', () => {
     const snippet = cursorCliGenerator.generate(baseConfig);
     expect(snippet.configFilePath).toContain('~/.cursor/mcp.json');
     expect(snippet.configFilePath).toContain('<project>/.cursor/mcp.json');
-    expect(snippet.instructions).toContain('cursor-agent');
+    expect(snippet.instructions).toContain('official `agent` command');
+    expect(snippet.instructions).toContain('native Windows');
     expect(snippet.instructions).toContain('deny-by-default');
     expect(JSON.parse(snippet.content).mcpServers['discord-mcp'].env).toBeUndefined();
   });

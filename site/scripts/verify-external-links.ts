@@ -106,6 +106,11 @@ export const monitoredExternalLinks: readonly MonitoredExternalLink[] = [
     sourceUrl: 'https://learn.chatgpt.com/docs/config-file/config-reference',
   },
   {
+    label: 'Cursor CLI installation',
+    sourceFile: 'site/src/content/docs/start/client-setup.mdx',
+    sourceUrl: 'https://cursor.com/docs/cli/installation',
+  },
+  {
     label: 'Grok Build MCP documentation',
     sourceFile: 'site/src/content/docs/start/client-setup.mdx',
     sourceUrl: 'https://docs.x.ai/build/features/mcp-servers',

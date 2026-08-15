@@ -157,16 +157,15 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
 
   Merge the generated `discord-mcp` entry into `~/.cursor/mcp.json` for
   user-level configuration or `<project>/.cursor/mcp.json` for one project.
-  Launch `cursor-agent` from a terminal that contains both `DISCORD_TOKEN` and
-  your Cursor authentication. The generated MCP JSON deliberately stores
-  neither `DISCORD_TOKEN` nor `CURSOR_API_KEY`. For automation, place
-  deny-by-default rules in `.cursor/cli.json` and allow only the exact
-  `Mcp(discord-mcp:tool_name)` calls required by the workflow. Verify the saved
-  launcher locally with
+  Install the official Cursor CLI for macOS, Linux, WSL, or
+  [native Windows](https://cursor.com/docs/cli/installation), verify it with
+  `agent --version`, then launch `agent` from a terminal that contains both
+  `DISCORD_TOKEN` and your Cursor authentication. The generated MCP JSON
+  deliberately stores neither `DISCORD_TOKEN` nor `CURSOR_API_KEY`. For
+  automation, place deny-by-default rules in `.cursor/cli.json` and allow only
+  the exact `Mcp(discord-mcp:tool_name)` calls required by the workflow. Verify
+  the saved launcher locally with
   `discord-mcp doctor --client cursor-cli --profile devbot`.
-
-  Cursor's documented `agent` command may collide with another program already
-  on `PATH`; the `cursor-agent` alias keeps the intended host explicit.
 
   </div>
   <div slot="grok-cli">

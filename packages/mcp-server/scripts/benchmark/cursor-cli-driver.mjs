@@ -1,7 +1,7 @@
 import { execFile as nodeExecFile } from 'node:child_process';
 import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, resolve, sep } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -183,25 +183,74 @@ async function candidate(path, platform) {
   }
 }
 
-/** Resolve only the unambiguous Cursor-owned alias. Native Windows must use WSL. */
+function cursorInstallRoot(environment, platform) {
+  if (!record(environment)) throw new TypeError('Cursor Agent environment is required');
+  const base = platform === 'win32' ? environment.LOCALAPPDATA : environment.HOME;
+  const root = absolutePath(base, platform === 'win32' ? 'LOCALAPPDATA' : 'HOME');
+  return platform === 'win32'
+    ? join(root, 'cursor-agent')
+    : join(root, '.local', 'share', 'cursor-agent', 'versions');
+}
+
+function insideInstallRoot(path, root, platform) {
+  const normalize = (value) =>
+    platform === 'win32' ? resolve(value).toLowerCase() : resolve(value);
+  const nested = relative(normalize(root), normalize(path));
+  return nested !== '' && nested !== '..' && !nested.startsWith(`..${sep}`) && !isAbsolute(nested);
+}
+
+async function officialCursorLauncher(path, { environment, platform }) {
+  const canonical = await candidate(path, platform);
+  if (canonical === null) return null;
+  const name = basename(canonical).toLowerCase();
+  const expectedNames =
+    platform === 'win32' ? new Set(['agent.exe', 'cursor-agent.exe']) : new Set(['cursor-agent']);
+  if (!expectedNames.has(name)) return null;
+  return insideInstallRoot(canonical, cursorInstallRoot(environment, platform), platform)
+    ? canonical
+    : null;
+}
+
+/** Resolve only an official Cursor installer path, including native Windows. */
 export async function resolveCursorCliLauncher({
   platform = process.platform,
-  command = 'cursor-agent',
+  command = 'agent',
+  environment = process.env,
   run = execFile,
 } = {}) {
-  if (platform === 'win32')
-    throw new Error('Cursor Agent CLI requires WSL on Windows; refusing a native shell fallback');
-  if (command === 'agent')
-    throw new Error('Cursor Agent launcher must use the unambiguous cursor-agent alias');
-  const selected = isAbsolute(command)
-    ? command
-    : String((await run('which', [command], { encoding: 'utf8' })).stdout ?? '')
-        .split(/\r?\n/u)
-        .find(Boolean)
-        ?.trim();
-  const path = selected === undefined ? null : await candidate(selected, platform);
-  if (path === null) throw new Error('Cursor Agent CLI launcher is unavailable');
-  return { command: path, prefix_args: [], kind: 'native' };
+  requiredString(command, 'Cursor Agent command');
+  if (!isAbsolute(command) && !['agent', 'cursor-agent'].includes(command))
+    throw new Error('Cursor Agent launcher must use the official agent command');
+  const installRoot = cursorInstallRoot(environment, platform);
+  if (isAbsolute(command)) {
+    const selected = await officialCursorLauncher(command, { environment, platform });
+    if (selected !== null) return { command: selected, prefix_args: [], kind: 'native' };
+    throw new Error('official Cursor Agent CLI launcher is unavailable');
+  }
+  const installedPath =
+    platform === 'win32'
+      ? join(installRoot, `${command}.exe`)
+      : join(environment.HOME, '.local', 'bin', command);
+  const installed = await officialCursorLauncher(installedPath, { environment, platform });
+  if (installed !== null) return { command: installed, prefix_args: [], kind: 'native' };
+  let discovered = [];
+  try {
+    const result = await run(platform === 'win32' ? 'where.exe' : 'which', [command], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    discovered = String(result.stdout ?? '')
+      .split(/\r?\n/u)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  } catch {
+    // Fall through to the same bounded unavailable result.
+  }
+  for (const path of discovered) {
+    const selected = await officialCursorLauncher(path, { environment, platform });
+    if (selected !== null) return { command: selected, prefix_args: [], kind: 'native' };
+  }
+  throw new Error('official Cursor Agent CLI launcher is unavailable');
 }
 
 export function runBoundedCursorCliProcess(options = {}) {

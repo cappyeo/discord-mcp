@@ -16,9 +16,10 @@ commit history and downloadable artifacts, see
   and never persist `DISCORD_TOKEN`; doctor fails closed if that field appears.
 - Kept Gemini CLI as an enterprise and paid API-key compatibility target while
   moving the primary Google consumer path to Antigravity CLI.
-- Added secret-free Cursor Agent CLI setup and offline launcher auditing. Cursor
-  and Discord credentials stay in the launch environment; generated MCP JSON
-  stores neither credential field.
+- Added secret-free Cursor Agent CLI setup and offline launcher auditing for the
+  official `agent` command on macOS, Linux, WSL, and native Windows. Cursor and
+  Discord credentials stay in the launch environment; generated MCP JSON stores
+  neither credential field.
 - Added first-class support for the official Grok Build CLI: secret-free
   `~/.grok/config.toml` generation and offline inspection, isolated `GROK_HOME`,
   bounded `streaming-json` parsing, exact MCP-only permissions, session resume,
@@ -40,9 +41,10 @@ commit history and downloadable artifacts, see
 - Added the first Cursor Agent CLI activation adapter over the shared
   setup → plan → approve → apply/resume → Activity Evidence lifecycle. Its
   benchmark driver uses the official `stream-json` events, exact MCP argument
-  capture, bounded process closure, private receipts, WSL-only Windows policy,
-  and a three-trial campaign entrypoint. This is code and CI evidence only;
-  no live Cursor model or Discord campaign is predeclared here.
+  capture, bounded process closure, private receipts, official-install launcher
+  provenance on POSIX and native Windows, and a three-trial campaign entrypoint.
+  This is code and CI evidence only; no live Cursor model or Discord campaign is
+  predeclared here.
 
 ## v0.23.0 - credential-free activation checkpoint
 

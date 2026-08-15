@@ -259,7 +259,7 @@ describe('Cursor Agent CLI activation live adapter', () => {
         return privateState;
       },
       verifyRuntimePackage: async () => ({ cliPath: DRIVER_PATH, corePath: DRIVER_PATH }),
-      resolveLauncher: async () => ({ command: 'cursor-agent', prefix_args: [], kind: 'native' }),
+      resolveLauncher: async () => ({ command: 'agent', prefix_args: [], kind: 'native' }),
       runProcess: vi.fn(async (input) => {
         expect(input.env).toEqual(privateState.environment);
         expect(input.env.CURSOR_API_KEY).toBe('ambient-model-key');
