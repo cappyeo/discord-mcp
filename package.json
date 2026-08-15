@@ -34,6 +34,7 @@
     "benchmark:activation": "node packages/mcp-server/scripts/benchmark/codex-activation-trial.mjs",
     "benchmark:activation:claude-code": "node packages/mcp-server/scripts/benchmark/claude-code-activation-trial.mjs",
     "benchmark:activation:campaign": "node packages/mcp-server/scripts/benchmark/codex-activation-campaign.mjs",
+    "benchmark:activation:claude-code:campaign": "node packages/mcp-server/scripts/benchmark/claude-code-activation-campaign.mjs",
     "benchmark:architect": "pnpm --filter @discord-mcp/core exec vitest bench src/tools/guild/_lib/blueprint-planning.bench.ts --run",
     "lint": "biome check .",
     "format": "biome format --write .",

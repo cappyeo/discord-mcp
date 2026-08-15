@@ -74,6 +74,12 @@ function validateAnthropicApiKey(value) {
   return value;
 }
 
+/** Validate Claude Code host authentication before campaign-local side effects. */
+export function assertClaudeCodeActivationAuthReady(environment = process.env) {
+  validateAnthropicApiKey(environment?.ANTHROPIC_API_KEY);
+  return true;
+}
+
 function assertSecretFree(value, token, label) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   if (token && text.includes(token)) throw new Error(`${label} contains the Discord token`);
@@ -293,7 +299,7 @@ export function assertClaudeCodeConfigWritable(config, context = {}) {
 
 function builtInAuthPreflight(environment) {
   return async () => {
-    validateAnthropicApiKey(environment.ANTHROPIC_API_KEY);
+    assertClaudeCodeActivationAuthReady(environment);
   };
 }
 
