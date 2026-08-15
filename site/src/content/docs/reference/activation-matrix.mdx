@@ -6,9 +6,10 @@ sidebar:
 ---
 
 The production activation matrix is the final technical gate for Codex, Claude
-Code, Antigravity CLI, Cursor Agent CLI, and Grok Build CLI. It does not run a
-model or mutate Discord. It independently verifies five already-completed live
-campaigns and emits one public, secret-free summary.
+Code, Antigravity CLI, Cursor Agent CLI, and Grok Build CLI. One operator
+command can preflight and run all five live campaigns in sequence. A separate
+read-only command independently verifies five completed campaigns and emits one
+public, secret-free summary.
 
 Each host must contribute exactly three unique live trials. All 15 trials must
 use the same release, source commit, verified package build, caller-owned bot,
@@ -35,6 +36,49 @@ Live campaigns can incur model-provider cost and Discord writes. They require
 fresh operator approval at execution time. CI fixtures, parser tests, catalog
 checks, and offline host inspection do not satisfy this gate.
 
+## Run all five campaigns
+
+The orchestrator accepts one approval bound to the exact release, matrix run,
+source commit, guild, and expected bot. Before starting the first campaign it
+checks the presence and bounded local shape of all four provider API keys, the
+readability of the local Codex authentication file, and the exact installed
+version of all five host CLIs. It then derives a unique run ID for each host and
+runs the hosts sequentially. It stops at the first failure, rejects
+package-build drift between hosts, and invokes the independent 15-trial verifier
+only after all five campaigns pass.
+
+The command below makes paid model calls and writes to the disposable Discord
+guild. Set these values only immediately before an approved run. The bot token
+and provider keys remain process-local and are not included in the public
+result.
+
+```bash
+export DISCORD_TESTBOT_B_TOKEN='<rotated caller-owned bot token>'
+export DISCORD_EXPECTED_BOT_ID='<expected bot id>'
+export DISCORD_MCP_ACTIVATION_ARTIFACT_ROOT='/private/discord-mcp-activation'
+export ANTHROPIC_API_KEY='<Claude Code provider key>'
+export GEMINI_API_KEY='<Antigravity provider key>'
+export CURSOR_API_KEY='<Cursor provider key>'
+export XAI_API_KEY='<Grok provider key>'
+
+pnpm benchmark:activation:matrix -- \
+  --release 0.24.0 \
+  --run-id five-host-live-001 \
+  --source-commit '<40-character source commit>' \
+  --guild '<disposable guild id>' \
+  --confirmation 'APPROVE_FIVE_HOST_ACTIVATION_MATRIX:0.24.0:five-host-live-001:<guild id>:<expected bot id>:<40-character source commit>' \
+  --codex-version '<installed Codex version>' \
+  --claude-code-version '<installed Claude Code version>' \
+  --antigravity-cli-version '<installed Antigravity CLI version>' \
+  --cursor-cli-version '<installed Cursor Agent CLI version>' \
+  --grok-cli-version '<installed Grok Build CLI version>'
+```
+
+Codex authentication is read from `CODEX_HOME/auth.json`, or from the default
+Codex home when `CODEX_HOME` is unset. A failed or interrupted matrix is never
+reported as partial success. Preserve its private artifacts for diagnosis and
+use a new matrix run ID for a later approved attempt.
+
 ## Verify the five campaigns
 
 Keep the bot token in the process environment. The verifier uses it only to
@@ -58,7 +102,8 @@ pnpm benchmark:activation:matrix:verify -- \
   --grok-cli-run-id grok-cli-activation-live-001
 ```
 
-A successful result uses
+A successful orchestrated or read-only verification result contains a public
+aggregate that uses
 `discord-mcp.activation-trials-verifier.v1`, reports `verified: true`,
 `host_count: 5`, and contains five three-trial host summaries. Any missing,
 mixed, duplicated, tampered, non-live, unsafe, incomplete, slow, or

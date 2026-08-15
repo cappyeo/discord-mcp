@@ -31,6 +31,12 @@ commit history and downloadable artifacts, see
   requires one exact release/commit/package build, and rejects cross-host reuse
   of trial IDs, client sessions, attestation envelopes, or Activity Evidence.
   The gate does not predeclare that the live 15-trial matrix has passed.
+- Added a production matrix orchestrator for Codex, Claude Code, Antigravity
+  CLI, Cursor Agent CLI, and Grok Build CLI. One target-bound approval starts a
+  fail-closed credential and exact CLI-version preflight, five sequential
+  three-trial campaigns, a same-build check, and the existing independent
+  15-trial verifier. It stops on the first host failure and emits no
+  partial-success claim.
 - Added the first Cursor Agent CLI activation adapter over the shared
   setup → plan → approve → apply/resume → Activity Evidence lifecycle. Its
   benchmark driver uses the official `stream-json` events, exact MCP argument

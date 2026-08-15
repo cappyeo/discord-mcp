@@ -42,10 +42,12 @@ unchecked items are real gates, not aspirational release notes.
 - The current source has thin activation adapters for Codex, Claude Code,
   Antigravity CLI, Cursor Agent CLI, and Grok Build CLI. The
   [AI host activation matrix](/discord-mcp/reference/activation-matrix/)
-  authenticates each host's private three-trial campaign, then re-aggregates all
-  15 original trial records to reject mixed builds and cross-host evidence or
-  session reuse. This is a verifier contract, not a claim that the live matrix
-  has already passed.
+  can preflight and run the five campaigns sequentially from one exact
+  target-bound approval. Its separate verifier authenticates each host's
+  private three-trial campaign, then re-aggregates all 15 original trial records
+  to reject mixed builds and cross-host evidence or session reuse. This is an
+  execution and verifier contract, not a claim that the live matrix has already
+  passed.
 - The v0.19.0 foundation passed its official 20-trial real-server campaign. The
   v0.20.0 source adds a caller-local `plan_ref` to remove opaque-token copying
   from the small-model write path while preserving the legacy token contract.

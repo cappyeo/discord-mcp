@@ -287,10 +287,11 @@ The repository is a pnpm workspace. For a real Discord smoke test, set `DISCORD_
 
 Maintainers can use the
 [AI host activation matrix](https://cappyeo.github.io/discord-mcp/reference/activation-matrix/)
-to independently verify three live trials for each of Codex, Claude Code,
-Antigravity CLI, Cursor Agent, and Grok Build against one exact release build.
-It consumes existing private campaign attestations; it does not launch models
-or write to Discord by itself.
+to preflight and sequentially run three live trials for each of Codex, Claude
+Code, Antigravity CLI, Cursor Agent, and Grok Build against one exact release
+build. A separate read-only verifier consumes the five private campaign
+attestations and revalidates all 15 original trials without launching models or
+writing to Discord.
 
 ## Project status
 
