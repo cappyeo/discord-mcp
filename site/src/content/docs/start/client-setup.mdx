@@ -1,6 +1,6 @@
 ---
 title: Client setup
-description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Antigravity CLI, Cursor Agent CLI, legacy Gemini CLI, the Cursor editor, or any generic MCP client.
+description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Antigravity CLI, Cursor Agent CLI, Grok Build CLI, legacy Gemini CLI, the Cursor editor, or any generic MCP client.
 type: tutorial
 sidebar:
   order: 22
@@ -39,8 +39,8 @@ recommended local stdio + progressive path.
 <Aside type="caution">
 `setup` does not edit your client config and has no token flag. The current `DISCORD_TOKEN` is sent only
 to Discord to verify the bot and its guild membership; it is not copied into the generated fragment or
-profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment. Antigravity CLI, Cursor Agent CLI, and most
-JSON fragments use the environment inherited by the client process and omit a token field. Gemini CLI instead emits
+profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment. Antigravity CLI, Cursor Agent CLI, Grok
+Build CLI, and most JSON-configured clients inherit the client process environment and omit a token field. Gemini CLI instead emits
 the non-secret `${DISCORD_TOKEN}` reference because Gemini removes inherited sensitive variables
 from MCP child processes unless the server entry explicitly opts in. The older
 `init --token` path is for explicit legacy automation and can expose a secret through shell history
@@ -167,6 +167,25 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
 
   Cursor's documented `agent` command may collide with another program already
   on `PATH`; the `cursor-agent` alias keeps the intended host explicit.
+
+  </div>
+  <div slot="grok-cli">
+
+  ```bash
+  discord-mcp setup --profile devbot --client grok-cli
+  ```
+
+  Merge the generated TOML table into `~/.grok/config.toml`, or
+  `$GROK_HOME/config.toml` when you use a custom Grok home. Authenticate the
+  official Grok Build CLI with `grok login` or `XAI_API_KEY`, then launch it
+  from a terminal containing `DISCORD_TOKEN`; the generated fragment stores
+  neither credential. The lifecycle adapter uses Grok's documented
+  `--single ... --output-format streaming-json` contract, the native
+  `search_tool` → `use_tool` MCP flow, exact
+  `MCPTool(discord-mcp__<tool>)` permission rules, and `--resume <session-id>`.
+  See the [Grok Build MCP documentation](https://docs.x.ai/build/features/mcp-servers).
+  Verify the saved launcher with
+  `discord-mcp doctor --client grok-cli --profile devbot`.
 
   </div>
   <div slot="gemini-cli">

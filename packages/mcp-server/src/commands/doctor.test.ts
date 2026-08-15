@@ -310,6 +310,40 @@ function createCursorCliProfileFixture(credential?: { name: string; value: strin
   return { directory, profileDirectory, configPath };
 }
 
+function createGrokCliProfileFixture(credential?: { name: string; value: string }): {
+  directory: string;
+  profileDirectory: string;
+  configPath: string;
+} {
+  const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-doctor-grok-cli-'));
+  const profileDirectory = join(directory, 'profiles');
+  const configDirectory = join(directory, '.grok');
+  const configPath = join(configDirectory, 'config.toml');
+  mkdirSync(configDirectory, { recursive: true });
+  saveProfile(
+    {
+      version: 1,
+      name: 'devbot',
+      bot: { id: '123456789012345678', username: 'doctor-grok-cli-bot' },
+      credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+      allowedGuilds: ['987654321098765432'],
+      client: 'grok-cli',
+      toolSurface: 'progressive',
+      gateway: false,
+    },
+    { directory: profileDirectory },
+  );
+  writeFileSync(
+    configPath,
+    `[mcp_servers.discord-mcp]\ncommand = "npx"\nargs = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.23.0", "serve", "--profile", "devbot"]\nenabled = true\nstartup_timeout_sec = 90\ntool_timeout_sec = 180\n${
+      credential === undefined
+        ? ''
+        : `\n[mcp_servers.discord-mcp.env]\n${credential.name} = ${JSON.stringify(credential.value)}\n`
+    }`,
+  );
+  return { directory, profileDirectory, configPath };
+}
+
 function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: string | URL | Request): Promise<Response> => {
     const url = String(input);
@@ -934,6 +968,69 @@ describe('doctorAction - Cursor Agent CLI credential audit', () => {
     const parsed = JSON.parse(out) as { exitCode: number; summary: string };
     expect(parsed.exitCode).toBe(2);
     expect(parsed.summary).toBe('--client cursor-cli requires --profile <name>');
+  });
+});
+
+describe('doctorAction - Grok CLI credential audit', () => {
+  it('accepts the generated secret-free launcher without requiring a token', async () => {
+    const fixture = createGrokCliProfileFixture();
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'grok-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+      const parsed = JSON.parse(out) as {
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      expect(
+        parsed.data.checks.find((check) => check.id === 'grok-cli-client-config'),
+      ).toMatchObject({
+        status: 'ok',
+        details: {
+          version: '0.23.0',
+          environmentForwarding: 'inherited',
+          credentialPersisted: false,
+        },
+      });
+      expect(out).not.toContain(VALID_TOKEN);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'DISCORD_TOKEN',
+    'XAI_API_KEY',
+  ])('fails closed when Grok settings contain %s', async (name) => {
+    const secret = `secret-${'g'.repeat(60)}`;
+    const fixture = createGrokCliProfileFixture({ name, value: secret });
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'grok-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string }> };
+      };
+      expect(parsed.exitCode).toBe(2);
+      expect(
+        parsed.data.checks.find((check) => check.id === 'grok-cli-client-config'),
+      ).toMatchObject({ status: 'fail' });
+      expect(out).not.toContain(secret);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
   });
 });
 

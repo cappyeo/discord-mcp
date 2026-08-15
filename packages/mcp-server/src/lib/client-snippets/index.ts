@@ -3,8 +3,8 @@
  *
  * Order is intentional: Claude Desktop first (most common entry point
  * for new users), Claude Code second (Anthropic CLI), Codex third,
- * Antigravity CLI fourth, Cursor Agent CLI fifth, Gemini CLI sixth, Cursor
- * editor seventh, Generic last (fallback). The numeric order also drives the
+ * Antigravity CLI fourth, Cursor Agent CLI fifth, Grok Build CLI sixth, Gemini CLI
+ * seventh, Cursor editor eighth, Generic last (fallback). The numeric order also drives the
  * default index in interactive `init` choice prompts.
  *
  * To add a new client: implement {@link ClientGenerator} in a new file
@@ -19,6 +19,7 @@ import { cursorGenerator } from './cursor.js';
 import { cursorCliGenerator } from './cursor-cli.js';
 import { geminiCliGenerator } from './gemini-cli.js';
 import { genericGenerator } from './generic.js';
+import { grokCliGenerator } from './grok-cli.js';
 import type { ClientGenerator } from './types.js';
 
 export type { ClientGenerator, Snippet, SnippetConfig } from './types.js';
@@ -29,6 +30,7 @@ export const ALL_GENERATORS: readonly ClientGenerator[] = [
   codexGenerator,
   antigravityCliGenerator,
   cursorCliGenerator,
+  grokCliGenerator,
   geminiCliGenerator,
   cursorGenerator,
   genericGenerator,

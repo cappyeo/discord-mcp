@@ -150,6 +150,7 @@ discord-mcp doctor [--profile <name>] [--json] [--online]
 discord-mcp doctor --profile <name> --client codex [--config <path>] [--json]
 discord-mcp doctor --profile <name> --client antigravity-cli [--config <path>] [--json]
 discord-mcp doctor --profile <name> --client cursor-cli [--config <path>] [--json]
+discord-mcp doctor --profile <name> --client grok-cli [--config <path>] [--json]
 ```
 
 Diagnose configuration, token, and connectivity issues. Runs a registry of
@@ -163,8 +164,8 @@ against npm `latest`.
 | `--json`    | boolean | `false` | Emit machine-readable JSON instead of pretty TTY output. Use this in CI.                                                                       |
 | `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). With a generated Codex profile, also performs one read-only npm version check. Without this flag only offline checks run, so doctor stays cheap. |
 | `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. A generated Codex profile enables launcher update discovery with `--online`. |
-| `--client <id>` | string | unset | Audit a saved MCP client configuration locally. Supports `codex`, `antigravity-cli`, `cursor-cli`, and `gemini-cli`; each requires `--profile` and does not call npm or Discord. Antigravity rejects a stored `DISCORD_TOKEN`; Cursor Agent rejects stored Discord or Cursor credential fields; Gemini rejects a materialized token. |
-| `--config <path>` | string | selected client's user config | Override the Codex `config.toml`, Antigravity `mcp_config.json`, Cursor Agent MCP JSON, or Gemini `settings.json` path; useful for a nonstandard client home or CI fixture. |
+| `--client <id>` | string | unset | Audit a saved MCP client configuration locally. Supports `codex`, `antigravity-cli`, `cursor-cli`, `grok-cli`, and `gemini-cli`; each requires `--profile` and does not call npm or Discord. Antigravity, Cursor Agent, and Grok Build reject persisted MCP credentials; Gemini rejects a materialized token. |
+| `--config <path>` | string | selected client's user config | Override the Codex or Grok Build `config.toml`, Antigravity `mcp_config.json`, Cursor Agent MCP JSON, or Gemini `settings.json` path; useful for a nonstandard client home or CI fixture. |
 
 ### Examples
 

@@ -1,4 +1,7 @@
 ---
+
+
+
 import { TabItem, Tabs } from '@astrojs/starlight/components';
 ---
 
@@ -17,6 +20,9 @@ import { TabItem, Tabs } from '@astrojs/starlight/components';
   </TabItem>
   <TabItem label="Cursor Agent CLI">
     <slot name="cursor-cli" />
+  </TabItem>
+  <TabItem label="Grok Build CLI">
+    <slot name="grok-cli" />
   </TabItem>
   <TabItem label="Gemini CLI (compatibility)">
     <slot name="gemini-cli" />

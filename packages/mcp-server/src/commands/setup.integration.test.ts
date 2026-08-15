@@ -200,6 +200,31 @@ describe('guided caller-owned bot setup', () => {
     );
   });
 
+  it('configures Grok Build mcp_servers without persisting either credential', async () => {
+    await setupAction({
+      profile: 'devbot',
+      client: 'grok-cli',
+      json: true,
+      profileDirectory: directory,
+    });
+
+    const parsed = result();
+    const content = parsed.data?.content ?? '';
+    expect(parsed.ok).toBe(true);
+    expect(content).toContain('[mcp_servers.discord-mcp]');
+    expect(content).toContain('command = "npx"');
+    expect(content).toContain('enabled = true');
+    expect(content).toContain('tool_timeout_sec = 180');
+    expect(content).not.toContain('[mcp_servers.discord-mcp.env]');
+    expect(content).not.toContain(TOKEN);
+    expect(content).not.toMatch(/DISCORD_TOKEN|XAI_API_KEY|GROK_API_KEY/iu);
+    expect(loadProfile('devbot', { directory }).client).toBe('grok-cli');
+    expect(readFileSync(parsed.data?.profile?.path ?? '', 'utf8')).not.toContain(TOKEN);
+    expect(parsed.details).toContain(
+      'Verify: discord-mcp doctor --profile devbot --client grok-cli --online',
+    );
+  });
+
   it('does not let --force reassign an existing profile to another bot', async () => {
     await setupAction({
       profile: 'devbot',

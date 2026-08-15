@@ -590,6 +590,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
     generator.id === 'codex' ||
     generator.id === 'antigravity-cli' ||
     generator.id === 'cursor-cli' ||
+    generator.id === 'grok-cli' ||
     generator.id === 'gemini-cli'
       ? ` --client ${generator.id}`
       : '';
