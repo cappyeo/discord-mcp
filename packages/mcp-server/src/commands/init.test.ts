@@ -205,6 +205,16 @@ describe('initAction - explicit flags', () => {
     expect(parsed.data?.configFilePath).toContain('.cursor/mcp.json');
   });
 
+  it('with --client gemini-cli emits explicit secret-safe environment forwarding', async () => {
+    await initAction({ json: true, client: 'gemini-cli' });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(parsed.data?.client).toBe('gemini-cli');
+    expect(parsed.data?.configFilePath).toContain('.gemini/settings.json');
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal Gemini placeholder
+    expect(snippet.mcpServers['discord-mcp'].env.DISCORD_TOKEN).toBe('${DISCORD_TOKEN}');
+  });
+
   it('with --client codex emits the safe TOML environment-forwarding fragment', async () => {
     await initAction({ json: true, client: 'codex' });
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;

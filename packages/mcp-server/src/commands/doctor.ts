@@ -24,8 +24,12 @@
  */
 import { type Config, loadConfig } from '@discord-mcp/core';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
+import {
+  GeminiCliConfigError,
+  inspectGeminiCliConfig,
+} from '../lib/client-snippets/gemini-cli-inspector.js';
 import { emitResult } from '../lib/output.js';
-import { activateProfile, type DiscordMcpProfile } from '../lib/profiles.js';
+import { activateProfile, type DiscordMcpProfile, loadProfile } from '../lib/profiles.js';
 import {
   CodexLauncherUpdateError,
   inspectCodexClientConfig,
@@ -160,26 +164,62 @@ async function codexLauncherUpdateCheck(
   }
 }
 
+function geminiCliClientConfigCheck(profile: DiscordMcpProfile, config?: string): CheckResult {
+  try {
+    const inspection = inspectGeminiCliConfig(profile, {
+      ...(config === undefined ? {} : { config }),
+    });
+    return {
+      id: 'gemini-cli-client-config',
+      status: 'ok',
+      message: `Configured Gemini CLI launcher is secret-safe for profile ${profile.name}.`,
+      details: {
+        profile: profile.name,
+        audited: true,
+        server: inspection.configName,
+        version: inspection.currentVersion,
+        environmentForwarding: inspection.environmentForwarding,
+        credentialPersisted: inspection.credentialPersisted,
+      },
+    };
+  } catch (error) {
+    const materialized =
+      error instanceof GeminiCliConfigError && error.kind === 'credential-materialized';
+    return {
+      id: 'gemini-cli-client-config',
+      status: 'fail',
+      message: materialized
+        ? 'Gemini CLI settings contain a materialized credential. Replace it with the generated environment reference and rotate the exposed token.'
+        : 'Could not verify a secret-safe generated Gemini CLI launcher.',
+      details: {
+        profile: profile.name,
+        audited: false,
+        credentialPersisted: materialized ? true : null,
+      },
+    };
+  }
+}
+
 export async function doctorAction(opts: DoctorOptions): Promise<void> {
-  if (opts.client !== undefined && opts.client !== 'codex') {
+  if (opts.client !== undefined && opts.client !== 'codex' && opts.client !== 'gemini-cli') {
     emitResult(
       {
         ok: false,
         exitCode: 2,
         summary: `unsupported client audit: ${opts.client}`,
-        errors: ['Only --client codex is currently supported.'],
+        errors: ['Supported client audits: codex, gemini-cli.'],
       },
       opts.json === true,
     );
     return;
   }
-  if (opts.client === 'codex' && opts.profile === undefined) {
+  if (opts.client !== undefined && opts.profile === undefined) {
     emitResult(
       {
         ok: false,
         exitCode: 2,
-        summary: '--client codex requires --profile <name>',
-        errors: ['A saved Codex profile identifies exactly which launcher to audit.'],
+        summary: `--client ${opts.client} requires --profile <name>`,
+        errors: ['A saved profile identifies exactly which generated launcher to audit.'],
       },
       opts.json === true,
     );
@@ -189,9 +229,18 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
   let profile: DiscordMcpProfile | undefined;
   if (opts.profile !== undefined) {
     try {
-      profile = activateProfile(opts.profile, {
+      const profileOptions = {
         ...(opts.profileDirectory === undefined ? {} : { directory: opts.profileDirectory }),
-      });
+      };
+      if (opts.client === 'gemini-cli') {
+        profile = loadProfile(opts.profile, profileOptions);
+        const token = process.env[profile.credential.variable];
+        if (token !== undefined && token !== '') {
+          profile = activateProfile(opts.profile, profileOptions);
+        }
+      } else {
+        profile = activateProfile(opts.profile, profileOptions);
+      }
     } catch (error) {
       emitResult(
         {
@@ -236,6 +285,9 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
 
   if (opts.client === 'codex' && profile !== undefined) {
     results.push(codexClientConfigCheck(profile, opts.config));
+  }
+  if (opts.client === 'gemini-cli' && profile !== undefined) {
+    results.push(geminiCliClientConfigCheck(profile, opts.config));
   }
 
   if (opts.online === true && profile?.client === 'codex') {

@@ -1,8 +1,9 @@
 /**
  * Internal shared rendering for MCP client snippets.
  *
- * The JSON-configured clients (Claude Desktop, Claude Code, Cursor, and
- * Generic) converge on the same `mcpServers.<id>.{command,args,env}` schema.
+ * The JSON-configured clients (Claude Desktop, Claude Code, Gemini CLI,
+ * Cursor, and Generic) converge on the same
+ * `mcpServers.<id>.{command,args,env}` schema.
  * Codex has its own TOML renderer because its config supports secure
  * environment forwarding through `env_vars`.
  */

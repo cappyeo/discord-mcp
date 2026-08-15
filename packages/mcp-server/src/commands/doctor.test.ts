@@ -162,6 +162,56 @@ function createCodexProfileFixture(version = '0.14.6'): {
   return { directory, profileDirectory, configPath };
 }
 
+// biome-ignore lint/suspicious/noTemplateCurlyInString: literal Gemini interpolation
+function createGeminiProfileFixture(tokenReference = '${DISCORD_TOKEN}'): {
+  directory: string;
+  profileDirectory: string;
+  configPath: string;
+} {
+  const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-doctor-gemini-'));
+  const profileDirectory = join(directory, 'profiles');
+  const geminiHome = join(directory, '.gemini');
+  const configPath = join(geminiHome, 'settings.json');
+  mkdirSync(geminiHome, { recursive: true });
+  saveProfile(
+    {
+      version: 1,
+      name: 'devbot',
+      bot: { id: '123456789012345678', username: 'doctor-gemini-bot' },
+      credential: { provider: 'env', variable: 'DISCORD_TOKEN' },
+      allowedGuilds: ['987654321098765432'],
+      client: 'gemini-cli',
+      toolSurface: 'progressive',
+      gateway: false,
+    },
+    { directory: profileDirectory },
+  );
+  writeFileSync(
+    configPath,
+    `${JSON.stringify(
+      {
+        mcpServers: {
+          'discord-mcp': {
+            command: 'npx',
+            args: [
+              '--yes',
+              '--loglevel=error',
+              '@discord-mcp/cli@0.23.0',
+              'serve',
+              '--profile',
+              'devbot',
+            ],
+            env: { DISCORD_TOKEN: tokenReference },
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { directory, profileDirectory, configPath };
+}
+
 function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: string | URL | Request): Promise<Response> => {
     const url = String(input);
@@ -529,6 +579,114 @@ describe('doctorAction - Codex launcher update discovery', () => {
     } finally {
       rmSync(fixture.directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('doctorAction - Gemini CLI credential audit', () => {
+  it('accepts the generated env reference without returning config values', async () => {
+    const fixture = createGeminiProfileFixture();
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'gemini-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string; details?: Record<string, unknown> }> };
+      };
+      expect(parsed.exitCode).toBe(0);
+      expect(
+        parsed.data.checks.find((check) => check.id === 'gemini-cli-client-config'),
+      ).toMatchObject({
+        status: 'ok',
+        details: {
+          profile: 'devbot',
+          audited: true,
+          server: 'discord-mcp',
+          version: '0.23.0',
+          environmentForwarding: true,
+          credentialPersisted: false,
+        },
+      });
+      expect(out).not.toContain(VALID_TOKEN);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when Gemini materialized the credential and never echoes it', async () => {
+    const secret = `Bot ${'z'.repeat(60)}`;
+    const fixture = createGeminiProfileFixture(secret);
+    try {
+      process.env.DISCORD_TOKEN = VALID_TOKEN;
+
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'gemini-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string }> };
+      };
+      expect(parsed.exitCode).toBe(2);
+      expect(
+        parsed.data.checks.find((check) => check.id === 'gemini-cli-client-config'),
+      ).toMatchObject({ status: 'fail' });
+      expect(out).not.toContain(secret);
+      expect(out).not.toContain(VALID_TOKEN);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('audits a materialized credential after the launch token was removed', async () => {
+    const secret = `Bot ${'y'.repeat(60)}`;
+    const fixture = createGeminiProfileFixture(secret);
+    try {
+      const out = await runAndCapture(() =>
+        doctorAction({
+          json: true,
+          profile: 'devbot',
+          client: 'gemini-cli',
+          config: fixture.configPath,
+          profileDirectory: fixture.profileDirectory,
+        }),
+      );
+
+      const parsed = JSON.parse(out) as {
+        exitCode: number;
+        data: { checks: Array<{ id: string; status: string }> };
+      };
+      expect(parsed.exitCode).toBe(2);
+      expect(
+        parsed.data.checks.find((check) => check.id === 'gemini-cli-client-config'),
+      ).toMatchObject({ status: 'fail' });
+      expect(out).not.toContain(secret);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a saved profile before auditing Gemini CLI', async () => {
+    const out = await runAndCapture(() => doctorAction({ json: true, client: 'gemini-cli' }));
+
+    const parsed = JSON.parse(out) as { exitCode: number; summary: string };
+    expect(parsed.exitCode).toBe(2);
+    expect(parsed.summary).toBe('--client gemini-cli requires --profile <name>');
   });
 });
 

@@ -1,6 +1,6 @@
 ---
 title: Client setup
-description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Cursor, or any generic MCP client.
+description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Gemini CLI, Cursor, or any generic MCP client.
 type: tutorial
 sidebar:
   order: 22
@@ -39,8 +39,10 @@ recommended local stdio + progressive path.
 <Aside type="caution">
 `setup` does not edit your client config and has no token flag. The current `DISCORD_TOKEN` is sent only
 to Discord to verify the bot and its guild membership; it is not copied into the generated fragment or
-profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment; the JSON fragments use
-the environment inherited by the client process and omit a token field entirely. The older
+profile. The Codex fragment forwards `DISCORD_TOKEN` from the environment. Most JSON fragments use
+the environment inherited by the client process and omit a token field. Gemini CLI instead emits
+the non-secret `${DISCORD_TOKEN}` reference because Gemini removes inherited sensitive variables
+from MCP child processes unless the server entry explicitly opts in. The older
 `init --token` path is for explicit legacy automation and can expose a secret through shell history
 or process inspection.
 </Aside>
@@ -124,6 +126,24 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
 
   This is the local stdio setup for the Codex CLI and IDE extension. Start a new
   Codex session after changing its configuration.
+
+  </div>
+  <div slot="gemini-cli">
+
+  ```bash
+  discord-mcp setup --profile devbot --client gemini-cli
+  ```
+
+  Merge the generated `mcpServers` object into `~/.gemini/settings.json` for
+  user-level configuration or `<project>/.gemini/settings.json` for one project.
+  Keep `DISCORD_TOKEN` in the environment that launches Gemini. The generated
+  `${DISCORD_TOKEN}` value is an interpolation reference, not the token itself;
+  it explicitly opts the `discord-mcp` child into that one variable after Gemini
+  sanitizes inherited secrets. Merge this fragment directly. After any
+  Gemini-managed MCP settings change, run
+  `discord-mcp doctor --client gemini-cli --profile devbot` and inspect the raw
+  file before restarting; current Gemini releases can reserialize an expanded
+  environment value while rewriting settings.
 
   </div>
   <div slot="cursor">

@@ -102,7 +102,7 @@ On PowerShell, set the token before running the same `setup` and verification co
 $env:DISCORD_TOKEN = "Bot YOUR_DISCORD_BOT_TOKEN"
 ```
 
-`setup` supports Codex, Claude Desktop, Claude Code, Cursor, and a generic MCP client. It sends the current token only to Discord, verifies the bot identity, chooses a guild boundary, and saves a versioned local profile containing only non-secret metadata. The generated client fragment runs a pinned `@discord-mcp/cli` package through `npx`, then `serve --profile devbot`, so it does not depend on an absolute installation or cache path. It forwards `DISCORD_TOKEN` from the caller's launch environment; neither the profile nor the default Codex fragment stores the token. A profile is locked to its first verified bot ID, so `--force` cannot silently reassign it to another bot. Use `profile list`, `profile show`, and `profile remove` for lifecycle management. The older `init` command remains available as a stateless snippet generator. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
+`setup` supports Codex, Claude Desktop, Claude Code, Gemini CLI, Cursor, and a generic MCP client. It sends the current token only to Discord, verifies the bot identity, chooses a guild boundary, and saves a versioned local profile containing only non-secret metadata. The generated client fragment runs a pinned `@discord-mcp/cli` package through `npx`, then `serve --profile devbot`, so it does not depend on an absolute installation or cache path. It forwards `DISCORD_TOKEN` from the caller's launch environment; neither the profile nor the generated fragment stores the token value. Gemini's fragment includes only `${DISCORD_TOKEN}` because Gemini sanitizes inherited sensitive variables unless its MCP entry explicitly opts in. A profile is locked to its first verified bot ID, so `--force` cannot silently reassign it to another bot. Use `profile list`, `profile show`, and `profile remove` for lifecycle management. The older `init` command remains available as a stateless snippet generator. See the [installation guide](https://cappyeo.github.io/discord-mcp/start/installation/) for non-interactive and client-specific setup.
 
 For MCP clients that do not natively defer large tool catalogs, set
 `MCP_TOOL_SURFACE=progressive`. The model initially receives only
@@ -218,7 +218,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
 | `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
 | `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
-| `discord-mcp doctor` | Check Node.js, token format, environment, audit configuration, optional network connectivity, and a saved Codex launcher's update status. |
+| `discord-mcp doctor` | Check Node.js, token shape, environment, optional connectivity, generated Codex launchers, and Gemini settings for materialized credentials. |
 | `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test, or `--confirm-template-lifecycle` to prove Guild Template inspect/diff/sync/delete and cleanup. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 

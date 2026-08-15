@@ -16,7 +16,14 @@ const PROFILE_VERSION = 1;
 const PROFILE_NAME = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/;
 const SNOWFLAKE = /^\d{17,20}$/;
-const CLIENT_IDS = ['claude-desktop', 'claude-code', 'codex', 'cursor', 'generic'] as const;
+const CLIENT_IDS = [
+  'claude-desktop',
+  'claude-code',
+  'codex',
+  'gemini-cli',
+  'cursor',
+  'generic',
+] as const;
 const TOOL_SURFACES = ['full', 'progressive'] as const;
 
 export type ProfileClientId = (typeof CLIENT_IDS)[number];

@@ -586,6 +586,8 @@ export async function initAction(opts: InitOptions): Promise<void> {
           `Allowed Discord guilds: ${allowedGuilds?.join(', ') ?? 'none'}`,
           '',
         ];
+  const clientAudit =
+    generator.id === 'codex' || generator.id === 'gemini-cli' ? ` --client ${generator.id}` : '';
 
   emitResult(
     {
@@ -632,7 +634,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
                     `Profile: ${profileName}`,
                     savedProfilePath,
                     'Credential: inherited env:DISCORD_TOKEN (not stored)',
-                    `Verify: discord-mcp doctor --profile ${profileName} --online`,
+                    `Verify: discord-mcp doctor --profile ${profileName}${clientAudit} --online`,
                     `Smoke: discord-mcp smoke --profile ${profileName}`,
                   ]),
             ]
@@ -651,7 +653,7 @@ export async function initAction(opts: InitOptions): Promise<void> {
                     `Profile: ${profileName}`,
                     savedProfilePath,
                     'Credential: inherited env:DISCORD_TOKEN (not stored)',
-                    `Verify: discord-mcp doctor --profile ${profileName} --online`,
+                    `Verify: discord-mcp doctor --profile ${profileName}${clientAudit} --online`,
                     `Smoke: discord-mcp smoke --profile ${profileName}`,
                   ]),
               '',

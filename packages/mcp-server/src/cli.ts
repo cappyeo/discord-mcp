@@ -79,8 +79,8 @@ export function buildProgram(): Command {
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
     .option('--online', 'Run online checks against Discord (requires DISCORD_TOKEN)')
     .option('--profile <name>', 'Load a caller-owned bot profile before checks')
-    .option('--client <id>', 'Audit one saved MCP client configuration (currently: codex)')
-    .option('--config <path>', 'Override the Codex config.toml path for --client codex')
+    .option('--client <id>', 'Audit one saved MCP client configuration (codex|gemini-cli)')
+    .option('--config <path>', 'Override the client configuration path for --client')
     .action(
       async (options: {
         json?: boolean;
@@ -133,7 +133,7 @@ export function buildProgram(): Command {
     .option('--profile <name>', 'Stable local profile name (required when not interactive)')
     .option(
       '--client <id>',
-      'MCP client (claude-desktop|claude-code|codex|cursor|generic). Default: prompt if TTY, else "generic".',
+      'MCP client (claude-desktop|claude-code|codex|gemini-cli|cursor|generic). Default: prompt if TTY, else "generic".',
     )
     .option('--gateway', 'Enable Discord Gateway resource subscriptions for this profile')
     .option(
@@ -224,11 +224,11 @@ export function buildProgram(): Command {
   program
     .command('init')
     .description(
-      'Generate an MCP client config snippet (Claude Desktop / Claude Code / Codex / Cursor / Generic)',
+      'Generate an MCP client config snippet (Claude Desktop / Claude Code / Codex / Gemini CLI / Cursor / Generic)',
     )
     .option(
       '--client <id>',
-      'MCP client (claude-desktop|claude-code|codex|cursor|generic). Default: prompt if TTY, else "generic".',
+      'MCP client (claude-desktop|claude-code|codex|gemini-cli|cursor|generic). Default: prompt if TTY, else "generic".',
     )
     .option(
       '--token <token>',

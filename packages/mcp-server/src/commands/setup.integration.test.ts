@@ -70,6 +70,7 @@ afterEach(() => {
 function result(): {
   ok: boolean;
   data?: { content?: string; profile?: { name: string; path: string } };
+  details?: string[];
   errors?: string[];
 } {
   return JSON.parse(stdoutWrites.join(''));
@@ -131,6 +132,28 @@ describe('guided caller-owned bot setup', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal legacy placeholder must be absent
     expect(result().data?.content).not.toContain('${env:DISCORD_TOKEN}');
     expect(result().data?.content).not.toContain(TOKEN);
+  });
+
+  it('opts Gemini into the caller token without persisting the secret', async () => {
+    await setupAction({
+      profile: 'devbot',
+      client: 'gemini-cli',
+      json: true,
+      profileDirectory: directory,
+    });
+
+    const parsed = result();
+    const content = JSON.parse(parsed.data?.content ?? '{}');
+    expect(parsed.ok).toBe(true);
+    expect(content.mcpServers['discord-mcp'].command).toBe('npx');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal Gemini placeholder
+    expect(content.mcpServers['discord-mcp'].env.DISCORD_TOKEN).toBe('${DISCORD_TOKEN}');
+    expect(parsed.data?.content).not.toContain(TOKEN);
+    expect(loadProfile('devbot', { directory }).client).toBe('gemini-cli');
+    expect(readFileSync(parsed.data?.profile?.path ?? '', 'utf8')).not.toContain(TOKEN);
+    expect(parsed.details).toContain(
+      'Verify: discord-mcp doctor --profile devbot --client gemini-cli --online',
+    );
   });
 
   it('does not let --force reassign an existing profile to another bot', async () => {
