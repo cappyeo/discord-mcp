@@ -218,7 +218,7 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
 | `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
 | `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
-| `discord-mcp doctor` | Check Node.js, token shape, environment, optional connectivity, generated Codex launchers, and Antigravity/Gemini config for persisted credentials. |
+| `discord-mcp doctor` | Check Node.js, token shape, environment, optional connectivity, generated Codex/Cursor launchers, and Antigravity/Gemini config for persisted credentials. |
 | `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test, or `--confirm-template-lifecycle` to prove Guild Template inspect/diff/sync/delete and cleanup. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 
