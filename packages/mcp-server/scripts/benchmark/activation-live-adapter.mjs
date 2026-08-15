@@ -546,6 +546,7 @@ export function createActivationLiveAdapter({
           phase: 'initial',
           expectedTool: hostDriver.initialQualifiedTool,
           includeRaw: true,
+          privateState: session.privateState,
         });
         const parsedVersion = hostDriver.versionFromParsed?.(parsed);
         if (parsedVersion !== undefined && parsedVersion !== actualVersion)
@@ -633,6 +634,7 @@ export function createActivationLiveAdapter({
           expectedTool: hostDriver.applyQualifiedTool,
           expectedSessionId: session[hostDriver.sessionField],
           includeRaw: true,
+          privateState: session.privateState,
         });
         const call = exactCompletedTool(
           parsed,
@@ -713,6 +715,7 @@ export function createActivationLiveAdapter({
         expectedTool: hostDriver.evidenceQualifiedTool,
         expectedSessionId: session[hostDriver.sessionField],
         includeRaw: true,
+        privateState: session.privateState,
       });
       const call = exactCompletedTool(
         parsed,
