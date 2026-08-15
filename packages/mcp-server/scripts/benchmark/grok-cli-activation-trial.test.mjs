@@ -229,11 +229,12 @@ describe('Grok CLI activation trial guard', () => {
   });
 
   it('builds a pinned guided setup command and rejects config drift', () => {
+    const configPath = join(tmpdir(), 'discord-mcp-grok-config.toml');
     expect(
       buildGrokCliSetupArgs({
         profile: 'devbot',
         guildId: target.guildId,
-        configPath: 'C:\\temp\\config.toml',
+        configPath,
       }),
     ).toEqual([
       'setup',
@@ -244,7 +245,7 @@ describe('Grok CLI activation trial guard', () => {
       '--allowed-guilds',
       target.guildId,
       '--output',
-      'C:\\temp\\config.toml',
+      configPath,
       '--force',
       '--json',
     ]);
