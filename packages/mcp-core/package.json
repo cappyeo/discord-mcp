@@ -12,7 +12,7 @@
     "claude",
     "cursor"
   ],
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "homepage": "https://cappyeo.github.io/discord-mcp/",
   "repository": {
     "type": "git",

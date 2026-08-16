@@ -8,7 +8,7 @@
   <a href="https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml"><img src="https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
   <a href="https://www.npmjs.com/package/@discord-mcp/cli"><img src="https://img.shields.io/npm/v/%40discord-mcp%2Fcli?label=npm" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/@discord-mcp/cli"><img src="https://img.shields.io/node/v/%40discord-mcp%2Fcli" alt="Required Node.js version" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue" alt="FSL-1.1-ALv2 license" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0 license" /></a>
 </p>
 
 <p align="center">
@@ -307,18 +307,14 @@ the report.
 
 ## License
 
-The current source is available under the
-[Functional Source License 1.1, ALv2 Future License](LICENSE). You may use,
-study, modify, and redistribute it for any purpose other than offering a
-commercial product or service that competes with discord-mcp. Each version
-automatically becomes available under Apache 2.0 two years after it is made
-available.
+The current source is licensed under the [Apache License 2.0](LICENSE). You
+may use, modify, distribute, and sell it subject to that license's terms.
 
 Published releases through `v0.23.0` remain available under the MIT License
-included with those releases. For a competing commercial use, see
-[commercial licensing](https://github.com/cappyeo/discord-mcp/blob/main/COMMERCIAL-LICENSING.md).
+included with those releases. Source revisions previously made available under
+the Functional Source License remain governed by that license.
+
 Community participation and project support are governed by the
 [Acceptable Use Policy](https://github.com/cappyeo/discord-mcp/blob/main/ACCEPTABLE-USE.md),
-which does not modify the software license. Contributions require acceptance
-of the
-[Contributor License Agreement](https://github.com/cappyeo/discord-mcp/blob/main/CLA.md).
+which does not modify the software license. Contributions are accepted under
+Apache-2.0; see [Contributing](CONTRIBUTING.md).
