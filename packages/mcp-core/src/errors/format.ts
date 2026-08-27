@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/server';
 import { BrokenCircuitError, BulkheadRejectedError, TaskCancelledError } from 'cockatiel';
 import { DryRunPreview, WritePreview } from './client.js';
 import {
+  BotScopeUnresolvedError,
   BulkheadFullError,
   CancelledError,
   CircuitOpenError,
@@ -390,6 +391,19 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
       recoveryHint: e.recoveryHint ?? 'use a resource in an allowed guild',
       text:
         `**Guild Scope Unresolved**: could not prove that \`${e.resource}\` belongs to an allowed guild.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: { resource: e.resource },
+    });
+  }
+
+  if (e instanceof BotScopeUnresolvedError) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'use the locked bot application',
+      text:
+        `**Bot Scope Unresolved**: could not prove that \`${e.resource}\` belongs to the locked bot application.\n\n` +
         `**Recovery**: ${e.recoveryHint}`,
       structured: { resource: e.resource },
     });

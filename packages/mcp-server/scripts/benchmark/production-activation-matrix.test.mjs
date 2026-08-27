@@ -88,7 +88,7 @@ function campaignResult(host, runId, buildDigest = BUILD) {
     bundle_relative_path: `runs/${runId}/results/activation-trials-bundle.json`,
     public_aggregate: {
       schema_version: ACTIVATION_VERIFIER_SCHEMA,
-      artifact_schema: 'discord-mcp.activation-trial.v1',
+      artifact_schema: 'discord-mcp.activation-trial.v3',
       verified: true,
       release: RELEASE,
       source_commit: SOURCE_COMMIT,
@@ -102,7 +102,7 @@ function campaignResult(host, runId, buildDigest = BUILD) {
 function matrixResult(overrides = {}) {
   return {
     schema_version: ACTIVATION_VERIFIER_SCHEMA,
-    artifact_schema: 'discord-mcp.activation-trial.v1',
+    artifact_schema: 'discord-mcp.activation-trial.v3',
     verified: true,
     release: RELEASE,
     source_commit: SOURCE_COMMIT,
@@ -165,6 +165,11 @@ describe('production activation matrix orchestrator', () => {
       await expect(
         preflightProductionActivationHosts(preflightRequest, { versionProbes }),
       ).resolves.toBe(true);
+      for (const probe of Object.values(versionProbes)) {
+        expect(probe.resolveLauncher).toHaveBeenCalledWith({
+          environment: { PATH: process.env.PATH },
+        });
+      }
       await expect(
         preflightProductionActivationHosts(
           { ...preflightRequest, environment: { ...environment, XAI_API_KEY: '' } },

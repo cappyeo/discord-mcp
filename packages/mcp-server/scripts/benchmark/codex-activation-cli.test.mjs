@@ -60,7 +60,7 @@ describe('Codex activation CLI', () => {
   it('passes only the Bot B environment credential into the live trial', async () => {
     const runTrial = vi.fn(async () => ({
       ok: true,
-      artifact: { schema_version: 'discord-mcp.activation-trial.v2', result: 'passed' },
+      artifact: { schema_version: 'discord-mcp.activation-trial.v3', result: 'passed' },
     }));
     const writes = [];
     const code = await main({

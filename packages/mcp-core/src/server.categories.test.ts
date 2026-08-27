@@ -127,4 +127,38 @@ describe('MCP_CATEGORIES validation and defaults', () => {
     expect(names).not.toContain('roles_create');
     await client.close();
   });
+
+  it('exposes bot-scoped application emoji writes when the bot identity is locked', async () => {
+    const client = await connect({
+      ...BASE_ENV,
+      ALLOWED_GUILDS: '111122223333444455',
+      // This is the deterministic bot ID returned by server-mocks for
+      // /users/@me (snowflake('bot_self')).
+      DISCORD_EXPECTED_BOT_ID: '100002088458902020',
+    });
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    expect(names).toContain('app_emojis_create');
+    expect(names).toContain('app_emojis_modify');
+    expect(names).toContain('app_emojis_delete');
+    await client.close();
+  });
+
+  it('rejects an application emoji write aimed at another application', async () => {
+    const client = await connect({
+      ...BASE_ENV,
+      ALLOWED_GUILDS: '111122223333444455',
+      DISCORD_EXPECTED_BOT_ID: '100002088458902020',
+    });
+    const result = await client.callTool({
+      name: 'app_emojis_create',
+      arguments: {
+        application_id: '999000999000999000',
+        name: 'spark',
+        image: 'data:image/png;base64,dGlueQ==',
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: 'BOT_SCOPE_UNRESOLVED' });
+    await client.close();
+  });
 });

@@ -183,6 +183,7 @@ describe('Cursor Agent CLI activation driver', () => {
       ).resolves.toEqual({ command: item.posixLauncher, prefix_args: [], kind: 'native' });
       expect(run).toHaveBeenCalledWith('which', ['agent'], {
         encoding: 'utf8',
+        env: { HOME: item.root },
         windowsHide: true,
       });
       await expect(

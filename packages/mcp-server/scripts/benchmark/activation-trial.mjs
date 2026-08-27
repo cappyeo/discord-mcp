@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 
-import { activationTrialDigest, createActivationTrialArtifact } from './activation-artifact.mjs';
 import {
+  ACTIVATION_ARTIFACT_SCHEMA,
+  ACTIVATION_ATTESTATION_REF_SCHEMA,
+  activationTrialDigest,
+  createActivationTrialArtifact,
+} from './activation-artifact.mjs';
+import {
+  ACTIVATION_ATTESTATION_CONTEXT,
+  ACTIVATION_ATTESTATION_SCHEMA,
   canonicalActivationAttestationDigest,
   canonicalActivationEvidenceDigest,
   createActivationAttestation,
@@ -218,6 +225,7 @@ export async function runActivationTrial({
   let buildDigest = digest(`@discord-mcp/cli@${request.release}`);
   let evidenceDigest = digest('evidence-unavailable');
   let sessionDigest = digest('session-unavailable');
+  let launcherDigest = digest('launcher-unavailable');
   let launchInvoked = false;
   let sessionRegistered = false;
 
@@ -483,6 +491,12 @@ export async function runActivationTrial({
         } else {
           sessionDigest = launched.sessionDigest;
         }
+        if (!DIGEST.test(launched?.launcherDigest ?? '')) {
+          failure = true;
+          readiness.client = 'failed';
+        } else {
+          launcherDigest = launched.launcherDigest;
+        }
         const first = await phase('first_request', async ({ signal }) => {
           if (!launched || readiness.client !== 'ready')
             throw new Error(`${host} client is not ready`);
@@ -639,6 +653,7 @@ export async function runActivationTrial({
     buildDigests !== null &&
     DIGEST.test(configDigest) &&
     DIGEST.test(sessionDigest) &&
+    DIGEST.test(launcherDigest) &&
     activityEvidence !== null &&
     executionProvenance.execution_mode === request.executionMode &&
     executionProvenance.abortable === true &&
@@ -651,14 +666,15 @@ export async function runActivationTrial({
       if (typeof dependencies.persistAttestation !== 'function')
         throw new Error('attestation persistence adapter is required');
       const envelope = {
-        schema_version: 'discord-mcp.activation-attestation.v1',
-        context: 'discord-mcp.activation-attestation:hmac:v1',
+        schema_version: ACTIVATION_ATTESTATION_SCHEMA,
+        context: ACTIVATION_ATTESTATION_CONTEXT,
         run_id: request.runId,
         trial_id: request.trialId,
         host,
         host_version: request.hostVersion,
         release: request.release,
         source_commit: request.sourceCommit,
+        launcher_digest: launcherDigest,
         binding: { guild_id: request.target.guildId, bot_id: request.target.botId },
         execution_provenance: executionProvenance,
         profile: {
@@ -679,7 +695,7 @@ export async function runActivationTrial({
         public_trial_digest: `sha256:${'0'.repeat(64)}`,
       };
       const unsignedPayload = {
-        schema_version: 'discord-mcp.activation-trial.v2',
+        schema_version: ACTIVATION_ARTIFACT_SCHEMA,
         host,
         host_version: request.hostVersion,
         release: request.release,
@@ -691,7 +707,12 @@ export async function runActivationTrial({
         readiness,
         terminal_status: 'passed',
         evidence,
-        digests: { build: buildDigest, evidence: evidenceDigest, session: sessionDigest },
+        digests: {
+          build: buildDigest,
+          evidence: evidenceDigest,
+          launcher: launcherDigest,
+          session: sessionDigest,
+        },
         safety: {
           secret_free: true,
           caller_owned_bot: callerOwnedBot,
@@ -738,7 +759,7 @@ export async function runActivationTrial({
     }
   }
   const payload = {
-    schema_version: 'discord-mcp.activation-trial.v2',
+    schema_version: ACTIVATION_ARTIFACT_SCHEMA,
     host,
     host_version: request.hostVersion,
     release: request.release,
@@ -750,7 +771,12 @@ export async function runActivationTrial({
     readiness,
     terminal_status: passed ? 'passed' : timedOut ? 'timeout' : 'failed',
     evidence,
-    digests: { build: buildDigest, evidence: evidenceDigest, session: sessionDigest },
+    digests: {
+      build: buildDigest,
+      evidence: evidenceDigest,
+      launcher: launcherDigest,
+      session: sessionDigest,
+    },
     safety: {
       secret_free: true,
       caller_owned_bot: callerOwnedBot,
@@ -769,7 +795,7 @@ export async function runActivationTrial({
   const artifact = createActivationTrialArtifact({
     ...payload,
     attestation: {
-      schema_version: 'discord-mcp.activation-attestation-ref.v1',
+      schema_version: ACTIVATION_ATTESTATION_REF_SCHEMA,
       envelope_digest: privateEnvelopeDigest,
       trial_digest: activationTrialDigest(payload),
     },

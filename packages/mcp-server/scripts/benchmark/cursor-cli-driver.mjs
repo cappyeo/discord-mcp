@@ -241,6 +241,7 @@ export async function resolveCursorCliLauncher({
   try {
     const result = await run(platform === 'win32' ? 'where.exe' : 'which', [command], {
       encoding: 'utf8',
+      env: environment,
       windowsHide: true,
     });
     discovered = String(result.stdout ?? '')

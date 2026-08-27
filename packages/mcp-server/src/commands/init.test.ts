@@ -95,6 +95,8 @@ interface InitJsonResult {
     gateway?: boolean;
     toolSurface?: string;
     allowedGuilds?: string[];
+    categories?: string[] | null;
+    writeMode?: string;
     discord?: {
       bot: { id: string; username: string };
       guilds: Array<{ id: string; name: string; administrator: boolean }>;
@@ -295,6 +297,36 @@ describe('initAction - explicit flags', () => {
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult & { errors?: string[] };
     expect(parsed.summary).toContain('compact');
     expect(parsed.errors?.[0]).toContain('progressive');
+  });
+
+  it('adds category and write policy to a stateless generated snippet', async () => {
+    await initAction({
+      json: true,
+      client: 'generic',
+      categories: 'messages, guild',
+      writeMode: 'preview',
+    });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    expect(snippet.mcpServers['discord-mcp'].env.MCP_CATEGORIES).toBe('messages,guild');
+    expect(snippet.mcpServers['discord-mcp'].env.MCP_WRITE_MODE).toBe('preview');
+    expect(parsed.data?.categories).toEqual(['messages', 'guild']);
+    expect(parsed.data?.writeMode).toBe('preview');
+  });
+
+  it('materializes explicit all/allow policy flags so ambient values cannot leak', async () => {
+    await initAction({ json: true, client: 'generic', categories: '', writeMode: 'allow' });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    const snippet = JSON.parse(parsed.data?.content ?? '{}') as ParsedSnippet;
+    expect(snippet.mcpServers['discord-mcp'].env.MCP_CATEGORIES).toBe('');
+    expect(snippet.mcpServers['discord-mcp'].env.MCP_WRITE_MODE).toBe('allow');
+  });
+
+  it('rejects malformed categories and write modes', async () => {
+    await initAction({ json: true, client: 'generic', categories: 'Messaging' });
+    expect(process.exitCode).toBe(2);
+    await initAction({ json: true, client: 'generic', writeMode: 'mutate' });
+    expect(process.exitCode).toBe(2);
   });
 
   it('with empty --token "" collapses to the env-var placeholder', async () => {

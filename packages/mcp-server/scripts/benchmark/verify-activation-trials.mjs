@@ -14,9 +14,9 @@ import {
 import { sameFileIdentity } from './file-identity.mjs';
 import { assertSecretFreeJson } from './manifest.mjs';
 
-export const ACTIVATION_VERIFIER_SCHEMA = 'discord-mcp.activation-trials-verifier.v1';
+export const ACTIVATION_VERIFIER_SCHEMA = 'discord-mcp.activation-trials-verifier.v2';
 export const ACTIVATION_MAX_DURATION_MS = 600_000;
-export const ACTIVATION_BUNDLE_SCHEMA = 'discord-mcp.activation-trials-bundle.v1';
+export const ACTIVATION_BUNDLE_SCHEMA = 'discord-mcp.activation-trials-bundle.v2';
 export const ACTIVATION_MAX_BUNDLE_BYTES = 2 * 1024 * 1024;
 export const ACTIVATION_MAX_ENVELOPE_BYTES = 1024 * 1024;
 export const ACTIVATION_MAX_TRIALS = 256;
@@ -156,6 +156,8 @@ function assertPublicPrivateMatch(publicTrial, privateAttestation, expectedBindi
     throw new Error('private execution provenance is not authoritative');
   if (privateAttestation.build.package_digest !== publicTrial.digests.build)
     throw new Error('private package digest does not match public build digest');
+  if (privateAttestation.launcher_digest !== publicTrial.digests.launcher)
+    throw new Error('private launcher digest does not match public launcher digest');
   if (privateAttestation.public_trial_digest !== publicTrial.attestation.trial_digest)
     throw new Error('private public_trial_digest does not match public trial digest');
   if (privateAttestation.guild_blueprint_evidence.evidence_id !== publicTrial.digests.evidence)
@@ -285,6 +287,8 @@ export function verifyActivationTrialAggregate({
       throw new Error(`host ${host} contains duplicate trial ids`);
     const hostVersions = new Set(hostTrials.map((trial) => trial.host_version));
     if (hostVersions.size !== 1) throw new Error(`host ${host} mixes client versions`);
+    const launcherDigests = new Set(hostTrials.map((trial) => trial.digests.launcher));
+    if (launcherDigests.size !== 1) throw new Error(`host ${host} mixes launcher identities`);
     for (const trial of hostTrials) {
       if (
         trial.result !== 'passed' ||
@@ -318,6 +322,7 @@ export function verifyActivationTrialAggregate({
       release,
       source_commit: sourceCommit,
       build_digest: buildDigest,
+      launcher_digest: hostTrials[0].digests.launcher,
       trial_count: hostTrials.length,
       trial_ids: [...ids],
       durations_ms: { median: trialMedian, p90 },

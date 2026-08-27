@@ -40,6 +40,7 @@ import { ALL_GENERATORS } from '../lib/client-snippets/index.js';
 import { emitResult } from '../lib/output.js';
 import {
   type DiscordMcpProfile,
+  normalizeProfileCategories,
   normalizeProfileName,
   profileExists,
   saveProfile,
@@ -54,6 +55,8 @@ export interface InitOptions {
   gateway?: boolean;
   toolSurface?: string;
   allowedGuilds?: string;
+  categories?: string;
+  writeMode?: string;
   discoverGuilds?: boolean;
   json?: boolean;
   profile?: {
@@ -361,6 +364,38 @@ export async function initAction(opts: InitOptions): Promise<void> {
     return;
   }
 
+  let categories: string[] | null = null;
+  const categoriesProvided = opts.categories !== undefined;
+  try {
+    categories = opts.categories === undefined ? null : normalizeProfileCategories(opts.categories);
+  } catch (error) {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: 'invalid category list',
+        errors: [error instanceof Error ? error.message : String(error)],
+      },
+      asJson,
+    );
+    return;
+  }
+  const writeModeProvided = opts.writeMode !== undefined;
+  const writeMode = opts.writeMode ?? (profileName === undefined ? 'allow' : 'preview');
+  if (writeMode !== 'allow' && writeMode !== 'preview') {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: `unknown write mode: ${writeMode}`,
+        errors: ['Available write modes: allow, preview'],
+      },
+      asJson,
+    );
+    return;
+  }
+  const resolvedWriteMode: 'allow' | 'preview' = writeMode;
+
   let allowedGuilds = opts.allowedGuilds?.split(',').map((guildId) => guildId.trim());
   if (
     allowedGuilds !== undefined &&
@@ -521,6 +556,11 @@ export async function initAction(opts: InitOptions): Promise<void> {
   if (profileName === undefined) {
     if (toolSurface === 'progressive') envVars.MCP_TOOL_SURFACE = 'progressive';
     if (allowedGuilds !== undefined) envVars.ALLOWED_GUILDS = allowedGuilds.join(',');
+    // Preserve legacy stateless output when the new policy flags are omitted,
+    // but make an explicitly selected "all"/"allow" policy immune to an
+    // unrelated ambient environment in the generated client process.
+    if (categoriesProvided) envVars.MCP_CATEGORIES = categories?.join(',') ?? '';
+    if (writeModeProvided) envVars.MCP_WRITE_MODE = resolvedWriteMode;
     if (discord !== undefined) envVars.DISCORD_EXPECTED_BOT_ID = discord.bot.id;
   }
 
@@ -542,6 +582,8 @@ export async function initAction(opts: InitOptions): Promise<void> {
       allowedGuilds,
       client: generator.id as DiscordMcpProfile['client'],
       toolSurface: toolSurface as DiscordMcpProfile['toolSurface'],
+      categories,
+      writeMode: resolvedWriteMode,
       gateway,
     };
     try {
@@ -611,6 +653,8 @@ export async function initAction(opts: InitOptions): Promise<void> {
         gateway,
         toolSurface,
         allowedGuilds: allowedGuilds ?? [],
+        categories,
+        writeMode: resolvedWriteMode,
         ...(discord === undefined ? {} : { discord }),
         ...(savedProfilePath === undefined
           ? {}

@@ -24,6 +24,12 @@ function endpoint(): URL {
   return new URL(`http://127.0.0.1:${address.port}/mcp`);
 }
 
+function healthEndpoint(): URL {
+  const url = endpoint();
+  url.pathname = '/healthz';
+  return url;
+}
+
 async function closeServer(): Promise<void> {
   if (server === undefined) return;
   await new Promise<void>((resolve, reject) =>
@@ -65,6 +71,45 @@ async function postChunked(
   });
 }
 
+async function getHealth(headers: Record<string, string> = {}): Promise<number> {
+  const url = healthEndpoint();
+  return new Promise((resolve, reject) => {
+    const req = request(url, { method: 'GET', headers }, (response) => {
+      response.resume();
+      response.once('end', () => resolve(response.statusCode ?? 0));
+    });
+    req.once('error', reject);
+    req.end();
+  });
+}
+
+async function getHealthWithBody(): Promise<{ status: number; connection: string | undefined }> {
+  const url = healthEndpoint();
+  return new Promise((resolve, reject) => {
+    const req = request(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          'Content-Length': '1',
+        },
+      },
+      (response) => {
+        response.resume();
+        response.once('end', () =>
+          resolve({
+            status: response.statusCode ?? 0,
+            connection: response.headers.connection,
+          }),
+        );
+      },
+    );
+    req.once('error', reject);
+    req.end('x');
+  });
+}
+
 beforeEach(() => {
   activityRoot = mkdtempSync(join(tmpdir(), 'discord-mcp-http-activity-'));
   process.env.APPDATA = activityRoot;
@@ -87,6 +132,61 @@ afterEach(async () => {
 });
 
 describe('startHttp', () => {
+  it('serves an authenticated, secret-free readiness response', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false });
+
+    const response = await fetch(healthEndpoint(), {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    const body = await response.text();
+    expect(JSON.parse(body)).toEqual({ status: 'ok' });
+    expect(body).not.toContain(ACCESS_TOKEN);
+  });
+
+  it('protects readiness with bearer, Host, and Origin validation', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false });
+
+    expect(await getHealth()).toBe(401);
+    expect(
+      await getHealth({ Authorization: `Bearer ${ACCESS_TOKEN}`, Host: 'attacker.example' }),
+    ).toBe(403);
+    expect(
+      await getHealth({
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        Origin: 'https://attacker.example',
+      }),
+    ).toBe(403);
+  });
+
+  it('keeps unknown paths and non-GET readiness requests unavailable', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false });
+
+    expect(
+      (
+        await fetch(new URL('/unknown', healthEndpoint()), {
+          headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await fetch(healthEndpoint(), {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it('closes a health connection that declares a request body', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false });
+
+    await expect(getHealthWithBody()).resolves.toEqual({ status: 400, connection: 'close' });
+  });
+
   it('rejects unauthenticated MCP requests', async () => {
     server = await startHttp({ port: 0, registerSignalHandlers: false });
 

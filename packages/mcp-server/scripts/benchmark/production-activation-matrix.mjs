@@ -250,7 +250,7 @@ async function probeHostVersion({ probe, cwd, environment }) {
   ) {
     throw new TypeError('production activation host version probe is invalid');
   }
-  const launcher = await probe.resolveLauncher();
+  const launcher = await probe.resolveLauncher({ environment });
   const result = await probe.runProcess({
     launcher,
     args: ['--version'],

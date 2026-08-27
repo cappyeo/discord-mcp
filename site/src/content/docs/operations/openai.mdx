@@ -51,6 +51,14 @@ Your proxy should publish `https://discord-mcp.example.com/mcp` and forward it
 to `http://127.0.0.1:3000/mcp`. Requests without a matching
 `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>` header receive `401`.
 
+The same listener exposes an authenticated `GET /healthz` readiness probe. It
+returns `{"status":"ok"}` after required startup checks and the HTTP listener
+have completed startup (including bot identity verification when
+`DISCORD_EXPECTED_BOT_ID` is configured). It applies the same bearer and
+loopback Host/Origin checks as `/mcp`; it is a process-readiness signal, not a
+Discord liveness check. Keep the bearer on the proxy health probe and do not
+publish an unauthenticated health route.
+
 The server rejects bodies larger than `MCP_HTTP_MAX_BODY_BYTES` (4 MiB by
 default) with `413`, and fast-rejects work above `MCP_HTTP_MAX_IN_FLIGHT` (16 by
 default) with `503` plus `Retry-After: 1`. Configure the reverse proxy with

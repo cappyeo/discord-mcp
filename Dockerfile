@@ -34,7 +34,7 @@ LABEL org.opencontainers.image.title="Discord MCP catalog" \
       org.opencontainers.image.description="Credential-free schema catalog for MCP registry inspection; Discord execution is disabled by default." \
       org.opencontainers.image.source="https://github.com/cappyeo/discord-mcp" \
       org.opencontainers.image.documentation="https://cappyeo.github.io/discord-mcp/" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=build --chown=node:node /runtime/ ./
 COPY --from=build --chown=node:node /workspace/LICENSE /licenses/discord-mcp/LICENSE

@@ -14,6 +14,7 @@ import {
   verifyBenchmarkBaseline,
 } from './baseline-lifecycle.mjs';
 import { CONTROLLED_BOT_ID, CONTROLLED_GUILD_IDS } from './campaign.mjs';
+import { attestHostLauncher, HOST_LAUNCHER_IDENTITY_SCHEMA } from './host-launcher-identity.mjs';
 import { createTrialDependencies } from './runtime.mjs';
 import { snapshotFingerprint } from './snapshot-fingerprint.mjs';
 import {
@@ -38,6 +39,22 @@ function record(value) {
 
 function digest(value) {
   return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
+}
+
+function launcherIdentity(value, kind) {
+  if (
+    !record(value) ||
+    value.schema_version !== HOST_LAUNCHER_IDENTITY_SCHEMA ||
+    value.kind !== kind ||
+    !DIGEST.test(value.digest ?? '')
+  ) {
+    throw new Error('host launcher identity is invalid');
+  }
+  return {
+    schema_version: value.schema_version,
+    kind: value.kind,
+    digest: value.digest,
+  };
 }
 
 function resultData(result) {
@@ -205,6 +222,7 @@ export function createActivationLiveAdapter({
   resolvePublicationTargets = publicationTargets,
   recoverBindings = recoverCheckpointBindings,
   verifyStateDirectoryPath = verifyStateDirectory,
+  attestLauncher = attestHostLauncher,
   now = () => new Date().toISOString(),
 } = {}) {
   if (!record(environment)) throw new TypeError('environment is required');
@@ -239,6 +257,9 @@ export function createActivationLiveAdapter({
     'privateHome',
     'privateState',
     'launcher',
+    'launcherDigest',
+    'launcherIdentity',
+    'launcherVerified',
     'plan',
     'trial',
     'trace',
@@ -297,6 +318,7 @@ export function createActivationLiveAdapter({
     resolvePublicationTargets,
     recoverBindings,
     verifyStateDirectoryPath,
+    attestLauncher,
     now,
   })) {
     if (typeof seam !== 'function') throw new TypeError(`${name} must be a function`);
@@ -494,6 +516,9 @@ export function createActivationLiveAdapter({
           childEnvironment,
           privateHome,
           launcher: null,
+          launcherDigest: null,
+          launcherIdentity: null,
+          launcherVerified: false,
           [hostDriver.sessionField]: null,
           plan: null,
           trial: trialFor(target, hostDriver.id),
@@ -515,7 +540,16 @@ export function createActivationLiveAdapter({
           });
         }
         registerSession(session);
-        session.launcher = await hostDriver.resolveLauncher({ platform });
+        session.launcher = await hostDriver.resolveLauncher({
+          environment: session.childEnvironment,
+          platform,
+        });
+        session.launcherIdentity = launcherIdentity(
+          await attestLauncher(session.launcher, { platform }),
+          session.launcher.kind,
+        );
+        session.launcherDigest = session.launcherIdentity.digest;
+        session.launcherVerified = true;
         session.validator = await loadActivityValidator(
           session.corePath,
           session.coreDigest,
@@ -591,6 +625,7 @@ export function createActivationLiveAdapter({
           blueprint_id: plan.blueprint_id,
           cli_digest: install.cliDigest,
           core_digest: install.coreDigest,
+          launcher_digest: session.launcherDigest,
         });
         return session;
       } catch (error) {
@@ -755,12 +790,34 @@ export function createActivationLiveAdapter({
 
     async closeSession({ session }) {
       if (!record(session)) return { settled: false };
-      if (session.closed) return { settled: true, closed: true };
+      if (session.closed)
+        return {
+          settled: session.launcherVerified === true,
+          closed: true,
+          launcherVerified: session.launcherVerified === true,
+        };
       if (session.active) return { settled: false };
+      try {
+        const current = launcherIdentity(
+          await attestLauncher(session.launcher, { platform }),
+          session.launcherIdentity?.kind,
+        );
+        session.launcherVerified =
+          current.digest === session.launcherIdentity?.digest &&
+          current.kind === session.launcherIdentity?.kind;
+      } catch {
+        session.launcherVerified = false;
+      }
       const removed = await removePrivateHome(session.privateHome);
       session.closed = removed;
-      if (session.unsettled) return { settled: false, authRemoved: removed };
-      return { settled: removed, closed: removed };
+      if (session.unsettled || !session.launcherVerified)
+        return {
+          settled: false,
+          closed: removed,
+          authRemoved: removed,
+          launcherVerified: session.launcherVerified,
+        };
+      return { settled: removed, closed: removed, launcherVerified: true };
     },
 
     async captureBaseline({ target, token, runId, sourceCommit }) {

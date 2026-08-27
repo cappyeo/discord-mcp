@@ -11,6 +11,22 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Saved caller-owned profiles now persist `MCP_CATEGORIES` and `MCP_WRITE_MODE`;
+  guided setup defaults to preview mode, while legacy profiles load as all
+  categories with `allow` to preserve existing behavior. Profile activation
+  clears ambient category policy and sets write mode explicitly.
+- Added an authenticated `GET /healthz` readiness probe alongside the HTTP
+  `/mcp` endpoint. It reuses bearer and loopback Host/Origin checks, returns
+  only a secret-free status, and closes malformed body-bearing probes safely.
+- Hardened the application-emoji surface for the authenticated bot: all five
+  `app_emojis_*` tools can resolve an omitted `application_id` through
+  `/applications/@me`, while guild-allowlisted deployments expose application
+  emoji writes only for the identity-locked bot application. Uploads now fail
+  closed before Discord for unsupported image MIME types, malformed base64,
+  decoded payloads over 256 KiB, and names outside Discord's
+  `[A-Za-z0-9_]{2,32}` rule. A distinct `BOT_SCOPE_UNRESOLVED` error explains
+  missing or mismatched bot identity locks. `app_emojis_delete` remains
+  confirmation-gated.
 - Added first-class Google Antigravity CLI setup and offline config auditing.
   Generated `mcp_config.json` fragments inherit the caller's launch environment
   and never persist `DISCORD_TOKEN`; doctor fails closed if that field appears.

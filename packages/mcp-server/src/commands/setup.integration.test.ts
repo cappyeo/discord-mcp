@@ -81,6 +81,7 @@ describe('guided caller-owned bot setup', () => {
     await setupAction({
       profile: 'devbot',
       client: 'codex',
+      categories: 'messages, guild',
       json: true,
       profileDirectory: directory,
     });
@@ -98,6 +99,7 @@ describe('guided caller-owned bot setup', () => {
     expect(parsed.data?.content).not.toMatch(/[\\/]_npx[\\/]/);
     expect(parsed.data?.content).not.toContain('node_modules');
     expect(parsed.data?.content).not.toContain('DISCORD_EXPECTED_BOT_ID');
+    expect(parsed.data?.content).not.toMatch(/MCP_CATEGORIES|MCP_WRITE_MODE/);
 
     const saved = loadProfile('devbot', { directory });
     expect(saved).toMatchObject({
@@ -105,6 +107,8 @@ describe('guided caller-owned bot setup', () => {
       allowedGuilds: [GUILD.id],
       client: 'codex',
       toolSurface: 'progressive',
+      categories: ['messages', 'guild'],
+      writeMode: 'preview',
     });
     expect(readFileSync(parsed.data?.profile?.path ?? '', 'utf8')).not.toContain(TOKEN);
   });

@@ -29,6 +29,7 @@ function envelope(overrides = {}) {
     host_version: '1.2.3',
     release: '0.22.0',
     source_commit: 'a'.repeat(40),
+    launcher_digest: DIGEST('8'),
     execution_provenance: {
       execution_mode: 'live',
       adapter_id: 'codex-adapter',
@@ -79,6 +80,13 @@ describe('private activation attestation', () => {
         validateActivityEvidence: () => false,
       }),
     ).toThrow(/validation failed|evidence_digest/);
+  });
+
+  it('requires the private launcher identity bound by the public trial', () => {
+    const { launcher_digest: ignored, ...value } = envelope();
+    expect(() => createActivationAttestation({ envelope: value, integrityKey: KEY })).toThrow(
+      /launcher_digest.*required/,
+    );
   });
 
   it.each([

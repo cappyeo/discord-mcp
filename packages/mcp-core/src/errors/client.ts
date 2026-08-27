@@ -109,6 +109,21 @@ export class GuildScopeUnresolvedError extends DiscordClientError {
   }
 }
 
+/**
+ * A bot-scoped operation could not be tied to the identity locked by the
+ * deployment. This is distinct from a guild-scope failure because application
+ * emojis are global to the bot application rather than to one guild.
+ */
+export class BotScopeUnresolvedError extends DiscordClientError {
+  public readonly code = 'BOT_SCOPE_UNRESOLVED';
+  public readonly retriable = false;
+  public constructor(public readonly resource: string) {
+    super(`Cannot prove that ${resource} belongs to the locked bot application`);
+    this.recoveryHint =
+      'Set DISCORD_EXPECTED_BOT_ID and omit application_id, or use the locked bot application ID';
+  }
+}
+
 export class DryRunPreview extends DiscordClientError {
   public readonly code: string = 'DRY_RUN_PREVIEW';
   public readonly retriable = false;

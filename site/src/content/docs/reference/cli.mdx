@@ -46,7 +46,9 @@ stateless Streamable HTTP endpoint at `/mcp`; it requires
 `DISCORD_MCP_ACCESS_TOKEN` and is designed to sit behind an HTTPS reverse
 proxy. The endpoint negotiates MCP `2026-07-28` and retains stateless 2025-era
 compatibility. Both forms read configuration from `process.env` and wire the
-audit sink.
+audit sink. The HTTP listener also provides an authenticated `GET /healthz`
+readiness probe; it reports startup readiness only (and is not a Discord
+liveness check).
 
 | Flag         | Type    | Default | Description                                                                                                              |
 | ------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -300,6 +302,7 @@ discord-mcp smoke --confirm-write --guild-id 111122223333444455 --json
 discord-mcp setup --profile <name> [--client <id>]
                   [--tool-surface <full|progressive>]
                   [--allowed-guilds <id,id,...>] [--gateway]
+                  [--categories <name,name,...>] [--write-mode <allow|preview>]
                   [--output <path>] [--force] [--json]
 ```
 
@@ -307,6 +310,10 @@ Recommended onboarding for one caller-owned bot. `setup` has no token flag: it
 resolves `DISCORD_TOKEN` from the caller's environment, verifies the bot through
 Discord, selects or validates its guild allowlist, saves non-secret profile
 metadata, and generates a client snippet that starts `serve --profile <name>`.
+Use `--categories messages,guild` to persist a narrow tool-category allowlist;
+category spelling is checked when the server boots. Guided setup defaults to
+`--write-mode preview`, while `--write-mode allow` opts into ordinary mutation
+execution explicitly.
 
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
@@ -314,6 +321,8 @@ metadata, and generates a client snippet that starts `serve --profile <name>`.
 | `--client <id>` | string | prompt if TTY, else `generic` | One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `cursor-cli`, `gemini-cli` (enterprise/API-key compatibility), `cursor`, `generic`. |
 | `--tool-surface <mode>` | string | `progressive` | Store `full` or `progressive` as the runtime presentation layer. |
 | `--allowed-guilds <ids>` | string | sole guild or interactive choice | Verify and store an explicit comma-separated guild allowlist. Ambiguous non-interactive selection fails closed. |
+| `--categories <names>` | string | all categories | Store comma-separated lowercase category names such as `messages,guild`; the running server validates names against its installed tool registry. |
+| `--write-mode <mode>` | string | `preview` | Store `preview` (guided setup default) or `allow` for ordinary mutations. Destructive tools retain their separate dry-run and confirmation gates. |
 | `--gateway` | boolean | `false` | Store Gateway subscriptions for stdio startup. |
 | `--output <path>` | string | stdout | Write the generated client snippet. Existing files are protected. |
 | `--force` | boolean | `false` | Update metadata for the same verified bot and overwrite `--output`. It cannot reassign the profile to another bot ID. |
@@ -464,6 +473,7 @@ and then run setup again with that bot's caller-owned token.
 discord-mcp init [--client <id>] [--token <token>] [--gateway]
                  [--tool-surface <full|progressive>]
                  [--allowed-guilds <id,id,...>]
+                 [--categories <name,name,...>] [--write-mode <allow|preview>]
                  [--discover-guilds]
                  [--output <path>] [--force] [--json]
 ```
@@ -480,6 +490,8 @@ reusable bot profile and safer credential lifecycle.
 | `--tool-surface <mode>` | string | `full`                                        | Set `progressive` to add `MCP_TOOL_SURFACE=progressive` to the generated client snippet; useful for hosts without native deferred MCP loading.                                                                        |
 | `--allowed-guilds <ids>` | string | unset                                       | Add a normalized `ALLOWED_GUILDS` server-side guild allowlist to the generated client snippet. Values must be comma-separated Discord snowflake IDs.                                                                  |
 | `--discover-guilds` | boolean | `false`                                         | Use the current `DISCORD_TOKEN` to verify the bot and enumerate its real guilds. A sole guild is selected automatically; TTY runs require an explicit choice and default to cancel; ambiguous non-interactive runs must pass `--allowed-guilds`. Selected guilds with `Administrator` produce a warning. |
+| `--categories <names>` | string | all categories | Add a lowercase comma-separated `MCP_CATEGORIES` allowlist; installed category names are validated at server boot. |
+| `--write-mode <mode>` | string | `allow` | Set `MCP_WRITE_MODE=preview` to make ordinary mutations return previews; `allow` preserves legacy execution behavior. |
 | `--output <path>`| string  | (stdout)                                             | Write the snippet to a file instead of stdout.                                                                                                                                                                        |
 | `--force`        | boolean | `false`                                              | Overwrite the `--output` path if it already exists. Required to overwrite.                                                                                                                                            |
 | `--json`         | boolean | `false`                                              | Emit machine-readable JSON instead of pretty output. The snippet body is delivered under `data.content`.                                                                                                              |

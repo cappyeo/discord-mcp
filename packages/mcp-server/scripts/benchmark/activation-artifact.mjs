@@ -9,8 +9,8 @@ import { assertSecretFreeJson, canonicalJson } from './manifest.mjs';
  * error, config, or local path. A runner may keep those details locally, but
  * they must not cross into the shareable benchmark evidence.
  */
-export const ACTIVATION_ARTIFACT_SCHEMA = 'discord-mcp.activation-trial.v2';
-export const ACTIVATION_ATTESTATION_REF_SCHEMA = 'discord-mcp.activation-attestation-ref.v1';
+export const ACTIVATION_ARTIFACT_SCHEMA = 'discord-mcp.activation-trial.v3';
+export const ACTIVATION_ATTESTATION_REF_SCHEMA = 'discord-mcp.activation-attestation-ref.v2';
 
 const ARTIFACT_PAYLOAD_KEYS = new Set([
   'schema_version',
@@ -42,7 +42,7 @@ const PHASE_KEYS = new Set([
 ]);
 const READINESS_KEYS = new Set(['install', 'setup', 'client', 'first_request']);
 const EVIDENCE_KEYS = new Set(['apply', 'guild_blueprint_evidence']);
-const DIGEST_KEYS = new Set(['build', 'evidence', 'session']);
+const DIGEST_KEYS = new Set(['build', 'evidence', 'launcher', 'session']);
 const SAFETY_KEYS = new Set([
   'secret_free',
   'caller_owned_bot',

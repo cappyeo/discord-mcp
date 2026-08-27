@@ -37,7 +37,12 @@ function trial(overrides = {}) {
     },
     terminal_status: 'passed',
     evidence: { apply: 'completed', guild_blueprint_evidence: 'verified' },
-    digests: { build: DIGEST('a'), evidence: DIGEST('b'), session: DIGEST('c') },
+    digests: {
+      build: DIGEST('a'),
+      evidence: DIGEST('b'),
+      launcher: DIGEST('f'),
+      session: DIGEST('c'),
+    },
     safety: {
       secret_free: true,
       caller_owned_bot: true,
@@ -126,6 +131,14 @@ describe('activation trial artifact boundary', () => {
     const value = { ...trial(), evidence: { apply: 'completed' } };
     expect(() => assertActivationTrialArtifact(value)).toThrow(
       /guild_blueprint_evidence.*required/,
+    );
+  });
+
+  it('requires a public launcher byte identity', () => {
+    const value = trial();
+    const { launcher: ignored, ...digests } = value.digests;
+    expect(() => assertActivationTrialArtifact({ ...value, digests })).toThrow(
+      /digests\.launcher.*required/,
     );
   });
 

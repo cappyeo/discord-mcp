@@ -90,6 +90,20 @@ function rejectAndClose(
   });
 }
 
+function requestDeclaresBody(req: IncomingMessage): boolean {
+  const contentLength = req.headers['content-length'];
+  const lengths = Array.isArray(contentLength) ? contentLength : [contentLength];
+  if (
+    lengths.some((value) => {
+      if (value === undefined || !/^\d+$/.test(value)) return false;
+      return Number(value) > 0;
+    })
+  ) {
+    return true;
+  }
+  return req.headers['transfer-encoding'] !== undefined;
+}
+
 /**
  * Starts a stateless Streamable HTTP MCP endpoint at `/mcp`.
  *
@@ -157,7 +171,9 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   let inFlight = 0;
 
   const server = createServer(async (req, res) => {
-    if (req.url === undefined || new URL(req.url, 'http://localhost').pathname !== '/mcp') {
+    const pathname =
+      req.url === undefined ? undefined : new URL(req.url, 'http://localhost').pathname;
+    if (pathname !== '/mcp' && pathname !== '/healthz') {
       res.writeHead(404).end();
       return;
     }
@@ -171,6 +187,23 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     // deployments remain responsible for Host/Origin policy at their proxy.
     if (validateHost !== undefined && !validateHost(req, res)) return;
     if (validateOrigin !== undefined && !validateOrigin(req, res)) return;
+
+    if (pathname === '/healthz') {
+      if (req.method?.toUpperCase() !== 'GET') {
+        rejectAndClose(req, res, 404);
+        return;
+      }
+      // A health probe has no request payload. Close the connection rather
+      // than replying while unread bytes could be interpreted as a second
+      // request on the same keep-alive socket.
+      if (requestDeclaresBody(req)) {
+        rejectAndClose(req, res, 400);
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
 
     if (inFlight >= config.MCP_HTTP_MAX_IN_FLIGHT) {
       rejectAndClose(req, res, 503, { 'Retry-After': '1' });

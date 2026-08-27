@@ -25,6 +25,8 @@ const originalToken = process.env.DISCORD_TOKEN;
 const originalExpectedBotId = process.env.DISCORD_EXPECTED_BOT_ID;
 const originalAllowedGuilds = process.env.ALLOWED_GUILDS;
 const originalToolSurface = process.env.MCP_TOOL_SURFACE;
+const originalCategories = process.env.MCP_CATEGORIES;
+const originalWriteMode = process.env.MCP_WRITE_MODE;
 
 beforeEach(() => {
   delete process.env.GATEWAY;
@@ -42,6 +44,8 @@ afterEach(() => {
   restore('DISCORD_EXPECTED_BOT_ID', originalExpectedBotId);
   restore('ALLOWED_GUILDS', originalAllowedGuilds);
   restore('MCP_TOOL_SURFACE', originalToolSurface);
+  restore('MCP_CATEGORIES', originalCategories);
+  restore('MCP_WRITE_MODE', originalWriteMode);
 });
 
 describe('serveAction', () => {
@@ -82,6 +86,8 @@ describe('serveAction', () => {
           allowedGuilds: ['111122223333444455'],
           client: 'codex',
           toolSurface: 'progressive',
+          categories: ['messages', 'guild'],
+          writeMode: 'preview',
           gateway: false,
         },
         { directory },
@@ -93,6 +99,8 @@ describe('serveAction', () => {
       expect(process.env.DISCORD_EXPECTED_BOT_ID).toBe('987654321098765432');
       expect(process.env.ALLOWED_GUILDS).toBe('111122223333444455');
       expect(process.env.MCP_TOOL_SURFACE).toBe('progressive');
+      expect(process.env.MCP_CATEGORIES).toBe('messages,guild');
+      expect(process.env.MCP_WRITE_MODE).toBe('preview');
       expect(process.env.DISCORD_TOKEN).toBe(`Bot ${'x'.repeat(60)}`);
     } finally {
       rmSync(directory, { recursive: true, force: true });

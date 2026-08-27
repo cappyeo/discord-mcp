@@ -160,6 +160,7 @@ async function fakeDependencies() {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: DIGEST('launcher'),
         sessionDigest: DIGEST('session'),
       };
     },
@@ -258,7 +259,7 @@ describe('Cursor Agent CLI activation trial', () => {
       expect(result).toMatchObject({
         ok: true,
         artifact: {
-          schema_version: 'discord-mcp.activation-trial.v2',
+          schema_version: 'discord-mcp.activation-trial.v3',
           host: 'cursor-cli',
           result: 'passed',
         },
