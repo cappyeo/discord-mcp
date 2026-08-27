@@ -14,10 +14,7 @@ import {
   verifyBenchmarkBaseline,
 } from './baseline-lifecycle.mjs';
 import { CONTROLLED_BOT_ID, CONTROLLED_GUILD_IDS } from './campaign.mjs';
-import {
-  HOST_LAUNCHER_IDENTITY_SCHEMA,
-  attestHostLauncher,
-} from './host-launcher-identity.mjs';
+import { attestHostLauncher, HOST_LAUNCHER_IDENTITY_SCHEMA } from './host-launcher-identity.mjs';
 import { createTrialDependencies } from './runtime.mjs';
 import { snapshotFingerprint } from './snapshot-fingerprint.mjs';
 import {

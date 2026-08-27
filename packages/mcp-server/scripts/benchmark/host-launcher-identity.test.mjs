@@ -4,10 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-  HOST_LAUNCHER_IDENTITY_SCHEMA,
-  attestHostLauncher,
-} from './host-launcher-identity.mjs';
+import { attestHostLauncher, HOST_LAUNCHER_IDENTITY_SCHEMA } from './host-launcher-identity.mjs';
 
 const roots = [];
 
@@ -79,8 +76,8 @@ describe('host launcher byte identity', () => {
     const command = join(root, 'launcher');
     await symlink(target, command);
 
-    await expect(
-      attestHostLauncher({ command, prefix_args: [], kind: 'native' }),
-    ).rejects.toThrow(/symlink/iu);
+    await expect(attestHostLauncher({ command, prefix_args: [], kind: 'native' })).rejects.toThrow(
+      /symlink/iu,
+    );
   });
 });

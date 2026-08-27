@@ -165,10 +165,7 @@ function validateEnvelope(value, { validateActivityEvidence } = {}) {
   );
   string(required(value, 'release', 'activation attestation'), 'release', RELEASE_RE);
   string(required(value, 'source_commit', 'activation attestation'), 'source_commit', COMMIT_RE);
-  digest(
-    required(value, 'launcher_digest', 'activation attestation'),
-    'launcher_digest',
-  );
+  digest(required(value, 'launcher_digest', 'activation attestation'), 'launcher_digest');
 
   keys(
     required(value, 'execution_provenance', 'activation attestation'),

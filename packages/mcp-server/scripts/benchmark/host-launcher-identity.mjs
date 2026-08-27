@@ -27,10 +27,7 @@ function record(value) {
 }
 
 function exactKeys(value, expected) {
-  return (
-    record(value) &&
-    Object.keys(value).sort().join('\0') === [...expected].sort().join('\0')
-  );
+  return record(value) && Object.keys(value).sort().join('\0') === [...expected].sort().join('\0');
 }
 
 function fileUnchanged(before, after, platform) {

@@ -294,7 +294,8 @@ export async function resolveCodexLauncher({
       .split(/\r?\n/u)
       .map((line) => line.trim())
       .find(Boolean);
-    if (selected === undefined || !isAbsolute(selected)) throw new Error('Codex CLI is unavailable');
+    if (selected === undefined || !isAbsolute(selected))
+      throw new Error('Codex CLI is unavailable');
     const command = resolve(await realpath(selected));
     const metadata = await lstat(command);
     if (!metadata.isFile()) throw new Error('Codex CLI is unavailable');
