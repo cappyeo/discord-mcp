@@ -66,11 +66,13 @@ describe('profile commands', () => {
       provider: 'env',
       variable: 'DISCORD_TOKEN',
     });
+    expect(listed.data.profiles[0]).toMatchObject({ categories: null, writeMode: 'allow' });
 
     stdoutWrites = [];
     profileShowAction('devbot', { json: true, profileDirectory: directory });
     const shown = JSON.parse(output());
     expect(shown.data.profile.bot.id).toBe(BOT_ID);
+    expect(shown.data.profile).toMatchObject({ categories: null, writeMode: 'allow' });
     expect(output()).not.toContain('Bot x');
   });
 

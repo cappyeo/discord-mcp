@@ -11,6 +11,13 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Saved caller-owned profiles now persist `MCP_CATEGORIES` and `MCP_WRITE_MODE`;
+  guided setup defaults to preview mode, while legacy profiles load as all
+  categories with `allow` to preserve existing behavior. Profile activation
+  clears ambient category policy and sets write mode explicitly.
+- Added an authenticated `GET /healthz` readiness probe alongside the HTTP
+  `/mcp` endpoint. It reuses bearer and loopback Host/Origin checks, returns
+  only a secret-free status, and closes malformed body-bearing probes safely.
 - Added first-class Google Antigravity CLI setup and offline config auditing.
   Generated `mcp_config.json` fragments inherit the caller's launch environment
   and never persist `DISCORD_TOKEN`; doctor fails closed if that field appears.

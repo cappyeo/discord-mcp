@@ -10,6 +10,8 @@ export interface SetupOptions {
   gateway?: boolean;
   toolSurface?: string;
   allowedGuilds?: string;
+  categories?: string;
+  writeMode?: string;
   json?: boolean;
   profileDirectory?: string;
 }
@@ -41,6 +43,10 @@ export async function setupAction(options: SetupOptions): Promise<void> {
     ...(options.gateway === undefined ? {} : { gateway: options.gateway }),
     toolSurface: options.toolSurface ?? 'progressive',
     ...(options.allowedGuilds === undefined ? {} : { allowedGuilds: options.allowedGuilds }),
+    ...(options.categories === undefined ? {} : { categories: options.categories }),
+    ...(options.writeMode === undefined
+      ? { writeMode: 'preview' }
+      : { writeMode: options.writeMode }),
     ...(options.json === undefined ? {} : { json: options.json }),
     discoverGuilds: true,
     profile: {

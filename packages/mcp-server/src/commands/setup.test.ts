@@ -55,6 +55,7 @@ describe('setupAction', () => {
       json: true,
       profile: { name: 'devbot', directory: 'C:/profiles' },
       toolSurface: 'progressive',
+      writeMode: 'preview',
     });
     expect(initAction.mock.calls[0]?.[0]).not.toHaveProperty('token');
   });

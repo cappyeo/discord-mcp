@@ -28,9 +28,12 @@ const CLIENT_IDS = [
   'generic',
 ] as const;
 const TOOL_SURFACES = ['full', 'progressive'] as const;
+const WRITE_MODES = ['allow', 'preview'] as const;
+const PROFILE_CATEGORY = /^[a-z][a-z0-9_]*$/;
 
 export type ProfileClientId = (typeof CLIENT_IDS)[number];
 export type ProfileToolSurface = (typeof TOOL_SURFACES)[number];
+export type ProfileWriteMode = (typeof WRITE_MODES)[number];
 
 export interface DiscordMcpProfile {
   readonly version: 1;
@@ -46,6 +49,8 @@ export interface DiscordMcpProfile {
   readonly allowedGuilds: readonly string[];
   readonly client: ProfileClientId;
   readonly toolSurface: ProfileToolSurface;
+  readonly categories?: readonly string[] | null;
+  readonly writeMode?: ProfileWriteMode;
   readonly gateway: boolean;
 }
 
@@ -89,11 +94,42 @@ export function normalizeProfileName(value: string): string {
   return name;
 }
 
+export function normalizeProfileCategories(value: string | readonly string[]): string[] | null {
+  const fromString = typeof value === 'string';
+  const categories = fromString ? value.split(',').map((item) => item.trim()) : [...value];
+  if (fromString && categories.length === 1 && categories[0] === '') return null;
+  if (
+    categories.length === 0 ||
+    categories.some((category) => typeof category !== 'string' || !PROFILE_CATEGORY.test(category))
+  ) {
+    throw new Error(
+      'Categories must be comma-separated lowercase names using letters, digits, and underscores',
+    );
+  }
+  if (new Set(categories).size !== categories.length)
+    throw new Error('Categories must not contain duplicates');
+  return categories;
+}
+
 function parseProfileValue(value: unknown, expectedName?: string): DiscordMcpProfile {
   if (!isRecord(value)) throw new Error('Profile must be a JSON object');
+  const baseKeys = [
+    'version',
+    'name',
+    'bot',
+    'credential',
+    'allowedGuilds',
+    'client',
+    'toolSurface',
+    'gateway',
+  ];
+  const hasPolicy = Object.keys(value).some((key) => key === 'categories' || key === 'writeMode');
+  if (hasPolicy && (!Object.hasOwn(value, 'categories') || !Object.hasOwn(value, 'writeMode'))) {
+    throw new Error('Profile policy requires both categories and writeMode');
+  }
   assertExactKeys(
     value,
-    ['version', 'name', 'bot', 'credential', 'allowedGuilds', 'client', 'toolSurface', 'gateway'],
+    hasPolicy ? [...baseKeys, 'categories', 'writeMode'] : baseKeys,
     'Profile',
   );
 
@@ -146,6 +182,19 @@ function parseProfileValue(value: unknown, expectedName?: string): DiscordMcpPro
   ) {
     throw new Error(`Profile toolSurface must be one of: ${TOOL_SURFACES.join(', ')}`);
   }
+  const categories = hasPolicy
+    ? value.categories === null
+      ? null
+      : (() => {
+          if (!Array.isArray(value.categories))
+            throw new Error('Profile categories must be an array or null');
+          return normalizeProfileCategories(value.categories);
+        })()
+    : null;
+  const writeMode = hasPolicy ? value.writeMode : 'allow';
+  if (typeof writeMode !== 'string' || !WRITE_MODES.includes(writeMode as ProfileWriteMode)) {
+    throw new Error(`Profile writeMode must be one of: ${WRITE_MODES.join(', ')}`);
+  }
   if (typeof value.gateway !== 'boolean') throw new Error('Profile gateway must be a boolean');
 
   return {
@@ -156,6 +205,8 @@ function parseProfileValue(value: unknown, expectedName?: string): DiscordMcpPro
     allowedGuilds: [...allowedGuilds],
     client: value.client as ProfileClientId,
     toolSurface: value.toolSurface as ProfileToolSurface,
+    categories,
+    writeMode: writeMode as ProfileWriteMode,
     gateway: value.gateway,
   };
 }
@@ -280,6 +331,10 @@ export function activateProfile(
   targetEnv.DISCORD_EXPECTED_BOT_ID = profile.bot.id;
   targetEnv.ALLOWED_GUILDS = profile.allowedGuilds.join(',');
   targetEnv.MCP_TOOL_SURFACE = profile.toolSurface;
+  if (profile.categories === undefined || profile.categories === null)
+    delete targetEnv.MCP_CATEGORIES;
+  else targetEnv.MCP_CATEGORIES = profile.categories.join(',');
+  targetEnv.MCP_WRITE_MODE = profile.writeMode ?? 'allow';
   if (profile.gateway) {
     targetEnv.GATEWAY = '1';
   } else {

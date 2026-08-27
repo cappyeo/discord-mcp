@@ -145,6 +145,11 @@ export function buildProgram(): Command {
       'progressive',
     )
     .option('--allowed-guilds <ids>', 'Comma-separated guild IDs to verify and allow')
+    .option(
+      '--categories <names>',
+      'Comma-separated tool categories (lowercase names; omitted means all)',
+    )
+    .option('--write-mode <mode>', 'Mutation policy (allow|preview). Setup defaults to preview')
     .option('--output <path>', 'Write the generated client snippet to this path')
     .option('--force', 'Update the same bot profile and overwrite --output if needed')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
@@ -155,6 +160,8 @@ export function buildProgram(): Command {
         gateway?: boolean;
         toolSurface?: string;
         allowedGuilds?: string;
+        categories?: string;
+        writeMode?: string;
         output?: string;
         force?: boolean;
         json?: boolean;
@@ -252,6 +259,11 @@ export function buildProgram(): Command {
       'Comma-separated guild IDs enforced by the server (recommended for bot safety)',
     )
     .option(
+      '--categories <names>',
+      'Comma-separated tool categories (lowercase names; omitted means all)',
+    )
+    .option('--write-mode <mode>', 'Mutation policy (allow|preview); default: allow')
+    .option(
       '--discover-guilds',
       'Verify DISCORD_TOKEN online and safely select or validate the guild allowlist',
     )
@@ -265,6 +277,8 @@ export function buildProgram(): Command {
         gateway?: boolean;
         toolSurface?: string;
         allowedGuilds?: string;
+        categories?: string;
+        writeMode?: string;
         discoverGuilds?: boolean;
         output?: string;
         force?: boolean;

@@ -7,6 +7,7 @@ import {
   type DiscordMcpProfile,
   listProfiles,
   loadProfile,
+  normalizeProfileCategories,
   normalizeProfileName,
   profilePath,
   removeProfile,
@@ -27,6 +28,8 @@ function profile(overrides: Partial<DiscordMcpProfile> = {}): DiscordMcpProfile 
     allowedGuilds: [GUILD_ID],
     client: 'codex',
     toolSurface: 'progressive',
+    categories: null,
+    writeMode: 'allow',
     gateway: false,
     ...overrides,
   };
@@ -95,6 +98,48 @@ describe('profile storage', () => {
     expect(() => loadProfile('devbot', { directory })).toThrow('unknown or missing fields');
   });
 
+  it('loads legacy profiles with permissive policy defaults', () => {
+    const path = profilePath('devbot', { directory });
+    const legacy = profile();
+    delete (legacy as { categories?: unknown }).categories;
+    delete (legacy as { writeMode?: unknown }).writeMode;
+    writeFileSync(path, JSON.stringify(legacy), 'utf8');
+
+    expect(loadProfile('devbot', { directory })).toMatchObject({
+      categories: null,
+      writeMode: 'allow',
+    });
+  });
+
+  it('validates category names and duplicate entries', () => {
+    expect(() =>
+      saveProfile(profile({ categories: ['messages', 'messages'] }), { directory }),
+    ).toThrow('duplicates');
+    expect(() => saveProfile(profile({ categories: ['Messages'] }), { directory })).toThrow(
+      'lowercase',
+    );
+  });
+
+  it('keeps CLI empty-string semantics distinct from malformed stored arrays', () => {
+    expect(normalizeProfileCategories(' ')).toBeNull();
+    expect(() => normalizeProfileCategories([])).toThrow('lowercase');
+    expect(() => normalizeProfileCategories([''])).toThrow('lowercase');
+  });
+
+  it.each([
+    { categories: ['messages'] },
+    { writeMode: 'preview' },
+  ])('rejects a partially migrated policy record: %o', (partial) => {
+    const path = profilePath('devbot', { directory });
+    const legacy = { ...profile() } as Record<string, unknown>;
+    delete legacy.categories;
+    delete legacy.writeMode;
+    writeFileSync(path, JSON.stringify({ ...legacy, ...partial }), 'utf8');
+    expect(() => loadProfile('devbot', { directory })).toThrow(
+      'requires both categories and writeMode',
+    );
+  });
+
   it('removes exactly the selected profile', () => {
     saveProfile(profile({ name: 'keep' }), { directory });
     saveProfile(profile({ name: 'remove' }), { directory });
@@ -108,7 +153,11 @@ describe('profile storage', () => {
 describe('profile activation', () => {
   it('applies safety settings while leaving the caller-owned token in the environment', () => {
     saveProfile(profile(), { directory });
-    const targetEnv: NodeJS.ProcessEnv = { DISCORD_TOKEN: TOKEN, GATEWAY: '1' };
+    const targetEnv: NodeJS.ProcessEnv = {
+      DISCORD_TOKEN: TOKEN,
+      GATEWAY: '1',
+      MCP_CATEGORIES: 'ambient',
+    };
 
     const activated = activateProfile('devbot', { directory, targetEnv });
 
@@ -117,7 +166,34 @@ describe('profile activation', () => {
     expect(targetEnv.DISCORD_EXPECTED_BOT_ID).toBe(BOT_ID);
     expect(targetEnv.ALLOWED_GUILDS).toBe(GUILD_ID);
     expect(targetEnv.MCP_TOOL_SURFACE).toBe('progressive');
+    expect(targetEnv.MCP_CATEGORIES).toBeUndefined();
+    expect(targetEnv.MCP_WRITE_MODE).toBe('allow');
     expect(targetEnv.GATEWAY).toBeUndefined();
+  });
+
+  it('activates a scoped preview profile and replaces ambient policy', () => {
+    saveProfile(profile({ categories: ['messages', 'guild'], writeMode: 'preview' }), {
+      directory,
+    });
+    const targetEnv: NodeJS.ProcessEnv = {
+      DISCORD_TOKEN: TOKEN,
+      MCP_CATEGORIES: 'ambient',
+      MCP_WRITE_MODE: 'allow',
+    };
+    activateProfile('devbot', { directory, targetEnv });
+    expect(targetEnv.MCP_CATEGORIES).toBe('messages,guild');
+    expect(targetEnv.MCP_WRITE_MODE).toBe('preview');
+  });
+
+  it('leaves the separate destructive dry-run arm caller-controlled', () => {
+    saveProfile(profile({ writeMode: 'allow' }), { directory });
+    const targetEnv: NodeJS.ProcessEnv = {
+      DISCORD_TOKEN: TOKEN,
+      MCP_DRY_RUN: 'false',
+    };
+    activateProfile('devbot', { directory, targetEnv });
+    expect(targetEnv.MCP_DRY_RUN).toBe('false');
+    expect(targetEnv.MCP_WRITE_MODE).toBe('allow');
   });
 
   it('fails before applying profile settings when the provider cannot resolve a token', () => {

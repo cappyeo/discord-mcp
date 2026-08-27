@@ -35,7 +35,7 @@ export function profileListAction(options: ProfileCommandOptions): void {
             : `found ${profiles.length} caller-owned bot profile${profiles.length === 1 ? '' : 's'}`,
         details: profiles.map(
           (profile) =>
-            `${profile.name}: ${profile.bot.username} (${profile.bot.id}), ${profile.allowedGuilds.length} allowed guild${profile.allowedGuilds.length === 1 ? '' : 's'}, ${profile.client}/${profile.toolSurface}`,
+            `${profile.name}: ${profile.bot.username} (${profile.bot.id}), ${profile.allowedGuilds.length} allowed guild${profile.allowedGuilds.length === 1 ? '' : 's'}, ${profile.client}/${profile.toolSurface}, categories=${profile.categories?.join(',') ?? 'all'}, write=${profile.writeMode ?? 'allow'}`,
         ),
         data: { profiles },
       },
@@ -66,6 +66,8 @@ export function profileShowAction(name: string, options: ProfileCommandOptions):
           `Credential provider: ${profile.credential.provider}:${profile.credential.variable}`,
           `Allowed guilds: ${profile.allowedGuilds.join(', ')}`,
           `Client/tool surface: ${profile.client}/${profile.toolSurface}`,
+          `Categories: ${profile.categories?.join(', ') ?? 'all (server validates names at boot)'}`,
+          `Write mode: ${profile.writeMode ?? 'allow'}${profile.writeMode === undefined ? ' (legacy profile default)' : ''}`,
           `Gateway: ${profile.gateway ? 'enabled' : 'disabled'}`,
         ],
         data: { profile },

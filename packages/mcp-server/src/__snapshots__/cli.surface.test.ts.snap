@@ -35,6 +35,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "name": "init",
       "options": [
         "--allowed-guilds <ids>",
+        "--categories <names>",
         "--client <id>",
         "--discover-guilds",
         "--force",
@@ -43,6 +44,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--output <path>",
         "--token <token>",
         "--tool-surface <mode>",
+        "--write-mode <mode>",
       ],
     },
     {
@@ -76,6 +78,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "name": "setup",
       "options": [
         "--allowed-guilds <ids>",
+        "--categories <names>",
         "--client <id>",
         "--force",
         "--gateway",
@@ -83,6 +86,7 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
         "--output <path>",
         "--profile <name>",
         "--tool-surface <mode>",
+        "--write-mode <mode>",
       ],
     },
     {
