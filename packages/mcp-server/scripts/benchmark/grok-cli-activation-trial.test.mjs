@@ -158,6 +158,7 @@ async function fakeDependencies() {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: digest('launcher'),
         sessionDigest: digest('session'),
       };
     },
@@ -310,7 +311,7 @@ describe('Grok CLI activation trial guard', () => {
       expect(result).toMatchObject({
         ok: true,
         artifact: {
-          schema_version: 'discord-mcp.activation-trial.v2',
+          schema_version: 'discord-mcp.activation-trial.v3',
           host: 'grok-cli',
           result: 'passed',
         },

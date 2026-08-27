@@ -82,6 +82,14 @@ describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
   });
 
   describe('per-tool redaction (SENSITIVE_KEYS_BY_TOOL)', () => {
+    it('app_emojis_create redacts base64 image data', () => {
+      const image = `data:image/png;base64,${'a'.repeat(64)}`;
+      const out = redactArgs({ application_id: '123', name: 'spark', image }, 'app_emojis_create');
+      expect(out.application_id).toBe('123');
+      expect(out.name).toBe('spark');
+      expect(out.image).toBe(`[REDACTED:${image.length}ch]`);
+    });
+
     it('messages_send redacts content', () => {
       const out = redactArgs({ channel_id: '111', content: 'secret data' }, 'messages_send');
       expect(out.channel_id).toBe('111');
@@ -253,6 +261,7 @@ describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
       // forgetting to add a corresponding test. Compare to the explicit
       // list this file actually exercises.
       const exercised = new Set([
+        'app_emojis_create',
         'messages_send',
         'messages_edit',
         'messages_bulk_delete',

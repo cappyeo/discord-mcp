@@ -118,6 +118,7 @@ function fakeDependencies(overrides = {}) {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: DIGEST('e'),
         sessionDigest: DIGEST('c'),
       };
     },
@@ -274,6 +275,7 @@ describe('Codex activation trial seam', () => {
           clientReady: true,
           firstRequest: true,
           isolated: true,
+          launcherDigest: DIGEST('e'),
           sessionDigest: DIGEST('c'),
         };
       },
@@ -310,6 +312,7 @@ describe('Codex activation trial seam', () => {
           clientReady: true,
           firstRequest: true,
           isolated: true,
+          launcherDigest: DIGEST('e'),
           sessionDigest: DIGEST('c'),
         };
       },

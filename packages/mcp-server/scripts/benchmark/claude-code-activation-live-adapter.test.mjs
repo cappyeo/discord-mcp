@@ -185,6 +185,11 @@ describe('Claude Code activation live adapter', () => {
       },
       verifyRuntimePackage: async () => ({ cliPath: DRIVER_PATH, corePath: DRIVER_PATH }),
       resolveLauncher: async () => ({ command: 'claude', prefix_args: [], kind: 'binary' }),
+      attestLauncher: async (launcher) => ({
+        schema_version: 'discord-mcp.host-launcher-identity.v1',
+        kind: launcher.kind,
+        digest: digest('launcher'),
+      }),
       runProcess: vi.fn(async (input) => {
         expect(input.env).toEqual(fixtureState.privateState.environment);
         expect(input.env).not.toHaveProperty('ANTHROPIC_API_KEY');
@@ -246,6 +251,11 @@ describe('Claude Code activation live adapter', () => {
       verifyRuntimePackage: async () => ({ cliPath: DRIVER_PATH, corePath: DRIVER_PATH }),
       runProcess,
       resolveLauncher: async () => ({ command: 'claude', prefix_args: [], kind: 'binary' }),
+      attestLauncher: async (launcher) => ({
+        schema_version: 'discord-mcp.host-launcher-identity.v1',
+        kind: launcher.kind,
+        digest: digest('launcher'),
+      }),
       loadActivityValidator: async () => () => {},
       verifyStateDirectoryPath: async (value) => value,
     });

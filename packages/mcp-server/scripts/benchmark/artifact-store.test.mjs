@@ -101,7 +101,7 @@ describe('benchmark artifact store', () => {
     const artifactRoot = await directory('discord-mcp-activation-artifacts-');
     const digest = `sha256:${'a'.repeat(64)}`;
     const attestation = {
-      schema_version: 'discord-mcp.activation-attestation.v1',
+      schema_version: 'discord-mcp.activation-attestation.v2',
       run_id: 'activation-run-001',
       trial_id: 'trial-001',
     };
@@ -118,7 +118,7 @@ describe('benchmark artifact store', () => {
     expect(written).toMatchObject({ persisted: true, digest });
     await expect(
       readFile(join(written.evidenceDirectory, `${'a'.repeat(64)}.json`), 'utf8'),
-    ).resolves.toContain('discord-mcp.activation-attestation.v1');
+    ).resolves.toContain('discord-mcp.activation-attestation.v2');
     await expect(
       writeActivationAttestationArtifact({
         cwd,

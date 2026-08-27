@@ -10,8 +10,8 @@ import { canonicalJson } from './manifest.mjs';
  * file I/O. The public artifact should contain only the digest returned by
  * canonicalActivationAttestationDigest().
  */
-export const ACTIVATION_ATTESTATION_SCHEMA = 'discord-mcp.activation-attestation.v1';
-export const ACTIVATION_ATTESTATION_CONTEXT = 'discord-mcp.activation-attestation:hmac:v1';
+export const ACTIVATION_ATTESTATION_SCHEMA = 'discord-mcp.activation-attestation.v2';
+export const ACTIVATION_ATTESTATION_CONTEXT = 'discord-mcp.activation-attestation:hmac:v2';
 export const ACTIVATION_ATTESTATION_ALGORITHM = 'hmac-sha256';
 
 const TOP_LEVEL_KEYS = new Set([
@@ -23,6 +23,7 @@ const TOP_LEVEL_KEYS = new Set([
   'host_version',
   'release',
   'source_commit',
+  'launcher_digest',
   'binding',
   'execution_provenance',
   'profile',
@@ -164,6 +165,10 @@ function validateEnvelope(value, { validateActivityEvidence } = {}) {
   );
   string(required(value, 'release', 'activation attestation'), 'release', RELEASE_RE);
   string(required(value, 'source_commit', 'activation attestation'), 'source_commit', COMMIT_RE);
+  digest(
+    required(value, 'launcher_digest', 'activation attestation'),
+    'launcher_digest',
+  );
 
   keys(
     required(value, 'execution_provenance', 'activation attestation'),

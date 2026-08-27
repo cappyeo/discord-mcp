@@ -96,6 +96,7 @@ function dependencies(persisted) {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: DIGEST('launcher'),
         sessionDigest: DIGEST('session'),
       };
     },
@@ -145,7 +146,7 @@ describe('host-neutral activation trial runner', () => {
 
     expect(result.ok).toBe(true);
     expect(result.artifact).toMatchObject({
-      schema_version: 'discord-mcp.activation-trial.v2',
+      schema_version: 'discord-mcp.activation-trial.v3',
       host: 'claude-code',
       result: 'passed',
       terminal_status: 'passed',
@@ -165,11 +166,13 @@ describe('host-neutral activation trial runner', () => {
         dangerous_permissions: false,
       },
       baseline: { restored: true, exact: true },
+      digests: { launcher: DIGEST('launcher') },
     });
     expect(JSON.stringify(result.artifact)).not.toContain(TOKEN);
     expect(persisted.attestation).toMatchObject({
-      schema_version: 'discord-mcp.activation-attestation.v1',
+      schema_version: 'discord-mcp.activation-attestation.v2',
       host: 'claude-code',
+      launcher_digest: DIGEST('launcher'),
       binding: { guild_id: GUILD_ID, bot_id: BOT_ID },
       profile: { kind: 'clean_temp', cleanup_verified: true, token_persisted: false },
       baseline: { restored: true, exact: true },

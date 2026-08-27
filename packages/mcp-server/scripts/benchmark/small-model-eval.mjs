@@ -275,12 +275,36 @@ function validTimestamp(value) {
   );
 }
 
-export async function resolveCodexLauncher({ platform = process.platform, run = execFile } = {}) {
-  if (platform !== 'win32') return { command: 'codex', prefix_args: [], kind: 'binary' };
+export async function resolveCodexLauncher({
+  platform = process.platform,
+  run = execFile,
+  environment,
+  env,
+} = {}) {
+  const discoveryEnvironment = environment ?? env ?? process.env;
+  if (!record(discoveryEnvironment)) throw new TypeError('Codex launcher environment is invalid');
+  if (platform !== 'win32') {
+    const result = await run('which', ['codex'], {
+      encoding: 'utf8',
+      env: discoveryEnvironment,
+      maxBuffer: 64 * 1024,
+      timeout: CODEX_PROBE_TIMEOUT_MS,
+    });
+    const selected = String(result?.stdout ?? '')
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (selected === undefined || !isAbsolute(selected)) throw new Error('Codex CLI is unavailable');
+    const command = resolve(await realpath(selected));
+    const metadata = await lstat(command);
+    if (!metadata.isFile()) throw new Error('Codex CLI is unavailable');
+    return { command, prefix_args: [], kind: 'binary' };
+  }
   for (const candidate of ['codex.exe', 'codex.ps1']) {
     try {
       const result = await run('where.exe', [candidate], {
         encoding: 'utf8',
+        env: discoveryEnvironment,
         windowsHide: true,
         maxBuffer: 64 * 1024,
         timeout: CODEX_PROBE_TIMEOUT_MS,
@@ -307,8 +331,23 @@ export async function resolveCodexLauncher({ platform = process.platform, run = 
       } catch {
         // Fall back to the PowerShell shim when the npm entrypoint is packaged differently.
       }
+      const powershell = String(
+        (
+          await run('where.exe', ['powershell.exe'], {
+            encoding: 'utf8',
+            env: discoveryEnvironment,
+            windowsHide: true,
+            maxBuffer: 64 * 1024,
+            timeout: CODEX_PROBE_TIMEOUT_MS,
+          })
+        )?.stdout ?? '',
+      )
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .find(Boolean);
+      if (powershell === undefined || !isAbsolute(powershell)) continue;
       return {
-        command: 'powershell.exe',
+        command: powershell,
         prefix_args: [
           '-NoLogo',
           '-NoProfile',

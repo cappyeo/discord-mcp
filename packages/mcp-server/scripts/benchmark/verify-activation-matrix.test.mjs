@@ -71,8 +71,8 @@ describe('production activation matrix CLI', () => {
   it('prints only the secret-free aggregate after the authoritative verifier passes', async () => {
     const output = [];
     const verify = vi.fn(async () => ({
-      schema_version: 'discord-mcp.activation-trials-verifier.v1',
-      artifact_schema: 'discord-mcp.activation-trial.v1',
+      schema_version: 'discord-mcp.activation-trials-verifier.v2',
+      artifact_schema: 'discord-mcp.activation-trial.v3',
       verified: true,
       release: '0.23.0',
       source_commit: COMMIT,
@@ -123,7 +123,7 @@ describe('production activation matrix CLI', () => {
     expect(code).toBe(1);
     expect(output).toEqual([
       `${JSON.stringify({
-        schema_version: 'discord-mcp.activation-trials-verifier.v1',
+        schema_version: 'discord-mcp.activation-trials-verifier.v2',
         verified: false,
         error: 'activation matrix verification failed',
       })}\n`,

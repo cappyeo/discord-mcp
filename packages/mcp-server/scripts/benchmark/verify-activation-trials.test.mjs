@@ -59,6 +59,7 @@ function trial(index, overrides = {}) {
     digests: {
       build: DIGEST('public-package'),
       evidence: DIGEST(`evidence-${index}`),
+      launcher: DIGEST('codex-launcher'),
       session: DIGEST(`session-${index}`),
     },
     safety: {
@@ -123,6 +124,7 @@ function attestedBundle({
         digests: {
           build: DIGEST('public-package'),
           evidence: evidence.evidence_id,
+          launcher: DIGEST(`${host}-launcher`),
           session: DIGEST(`${sessionNamespace}session-${index}`),
         },
       });
@@ -136,6 +138,7 @@ function attestedBundle({
           host_version: value.host_version,
           release: value.release,
           source_commit: value.source_commit,
+          launcher_digest: value.digests.launcher,
           execution_provenance: {
             execution_mode: value.execution_mode,
             adapter_id: `${host}-adapter`,
@@ -227,6 +230,7 @@ describe('activation trial aggregate verifier', () => {
           release: '0.22.0',
           source_commit: 'a'.repeat(40),
           build_digest: DIGEST('public-package'),
+          launcher_digest: DIGEST('codex-launcher'),
           trial_count: 3,
           trial_ids: ['trial-001', 'trial-002', 'trial-003'],
           durations_ms: { median: 10_200, p90: 10_300 },
@@ -251,6 +255,20 @@ describe('activation trial aggregate verifier', () => {
     );
   });
 
+  it('rejects executable byte drift across one host campaign', () => {
+    const trials = three([
+      {},
+      {},
+      {
+        digests: {
+          ...trial(3).digests,
+          launcher: DIGEST('changed-launcher'),
+        },
+      },
+    ]);
+    expect(() => verifyActivationTrialAggregate({ trials })).toThrow(/mixes launcher identities/);
+  });
+
   it('verifies every host independently when multiple hosts are present', () => {
     const trials = [
       ...three(),
@@ -262,6 +280,7 @@ describe('activation trial aggregate verifier', () => {
           digests: {
             build: DIGEST('public-package'),
             evidence: DIGEST(`claude-evidence-${index}`),
+            launcher: DIGEST('claude-launcher'),
             session: DIGEST(`claude-session-${index}`),
           },
         }),

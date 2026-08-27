@@ -2,7 +2,7 @@ import { server } from '@discord-mcp/server-mocks';
 import { REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import appEmojisModify from './modify.js';
 import '../../container.js';
 
@@ -35,5 +35,22 @@ describe('app_emojis_modify', () => {
     )) as { isError: boolean; structuredContent: { name: string } };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.name).toBe('glow');
+  });
+
+  it('rejects names outside Discord rules before making a write', async () => {
+    const patch = vi.fn();
+    container.rest = { patch } as never;
+    const T = appEmojisModify;
+    const t = new T(
+      { name: 'app_emojis_modify', path: 'inline', root: 'inline', store: null as never },
+      { name: 'app_emojis_modify', enabled: true },
+    );
+    await expect(
+      t.run(
+        { application_id: '111122223333444401', emoji_id: '850000000000000001', name: 'bad-name' },
+        { signal: new AbortController().signal },
+      ),
+    ).rejects.toThrow(/A-Za-z0-9_/);
+    expect(patch).not.toHaveBeenCalled();
   });
 });

@@ -141,6 +141,7 @@ async function fakeDependencies() {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: DIGEST('launcher'),
         sessionDigest: DIGEST('session'),
       };
     },
@@ -223,7 +224,7 @@ describe('Claude Code activation trial', () => {
       });
       expect(result.ok).toBe(true);
       expect(result.artifact).toMatchObject({
-        schema_version: 'discord-mcp.activation-trial.v2',
+        schema_version: 'discord-mcp.activation-trial.v3',
         host: 'claude-code',
         result: 'passed',
       });
@@ -260,6 +261,7 @@ describe('Claude Code activation trial', () => {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: DIGEST('launcher'),
         sessionDigest: DIGEST('session'),
       };
     };

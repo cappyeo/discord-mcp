@@ -1,7 +1,11 @@
 import type { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import type { z } from 'zod';
-import { GuildNotAllowedError, GuildScopeUnresolvedError } from '../errors/client.js';
+import {
+  BotScopeUnresolvedError,
+  GuildNotAllowedError,
+  GuildScopeUnresolvedError,
+} from '../errors/client.js';
 import { resolveChannelGuildId } from '../rest/channel-guild-cache.js';
 import type { ToolMiddleware } from './compose.js';
 
@@ -29,6 +33,8 @@ const MAX_RESOLUTION_CACHE_ENTRIES = 1_024;
  * Operations whose Discord route is global or authenticated only by an opaque
  * interaction token. With an active guild allowlist, the server cannot prove
  * their target guild before execution, so they fail closed and stay hidden.
+ * Application-emoji writes are the one bot-scoped exception, handled below
+ * through the exact expected bot identity rather than a guild ID.
  */
 export const GUILD_SCOPE_BLOCKED_TOOLS: ReadonlySet<string> = new Set([
   'app_emojis_create',
@@ -55,13 +61,31 @@ export const GUILD_SCOPE_BLOCKED_TOOLS: ReadonlySet<string> = new Set([
   'users_modify_current',
 ]);
 
+/**
+ * Application emoji writes do not have a guild target.  They are safe to
+ * expose alongside a guild allowlist only after the deployment has locked the
+ * credential to one expected bot identity. They can affect every guild where
+ * the application is available, so the route still targets only that bot's
+ * application; this is not a general cross-application write escape.
+ */
+export const BOT_SCOPED_TOOLS: ReadonlySet<string> = new Set([
+  'app_emojis_create',
+  'app_emojis_modify',
+  'app_emojis_delete',
+]);
+
 export function parseGuildAllowlist(raw: string | undefined): ReadonlySet<string> | null {
   if (raw === undefined) return null;
   return new Set(raw.split(',').map((guildId) => guildId.trim()));
 }
 
-export function isToolVisibleWithGuildAllowlist(toolName: string, enabled: boolean): boolean {
-  return !enabled || !GUILD_SCOPE_BLOCKED_TOOLS.has(toolName);
+export function isToolVisibleWithGuildAllowlist(
+  toolName: string,
+  enabled: boolean,
+  expectedBotId?: string,
+): boolean {
+  if (!enabled || !GUILD_SCOPE_BLOCKED_TOOLS.has(toolName)) return true;
+  return BOT_SCOPED_TOOLS.has(toolName) && expectedBotId !== undefined;
 }
 
 export function hasVerifiableGuildScope(
@@ -94,6 +118,7 @@ export class GuildScopePolicy {
   public constructor(
     private readonly allowed: ReadonlySet<string> | null,
     private readonly rest: REST,
+    private readonly expectedBotId?: string,
   ) {}
 
   public get enabled(): boolean {
@@ -111,7 +136,18 @@ export class GuildScopePolicy {
     argsValue: unknown,
     schema: SchemaCarrier | undefined,
   ): Promise<void> {
+    // An identity lock is authoritative for bot-scoped application writes
+    // even when no guild allowlist is configured. This prevents an explicit
+    // application_id from silently widening the operation to another app.
+    if (BOT_SCOPED_TOOLS.has(toolName) && this.expectedBotId !== undefined) {
+      this.authorizeBotScopedTool(toolName, argsValue);
+      return;
+    }
     if (this.allowed === null) return;
+    if (BOT_SCOPED_TOOLS.has(toolName)) {
+      this.authorizeBotScopedTool(toolName, argsValue);
+      return;
+    }
     if (GUILD_SCOPE_BLOCKED_TOOLS.has(toolName)) {
       throw new GuildScopeUnresolvedError(`tool ${toolName}`);
     }
@@ -158,7 +194,24 @@ export class GuildScopePolicy {
     }
 
     // Global reads and local-only builders remain available. Their lack of a
-    // guild target is intentional; all unprovable writes are enumerated above.
+    // guild target is intentional; unprovable writes are enumerated above.
+  }
+
+  private authorizeBotScopedTool(toolName: string, argsValue: unknown): void {
+    if (this.expectedBotId === undefined) {
+      throw new BotScopeUnresolvedError(
+        `bot-scoped tool ${toolName} (DISCORD_EXPECTED_BOT_ID is required)`,
+      );
+    }
+    if (!isRecord(argsValue)) {
+      throw new BotScopeUnresolvedError(`bot-scoped tool ${toolName}`);
+    }
+    const applicationId = stringField(argsValue, 'application_id');
+    if (applicationId !== undefined && applicationId !== this.expectedBotId) {
+      throw new BotScopeUnresolvedError(
+        `application ${applicationId} does not match the locked bot application ${this.expectedBotId}`,
+      );
+    }
   }
 
   public async authorizeSubscription(uri: string): Promise<void> {

@@ -121,7 +121,12 @@ Set `ALLOWED_GUILDS` to a comma-separated list of server IDs to enforce the
 bot's guild boundary inside discord-mcp. Direct guild calls use a constant-time
 check; channel, thread, webhook, invite, and guild-sticker routes are resolved
 before execution and cached. Global writes and opaque interaction-token routes
-that cannot prove a guild are unavailable while the allowlist is active. The
+that cannot prove a guild are unavailable while the allowlist is active. When
+that boundary is active, the three application-emoji write tools are the
+deliberate bot-scoped exception: they are exposed only when
+`DISCORD_EXPECTED_BOT_ID` locks the token to one bot and they can target only
+that bot's application. Omit `application_id` to have the server resolve the
+current bot application automatically. The
 resolution caches are bounded to prevent untrusted ID churn from growing memory
 without limit.
 `users_list_current_user_guilds` remains a read-only discovery tool; seeing a
@@ -161,7 +166,7 @@ the current OAuth boundary.
 | Messages and channels | Send, edit, pin, search, manage threads, forums, and permissions |
 | Moderation and safety | Permission preflight, channel role audits, role hierarchy, bans, AutoMod, bulk actions, and audit-aware operations |
 | Community operations | Members, roles, invites, onboarding, events, polls, soundboard, and voice |
-| Application APIs | Slash commands, interactions, application emojis, webhooks, and entitlements |
+| Application APIs | Slash commands, interactions, bot-owned application emojis, webhooks, and entitlements |
 | Agent workflows | Tool output schemas, predictable errors, migration adapters, and client config generation |
 
 Explore the complete, generated [tool reference](https://cappyeo.github.io/discord-mcp/tools/) and practical [recipes](https://cappyeo.github.io/discord-mcp/recipes/).

@@ -60,7 +60,7 @@ function request(overrides = {}) {
 
 function passedArtifact(trialId) {
   return {
-    schema_version: 'discord-mcp.activation-trial.v2',
+    schema_version: 'discord-mcp.activation-trial.v3',
     host: 'codex',
     host_version: '0.147.0',
     release: RELEASE,
@@ -77,7 +77,7 @@ function digest(character) {
 
 function completePassedArtifact(trialId, index) {
   const value = {
-    schema_version: 'discord-mcp.activation-trial.v2',
+    schema_version: 'discord-mcp.activation-trial.v3',
     host: 'codex',
     host_version: '0.147.0',
     release: RELEASE,
@@ -106,6 +106,7 @@ function completePassedArtifact(trialId, index) {
     digests: {
       build: digest('a'),
       evidence: digest(['b', 'c', 'd'][index]),
+      launcher: digest('5'),
       session: digest(['e', 'f', '0'][index]),
     },
     safety: {
@@ -139,7 +140,7 @@ function dependencies(overrides = {}) {
     artifact: passedArtifact(trialId),
   }));
   const verifyAggregate = vi.fn(() => ({
-    schema_version: 'discord-mcp.activation-trials-verifier.v1',
+    schema_version: 'discord-mcp.activation-trials-verifier.v2',
     verified: true,
     host_count: 1,
   }));
@@ -179,7 +180,7 @@ describe('Codex activation campaign', () => {
       ok: true,
       bundle_relative_path: `runs/${RUN_ID}/results/activation-trials-bundle.json`,
       public_aggregate: {
-        schema_version: 'discord-mcp.activation-trials-verifier.v1',
+        schema_version: 'discord-mcp.activation-trials-verifier.v2',
         verified: true,
         host_count: 1,
       },
@@ -219,7 +220,7 @@ describe('Codex activation campaign', () => {
     });
     expect(seams.writeArtifact).toHaveBeenCalledTimes(4);
     expect(seams.writeArtifact).toHaveBeenLastCalledWith('results/activation-trials-bundle.json', {
-      schema_version: 'discord-mcp.activation-trials-bundle.v1',
+      schema_version: 'discord-mcp.activation-trials-bundle.v2',
       trials: expect.arrayContaining([
         passedArtifact('codex-activation-01'),
         passedArtifact('codex-activation-02'),
@@ -342,7 +343,7 @@ describe('Codex activation campaign', () => {
   it('never publishes a bundle when the public aggregate does not verify', async () => {
     const seams = dependencies({
       verifyAggregate: vi.fn(() => ({
-        schema_version: 'discord-mcp.activation-trials-verifier.v1',
+        schema_version: 'discord-mcp.activation-trials-verifier.v2',
         verified: false,
       })),
     });

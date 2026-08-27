@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BotScopeUnresolvedError,
   CancelledError,
   DiscordAuthError,
   DiscordCloudflareBlocked,
@@ -139,6 +140,16 @@ describe('GuildScopeUnresolvedError', () => {
     expect(e.retriable).toBe(false);
     expect(e.resource).toBe('tool interactions_create_response');
     expect(e.recoveryHint).toContain('ALLOWED_GUILDS');
+  });
+});
+
+describe('BotScopeUnresolvedError', () => {
+  it('points callers to the locked bot application instead of a guild', () => {
+    const e = new BotScopeUnresolvedError('application 123');
+    expect(e.code).toBe('BOT_SCOPE_UNRESOLVED');
+    expect(e.retriable).toBe(false);
+    expect(e.resource).toBe('application 123');
+    expect(e.recoveryHint).toContain('DISCORD_EXPECTED_BOT_ID');
   });
 });
 

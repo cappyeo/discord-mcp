@@ -372,6 +372,7 @@ function jsonSchemaExample(name: string, schema: JsonSchema): unknown {
     return 'Hello from discord-mcp';
   }
   if (lowerName.includes('reason')) return 'Requested by an administrator';
+  if (pattern.includes('A-Za-z0-9_')) return 'example_name';
   if (lowerName.includes('name') || lowerName.includes('title')) return 'Example name';
 
   const minimumLength = typeof schema.minLength === 'number' ? schema.minLength : 1;

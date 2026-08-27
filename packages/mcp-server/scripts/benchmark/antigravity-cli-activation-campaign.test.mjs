@@ -61,7 +61,7 @@ function request(overrides = {}) {
 
 function artifact(trialId, overrides = {}) {
   return {
-    schema_version: 'discord-mcp.activation-trial.v2',
+    schema_version: 'discord-mcp.activation-trial.v3',
     host: 'antigravity-cli',
     host_version: HOST_VERSION,
     release: RELEASE,
@@ -101,6 +101,7 @@ function completeArtifact(trialId, index) {
     digests: {
       build: digest('a'),
       evidence: digest(['b', 'c', 'd'][index]),
+      launcher: digest('5'),
       session: digest(['e', 'f', '0'][index]),
     },
     safety: {
@@ -131,7 +132,7 @@ function completeArtifact(trialId, index) {
 function seams(overrides = {}) {
   const runTrial = vi.fn(async ({ trialId }) => ({ ok: true, artifact: artifact(trialId) }));
   const verifyAggregate = vi.fn(() => ({
-    schema_version: 'discord-mcp.activation-trials-verifier.v1',
+    schema_version: 'discord-mcp.activation-trials-verifier.v2',
     verified: true,
     host_count: 1,
   }));
@@ -168,7 +169,7 @@ describe('Antigravity CLI activation campaign', () => {
       ok: true,
       bundle_relative_path: `runs/${RUN_ID}/results/activation-trials-bundle.json`,
       public_aggregate: {
-        schema_version: 'discord-mcp.activation-trials-verifier.v1',
+        schema_version: 'discord-mcp.activation-trials-verifier.v2',
         verified: true,
         host_count: 1,
       },
@@ -204,7 +205,7 @@ describe('Antigravity CLI activation campaign', () => {
     expect(dependencies.writeArtifact).toHaveBeenLastCalledWith(
       'results/activation-trials-bundle.json',
       expect.objectContaining({
-        schema_version: 'discord-mcp.activation-trials-bundle.v1',
+        schema_version: 'discord-mcp.activation-trials-bundle.v2',
       }),
     );
   });
@@ -287,7 +288,7 @@ describe('Antigravity CLI activation campaign', () => {
   it('refuses a non-verifying aggregate and never writes the bundle', async () => {
     const dependencies = seams({
       verifyAggregate: vi.fn(() => ({
-        schema_version: 'discord-mcp.activation-trials-verifier.v1',
+        schema_version: 'discord-mcp.activation-trials-verifier.v2',
         verified: false,
       })),
     });

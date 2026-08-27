@@ -560,11 +560,12 @@ function listVisibleTools(
   categoryAllowlist: ReadonlySet<string> | null,
   hasDefaultGuild: boolean,
   guildAllowlistEnabled: boolean,
+  expectedBotId: string | undefined,
   eagerContracts: boolean,
 ): McpTool[] {
   const visible: McpTool[] = [];
   for (const tool of toolStore.values()) {
-    if (!isToolVisibleWithGuildAllowlist(tool.name, guildAllowlistEnabled)) continue;
+    if (!isToolVisibleWithGuildAllowlist(tool.name, guildAllowlistEnabled, expectedBotId)) continue;
     if (
       categoryAllowlist !== null &&
       !categoryAllowlist.has(tool.category) &&
@@ -1601,6 +1602,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
   const guildScopePolicy = new GuildScopePolicy(
     parseGuildAllowlist(deps.config.ALLOWED_GUILDS),
     deps.rest,
+    deps.config.DISCORD_EXPECTED_BOT_ID,
   );
   if (guildScopePolicy.enabled) {
     const uncoveredWrites = [...toolStore.values()]
@@ -1653,6 +1655,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     categoryAllowlist,
     deps.config.DISCORD_DEFAULT_GUILD_ID !== undefined,
     guildScopePolicy.enabled,
+    deps.config.DISCORD_EXPECTED_BOT_ID,
     toolSurface === 'full',
   );
   const progressiveCatalog =
@@ -1703,7 +1706,8 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
           ? [
               'ALLOWED_GUILDS is active. Guild-scoped calls are verified server-side;',
               'global writes and opaque interaction-token calls are unavailable when their',
-              'guild cannot be proven before execution.',
+              'guild cannot be proven before execution; application-emoji writes are allowed',
+              'only for the identity-locked bot application.',
             ]
           : []),
         'Destructive tools return DRY_RUN_PREVIEW unless the server runs with',
@@ -1950,7 +1954,7 @@ const CATALOG_ONLY_ERROR = {
  */
 export async function buildCatalogServer(): Promise<BuildCatalogServerResult> {
   const toolStore = await getSharedToolStore();
-  const visibleTools = listVisibleTools(toolStore, null, false, false, true);
+  const visibleTools = listVisibleTools(toolStore, null, false, false, undefined, true);
   const resourceStore = new ResourceStore();
   const subscriptions = new SubscriptionRegistry();
   const auditSink = new NoopAuditSink();

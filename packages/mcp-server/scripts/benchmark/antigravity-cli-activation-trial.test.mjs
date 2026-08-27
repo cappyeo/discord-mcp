@@ -160,6 +160,7 @@ async function fakeDependencies() {
         clientReady: true,
         firstRequest: true,
         isolated: true,
+        launcherDigest: DIGEST('launcher'),
         sessionDigest: DIGEST('session'),
       };
     },
@@ -260,7 +261,7 @@ describe('Antigravity CLI activation trial', () => {
       expect(result).toMatchObject({
         ok: true,
         artifact: {
-          schema_version: 'discord-mcp.activation-trial.v2',
+          schema_version: 'discord-mcp.activation-trial.v3',
           host: 'antigravity-cli',
           result: 'passed',
         },

@@ -191,12 +191,13 @@ async function candidate(path, options) {
 export async function resolveAntigravityLauncher({
   platform = process.platform,
   command = 'agy',
+  environment = process.env,
   run = execFile,
 } = {}) {
   if (platform !== 'win32') {
     const selected = isAbsolute(command)
       ? command
-      : String((await run('which', [command], { encoding: 'utf8' })).stdout ?? '')
+      : String((await run('which', [command], { encoding: 'utf8', env: environment })).stdout ?? '')
           .split(/\r?\n/u)
           .find(Boolean)
           ?.trim();
@@ -209,7 +210,11 @@ export async function resolveAntigravityLauncher({
   const candidates = [];
   if (isAbsolute(command)) candidates.push(command);
   else {
-    const result = await run('where.exe', [command], { encoding: 'utf8', windowsHide: true });
+    const result = await run('where.exe', [command], {
+      encoding: 'utf8',
+      env: environment,
+      windowsHide: true,
+    });
     candidates.push(
       ...String(result.stdout ?? '')
         .split(/\r?\n/u)

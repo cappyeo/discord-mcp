@@ -57,7 +57,7 @@ function request(overrides = {}) {
 
 function artifact(trialId, overrides = {}) {
   return {
-    schema_version: 'discord-mcp.activation-trial.v2',
+    schema_version: 'discord-mcp.activation-trial.v3',
     host: 'grok-cli',
     host_version: HOST_VERSION,
     release: RELEASE,
@@ -72,7 +72,7 @@ function artifact(trialId, overrides = {}) {
 function seams(overrides = {}) {
   const runTrial = vi.fn(async ({ trialId }) => ({ ok: true, artifact: artifact(trialId) }));
   const verifyAggregate = vi.fn(() => ({
-    schema_version: 'discord-mcp.activation-trials-verifier.v1',
+    schema_version: 'discord-mcp.activation-trials-verifier.v2',
     verified: true,
     host_count: 1,
   }));
@@ -138,7 +138,7 @@ describe('Grok Build CLI activation campaign', () => {
     expect(dependencies.writeArtifact).toHaveBeenCalledTimes(4);
     expect(dependencies.writeArtifact).toHaveBeenLastCalledWith(
       'results/activation-trials-bundle.json',
-      expect.objectContaining({ schema_version: 'discord-mcp.activation-trials-bundle.v1' }),
+      expect.objectContaining({ schema_version: 'discord-mcp.activation-trials-bundle.v2' }),
     );
   });
 

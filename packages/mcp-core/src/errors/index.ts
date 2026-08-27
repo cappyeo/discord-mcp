@@ -1,5 +1,6 @@
 export { DiscordClientError, DiscordError, DiscordServerError } from './base.js';
 export {
+  BotScopeUnresolvedError,
   CancelledError,
   DiscordAuthError,
   DiscordCloudflareBlocked,

@@ -19,6 +19,7 @@ const PLAN_REF = `dmbpr1.${'f'.repeat(64)}`;
 const PLAN_ID = digest('plan');
 const BLUEPRINT_ID = digest('blueprint');
 const APPROVAL_ID = digest('approval');
+const LAUNCHER_DIGEST = digest('launcher');
 
 function claudeStream(tool, input, result) {
   const callId = `${tool}-call`;
@@ -121,6 +122,11 @@ function createAdversarialAdapter({
   classifyInitial,
   classifyResume,
   verifyStateDirectoryPath = async (value) => value,
+  attestLauncher = async () => ({
+    schema_version: 'discord-mcp.host-launcher-identity.v1',
+    kind: 'binary',
+    digest: LAUNCHER_DIGEST,
+  }),
 }) {
   const validatePlanResult = vi.fn();
   const validateApplyResult = vi.fn();
@@ -165,6 +171,7 @@ function createAdversarialAdapter({
     }),
     resolvePublicationTargets: () => [],
     verifyStateDirectoryPath,
+    attestLauncher,
   });
   return { adapter, validatePlanResult, validateApplyResult };
 }
@@ -219,6 +226,16 @@ describe('shared activation live adapter', () => {
       },
     ];
     const runProcess = vi.fn(async () => responses.shift());
+    const resolveLauncher = vi.fn(async () => ({
+      command: 'C:/host/claude.exe',
+      prefix_args: [],
+      kind: 'binary',
+    }));
+    const attestLauncher = vi.fn(async () => ({
+      schema_version: 'discord-mcp.host-launcher-identity.v1',
+      kind: 'binary',
+      digest: LAUNCHER_DIGEST,
+    }));
     const privateHome = { path: 'C:/private-claude-state', cleanup: vi.fn(async () => {}) };
     const validator = vi.fn();
     const adapter = createActivationLiveAdapter({
@@ -243,7 +260,7 @@ describe('shared activation live adapter', () => {
         contractErrors: () => [],
         preparePrivateState: async () => privateHome,
         privateEnvironment: (state) => ({ CLAUDE_CONFIG_DIR: state.path }),
-        resolveLauncher: async () => ({ command: 'claude', prefix_args: [], kind: 'binary' }),
+        resolveLauncher,
         runProcess,
         parseVersion: (stdout) => stdout.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/)?.[0] ?? null,
         sessionId: (value) => value.session_id,
@@ -262,6 +279,7 @@ describe('shared activation live adapter', () => {
         evidence_body: { schema_version: 'guild_blueprint_activity_evidence.v1' },
       }),
       resolvePublicationTargets: () => [],
+      attestLauncher,
     });
     const target = { guildId: GUILD_ID, botId: BOT_ID };
     const binding = { guildId: GUILD_ID, botId: BOT_ID };
@@ -283,6 +301,14 @@ describe('shared activation live adapter', () => {
     expect(session).toBe(registered);
     expect(session).toMatchObject({ clientReady: true, firstRequest: true, sessionId: SESSION_ID });
     expect(session.sessionDigest).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(session.launcherDigest).toBe(LAUNCHER_DIGEST);
+    expect(resolveLauncher).toHaveBeenCalledWith({
+      environment: {
+        CLAUDE_CONFIG_DIR: 'C:/private-claude-state',
+        DISCORD_TOKEN: TOKEN,
+      },
+      platform: process.platform,
+    });
 
     const applied = await adapter.apply({ session, target, binding });
     expect(applied.status).toBe('complete');
@@ -291,6 +317,58 @@ describe('shared activation live adapter', () => {
     expect(validator).toHaveBeenCalledTimes(1);
     expect(runProcess).toHaveBeenCalledTimes(5);
     expect(responses).toHaveLength(0);
+    await expect(adapter.closeSession({ session })).resolves.toMatchObject({
+      settled: true,
+      launcherVerified: true,
+    });
+    expect(attestLauncher).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when the launcher bytes drift before session cleanup', async () => {
+    const responses = [
+      { stdout: '2.1.228', exitCode: 0, signal: null },
+      { stdout: 'initial', exitCode: 0, signal: null },
+    ];
+    const attestLauncher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        schema_version: 'discord-mcp.host-launcher-identity.v1',
+        kind: 'binary',
+        digest: LAUNCHER_DIGEST,
+      })
+      .mockResolvedValueOnce({
+        schema_version: 'discord-mcp.host-launcher-identity.v1',
+        kind: 'binary',
+        digest: digest('changed-launcher'),
+      });
+    const { adapter } = createAdversarialAdapter({
+      responses,
+      attestLauncher,
+      parseJsonl: (stdout) =>
+        stdout === 'initial'
+          ? normalized(SESSION_ID, 'build_discord_server', CLAUDE_CODE_TOOLS.initial, plan())
+          : { malformed_json_lines: 0 },
+      classifyInitial: () => 'pass',
+      classifyResume: () => 'pass',
+    });
+    const target = { guildId: GUILD_ID, botId: BOT_ID };
+    const session = await adapter.launch({
+      release: '0.23.0',
+      hostVersion: '2.1.228',
+      target,
+      installRoot: 'C:/install',
+      install: { cliDigest: digest('cli'), coreDigest: digest('core') },
+      stateDirectory: 'C:/state',
+      configPath: 'C:/state/mcp.json',
+      env: { DISCORD_TOKEN: TOKEN },
+      binding: target,
+      registerSession: () => {},
+    });
+
+    await expect(adapter.closeSession({ session })).resolves.toMatchObject({
+      settled: false,
+      launcherVerified: false,
+    });
   });
 
   it('does not let a dishonest classifier bypass a wrong qualified tool', async () => {

@@ -271,6 +271,11 @@ describe('generated reference stays aligned with tool metadata', () => {
         image: expect.stringMatching(/^data:image\/png;base64,/),
       });
     }
+    expect(examples.get('app_emojis_create')?.name).toBe('example_name');
+    const appEmojiCreate = tools.find((tool) => tool.name === 'app_emojis_create');
+    expect(appEmojiCreate).toBeDefined();
+    expect(renderToolMdx(appEmojiCreate!)).toContain('256 KiB');
+    expect(renderToolMdx(appEmojiCreate!)).toContain('authenticated bot application');
 
     expect(examples.get('channels_forum_create_thread')).toMatchObject({
       message: { content: expect.any(String) },

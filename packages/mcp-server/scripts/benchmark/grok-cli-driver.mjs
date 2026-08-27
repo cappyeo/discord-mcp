@@ -209,13 +209,18 @@ async function candidate(path, platform) {
 export async function resolveGrokCliLauncher({
   platform = process.platform,
   command = 'grok',
+  environment = process.env,
   run = execFile,
 } = {}) {
   const selected = isAbsolute(command)
     ? command
     : String(
-        (await run(platform === 'win32' ? 'where.exe' : 'which', [command], { encoding: 'utf8' }))
-          .stdout ?? '',
+        (
+          await run(platform === 'win32' ? 'where.exe' : 'which', [command], {
+            encoding: 'utf8',
+            env: environment,
+          })
+        ).stdout ?? '',
       )
         .split(/\r?\n/u)
         .find(Boolean)

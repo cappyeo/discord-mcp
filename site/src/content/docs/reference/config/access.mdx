@@ -26,7 +26,10 @@ your agent needs.
 Discord. When set, the server verifies `/users/@me` before serving MCP and
 caches the successful result for the process. Keep the value stable during a
 normal token rotation; a mismatch usually means the wrong application's token
-was supplied. See [Credential lifecycle](/discord-mcp/operations/credentials/).
+was supplied. This identity lock also authorizes the application-emoji write
+surface when `ALLOWED_GUILDS` is active: those tools can affect the bot's
+application globally, never another application. See [Credential
+lifecycle](/discord-mcp/operations/credentials/).
 
 ## Remote HTTP credential
 
@@ -127,9 +130,13 @@ readable.
 When the boundary is active, global writes and interaction-token routes whose
 guild cannot be proven before execution are omitted from `tools/list` and
 rejected on direct calls with `GUILD_SCOPE_UNRESOLVED`. A known but disallowed
-guild returns `GUILD_NOT_ALLOWED`. Pipeline steps and progressive dispatchers
-re-enter the same policy. Gateway subscriptions for guild, voice, and channel
-URIs are checked before registration.
+guild returns `GUILD_NOT_ALLOWED`. The application-emoji write tools are a
+bot-scoped exception when `DISCORD_EXPECTED_BOT_ID` is set: they may target only
+the locked bot application (and may omit `application_id` to resolve it from
+`/applications/@me`). Other application/global writes remain unavailable.
+Pipeline steps and progressive dispatchers re-enter the same policy. Gateway
+subscriptions for guild, voice, and channel URIs are checked before
+registration.
 
 Global read-only discovery remains available, including
 `users_list_current_user_guilds`; its results do not extend the allowlist. If

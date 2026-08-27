@@ -1,8 +1,13 @@
 import type { REST } from '@discordjs/rest';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { GuildNotAllowedError, GuildScopeUnresolvedError } from '../errors/client.js';
 import {
+  BotScopeUnresolvedError,
+  GuildNotAllowedError,
+  GuildScopeUnresolvedError,
+} from '../errors/client.js';
+import {
+  BOT_SCOPED_TOOLS,
   GUILD_SCOPE_BLOCKED_TOOLS,
   GuildScopePolicy,
   hasVerifiableGuildScope,
@@ -12,6 +17,7 @@ import {
 
 const ALLOWED = '111122223333444455';
 const DENIED = '999000999000999000';
+const BOT_ID = '987654321098765432';
 
 function fakeRest(get: ReturnType<typeof vi.fn>): REST {
   return { get } as unknown as REST;
@@ -143,11 +149,45 @@ describe('guild allowlist policy', () => {
     const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()));
     for (const tool of GUILD_SCOPE_BLOCKED_TOOLS) {
       expect(isToolVisibleWithGuildAllowlist(tool, true)).toBe(false);
+      const expectedError = BOT_SCOPED_TOOLS.has(tool)
+        ? BotScopeUnresolvedError
+        : GuildScopeUnresolvedError;
       await expect(policy.authorizeTool(tool, {}, { inputSchema: {} })).rejects.toBeInstanceOf(
-        GuildScopeUnresolvedError,
+        expectedError,
       );
     }
     expect(isToolVisibleWithGuildAllowlist('users_get_current', true)).toBe(true);
+  });
+
+  it('allows application-emoji writes only for the locked bot application', async () => {
+    expect(isToolVisibleWithGuildAllowlist('app_emojis_create', true, BOT_ID)).toBe(true);
+    expect(isToolVisibleWithGuildAllowlist('app_emojis_modify', true, BOT_ID)).toBe(true);
+    expect(isToolVisibleWithGuildAllowlist('app_emojis_delete', true, BOT_ID)).toBe(true);
+
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID);
+    const schema = { inputSchema: { application_id: z.string().optional() } };
+    await policy.authorizeTool('app_emojis_create', {}, schema);
+    await policy.authorizeTool('app_emojis_modify', { application_id: BOT_ID }, schema);
+    await expect(
+      policy.authorizeTool('app_emojis_create', { application_id: DENIED }, schema),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+
+    const unlockedGuildPolicy = new GuildScopePolicy(null, fakeRest(vi.fn()), BOT_ID);
+    await expect(
+      unlockedGuildPolicy.authorizeTool('app_emojis_create', { application_id: DENIED }, schema),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+  });
+
+  it('keeps bot-scoped emoji writes unavailable without an identity lock', async () => {
+    expect(isToolVisibleWithGuildAllowlist('app_emojis_create', true)).toBe(false);
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()));
+    await expect(
+      policy.authorizeTool(
+        'app_emojis_create',
+        {},
+        { inputSchema: { application_id: z.string() } },
+      ),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
   });
 
   it('detects a newly added write route that lacks a verifiable guild seam', () => {

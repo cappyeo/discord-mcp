@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { DryRunPreview, WritePreview } from './client.js';
 import { formatErrorForUser } from './format.js';
 import {
+  BotScopeUnresolvedError,
   CancelledError,
   DiscordAuthError,
   DiscordCloudflareBlocked,
@@ -174,6 +175,17 @@ describe('formatErrorForUser', () => {
       code: 'GUILD_SCOPE_UNRESOLVED',
       resource: 'tool interactions_create_response',
     });
+  });
+
+  it('formats BotScopeUnresolvedError', () => {
+    const r = formatErrorForUser(new BotScopeUnresolvedError('application 123'), stdio);
+    expect(r.structuredContent).toMatchObject({
+      code: 'BOT_SCOPE_UNRESOLVED',
+      resource: 'application 123',
+    });
+    const text = (r.content as Array<{ text: string }>)[0]!.text;
+    expect(text).toMatch(/Bot Scope Unresolved/);
+    expect(text).toMatch(/DISCORD_EXPECTED_BOT_ID/);
   });
 
   it('formats DryRunPreview with embedded JSON preview', () => {

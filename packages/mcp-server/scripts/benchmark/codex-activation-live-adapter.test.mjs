@@ -168,6 +168,11 @@ describe('Codex activation live adapter', () => {
         expect(registered).not.toBeNull();
         return { command: 'codex', prefix_args: [], kind: 'binary' };
       },
+      attestLauncher: async (launcher) => ({
+        schema_version: 'discord-mcp.host-launcher-identity.v1',
+        kind: launcher.kind,
+        digest: hash('launcher'),
+      }),
       runProcess,
       prepareCodexHome: async () => ({
         path: privateHome,
@@ -231,6 +236,7 @@ describe('Codex activation live adapter', () => {
       await expect(adapter.closeSession({ session })).resolves.toEqual({
         settled: true,
         closed: true,
+        launcherVerified: true,
       });
       expect(runProcess).toHaveBeenCalledTimes(4);
       expect(responses).toEqual([]);

@@ -690,8 +690,13 @@ describe('small-model evaluation contract', () => {
         DISCORD_EXPECTED_BOT_ID: '1533719084636700773',
       },
       platform: 'linux',
-      run: async (_command, args) => ({
-        stdout: args?.[0] === 'rev-parse' ? `${'a'.repeat(40)}\n` : 'codex 1.0.0\n',
+      run: async (command, args) => ({
+        stdout:
+          args?.[0] === 'rev-parse'
+            ? `${'a'.repeat(40)}\n`
+            : command === 'which'
+              ? `${process.execPath}\n`
+              : 'codex 1.0.0\n',
       }),
       attest: async () => ({
         cliPath: 'C:/repo/packages/mcp-server/dist/cli.js',

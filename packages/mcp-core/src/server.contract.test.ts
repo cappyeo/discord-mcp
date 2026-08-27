@@ -55,10 +55,15 @@ describe('MCP protocol contract', () => {
     const { tools } = await client.listTools();
     const read = tools.find((tool) => tool.name === 'messages_read');
     const event = tools.find((tool) => tool.name === 'events_create');
+    const appEmojiCreate = tools.find((tool) => tool.name === 'app_emojis_create');
     expect(read?.inputSchema.properties).toHaveProperty('limit');
     expect((read?.inputSchema.required as string[]) ?? []).not.toContain('limit');
     expect(event?.inputSchema.properties).toHaveProperty('privacy_level');
     expect((event?.inputSchema.required as string[]) ?? []).not.toContain('privacy_level');
+    expect(appEmojiCreate?.inputSchema.properties).toHaveProperty('application_id');
+    expect((appEmojiCreate?.inputSchema.required as string[]) ?? []).not.toContain(
+      'application_id',
+    );
   });
 
   it('callTool with invalid args returns isError=true (not throws)', async () => {
@@ -95,6 +100,23 @@ describe('MCP protocol contract', () => {
     const text = (r.content as Array<{ text: string }>)[0]!.text;
     expect(text).toMatch(/Input Error/);
     expect(text).toMatch(/channel_id/);
+  });
+
+  it('rejects an invalid application emoji upload before Discord', async () => {
+    const r = await client.callTool({
+      name: 'app_emojis_create',
+      arguments: {
+        name: 'bad-name',
+        image: 'data:image/svg+xml;base64,PHN2Zz4=',
+      },
+    });
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      retriable: false,
+      category: 'client',
+    });
+    expect(JSON.stringify(r.structuredContent)).toMatch(/name|image/);
   });
 
   it('lists 208 tools after auto-discovery', async () => {
