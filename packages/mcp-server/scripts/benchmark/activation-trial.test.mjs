@@ -7,7 +7,7 @@ import {
 } from './activation-attestation.mjs';
 import { runActivationTrial } from './activation-trial.mjs';
 
-const RELEASE = '0.23.0';
+const RELEASE = '0.24.0';
 const RUN_ID = 'activation-claude-code-20260814';
 const TRIAL_ID = 'claude-code-activation-001';
 const GUILD_ID = '1537332825978568744';

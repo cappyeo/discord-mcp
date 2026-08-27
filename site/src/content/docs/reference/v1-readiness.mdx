@@ -5,21 +5,23 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.23.0 and contains 208 tools.
+The current source tree targets discord-mcp v0.24.0 and contains 208 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.23.0)
+## Current source evidence (v0.24.0)
 
 - The current source tree exposes 208 MCP tools across 31 categories; the
   preceding v0.18.1 packages exposed 203.
-- v0.23.0 keeps the operational 208-tool contract unchanged and adds a bounded,
-  credential-free catalog self-check for the installed package. It validates
-  tools/list, resources/list, one resource read, and the `CATALOG_ONLY` guard,
-  but explicitly does not count as AI-host connectivity, Discord connectivity,
-  or Activity Evidence. v0.22.0 added privacy-safe
+- v0.24.0 keeps the operational 208-tool contract unchanged and adds a bounded,
+  credential-free catalog self-check for the installed package, hardened
+  activation evidence across five supported hosts, and bot-scoped application
+  emoji management with self-application resolution and fail-closed upload
+  validation. It validates tools/list, resources/list, one resource read, and
+  the `CATALOG_ONLY` guard, but explicitly does not count as AI-host
+  connectivity, Discord connectivity, or Activity Evidence. v0.22.0 added privacy-safe
   local blueprint lifecycle outcomes, and opens an explicit manual feedback
   handoff. v0.21.0 added a credential-free catalog boundary for registry
   inspection. Catalog mode

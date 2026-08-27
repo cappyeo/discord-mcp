@@ -196,7 +196,7 @@ function createGeminiProfileFixture(tokenReference = '${DISCORD_TOKEN}'): {
             args: [
               '--yes',
               '--loglevel=error',
-              '@discord-mcp/cli@0.23.0',
+              '@discord-mcp/cli@0.24.0',
               'serve',
               '--profile',
               'devbot',
@@ -245,7 +245,7 @@ function createAntigravityProfileFixture(token?: string): {
             args: [
               '--yes',
               '--loglevel=error',
-              '@discord-mcp/cli@0.23.0',
+              '@discord-mcp/cli@0.24.0',
               'serve',
               '--profile',
               'devbot',
@@ -294,7 +294,7 @@ function createCursorCliProfileFixture(credential?: { name: string; value: strin
             args: [
               '--yes',
               '--loglevel=error',
-              '@discord-mcp/cli@0.23.0',
+              '@discord-mcp/cli@0.24.0',
               'serve',
               '--profile',
               'devbot',
@@ -335,7 +335,7 @@ function createGrokCliProfileFixture(credential?: { name: string; value: string 
   );
   writeFileSync(
     configPath,
-    `[mcp_servers.discord-mcp]\ncommand = "npx"\nargs = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.23.0", "serve", "--profile", "devbot"]\nenabled = true\nstartup_timeout_sec = 90\ntool_timeout_sec = 180\n${
+    `[mcp_servers.discord-mcp]\ncommand = "npx"\nargs = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.24.0", "serve", "--profile", "devbot"]\nenabled = true\nstartup_timeout_sec = 90\ntool_timeout_sec = 180\n${
       credential === undefined
         ? ''
         : `\n[mcp_servers.discord-mcp.env]\n${credential.name} = ${JSON.stringify(credential.value)}\n`
@@ -743,7 +743,7 @@ describe('doctorAction - Gemini CLI credential audit', () => {
           profile: 'devbot',
           audited: true,
           server: 'discord-mcp',
-          version: '0.23.0',
+          version: '0.24.0',
           environmentForwarding: true,
           credentialPersisted: false,
         },
@@ -847,7 +847,7 @@ describe('doctorAction - Antigravity CLI credential audit', () => {
           profile: 'devbot',
           audited: true,
           server: 'discord-mcp',
-          version: '0.23.0',
+          version: '0.24.0',
           environmentForwarding: 'inherited',
           credentialPersisted: false,
         },
@@ -920,7 +920,7 @@ describe('doctorAction - Cursor Agent CLI credential audit', () => {
           profile: 'devbot',
           audited: true,
           server: 'discord-mcp',
-          version: '0.23.0',
+          version: '0.24.0',
           environmentForwarding: 'inherited',
           credentialPersisted: false,
         },
@@ -992,7 +992,7 @@ describe('doctorAction - Grok CLI credential audit', () => {
       ).toMatchObject({
         status: 'ok',
         details: {
-          version: '0.23.0',
+          version: '0.24.0',
           environmentForwarding: 'inherited',
           credentialPersisted: false,
         },

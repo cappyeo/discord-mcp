@@ -33,7 +33,7 @@ function writeConfig(profileName = 'devbot', env: Record<string, string> | undef
             args: [
               '--yes',
               '--loglevel=error',
-              '@discord-mcp/cli@0.23.0',
+              '@discord-mcp/cli@0.24.0',
               'serve',
               '--profile',
               profileName,
@@ -65,7 +65,7 @@ describe('inspectAntigravityCliConfig', () => {
 
     expect(inspectAntigravityCliConfig(profile, { config: configPath })).toEqual({
       configName: 'discord-mcp',
-      currentVersion: '0.23.0',
+      currentVersion: '0.24.0',
       environmentForwarding: 'inherited',
       credentialPersisted: false,
     });
@@ -99,7 +99,7 @@ describe('inspectAntigravityCliConfig', () => {
     writeConfig();
 
     expect(inspectAntigravityCliConfig(profile, { homeDirectory: directory }).currentVersion).toBe(
-      '0.23.0',
+      '0.24.0',
     );
   });
 

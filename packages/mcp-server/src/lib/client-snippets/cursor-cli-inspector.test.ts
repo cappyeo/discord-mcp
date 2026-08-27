@@ -30,7 +30,7 @@ function writeConfig(profileName = 'devbot', extra: Record<string, unknown> = {}
             args: [
               '--yes',
               '--loglevel=error',
-              '@discord-mcp/cli@0.23.0',
+              '@discord-mcp/cli@0.24.0',
               'serve',
               '--profile',
               profileName,
@@ -62,7 +62,7 @@ describe('inspectCursorCliConfig', () => {
 
     expect(inspectCursorCliConfig(profile, { config: configPath })).toEqual({
       configName: 'discord-mcp',
-      currentVersion: '0.23.0',
+      currentVersion: '0.24.0',
       environmentForwarding: 'inherited',
       credentialPersisted: false,
     });
@@ -109,7 +109,7 @@ describe('inspectCursorCliConfig', () => {
     writeConfig();
 
     expect(inspectCursorCliConfig(profile, { homeDirectory: directory }).currentVersion).toBe(
-      '0.23.0',
+      '0.24.0',
     );
   });
 

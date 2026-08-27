@@ -300,7 +300,7 @@ writing to Discord.
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.23.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.24.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)
