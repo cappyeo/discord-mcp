@@ -20,7 +20,7 @@ import {
   validateCursorCliActivationRequest,
 } from './cursor-cli-activation-trial.mjs';
 
-const RELEASE = '0.24.0';
+const RELEASE = '0.25.0';
 const RUN_ID = 'cursor-cli-activation-run-001';
 const TRIAL_ID = 'cursor-cli-activation-001';
 const GUILD_ID = '1537332825978568744';

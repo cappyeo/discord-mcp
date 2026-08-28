@@ -29,7 +29,7 @@ function args(overrides = {}) {
     '--artifact-root',
     ROOT,
     '--expected-release',
-    '0.24.0',
+    '0.25.0',
     '--expected-commit',
     COMMIT,
     '--expected-build-digest',
@@ -74,7 +74,7 @@ describe('production activation matrix CLI', () => {
       schema_version: 'discord-mcp.activation-trials-verifier.v2',
       artifact_schema: 'discord-mcp.activation-trial.v3',
       verified: true,
-      release: '0.24.0',
+      release: '0.25.0',
       source_commit: COMMIT,
       build_digest: BUILD,
       host_count: 5,
@@ -97,7 +97,7 @@ describe('production activation matrix CLI', () => {
     expect(verify.mock.calls[0][0]).toMatchObject({
       integrityKey: TOKEN,
       expectedBinding: { guildId: GUILD_ID, botId: BOT_ID },
-      expectedRelease: '0.24.0',
+      expectedRelease: '0.25.0',
       expectedCommit: COMMIT,
       expectedBuildDigest: BUILD,
     });

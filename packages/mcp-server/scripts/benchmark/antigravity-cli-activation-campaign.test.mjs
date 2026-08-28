@@ -14,7 +14,7 @@ import {
   runAntigravityCliActivationCampaign,
 } from './antigravity-cli-activation-campaign.mjs';
 
-const RELEASE = '0.24.0';
+const RELEASE = '0.25.0';
 const RUN_ID = 'activation-antigravity-20260815';
 const HOST_VERSION = '1.1.13';
 const GUILD_ID = '1537332825978568744';

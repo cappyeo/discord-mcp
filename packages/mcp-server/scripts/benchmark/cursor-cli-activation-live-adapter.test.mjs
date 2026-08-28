@@ -302,7 +302,7 @@ describe('Cursor Agent CLI activation live adapter', () => {
     });
     try {
       const session = await adapter.launch({
-        release: '0.24.0',
+        release: '0.25.0',
         hostVersion: '2.4.1',
         target,
         installRoot: root,

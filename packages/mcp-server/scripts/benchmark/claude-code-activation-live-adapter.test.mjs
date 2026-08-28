@@ -208,7 +208,7 @@ describe('Claude Code activation live adapter', () => {
     try {
       const binding = fixtureState.target;
       const session = await adapter.launch({
-        release: '0.24.0',
+        release: '0.25.0',
         hostVersion: '2.1.228',
         target: fixtureState.target,
         installRoot: fixtureState.root,
@@ -262,7 +262,7 @@ describe('Claude Code activation live adapter', () => {
     try {
       await expect(
         adapter.launch({
-          release: '0.24.0',
+          release: '0.25.0',
           hostVersion: '2.1.228',
           target: fixtureState.target,
           installRoot: fixtureState.root,

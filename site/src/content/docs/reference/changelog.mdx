@@ -11,6 +11,10 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+No unreleased changes.
+
+## v0.25.0 - verified access and approval hardening
+
 - Wired `MCP_AUDIT_SINK=otlp` to a server-owned OpenTelemetry Logs pipeline
   when `OTEL_ENABLED=true` and an OTLP endpoint is configured. Audit records
   cross the core/server boundary only after redaction, use a bounded batch
