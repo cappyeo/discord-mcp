@@ -55,7 +55,7 @@ const client = new Client(
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 208);
+  assert.equal(tools.length, 209);
   assert.ok(tools.some((tool) => tool.name === 'guild_blueprint_plan'));
   assert.ok(tools.some((tool) => tool.name === 'messages_send'));
 
