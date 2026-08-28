@@ -23,6 +23,7 @@
  * itself (status=fail with zod issue details).
  */
 import { type Config, loadConfig } from '@discord-mcp/core';
+import { botAccessPreflightCheck } from '../lib/checks/bot-access.js';
 import { ALL_CHECKS, type CheckResult } from '../lib/checks/index.js';
 import {
   AntigravityCliConfigError,
@@ -51,6 +52,9 @@ import {
 export interface DoctorOptions {
   json?: boolean;
   online?: boolean;
+  access?: boolean;
+  guildId?: string;
+  channelId?: string;
   profile?: string;
   client?: string;
   config?: string;
@@ -353,6 +357,18 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
     );
     return;
   }
+  if ((opts.guildId !== undefined || opts.channelId !== undefined) && opts.access !== true) {
+    emitResult(
+      {
+        ok: false,
+        exitCode: 2,
+        summary: '--guild-id/--channel-id require --access',
+        errors: ['Use doctor --access --guild-id <id> to run the online access preflight.'],
+      },
+      opts.json === true,
+    );
+    return;
+  }
 
   let profile: DiscordMcpProfile | undefined;
   if (opts.profile !== undefined) {
@@ -388,9 +404,10 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
     }
   }
 
-  // Filter: when --online is omitted/false, run only offline checks.
-  // When --online is true, run everything (offline + online).
-  const checks = ALL_CHECKS.filter((c) => opts.online === true || c.online === false);
+  // Filter: when --online/--access are omitted/false, run only offline checks.
+  // `--access` implies the normal online token/OTel checks as well.
+  const online = opts.online === true || opts.access === true;
+  const checks = ALL_CHECKS.filter((c) => online || c.online === false);
 
   let cfg: Config | null = null;
   try {
@@ -434,6 +451,17 @@ export async function doctorAction(opts: DoctorOptions): Promise<void> {
 
   if (opts.online === true && profile?.client === 'codex') {
     results.push(await codexLauncherUpdateCheck(profile, opts.config));
+  }
+
+  if (opts.access === true) {
+    results.push(
+      await botAccessPreflightCheck({
+        config: cfg,
+        ...(profile === undefined ? {} : { profile }),
+        ...(opts.guildId === undefined ? {} : { guildId: opts.guildId }),
+        ...(opts.channelId === undefined ? {} : { channelId: opts.channelId }),
+      }),
+    );
   }
 
   const fails = results.filter((r) => r.status === 'fail').length;

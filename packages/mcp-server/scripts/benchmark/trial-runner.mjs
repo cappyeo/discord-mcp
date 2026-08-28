@@ -439,6 +439,12 @@ function validateInput(input) {
   if (dependencies.sleep !== undefined && typeof dependencies.sleep !== 'function') {
     fail('TRIAL_DEPENDENCIES_INVALID');
   }
+  if (
+    dependencies.injectApplyResultLoss !== undefined &&
+    typeof dependencies.injectApplyResultLoss !== 'function'
+  ) {
+    fail('TRIAL_DEPENDENCIES_INVALID');
+  }
 }
 
 function childEnv(input) {
@@ -948,6 +954,8 @@ export async function runBenchmarkTrial(input) {
   let applyCalls = 0;
   let latestCheckpointVersion = -1;
   let lastApplyResultUnavailable = false;
+  let applyResultLossObserved = false;
+  let applyResultLossRecovered = false;
   let planRecoveryCount = 0;
   let planSnapshotUnchanged = false;
   let progressiveDiscoverySucceeded = false;
@@ -1070,13 +1078,24 @@ export async function runBenchmarkTrial(input) {
           contract,
           applyArgs(input, plan, operationBudget),
         );
+        if (typeof dependencies.injectApplyResultLoss === 'function') {
+          const injection = await dependencies.injectApplyResultLoss({
+            rawApply,
+            applyCall: applyCalls,
+            operationBudget,
+            trial,
+          });
+          if (injection?.observed === true) applyResultLossObserved = true;
+        }
       } catch (error) {
+        if (error?.code === 'RESULT_LOST_AFTER_MUTATION') applyResultLossObserved = true;
         lastApplyResultUnavailable = true;
         if (!retryableSessionError(error) || !(await recoverApply.recover(error))) throw error;
         continue;
       }
       lastApplyResultUnavailable = false;
       const result = validateApply(rawApply, plan, trial);
+      if (applyResultLossObserved) applyResultLossRecovered = true;
       recoverApply.observe(result);
       return result;
     }
@@ -1459,6 +1478,8 @@ export async function runBenchmarkTrial(input) {
       plan_snapshot_unchanged: planSnapshotUnchanged,
       progressive_discovery_succeeded: progressiveDiscoverySucceeded,
       dry_run_observed_before_apply: dryRunObservedBeforeApply,
+      apply_result_loss_observed: applyResultLossObserved,
+      apply_result_loss_recovered: applyResultLossRecovered,
       forced_resume_observed: trial.mode === 'forced_resume' ? forcedResumeObserved : null,
       operations_planned: operationsPlanned,
       apply_calls: applyCalls,

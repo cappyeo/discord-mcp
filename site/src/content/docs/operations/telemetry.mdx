@@ -8,8 +8,9 @@ sidebar:
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 discord-mcp ships with OpenTelemetry traces and metrics built on top of the
-official OTel JS SDK. This page covers how to enable telemetry, where to send
-the data, and what signals you get out of the box.
+official OTel JS SDK. Mutation audit events can additionally use the OTel Logs
+signal when `MCP_AUDIT_SINK=otlp`. This page covers how to enable telemetry,
+where to send the data, and what signals you get out of the box.
 
 The SDK is **disabled by default**: if you do not set `OTEL_ENABLED=true` the
 server runs with no exporter wired and zero overhead. All telemetry
@@ -114,6 +115,15 @@ can break. This option is retained in configuration but is not a supported
 </Aside>
 
 ## Available signals
+
+### Audit logs
+
+Set `MCP_AUDIT_SINK=otlp` alongside `OTEL_ENABLED=true` to send the redacted
+mutation audit events described in [Audit logging](/discord-mcp/operations/audit/)
+to the collector's `/v1/logs` endpoint. The logs processor uses a bounded
+1,024-record queue, batches up to 128 records, and never makes collector
+availability part of the Discord tool success path. Shutdown performs a
+bounded flush; delivery is best-effort rather than a durable spool.
 
 ### Tool-level metrics
 

@@ -46,6 +46,7 @@ const VALUE_FLAGS = new Set([
   '--not-before',
   '--run-id',
   '--request',
+  '--inject-result-loss-trial',
   '--started-at',
   '--pid',
   '--hostname',
@@ -86,6 +87,13 @@ function parseOwnerPid(value) {
 function parseOwnerHostname(value) {
   if (value.length < 1 || value.length > 255) {
     throw new TypeError('--hostname must contain 1 to 255 characters');
+  }
+  return value;
+}
+
+function parseTrialId(value) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) {
+    throw new TypeError('--inject-result-loss-trial must be a safe trial ID');
   }
   return value;
 }
@@ -145,6 +153,9 @@ export function parseBenchmarkCommand(argv) {
     if (values['--pid'] !== undefined || values['--hostname'] !== undefined) {
       commandError('--pid and --hostname are only valid for unlock');
     }
+    if (values['--inject-result-loss-trial'] !== undefined) {
+      commandError('--inject-result-loss-trial is only valid for run');
+    }
   } else if (command === 'migrate') {
     if (values['--guild'] === undefined) commandError('missing --guild');
     for (const flag of [
@@ -154,6 +165,7 @@ export function parseBenchmarkCommand(argv) {
       '--run-id',
       '--pid',
       '--hostname',
+      '--inject-result-loss-trial',
     ]) {
       if (values[flag] !== undefined) commandError(`${flag} is not valid for migrate`);
     }
@@ -178,6 +190,42 @@ export function parseBenchmarkCommand(argv) {
     pid: values['--pid'] === undefined ? undefined : parseOwnerPid(values['--pid']),
     hostname:
       values['--hostname'] === undefined ? undefined : parseOwnerHostname(values['--hostname']),
+    injectResultLossTrial:
+      values['--inject-result-loss-trial'] === undefined
+        ? undefined
+        : parseTrialId(values['--inject-result-loss-trial']),
+  };
+}
+
+/**
+ * Attach one explicit, benchmark-only response-loss fault to a trial. The
+ * hook runs after the child MCP call has returned (so its checkpoint/mutation
+ * already happened) and drops only the runner's result. It is never wired into
+ * the production server.
+ */
+export function attachApplyResultLossInjection(trialDependencies, manifest, trialId) {
+  if (trialId === undefined) return trialDependencies;
+  if (trialDependencies === null || typeof trialDependencies !== 'object') {
+    throw new TypeError('trial dependencies are required');
+  }
+  if (typeof trialDependencies.injectApplyResultLoss === 'function') {
+    throw new Error('an apply-result-loss injector is already configured');
+  }
+  if (!manifest?.trials?.some((trial) => trial?.trial_id === trialId)) {
+    throw new Error(`unknown benchmark trial for response-loss injection: ${trialId}`);
+  }
+  let injected = false;
+  return {
+    ...trialDependencies,
+    async injectApplyResultLoss({ trial }) {
+      if (injected || trial?.trial_id !== trialId) return;
+      injected = true;
+      throw Object.assign(new Error('RESULT_LOST_AFTER_MUTATION'), {
+        code: 'RESULT_LOST_AFTER_MUTATION',
+        source: 'mcp_tool_result',
+        retriable: true,
+      });
+    },
   };
 }
 
@@ -304,12 +352,6 @@ async function runCommandWithLock(options, token, { runId, startedAt, request })
         }),
       ),
     );
-    const store = await prepareArtifactStore({
-      cwd: REPOSITORY_ROOT,
-      artifactRoot: options.artifactRoot,
-      runId,
-    });
-    const trialDependencies = createTrialDependencies({ token });
     const manifest = createControlledReuseManifest({
       runId,
       commit: options.expectedCommit,
@@ -317,6 +359,16 @@ async function runCommandWithLock(options, token, { runId, startedAt, request })
       startedAt,
       request,
       builtCli: build.attestation,
+    });
+    const trialDependencies = attachApplyResultLossInjection(
+      createTrialDependencies({ token }),
+      manifest,
+      options.injectResultLossTrial,
+    );
+    const store = await prepareArtifactStore({
+      cwd: REPOSITORY_ROOT,
+      artifactRoot: options.artifactRoot,
+      runId,
     });
     const report = await runBenchmarkCampaign({
       manifest,
@@ -380,10 +432,13 @@ async function runCommandWithLock(options, token, { runId, startedAt, request })
       integrityKey: token,
     });
     return {
+      // `ok` preserves the activation/compatibility exit contract. The
+      // stricter North Star claim is explicit in summary.verified_correctness_gate_passed.
       ok: report.summary.gate_passed,
       command: 'run',
       run_id: runId,
       artifact_directory: store.runDirectory,
+      verified: report.summary.verified_correctness_gate_passed,
       summary: report.summary,
     };
   } finally {

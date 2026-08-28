@@ -256,6 +256,22 @@ describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
       expect(out.components).toBe('[REDACTED:value]');
     });
 
+    it('users_create_dm redacts short-lived consent material but preserves recipient', () => {
+      const out = redactArgs(
+        {
+          recipient_id: '111122223333444499',
+          __consent: true,
+          __consent_hash: 'a'.repeat(64),
+          __consent_id: 'approval-id',
+        },
+        'users_create_dm',
+      );
+      expect(out.recipient_id).toBe('111122223333444499');
+      expect(out.__consent).toBe(true);
+      expect(out.__consent_hash).toBe('[REDACTED:64ch]');
+      expect(out.__consent_id).toBe('[REDACTED:11ch]');
+    });
+
     it('every entry in SENSITIVE_KEYS_BY_TOOL has at least one assertion above', () => {
       // Sanity: catch a future contributor adding a tool to the map and
       // forgetting to add a corresponding test. Compare to the explicit
@@ -279,6 +295,7 @@ describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
         'interactions_edit_original_response',
         'interactions_create_followup',
         'interactions_edit_followup',
+        'users_create_dm',
       ]);
       const declared = new Set(Object.keys(__SENSITIVE_KEYS_BY_TOOL_FOR_TESTS));
       // Sets must be equal - no orphans either way.

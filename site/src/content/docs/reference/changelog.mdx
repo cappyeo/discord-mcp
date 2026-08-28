@@ -11,7 +11,81 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
-No unreleased changes.
+- Wired `MCP_AUDIT_SINK=otlp` to a server-owned OpenTelemetry Logs pipeline
+  when `OTEL_ENABLED=true` and an OTLP endpoint is configured. Audit records
+  cross the core/server boundary only after redaction, use a bounded batch
+  queue, and flush best-effort on shutdown; missing telemetry configuration
+  remains an explicit stderr fallback. This is not durable spool storage.
+- Added machine-readable access classification for all 209 tools (15
+  colocated definitions plus a conservative 208-route central registry). The
+  recipient-targeted `users_create_dm` route is explicitly `scope: user`; its
+  caller approval remains a separate policy gate. The three blueprint
+  lifecycle tools are marked as delegated because their specialized
+  target-bound permission, drift, and readback checks remain authoritative;
+  unknown tools still fail closed.
+- Added an optional same-filesystem durable approval ledger through
+  `MCP_APPROVAL_STATE_DIR` and `MCP_APPROVAL_HMAC_KEY`. It uses bounded,
+  HMAC-protected state, an exclusive lock, atomic replacement, TTL cleanup, and
+  one-time consume semantics across processes; the default remains process-local
+  memory and multi-host deployments still need an external transactional store.
+- Added an opt-in runtime access gate (`MCP_ACCESS_MODE=warn|enforce`) and a
+  built-in read-only REST evidence resolver for stdio and Streamable HTTP. It
+  verifies the authenticated bot, target guild/channel, effective role and
+  channel permissions, declared Gateway intent state, and role hierarchy where
+  a contract requires it. Evidence is short-lived and bounded; partial or
+  unknown data fails closed in `enforce`, and no resolver path performs a
+  Discord mutation. Field-conditional and consent gates still apply, so this
+  is not a claim that every shipped write is automatically admissible.
+- Refreshed the Discord access contracts against the current permission split:
+  emoji/sticker/sound creation requires `CREATE_GUILD_EXPRESSIONS`, scheduled
+  event creation requires `CREATE_EVENTS`, pin/unpin requires `PIN_MESSAGES`,
+  and stage operations check the full moderator permission set. Thread/archive
+  routes now follow their distinct history, management, and in-thread-send
+  permissions. Guild-scoped channel targets now include their channel
+  overwrites in runtime evidence where the contract declares them.
+- Declared `MESSAGE_CONTENT` for message-reading and intelligence contracts,
+  while keeping metadata-only reaction, poll-voter, and thread-member reads
+  on the narrower history/channel requirements.
+- Added an advisory `doctor --access` preflight with a machine-readable
+  catalogued access-requirement report for all 208 Discord routes plus the specialized
+  blueprint verifier entries. It verifies the caller-owned bot identity,
+  application and guild membership, evaluates role/channel permission
+  bitfields, separates application intent availability from this process's
+  Gateway runtime configuration, and keeps bearer-only, missing, and unknown
+  requirements distinct. Application identity mismatches and incomplete
+  permission evidence fail closed. It does not mutate Discord or replace the
+  server-side authorization policy.
+- Added `discord_intent_plan`, a deterministic read-only front door for a
+  deliberately small set of explicit channel workflows. It produces
+  target-bound steps, aggregated access requirements, a plan digest, and
+  fail-closed `needs_input` results; it never executes the returned writes or
+  grants approval.
+- Added a recipient-bound caller-approval gate for `users_create_dm`. Ambiguous
+  post-send failures return `DM_OUTCOME_UNKNOWN` and never reuse the consumed
+  approval; the host/operator remains responsible for obtaining human consent.
+- Added payload-bound approval for `components_v2_send`, `components_v2_edit`,
+  and `components_v2_send_from_template`. Their first validated call returns a redacted preview,
+  risk flags, canonical SHA-256 `payload_hash`, and a short-lived one-time
+  `approval_id`; execution requires `MCP_DRY_RUN=false`, `__confirm:true`, the
+  exact `__confirm_hash`, and `__confirm_id`.
+  Changed payloads fail closed before Discord, including fully interpolated
+  template sends.
+- Added the first readable live resource,
+  `discord://guild/{guild_id}/info`, for configured guilds. Reads reuse the
+  guild scope policy, cache short-lived Discord REST snapshots, and invalidate
+  the cache before a Gateway `resources/updated` notification. Other Gateway
+  URI families remain notification-only.
+- Added a deterministic benchmark fault-injection seam for the critical
+  `RESULT_LOST_AFTER_MUTATION` case. Trial evidence now records whether an
+  apply response was lost after the simulated mutation and whether the retry
+  recovered; replay, independent Activity Evidence, state/audit oracles, and
+  duplicate-mutation protection remain required. This is a local proof seam,
+  not a claim that the real 20-trial Discord campaign has passed.
+- Split benchmark reporting into the compatibility activation gate (`19/20`)
+  and a stricter `verified_correctness_gate_passed` signal. The latter requires
+  all 20 eligible trials, zero serious permission failures, all safety cases,
+  and at least one observed post-mutation lost-response recovery; a passing
+  compatibility gate is no longer presented as full correctness proof.
 
 ## v0.24.0 - activation hardening and bot operations
 

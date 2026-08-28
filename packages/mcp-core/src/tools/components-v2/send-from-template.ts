@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { CHANNEL_WRITE_ACCESS } from '../../access/requirements.js';
 import { DiscordNotFoundError, ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { messageJumpUrl } from '../_lib/message-jump-url.js';
@@ -30,8 +31,9 @@ interface TemplateFile {
 export default defineTool({
   name: 'components_v2_send_from_template',
   category: 'components_v2',
+  access: CHANNEL_WRITE_ACCESS,
   description:
-    '**Purpose**: Apply variables to a built-in V2 template and send the result.\n\n**Templates v1**: announcement, release_notes, welcome_card, poll_results, incident_status. Each declares a `variables` list - pass values in `vars`.\n\n**Returns**: `{message_id, jump_url, template}`.',
+    '**Purpose**: Apply variables to a built-in V2 template and send the result.\n\n**Templates v1**: announcement, release_notes, welcome_card, poll_results, incident_status. Each declares a `variables` list - pass values in `vars`.\n\n**Returns**: `{message_id, jump_url, template}`. The server first returns a bounded component review with `payload_hash` and one-time `approval_id`; run with `MCP_DRY_RUN=false`, `__confirm:true`, the exact `__confirm_hash`, and `__confirm_id` before expiry to send once.',
   inputSchema: {
     channel_id: ChannelId,
     template: z.enum(KNOWN_TEMPLATES).describe('Built-in template name'),
@@ -51,6 +53,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
+  confirmation: 'payload_hash' as const,
   handler: async (args) => {
     // Registry lookup, not a filesystem read: the JSON is bundled into the
     // published artifact, where the old `__dirname`-relative path did not exist.

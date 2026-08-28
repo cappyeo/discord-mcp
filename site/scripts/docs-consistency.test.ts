@@ -148,12 +148,18 @@ describe('confirmation.mdx enumerates the real confirm-gated tool set', () => {
       'webhooks_execute',
       'roles_create',
       'members_add_role',
-      'components_v2_send',
     ];
     for (const name of mustWarnAbout) {
       // Guard the guard: if one of these ever becomes gated, this list is stale.
       expect(registered.has(name), `${name} should be a registered tool`).toBe(true);
       expect(gated.has(name), `${name} is now gated - update the NOT-gated callout`).toBe(false);
+      expect(mdx.includes(`\`${name}\``), `confirmation.mdx must name \`${name}\``).toBe(true);
+    }
+    const payloadBound = tools
+      .filter((tool) => tool.confirmation === 'payload_hash')
+      .map((tool) => tool.name);
+    expect(payloadBound.length).toBeGreaterThan(0);
+    for (const name of payloadBound) {
       expect(mdx.includes(`\`${name}\``), `confirmation.mdx must name \`${name}\``).toBe(true);
     }
   });
@@ -183,14 +189,28 @@ describe('generated reference stays aligned with tool metadata', () => {
       );
 
       const requiresConfirm = tool.preconditions.includes('confirm_required');
+      const requiresPayloadConfirmation = tool.confirmation === 'payload_hash';
       expect(
         rendered.includes('| `__confirm` |'),
         `${tool.name}: rendered table must match runtime confirmation schema`,
-      ).toBe(requiresConfirm);
+      ).toBe(requiresConfirm || requiresPayloadConfirmation);
       expect(
         rendered.includes('"__confirm": true'),
         `${tool.name}: executable call must match runtime confirmation contract`,
-      ).toBe(requiresConfirm);
+      ).toBe(requiresConfirm && !requiresPayloadConfirmation);
+      if (requiresPayloadConfirmation) {
+        expect(rendered, `${tool.name}: payload approval field`).toContain('__confirm_hash');
+        expect(rendered, `${tool.name}: one-time approval field`).toContain('__confirm_id');
+        expect(rendered, `${tool.name}: payload approval badge`).toContain(
+          'Payload approval required',
+        );
+      }
+      if (tool.access !== undefined) {
+        expect(rendered, `${tool.name}: colocated access contract guidance`).toContain(
+          'Access contract:',
+        );
+        expect(rendered, `${tool.name}: colocated access scope`).toContain(tool.access.scope);
+      }
 
       const inputExample = buildSchemaExample(tool.inputSchema, { toolName: tool.name });
       expect(inputExample, `${tool.name}: input example`).toBeDefined();
@@ -416,7 +436,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     const safetyProse = safety.replace(/\s+/g, ' ');
 
     expect(configureProse).toContain(
-      `\`MCP_DRY_RUN\` applies only to the ${gatedCount} confirmation-gated tools`,
+      `\`MCP_DRY_RUN\` arms the ${gatedCount} legacy confirmation-gated tools`,
     );
     expect(configureProse).toContain('ordinary writes can execute immediately');
     expect(configureProse).toContain('`MCP_WRITE_MODE=preview`');
@@ -424,7 +444,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
 
     expect(safetyProse).toContain(`Protects ${gatedCount} destructive tools`);
     expect(safetyProse).toContain(
-      'Tools without the `confirm_required` precondition are unaffected',
+      'Tools without the `confirm_required` precondition are generally unaffected',
     );
     expect(safetyProse).toContain('ordinary writes can execute immediately');
     expect(safetyProse).toContain('`MCP_WRITE_MODE=preview`');
@@ -577,7 +597,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
       expect(source, `${name} must document the catalog-check schema`).toContain(
         'discord-mcp.catalog-check.v1',
       );
-      expect(source, `${name} must document the catalog-check counts`).toContain('208 tools');
+      expect(source, `${name} must document the catalog-check counts`).toContain('209 tools');
       expect(source, `${name} must document the resource count`).toContain('6 static resources');
       expect(source, `${name} must document the execution guard`).toContain('CATALOG_ONLY');
       expect(source, `${name} must document disabled Discord execution`).toContain(

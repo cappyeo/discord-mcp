@@ -119,8 +119,9 @@ Three reasons:
 
 2. **Single observability unit**: one pipeline = one parent span with leaf tool
    spans. Audit emits a parent event because `mcp_pipeline` is non-idempotent,
-   plus events for non-idempotent leaves. The current audit middleware skips
-   idempotent leaves, including idempotent writes.
+   plus events for every leaf that is not explicitly read-only. Idempotent
+   writes remain auditable; only read-only leaves are omitted from the mutation
+   trail.
 
 3. **Captured intermediate state**: `announce.message_id` gets passed into step 2
    without the agent ever seeing it. Reduces token usage on the agent side

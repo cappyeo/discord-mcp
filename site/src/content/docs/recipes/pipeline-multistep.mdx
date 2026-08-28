@@ -191,7 +191,7 @@ use the dedicated bulk tool for that resource instead.
 | Round-trips | N | 1 |
 | Stop after a failed step | client must re-implement | server-side, built in |
 | Intermediate state | client juggles | exposed via `variables` |
-| Audit logging | Depends on each tool's idempotency metadata | One parent event plus events for non-idempotent leaves; idempotent leaves are skipped |
+| Audit logging | Depends on each tool's read-only annotation | One parent event plus events for every non-read-only leaf; explicitly read-only leaves are skipped |
 
 <Aside type="caution">
 Stopping is not rollback. Any Discord side effect from an earlier successful step remains and

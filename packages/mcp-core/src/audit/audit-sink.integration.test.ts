@@ -20,7 +20,7 @@ import type { AuditSink } from './sink.js';
  *   2. AuditEvent fields are correctly populated (tool, category,
  *      idempotent=false, status='success', transport='stdio',
  *      request_id non-empty, duration_ms numeric, ISO timestamp).
- *   3. Read-only / idempotent tools (messages_get) do NOT emit events.
+ *   3. Explicitly read-only tools (messages_get) do NOT emit events.
  *   4. tool_error events surface result_code from structuredContent.
  *
  * No child processes spawned (per plan critical rule 4).
@@ -111,9 +111,9 @@ describe('audit sink integration (Plan 8 F.3)', () => {
     }
   });
 
-  it('does NOT emit AuditEvents for idempotent tools (messages_get is read-only)', async () => {
+  it('does NOT emit AuditEvents for explicitly read-only tools (messages_get)', async () => {
     captured.events.length = 0;
-    // messages_get is idempotent: true; the audit middleware short-circuits.
+    // messages_get is explicitly read-only; the audit middleware short-circuits.
     await client.callTool({
       name: 'messages_get',
       arguments: { channel_id: '112233445566778899', message_id: '999000999000999000' },

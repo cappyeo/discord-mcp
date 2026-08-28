@@ -285,6 +285,7 @@ function harness(
     snapshotSettlesAfter = 1,
     auditSettlesAfter = 1,
     progressiveContractMismatch = false,
+    injectApplyResultLoss = false,
   } = {},
 ) {
   const readableBaselineChannelIds =
@@ -330,6 +331,9 @@ function harness(
   let nonRetriableApplyReturned = false;
   let completedApply = false;
   let forcedPartialObserved = false;
+  let resultLossInjected = false;
+  let checkpointRecoveryObserved = false;
+  let mutationCount = 0;
   const openSession = async (options) => {
     const calls = [];
     const session = {
@@ -558,6 +562,7 @@ function harness(
         }
         if (mode === 'forced_resume' && failResume) throw new Error('injected resume failure');
         if (completedApply) {
+          if (resultLossInjected) checkpointRecoveryObserved = true;
           return fixtureApplyResult(
             'already_current',
             0,
@@ -567,6 +572,7 @@ function harness(
           );
         }
         completedApply = true;
+        mutationCount += 1;
         const completed = fixtureApplyResult(
           'complete',
           1,
@@ -667,7 +673,20 @@ function harness(
       async sleep(milliseconds) {
         settleSleeps.push(milliseconds);
       },
+      async injectApplyResultLoss({ rawApply }) {
+        if (!injectApplyResultLoss || resultLossInjected) return;
+        assert.equal(rawApply.status, 'complete');
+        resultLossInjected = true;
+        throw Object.assign(new Error('RESULT_LOST_AFTER_MUTATION'), {
+          code: 'RESULT_LOST_AFTER_MUTATION',
+          source: 'mcp_tool_result',
+          retriable: true,
+        });
+      },
     },
+    resultLossInjected: () => resultLossInjected,
+    checkpointRecoveryObserved: () => checkpointRecoveryObserved,
+    mutationCount: () => mutationCount,
   };
 }
 
@@ -974,6 +993,25 @@ describe('real benchmark trial orchestration', () => {
     assert.deepEqual(test.applyBudgets, [10, 10, 10]);
     assert.deepEqual(test.settleSleeps, [1_000]);
     assert.equal(outcome.result.restart_count, 2);
+  });
+
+  it('proves a lost apply response after mutation recovers without a duplicate', async () => {
+    const test = harness('full', { injectApplyResultLoss: true });
+    const outcome = await runBenchmarkTrial(input('full', test.dependencies));
+
+    assert.equal(test.resultLossInjected(), true);
+    assert.equal(test.checkpointRecoveryObserved(), true);
+    assert.equal(test.mutationCount(), 1);
+    assert.equal(outcome.result.oracle_match, true);
+    assert.equal(outcome.result.apply_result_loss_observed, true);
+    assert.equal(outcome.result.apply_result_loss_recovered, true);
+    assert.equal(outcome.result.restart_count, 2);
+    assert.equal(outcome.result.replay_status, 'already_current');
+    assert.equal(outcome.result.evidence_status, 'verified');
+    assert.equal(outcome.result.snapshot_oracle_pass, true);
+    assert.equal(outcome.result.blueprint_oracle_match, true);
+    assert.equal(outcome.result.audit_oracle_pass, true);
+    assert.deepEqual(test.applyBudgets, [10, 10, 10]);
   });
 
   it('recovers cleanup bindings from an authenticated checkpoint after every apply response is lost', async () => {

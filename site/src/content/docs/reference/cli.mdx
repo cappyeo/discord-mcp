@@ -110,7 +110,7 @@ discord-mcp catalog --check [--json]
 ```
 
 Start a credential-free stdio MCP server for schema discovery. It exposes the
-same 208 tool contracts and six static resources as an unrestricted full
+same 209 tool contracts and six static resources as an unrestricted full
 server, but every `tools/call`—including an unknown name—fails closed with
 `CATALOG_ONLY` before validation or dispatch.
 
@@ -125,7 +125,7 @@ If you build that image from source for operational use, explicitly override
 the command with `serve` and provide the caller-owned token and safety settings.
 
 `--check` runs a bounded in-process MCP handshake and exits. It requires the
-packaged catalog to expose exactly 208 tools and six static resources, reads the
+packaged catalog to expose exactly 209 tools and six static resources, reads the
 six Components V2 JSON resources, and proves both a listed and unknown tool call
 fail with `CATALOG_ONLY`. It does not read `DISCORD_TOKEN`, contact Discord or
 another network service, write a profile or activity journal, prove AI-host
@@ -149,6 +149,7 @@ connectivity, or create Activity Evidence. Add `--json` for the stable
 
 ```bash
 discord-mcp doctor [--profile <name>] [--json] [--online]
+discord-mcp doctor --access [--guild-id <id>] [--channel-id <id>] [--profile <name>] [--json]
 discord-mcp doctor --profile <name> --client codex [--config <path>] [--json]
 discord-mcp doctor --profile <name> --client antigravity-cli [--config <path>] [--json]
 discord-mcp doctor --profile <name> --client cursor-cli [--config <path>] [--json]
@@ -165,6 +166,9 @@ against npm `latest`.
 | ----------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--json`    | boolean | `false` | Emit machine-readable JSON instead of pretty TTY output. Use this in CI.                                                                       |
 | `--online`  | boolean | `false` | Run online checks against Discord (requires a working `DISCORD_TOKEN`). With a generated Codex profile, also performs one read-only npm version check. Without this flag only offline checks run, so doctor stays cheap. |
+| `--access` | boolean | `false` | Run the read-only bot identity, application, guild membership, permission, and privileged-intent preflight. Implies `--online`; it is advisory and does not mutate Discord or block tool calls yet. |
+| `--guild-id <id>` | string | profile/allowlist when unique | Select the guild to evaluate with `--access`; it must be inside the configured allowlist when one exists. |
+| `--channel-id <id>` | string | unset | Optionally fetch one channel and evaluate its permission overwrites. Requires `--access`. |
 | `--profile <name>` | string | unset | Activate a saved profile before checks, including its expected bot identity and guild allowlist. A generated Codex profile enables launcher update discovery with `--online`. |
 | `--client <id>` | string | unset | Audit a saved MCP client configuration locally. Supports `codex`, `antigravity-cli`, `cursor-cli`, `grok-cli`, and `gemini-cli`; each requires `--profile` and does not call npm or Discord. Antigravity, Cursor Agent, and Grok Build reject persisted MCP credentials; Gemini rejects a materialized token. |
 | `--config <path>` | string | selected client's user config | Override the Codex or Grok Build `config.toml`, Antigravity `mcp_config.json`, Cursor Agent MCP JSON, or Gemini `settings.json` path; useful for a nonstandard client home or CI fixture. |
@@ -188,6 +192,9 @@ discord-mcp doctor --online --json | jq .
 # generated Codex launcher) whether an explicit update is available.
 discord-mcp doctor --profile devbot --online
 
+# Explain the bot's verified guild access before a planned write.
+discord-mcp doctor --profile devbot --access --guild-id <guild-id> --json
+
 # Inspect the saved Codex launcher without a network call. This reports only
 # normalized state: launcher/version, enabled status, startup timeout,
 # dry-run, write-mode, and OTel enabled state.
@@ -209,6 +216,16 @@ The update-status check never reads or sends `DISCORD_TOKEN`, bot identity,
 guild IDs, or profile contents to npm. It never modifies `config.toml`; use
 [`update --apply`](#update) only after reviewing the reported version. Custom
 or ambiguous launchers are marked caller-managed and left alone.
+
+`--access` is a read-only capability report. It verifies `/users/@me`, the
+current application, guild membership, roles, and (when supplied) channel
+overwrites. The JSON result keeps `ready`, `missing_permissions`,
+`missing_intents`, `bearer_required`, `opaque_required`, `consent_required`,
+`delegated_required`, `conditional`, and `unknown` distinct; unknown evidence
+is never treated as permission to write. The current report covers all 208
+tools and is intentionally advisory; `users_create_dm` is user-scoped and
+still requires its separate explicit consent policy before contacting a
+recipient.
 
 `--client codex` does not change configuration or Discord state, but it is
 deliberately local: it reads the saved generated launcher and never returns the
@@ -232,7 +249,7 @@ discord-mcp smoke --confirm-write [--profile <name>] [--guild-id <id>] [--json]
 discord-mcp smoke --confirm-write --confirm-template-lifecycle [--profile <name>] [--guild-id <id>] [--json]
 ```
 
-Verify the real MCP-to-Discord path without loading all 208 tool schemas into an
+Verify the real MCP-to-Discord path without loading all 209 tool schemas into an
 AI model. The default run is read-only: it starts an in-memory MCP client/server
 pair, validates the bot identity, and lists the guilds visible to the bot.
 

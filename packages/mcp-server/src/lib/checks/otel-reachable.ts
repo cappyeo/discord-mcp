@@ -2,10 +2,11 @@
  * `otel-reachable` check - Plan 9 Phase C.
  *
  * Probes the configured OTLP endpoint with an HTTP HEAD request to
- * `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`. We treat 200/204/405 as
- * "server alive" (405 happens when the endpoint requires POST but the
- * port/host responds), 4xx as a warning (auth/header config issue) and
- * 5xx / network errors as failures depending on which.
+ * `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`. When the audit sink is `otlp`,
+ * it also probes `/v1/logs`. We treat 200/204/405 as "server alive" (405
+ * happens when the endpoint requires POST but the port/host responds), 4xx
+ * as a warning (auth/header config issue) and 5xx / network errors as failures
+ * depending on which.
  *
  * Privacy: `OTEL_EXPORTER_OTLP_HEADERS` value is NEVER included in the
  * result (it can contain bearer tokens, API keys, etc.). We surface
@@ -18,6 +19,9 @@
  *   - cfg === null → 'warn' (canonical reporter is env-vars)
  *   - !OTEL_ENABLED → 'ok', skip request entirely
  *   - OTEL_ENABLED but no endpoint → 'warn'
+ *
+ * Configured OTLP headers are sent on both probes so authenticated collectors
+ * are tested realistically; only a count is returned in the report.
  *
  * Timeout: 3 seconds via AbortController. Shorter than token-online's
  * 5s because OTLP collectors are typically local / on-network.
@@ -39,6 +43,19 @@ function countHeaders(raw: string | undefined): number {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0).length;
+}
+
+function parseHeaders(raw: string | undefined): Record<string, string> {
+  if (raw === undefined || raw.trim() === '') return {};
+  const headers: Record<string, string> = {};
+  for (const pair of raw.split(',')) {
+    const separator = pair.indexOf('=');
+    if (separator <= 0) continue;
+    const key = pair.slice(0, separator).trim();
+    const value = pair.slice(separator + 1).trim();
+    if (key.length > 0) headers[key] = value;
+  }
+  return headers;
 }
 
 /**
@@ -94,6 +111,7 @@ export const otelReachableCheck: DoctorCheck = {
     // Reported form only - the request itself uses `url`, credentials included.
     const safeEndpoint = redactEndpoint(endpoint);
     const headersConfigured = countHeaders(config.OTEL_EXPORTER_OTLP_HEADERS);
+    const headers = parseHeaders(config.OTEL_EXPORTER_OTLP_HEADERS);
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
@@ -101,6 +119,7 @@ export const otelReachableCheck: DoctorCheck = {
     try {
       const res = await fetch(url, {
         method: 'HEAD',
+        headers,
         signal: ctrl.signal,
       });
 
@@ -108,16 +127,45 @@ export const otelReachableCheck: DoctorCheck = {
       // 405 → "method not allowed" - server is alive but only accepts POST,
       // which is what the OTLP HTTP exporter actually uses. Treat as ok.
       if (res.status === 200 || res.status === 204 || res.status === 405) {
+        let logsStatus: number | undefined;
+        let logsReachable = true;
+        if (config.MCP_AUDIT_ENABLED && config.MCP_AUDIT_SINK === 'otlp') {
+          const logsUrl = `${base}/v1/logs`;
+          try {
+            const logsResponse = await fetch(logsUrl, {
+              method: 'HEAD',
+              headers,
+              signal: ctrl.signal,
+            });
+            logsStatus = logsResponse.status;
+            logsReachable =
+              logsResponse.status === 200 ||
+              logsResponse.status === 204 ||
+              logsResponse.status === 405;
+          } catch {
+            logsReachable = false;
+          }
+        }
+        const details = {
+          endpoint: safeEndpoint,
+          method: 'HEAD',
+          status: res.status,
+          headers_configured: headersConfigured,
+          ...(logsStatus === undefined ? {} : { logs_status: logsStatus }),
+        };
+        if (!logsReachable) {
+          return {
+            id: 'otel-reachable',
+            status: 'warn',
+            message: 'trace endpoint reachable but OTLP audit logs endpoint was not confirmed',
+            details,
+          };
+        }
         return {
           id: 'otel-reachable',
           status: 'ok',
           message: `OTLP endpoint reachable (HEAD → ${res.status})`,
-          details: {
-            endpoint: safeEndpoint,
-            method: 'HEAD',
-            status: res.status,
-            headers_configured: headersConfigured,
-          },
+          details,
         };
       }
 

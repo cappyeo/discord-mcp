@@ -26,29 +26,52 @@ interface GuildSticker {
   readonly guild_id?: string;
 }
 
-const CHANNEL_FIELDS = ['channel_id', 'thread_id', 'webhook_channel_id', 'parent_id'] as const;
+const CHANNEL_FIELDS = [
+  'channel_id',
+  'thread_id',
+  'webhook_channel_id',
+  'parent_id',
+  'afk_channel_id',
+  'system_channel_id',
+  'rules_channel_id',
+  'public_updates_channel_id',
+  'safety_alerts_channel_id',
+] as const;
+const CHANNEL_ARRAY_FIELDS = ['default_channel_ids'] as const;
 const MAX_RESOLUTION_CACHE_ENTRIES = 1_024;
 
 /**
  * Operations whose Discord route is global or authenticated only by an opaque
  * interaction token. With an active guild allowlist, the server cannot prove
  * their target guild before execution, so they fail closed and stay hidden.
- * Application-emoji writes are the one bot-scoped exception, handled below
- * through the exact expected bot identity rather than a guild ID.
+ * Bot-scoped application routes are handled below through the exact expected
+ * bot identity; routes that also carry a guild target continue through the
+ * guild check after identity validation.
  */
 export const GUILD_SCOPE_BLOCKED_TOOLS: ReadonlySet<string> = new Set([
+  'app_emojis_list',
+  'app_emojis_get',
   'app_emojis_create',
   'app_emojis_modify',
   'app_emojis_delete',
   'application_modify_current',
+  'application_get_current',
+  'application_get_activity_instance',
+  'application_get_role_connection_metadata',
   'application_modify_role_connection_metadata',
   'commands_create_global',
   'commands_modify_global',
   'commands_delete_global',
   'commands_bulk_overwrite_global',
+  'commands_list_global',
+  'commands_get_global',
   'entitlements_consume',
   'entitlements_create_test',
   'entitlements_delete_test',
+  'entitlements_get',
+  'skus_list',
+  'subscriptions_list',
+  'subscriptions_get',
   'interactions_create_followup',
   'interactions_create_response',
   'interactions_delete_followup',
@@ -62,17 +85,51 @@ export const GUILD_SCOPE_BLOCKED_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Application emoji writes do not have a guild target.  They are safe to
- * expose alongside a guild allowlist only after the deployment has locked the
- * credential to one expected bot identity. They can affect every guild where
- * the application is available, so the route still targets only that bot's
- * application; this is not a general cross-application write escape.
+ * Application-scoped operations are safe to expose alongside a guild allowlist
+ * only after the deployment has locked the credential to one expected bot
+ * identity. Global routes can affect every guild where the application is
+ * available, so they still target only that bot's application; this is not a
+ * general cross-application write escape.
  */
 export const BOT_SCOPED_TOOLS: ReadonlySet<string> = new Set([
+  'app_emojis_list',
+  'app_emojis_get',
   'app_emojis_create',
   'app_emojis_modify',
   'app_emojis_delete',
+  // Application commands carry an application_id in every route. Locking
+  // that value to the authenticated bot prevents a guild allowlist from
+  // becoming an accidental cross-application control plane.
+  'commands_bulk_overwrite_global',
+  'commands_create_global',
+  'commands_delete_global',
+  'commands_modify_global',
+  'commands_list_global',
+  'commands_get_global',
+  'commands_bulk_overwrite_guild',
+  'commands_create_guild',
+  'commands_delete_guild',
+  'commands_modify_guild',
+  'commands_list_guild',
+  'commands_get_guild',
+  'application_get_activity_instance',
+  'application_get_current',
+  'application_modify_current',
+  'application_get_role_connection_metadata',
+  'application_modify_role_connection_metadata',
+  'skus_list',
+  'subscriptions_list',
+  'subscriptions_get',
+  'entitlements_list',
+  'entitlements_get',
+  'entitlements_consume',
+  'entitlements_create_test',
+  'entitlements_delete_test',
+  'commands_get_command_permissions',
+  'commands_get_guild_command_permissions',
+  'users_modify_current',
 ]);
+const USER_SCOPED_TOOLS: ReadonlySet<string> = new Set(['users_create_dm']);
 
 export function parseGuildAllowlist(raw: string | undefined): ReadonlySet<string> | null {
   if (raw === undefined) return null;
@@ -83,8 +140,10 @@ export function isToolVisibleWithGuildAllowlist(
   toolName: string,
   enabled: boolean,
   expectedBotId?: string,
+  allowUserScoped = false,
 ): boolean {
   if (!enabled || !GUILD_SCOPE_BLOCKED_TOOLS.has(toolName)) return true;
+  if (USER_SCOPED_TOOLS.has(toolName)) return allowUserScoped && expectedBotId !== undefined;
   return BOT_SCOPED_TOOLS.has(toolName) && expectedBotId !== undefined;
 }
 
@@ -97,6 +156,7 @@ export function hasVerifiableGuildScope(
     return true;
   }
   if (CHANNEL_FIELDS.some((field) => Object.hasOwn(inputSchema, field))) return true;
+  if (CHANNEL_ARRAY_FIELDS.some((field) => Object.hasOwn(inputSchema, field))) return true;
   if (toolName.startsWith('invites_') && Object.hasOwn(inputSchema, 'code')) return true;
   return toolName === 'stickers_get' && Object.hasOwn(inputSchema, 'sticker_id');
 }
@@ -119,6 +179,7 @@ export class GuildScopePolicy {
     private readonly allowed: ReadonlySet<string> | null,
     private readonly rest: REST,
     private readonly expectedBotId?: string,
+    private readonly allowUserScoped = false,
   ) {}
 
   public get enabled(): boolean {
@@ -136,18 +197,26 @@ export class GuildScopePolicy {
     argsValue: unknown,
     schema: SchemaCarrier | undefined,
   ): Promise<void> {
-    // An identity lock is authoritative for bot-scoped application writes
+    if (USER_SCOPED_TOOLS.has(toolName)) {
+      if (this.allowed === null) return;
+      if (!this.allowUserScoped || this.expectedBotId === undefined) {
+        throw new GuildScopeUnresolvedError(
+          `user-scoped tool ${toolName} (MCP_ALLOW_USER_SCOPED=true and DISCORD_EXPECTED_BOT_ID are required)`,
+        );
+      }
+      this.authorizeBotScopedTool(toolName, argsValue);
+      return;
+    }
+    // An identity lock is authoritative for bot-scoped application operations
     // even when no guild allowlist is configured. This prevents an explicit
     // application_id from silently widening the operation to another app.
-    if (BOT_SCOPED_TOOLS.has(toolName) && this.expectedBotId !== undefined) {
-      this.authorizeBotScopedTool(toolName, argsValue);
-      return;
-    }
-    if (this.allowed === null) return;
     if (BOT_SCOPED_TOOLS.has(toolName)) {
       this.authorizeBotScopedTool(toolName, argsValue);
-      return;
+      // Global application routes have no guild target. After the identity
+      // check they are safe to pass through an active guild allowlist.
+      if (GUILD_SCOPE_BLOCKED_TOOLS.has(toolName)) return;
     }
+    if (this.allowed === null) return;
     if (GUILD_SCOPE_BLOCKED_TOOLS.has(toolName)) {
       throw new GuildScopeUnresolvedError(`tool ${toolName}`);
     }
@@ -155,19 +224,31 @@ export class GuildScopePolicy {
       throw new GuildScopeUnresolvedError(`tool ${toolName}`);
     }
 
+    let checkedDirectGuild = false;
     if (schema !== undefined && Object.hasOwn(schema.inputSchema, 'guild_id')) {
       const guildId = stringField(argsValue, 'guild_id');
       if (guildId === undefined) {
         throw new GuildScopeUnresolvedError(`tool ${toolName}`);
       }
       this.assertGuild(guildId);
-      return;
+      checkedDirectGuild = true;
     }
 
     for (const field of CHANNEL_FIELDS) {
       const channelId = stringField(argsValue, field);
       if (channelId === undefined) continue;
       this.assertGuild(await this.resolveChannelGuild(channelId));
+    }
+    for (const field of CHANNEL_ARRAY_FIELDS) {
+      const value = argsValue[field];
+      if (value === undefined) continue;
+      if (!Array.isArray(value)) throw new GuildScopeUnresolvedError(`tool ${toolName}`);
+      for (const channelId of value) {
+        if (typeof channelId !== 'string' || channelId.length === 0) {
+          throw new GuildScopeUnresolvedError(`tool ${toolName}`);
+        }
+        this.assertGuild(await this.resolveChannelGuild(channelId));
+      }
     }
 
     const webhookId = stringField(argsValue, 'webhook_id');
@@ -192,6 +273,8 @@ export class GuildScopePolicy {
       if (guildId !== null) this.assertGuild(guildId);
       return;
     }
+
+    if (checkedDirectGuild) return;
 
     // Global reads and local-only builders remain available. Their lack of a
     // guild target is intentional; unprovable writes are enumerated above.

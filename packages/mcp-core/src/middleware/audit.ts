@@ -10,6 +10,10 @@ interface ToolResultLike {
   structuredContent?: { code?: unknown };
 }
 
+interface ToolPieceWithAnnotations {
+  readonly annotations?: { readonly readOnlyHint?: boolean };
+}
+
 /**
  * Try to extract a short machine-readable code from a tool's
  * `CallToolResult` when `isError: true`. The structured-error format
@@ -22,6 +26,22 @@ function extractToolErrorCode(result: ToolResultLike | null | undefined): string
   return typeof code === 'string' && code.length > 0 ? code : undefined;
 }
 
+async function emitAuditSafely(sink: AuditSink, event: AuditEvent): Promise<void> {
+  try {
+    await sink.emit(event);
+  } catch {
+    // A broken audit destination must never turn a completed Discord
+    // mutation into a client-visible failure. Keep the warning event-free so
+    // a non-conforming custom sink cannot cause a second disclosure.
+    try {
+      process.stderr.write(`${JSON.stringify({ level: 'warn', msg: 'audit sink emit failed' })}\n`);
+    } catch {
+      // stderr may be closed during process shutdown; there is no safe sink
+      // left to report to at that point.
+    }
+  }
+}
+
 /**
  * Audit middleware (Plan 8 Phase E, Task E.3).
  *
@@ -31,8 +51,9 @@ function extractToolErrorCode(result: ToolResultLike | null | undefined): string
  * operations should NOT generate audit noise - telemetry already
  * records them.
  *
- * Skips read-only / idempotent tools (`ctx.tool.idempotent === true`).
- * Mutating tools (`idempotent: false`) emit one AuditEvent per call:
+ * Skips only tools explicitly annotated as read-only. Idempotent writes still
+ * emit one AuditEvent: idempotency describes retry semantics, not whether a
+ * Discord mutation occurred.
  *
  *   - `success`     - handler returned without `isError: true`.
  *   - `tool_error`  - handler returned `{ isError: true, ... }`.
@@ -46,8 +67,12 @@ function extractToolErrorCode(result: ToolResultLike | null | undefined): string
 export function auditMiddleware(sink: AuditSink): ToolMiddleware {
   return {
     async onCallTool(ctx, next) {
-      // Skip read-only tools - see plan §10 Task E.3.
-      if (ctx.tool.idempotent) {
+      // Read-only is a semantic annotation, not an inference from
+      // idempotency. A PATCH/DELETE may be idempotent while still changing
+      // Discord and must remain in the audit trail. Missing metadata fails
+      // closed and is audited as a potentially mutating call.
+      const piece = ctx.meta.get('toolPiece') as ToolPieceWithAnnotations | undefined;
+      if (piece?.annotations?.readOnlyHint === true) {
         return next();
       }
 
@@ -88,14 +113,14 @@ export function auditMiddleware(sink: AuditSink): ToolMiddleware {
         const result = (await next()) as ToolResultLike | null;
         const isToolError = result?.isError === true;
         if (isToolError) {
-          await sink.emit(buildEvent('tool_error', extractToolErrorCode(result)));
+          await emitAuditSafely(sink, buildEvent('tool_error', extractToolErrorCode(result)));
         } else {
-          await sink.emit(buildEvent('success', undefined));
+          await emitAuditSafely(sink, buildEvent('success', undefined));
         }
         return result as never;
       } catch (e) {
         const code = e instanceof Error ? e.name : 'unknown';
-        await sink.emit(buildEvent('thrown', code));
+        await emitAuditSafely(sink, buildEvent('thrown', code));
         throw e;
       }
     },

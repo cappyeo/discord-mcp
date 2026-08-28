@@ -31,11 +31,30 @@ const readonlyTool = {
   idempotent: true,
 };
 
+const idempotentWriteTool = {
+  name: 'channels_modify',
+  category: 'channels',
+  idempotent: true,
+};
+
 function makeCtx(
   tool: { name: string; category: string; idempotent: boolean },
   args: unknown = { channel_id: '111', content: 'hi' },
 ): MiddlewareContext<unknown> {
-  return { tool, args, meta: new Map() };
+  return {
+    tool,
+    args,
+    meta: new Map([
+      [
+        'toolPiece',
+        {
+          annotations: {
+            readOnlyHint: tool === readonlyTool,
+          },
+        },
+      ],
+    ]),
+  };
 }
 
 const TEST_REQUEST_CTX = {
@@ -119,8 +138,8 @@ describe('auditMiddleware - mutating tools', () => {
   });
 });
 
-describe('auditMiddleware - idempotent tools (skip)', () => {
-  it('does NOT emit for read-only tools (idempotent: true)', async () => {
+describe('auditMiddleware - read-only versus idempotent writes', () => {
+  it('does NOT emit for explicitly read-only tools', async () => {
     const sink = new CapturingSink();
     const mw = auditMiddleware(sink);
     await runWithCtx(TEST_REQUEST_CTX, () =>
@@ -140,6 +159,16 @@ describe('auditMiddleware - idempotent tools (skip)', () => {
       ),
     ).rejects.toThrow('readonly boom');
     expect(sink.events).toHaveLength(0);
+  });
+
+  it('emits for an idempotent write because it still changes Discord', async () => {
+    const sink = new CapturingSink();
+    const mw = auditMiddleware(sink);
+    await runWithCtx(TEST_REQUEST_CTX, () =>
+      mw.onCallTool!(makeCtx(idempotentWriteTool), async () => ({ isError: false, content: [] })),
+    );
+    expect(sink.events).toHaveLength(1);
+    expect(sink.events[0]).toMatchObject({ tool: 'channels_modify', idempotent: true });
   });
 });
 
@@ -211,23 +240,20 @@ describe('auditMiddleware - no active span', () => {
 });
 
 describe('auditMiddleware - sink failure isolation', () => {
-  it('does not break tool execution when sink.emit throws (sink contract is best-effort)', async () => {
+  it('does not break tool execution when a custom sink.emit throws', async () => {
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const failingSink: AuditSink = {
       async emit() {
         throw new Error('sink failure');
       },
     };
     const mw = auditMiddleware(failingSink);
-    // We do not assert non-throw here because the spec says emit() must
-    // never throw. Sinks own that contract; if a custom sink violates it
-    // the middleware will surface the error. This test documents that
-    // behavior so any future sink change is intentional.
     await expect(
       runWithCtx(TEST_REQUEST_CTX, () =>
         mw.onCallTool!(makeCtx(mutatingTool), async () => ({ isError: false, content: [] })),
       ),
-    ).rejects.toThrow('sink failure');
-    // Silence any ambient warnings.
-    vi.restoreAllMocks();
+    ).resolves.toMatchObject({ isError: false });
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    writeSpy.mockRestore();
   });
 });

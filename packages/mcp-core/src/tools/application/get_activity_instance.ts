@@ -1,5 +1,6 @@
 import { container } from '@sapphire/pieces';
 import { z } from 'zod';
+import { BOT_APPLICATION_READ_ACCESS } from '../../access/requirements.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ApplicationId } from '../_lib/snowflake.js';
@@ -15,6 +16,7 @@ interface RawActivityInstance {
 export default defineTool({
   name: 'application_get_activity_instance',
   category: 'application',
+  access: BOT_APPLICATION_READ_ACCESS,
   description: [
     '**Purpose**: Fetch a running Activity instance by id (Discord Activities API).',
     '',

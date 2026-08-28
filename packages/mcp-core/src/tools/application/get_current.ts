@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { BOT_APPLICATION_READ_ACCESS } from '../../access/requirements.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ApplicationId, UserId } from '../_lib/snowflake.js';
@@ -25,6 +26,7 @@ interface RawApplication {
 export default defineTool({
   name: 'application_get_current',
   category: 'application',
+  access: BOT_APPLICATION_READ_ACCESS,
   description:
     '**Purpose**: Fetch the bot/app application object (`/applications/@me`).\n\n**When to use**: confirm app identity; read flags, install URLs, tags, interaction endpoint, etc.\n\n**Returns**: projected application shape. `name` and `description` remain raw app-author data; `untrusted_text` provides a separately fenced copy.',
   inputSchema: {},

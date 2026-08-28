@@ -26,6 +26,9 @@ change types or behavior. Pin a compatible version and read the
 | --- | --- |
 | Server | `buildServer`, `buildCatalogServer`, `BuildServerDeps`, `BuildServerResult`, `BuildCatalogServerResult`, `VERSION` |
 | Configuration | `loadConfig`, `Config` |
+| Access preflight | `getToolAccessRequirement`, `listKnownToolAccessRequirements`, `evaluateBotPermissions`, named permission/intent registries |
+| Approval and fingerprints | `payloadConfirmationMiddleware`, `fingerprintPayload`, `canonicalizePayload`, `reviewComponentsV2` |
+| Resource runtime | `ResourceStore` (internal server seam), static Components V2 resources, allowlisted live guild snapshots |
 | Tools and results | `defineTool`, `ToolDefinition`, `Tool`, `ToolRunContext`, `dualResult` |
 | IDs and pagination | `Snowflake`, `ApplicationId`, `ChannelId`, `EmojiId`, `GuildId`, `MessageId`, `RoleId`, `UserId`, `WebhookId`, `encodeCursor`, `decodeCursor` |
 | Errors | `DiscordError` families, `formatErrorForUser`, `FormatErrorContext` |
@@ -87,9 +90,9 @@ Important distinctions:
 
 - `annotations.readOnlyHint` describes semantics to MCP clients.
 - `annotations.idempotentHint` says repeated calls have the same intended effect.
-- `def.idempotent` is runtime metadata used by telemetry and the current audit
-  middleware. It is not synonymous with read-only: an idempotent PUT can write,
-  and the current audit layer skips all tools marked `idempotent: true`.
+- `def.idempotent` is runtime metadata used by telemetry and audit correlation.
+  It is not synonymous with read-only: an idempotent PUT can write. The audit
+  layer skips only tools whose `annotations.readOnlyHint` is explicitly true.
 - `ToolRunContext` guarantees `signal`. The built-in pipeline path augments its
   internal context with invocation support, but custom handlers should not rely
   on an undocumented `ctx.invoke`.
@@ -191,10 +194,10 @@ shape and retry guidance.
 
 ## Middleware and registration
 
-The built-in server invokes six stages in this order:
+The built-in server invokes the shared policy stages in this order:
 
 ```text
-telemetry → default guild → validation → category gate → preconditions → audit
+telemetry → default guild → blueprint target → validation → guild scope → category gate → payload approval → write mode → preconditions → audit
 ```
 
 `buildServer` registers the shipped tools explicitly. The runtime does not scan

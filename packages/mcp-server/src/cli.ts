@@ -78,6 +78,15 @@ export function buildProgram(): Command {
     .description('Diagnose configuration, token, and connectivity issues')
     .option('--json', 'Emit machine-readable JSON instead of pretty output')
     .option('--online', 'Run online checks against Discord (requires DISCORD_TOKEN)')
+    .option(
+      '--access',
+      'Run a read-only bot identity, guild permission, and data-access preflight (implies --online)',
+    )
+    .option(
+      '--guild-id <id>',
+      'Guild target for --access; defaults to the profile allowlist when unique',
+    )
+    .option('--channel-id <id>', 'Optional channel target for --access overwrite evaluation')
     .option('--profile <name>', 'Load a caller-owned bot profile before checks')
     .option(
       '--client <id>',
@@ -88,6 +97,9 @@ export function buildProgram(): Command {
       async (options: {
         json?: boolean;
         online?: boolean;
+        access?: boolean;
+        guildId?: string;
+        channelId?: string;
         profile?: string;
         client?: string;
         config?: string;

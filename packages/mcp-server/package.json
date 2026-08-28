@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",
-  "description": "Caller-owned Discord operations for AI agents, with 208 typed tools, safety controls, and verifiable guild builds.",
+  "description": "Caller-owned Discord operations for AI agents, with 209 typed tools, safety controls, and verifiable guild builds.",
   "bin": {
     "discord-mcp": "./dist/cli.js",
     "discord-mcp-server": "./dist/cli.js"
@@ -59,11 +59,14 @@
     "@modelcontextprotocol/server": "^2.0.0",
     "@sapphire/pieces": "^4.4.1",
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
     "@opentelemetry/instrumentation-pino": "^0.67.0",
     "@opentelemetry/instrumentation-undici": "^0.31.0",
     "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",

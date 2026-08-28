@@ -123,6 +123,8 @@ beforeEach(() => {
   delete process.env.MCP_HTTP_MAX_IN_FLIGHT;
   delete process.env.MCP_WRITE_MODE;
   delete process.env.DISCORD_MCP_ACTIVITY;
+  delete process.env.MCP_APPROVAL_STATE_DIR;
+  delete process.env.MCP_APPROVAL_HMAC_KEY;
 });
 
 afterEach(async () => {
@@ -285,7 +287,7 @@ describe('startHttp', () => {
       expect(transport.sessionId).toBeUndefined();
       const legacyList = await client.listTools();
       const { tools } = legacyList;
-      expect(tools).toHaveLength(208);
+      expect(tools).toHaveLength(209);
       expect(tools.map((tool) => tool.name)).toContain('messages_send');
       expect(legacyList.ttlMs).toBeUndefined();
       expect(legacyList.cacheScope).toBeUndefined();
@@ -313,7 +315,7 @@ describe('startHttp', () => {
       fetchSpy.mockClear();
       const firstList = await client.listTools();
       const { tools, ttlMs, cacheScope } = firstList;
-      expect(tools).toHaveLength(208);
+      expect(tools).toHaveLength(209);
       expect(tools.map((tool) => tool.name)).toContain('messages_send');
       expect(ttlMs).toBe(3_600_000);
       expect(cacheScope).toBe('private');
@@ -383,6 +385,38 @@ describe('startHttp', () => {
       });
       expect(result.isError).toBe(true);
       expect(result.structuredContent).toMatchObject({ code: 'WRITE_PREVIEW' });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('wires the optional durable approval ledger across stateless HTTP builds', async () => {
+    const approvalDirectory = join(activityRoot, 'approvals');
+    process.env.MCP_APPROVAL_STATE_DIR = approvalDirectory;
+    process.env.MCP_APPROVAL_HMAC_KEY = 'http-approval-ledger-test-secret-0123456789';
+    server = await startHttp({ port: 0, registerSignalHandlers: false });
+    const transport = new StreamableHTTPClientTransport(endpoint(), {
+      requestInit: { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } },
+    });
+    const client = new Client({ name: 'http-durable-approval-test', version: '0.0.0' });
+
+    await client.connect(transport as never);
+    try {
+      const result = await client.callTool({
+        name: 'components_v2_send',
+        arguments: {
+          channel_id: '111122223333444455',
+          components: [{ type: 10, content: 'durable HTTP preview' }],
+        },
+      });
+      expect(result.structuredContent).toMatchObject({
+        code: 'PAYLOAD_CONFIRMATION_REQUIRED',
+      });
+      const state = readFileSync(join(approvalDirectory, 'approvals.json'), 'utf8');
+      expect(state).toContain('"version":1');
+      expect(state).not.toContain(
+        (result.structuredContent as { approval_id: string }).approval_id,
+      );
     } finally {
       await client.close();
     }

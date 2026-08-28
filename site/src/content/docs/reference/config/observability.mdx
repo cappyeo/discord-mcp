@@ -36,7 +36,7 @@ OpenTelemetry SDK is not started.
 - **Type:** URL
 - **Default:** unset
 - **Use:** OTLP HTTP collector endpoint. The runtime appends `/v1/traces` and
-  `/v1/metrics`.
+  `/v1/metrics`; when `MCP_AUDIT_SINK=otlp`, it also appends `/v1/logs`.
 - **Example:** `OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io`
 
 ### `OTEL_EXPORTER_OTLP_PROTOCOL`

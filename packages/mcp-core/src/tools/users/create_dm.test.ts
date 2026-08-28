@@ -1,8 +1,10 @@
 import { server } from '@discord-mcp/server-mocks';
 import { REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
+import { TaskCancelledError } from 'cockatiel';
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { DmOutcomeUnknown } from '../../errors/client.js';
 import usersCreateDm from './create_dm.js';
 import '../../container.js';
 
@@ -42,5 +44,36 @@ describe('users_create_dm', () => {
     expect(r.structuredContent.recipient_ids).toEqual(['111122223333444499']);
     expect(capturedUrl).toContain('/users/@me/channels');
     expect(capturedUrl).not.toContain('%40me');
+  });
+
+  it('reports an ambiguous lost response without retrying the DM POST', async () => {
+    const lostResponse = Object.assign(new Error('socket reset after request'), {
+      code: 'ECONNRESET',
+    });
+    const post = vi.fn().mockRejectedValue(lostResponse);
+    container.rest = { post } as unknown as REST;
+    const T = usersCreateDm;
+    const t = new T(
+      { name: 'users_create_dm', path: 'inline', root: 'inline', store: null as never },
+      { name: 'users_create_dm', enabled: true },
+    );
+    await expect(
+      t.run({ recipient_id: '111122223333444499' }, { signal: new AbortController().signal }),
+    ).rejects.toBeInstanceOf(DmOutcomeUnknown);
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an internal REST timeout as outcome-unknown, not a safe retry', async () => {
+    const post = vi.fn().mockRejectedValue(new TaskCancelledError('timeout'));
+    container.rest = { post } as unknown as REST;
+    const T = usersCreateDm;
+    const t = new T(
+      { name: 'users_create_dm', path: 'inline', root: 'inline', store: null as never },
+      { name: 'users_create_dm', enabled: true },
+    );
+    await expect(
+      t.run({ recipient_id: '111122223333444499' }, { signal: new AbortController().signal }),
+    ).rejects.toBeInstanceOf(DmOutcomeUnknown);
+    expect(post).toHaveBeenCalledTimes(1);
   });
 });

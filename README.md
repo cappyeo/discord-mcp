@@ -13,13 +13,13 @@
 
 <p align="center">
   <strong>Connect any MCP-compatible AI to Discord. Do real community work safely. Verify complete guild builds.</strong><br />
-  Caller-owned bot · local by default · 208 typed tools · resumable guild builds with Activity Evidence.
+  Caller-owned bot · local by default · 209 typed tools · resumable guild builds with Activity Evidence.
 </p>
 
 <p align="center">
   <a href="https://cappyeo.github.io/discord-mcp/start/activity-evidence/"><strong>Get a verified result</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/start/"><strong>Get started</strong></a>
-  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 208 tools</strong></a>
+  · <a href="https://cappyeo.github.io/discord-mcp/tools/"><strong>Browse 209 tools</strong></a>
   · <a href="https://cappyeo.github.io/discord-mcp/showcase/live-gaming-server/"><strong>Watch live demo</strong></a>
   · <a href="https://github.com/cappyeo/discord-mcp/discussions"><strong>Join the community</strong></a>
   · <a href="https://www.npmjs.com/package/@discord-mcp/cli"><strong>View on npm</strong></a>
@@ -92,6 +92,9 @@ discord-mcp setup --profile devbot --client codex
 # Verify the rest of the local configuration
 discord-mcp doctor --profile devbot --online
 
+# Explain the bot's verified guild access before a planned write
+discord-mcp doctor --profile devbot --access --guild-id <GUILD_ID> --json
+
 # Verify the real MCP path without changing Discord
 discord-mcp smoke --profile devbot
 ```
@@ -122,11 +125,12 @@ bot's guild boundary inside discord-mcp. Direct guild calls use a constant-time
 check; channel, thread, webhook, invite, and guild-sticker routes are resolved
 before execution and cached. Global writes and opaque interaction-token routes
 that cannot prove a guild are unavailable while the allowlist is active. When
-that boundary is active, the three application-emoji write tools are the
-deliberate bot-scoped exception: they are exposed only when
-`DISCORD_EXPECTED_BOT_ID` locks the token to one bot and they can target only
-that bot's application. Omit `application_id` to have the server resolve the
-current bot application automatically. The
+that boundary is active, bot-application routes (the five application-emoji
+operations, application commands, SKUs, entitlements, and application
+metadata) are exposed only when `DISCORD_EXPECTED_BOT_ID` locks the token to
+one bot and they can target only that bot's application. Omit `application_id`
+where supported to have the server resolve the current bot application
+automatically. The
 resolution caches are bounded to prevent untrusted ID churn from growing memory
 without limit.
 `users_list_current_user_guilds` remains a read-only discovery tool; seeing a
@@ -203,9 +207,9 @@ caller-owned bot; foreign-owned or ambiguous rules block the plan without mutati
 
 ## Built for production use
 
-- **Safety controls** - destructive operations require explicit confirmation; guild and category allowlists constrain the bot's blast radius server-side.
+- **Safety controls** - destructive operations require explicit confirmation, Components V2 send/edit/template approvals bind to a payload hash, and guild/category allowlists constrain the bot's blast radius server-side.
 - **Reliable Discord access** - retries, timeouts, rate-limit handling, and circuit breaking protect agent workflows from transient API failures.
-- **Observability** - OpenTelemetry traces and metrics, structured logs, and audit events make operations inspectable.
+- **Observability** - OpenTelemetry traces/metrics, optional OTLP audit logs, structured logs, and redacted audit events make operations inspectable.
 - **Typed contracts** - every tool is schema-defined; public core exports, CLI flags, configuration variables, and tool metadata are regression-tested.
 - **Supply-chain evidence** - npm releases are published from GitHub Actions with signed SLSA provenance.
 
@@ -216,14 +220,14 @@ Read the [architecture](https://cappyeo.github.io/discord-mcp/architecture/), [o
 | Command | Purpose |
 | --- | --- |
 | `discord-mcp serve` | Start the local stdio MCP server (default), or `serve --http` for a bearer-protected Streamable HTTP endpoint. |
-| `discord-mcp catalog` | Expose all 208 real tool schemas without a token; every tool call fails closed with `CATALOG_ONLY`. |
+| `discord-mcp catalog` | Expose all 209 real tool schemas without a token; every tool call fails closed with `CATALOG_ONLY`. |
 | `discord-mcp catalog --check [--json]` | Check the real local MCP catalog contract without a token, Discord request, or Discord write. This is catalog validation only—not Activity Evidence. |
 | `discord-mcp setup` | Verify one caller-owned bot, save a non-secret profile, and generate its client configuration. |
 | `discord-mcp activity [--report]` | Show the local, privacy-safe evidence journal; `--report` prints the optional GitHub outcome-form URL. |
 | `discord-mcp update` | Check a generated Codex launcher for a newer release; apply it only with explicit `--apply`. |
 | `discord-mcp profile` | List, inspect, or remove local non-secret bot profiles. |
 | `discord-mcp init` | Generate a stateless MCP client configuration snippet. |
-| `discord-mcp doctor` | Check Node.js, token shape, environment, optional connectivity, generated Codex/Cursor/Grok launchers, and Antigravity/Gemini config for persisted credentials. |
+| `discord-mcp doctor` | Check Node.js, token shape, environment, optional connectivity, read-only bot/guild access (`--access`), generated Codex/Cursor/Grok launchers, and Antigravity/Gemini config for persisted credentials. |
 | `discord-mcp smoke` | Verify the MCP-to-Discord path; add `--confirm-write` for a self-cleaning CRUD test, or `--confirm-template-lifecycle` to prove Guild Template inspect/diff/sync/delete and cleanup. |
 | `discord-mcp migrate` | Create a migration report from a supported Discord MCP setup. |
 
@@ -232,7 +236,7 @@ Run `discord-mcp --help` or see the full [CLI reference](https://cappyeo.github.
 ### Registry-safe schema discovery
 
 `discord-mcp catalog` is a credential-free stdio server for MCP directories,
-security review, and contract inspection. It advertises the same 208 schemas as
+security review, and contract inspection. It advertises the same 209 schemas as
 the full server, never reads a bot token, never contacts Discord, and returns
 `CATALOG_ONLY` for every `tools/call`. It is not an operational Discord server;
 use `discord-mcp serve` with your caller-owned bot when an AI agent should act.
@@ -251,7 +255,7 @@ only proves catalog discovery; continue to [set up a caller-owned bot](https://c
 to reach the first verified Discord outcome.
 
 With `--json`, the result uses schema `discord-mcp.catalog-check.v1` and reports the
-expected 208 tools, 6 static resources, `execution_guard: "CATALOG_ONLY"`,
+expected 209 tools, 6 static resources, `execution_guard: "CATALOG_ONLY"`,
 `credentials_required: false`, `discord_execution: "disabled"`, and
 `activity_evidence_created: false`. It proves the installed catalog contract only;
 it does not prove that an AI host or a live Discord connection is configured.
@@ -300,7 +304,7 @@ writing to Discord.
 
 ## Project status
 
-`discord-mcp` is pre-1.0. This source tree targets **v0.24.0**. Its core exports, CLI surface, environment schema, and 208-tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
+`discord-mcp` is pre-1.0. This source tree targets **v0.24.0** plus an unreleased 209-tool increment. Its core exports, CLI surface, environment schema, and tool registry are covered by contract tests; publication is gated on independently verified real-server evidence appropriate to the exact tag commit. See the [GitHub releases](https://github.com/cappyeo/discord-mcp/releases), [changelog](https://cappyeo.github.io/discord-mcp/reference/changelog/), and [v1.0 readiness checklist](https://cappyeo.github.io/discord-mcp/reference/v1-readiness/) before depending on an unstable surface.
 
 Help validate v1.0: if you have not authored discord-mcp or its documentation,
 follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/)

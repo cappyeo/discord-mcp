@@ -21,17 +21,33 @@ supposed to control:
 DISCORD_TOKEN=your-discord-bot-token
 ALLOWED_GUILDS=111122223333444455
 MCP_WRITE_MODE=preview
+MCP_ACCESS_MODE=advisory
+MCP_DM_CONSENT_MODE=require
+MCP_ALLOW_USER_SCOPED=false
 ```
 
 This starts the server with REST-only transport, `info` logging, retry, circuit
 breaking, and audit logging enabled. Destructive tools stay in dry-run mode until
 you explicitly opt in. `ALLOWED_GUILDS` is optional for backward compatibility,
 but strongly recommended whenever the bot can see more than one server.
+`MCP_ACCESS_MODE=advisory` is the compatibility default. The built-in stdio and
+HTTP transports provide a conservative read-only evidence resolver for `warn`
+and `enforce`; custom embedders should inject an equivalent provider before
+turning on `enforce`.
+
+`MCP_DM_CONSENT_MODE=require` adds an explicit, one-time caller-approval step
+before `users_create_dm` contacts a user. The host/operator must obtain any
+human consent separately; the returned MCP preview is not proof of a human
+click. Keep the default `advisory` mode only when the deployment has a separate
+consent workflow.
 
 <Aside type="caution">
-`MCP_DRY_RUN` applies only to the 31 confirmation-gated tools. Setting it to
-`false` removes the dry-run half of this gate for that set, but each call still
-needs `__confirm: true`.
+`MCP_DRY_RUN` arms the 31 legacy confirmation-gated tools and the stricter
+payload-bound policy for `components_v2_send`, `components_v2_edit`, and
+`components_v2_send_from_template`. Setting
+it to `false` removes the dry-run half, but legacy calls still need
+`__confirm: true`; Components V2 calls additionally need the exact
+`__confirm_hash` and one-time `__confirm_id` returned by their preview.
 
 This setting does not protect ordinary writes. With the default
 `MCP_WRITE_MODE=allow`, ordinary writes can execute immediately. Set

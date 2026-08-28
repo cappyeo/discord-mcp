@@ -441,6 +441,71 @@ describe('doctorAction - online check selection', () => {
     // because OTEL_ENABLED=false → skips request.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('runs the read-only bot access preflight when --access is enabled', async () => {
+    const guildId = '111122223333444455';
+    const botId = '999988887777666601';
+    const roleId = '999988887777666602';
+    process.env.DISCORD_TOKEN = VALID_TOKEN;
+    process.env.DISCORD_EXPECTED_BOT_ID = botId;
+    process.env.ALLOWED_GUILDS = guildId;
+    const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
+      const path = new URL(String(input)).pathname;
+      const body = path.endsWith('/users/@me')
+        ? { id: botId, username: 'doctor-bot', bot: true }
+        : path.endsWith('/applications/@me')
+          ? { id: botId, flags_new: String((1n << 14n) | (1n << 18n)) }
+          : path.endsWith(`/guilds/${guildId}`)
+            ? { id: guildId, owner_id: '999988887777666699' }
+            : path.endsWith(`/guilds/${guildId}/members/${botId}`)
+              ? { user: { id: botId }, roles: [roleId] }
+              : path.endsWith(`/guilds/${guildId}/roles`)
+                ? [
+                    {
+                      id: guildId,
+                      name: '@everyone',
+                      position: 0,
+                      permissions: '1024',
+                      managed: false,
+                    },
+                    {
+                      id: roleId,
+                      name: 'Bot',
+                      position: 5,
+                      permissions: String((1n << 4n) | (1n << 11n) | (1n << 13n)),
+                      managed: false,
+                    },
+                  ]
+                : null;
+      return new Response(body === null ? '' : JSON.stringify(body), {
+        status: body === null ? 404 : 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const out = await runAndCapture(() => doctorAction({ json: true, access: true, guildId }));
+    const parsed = JSON.parse(out) as {
+      data: {
+        checks: Array<{ id: string; status: string; details?: Record<string, unknown> }>;
+      };
+    };
+    expect(parsed.data.checks.map((check) => check.id)).toEqual([
+      'node-version',
+      'token-format',
+      'env-vars',
+      'audit-sink',
+      'client-caps',
+      'token-online',
+      'otel-reachable',
+      'bot-access',
+    ]);
+    expect(parsed.data.checks.find((check) => check.id === 'bot-access')).toMatchObject({
+      status: 'warn',
+      details: { bot_id: botId, guild_id: guildId, identity_match: true },
+    });
+    expect(out).not.toContain(VALID_TOKEN);
+  });
 });
 
 describe('doctorAction - Codex launcher update discovery', () => {

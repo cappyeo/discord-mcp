@@ -1,13 +1,13 @@
 ---
 title: Middleware chain
-description: The six-stage middleware chain wrapping every tool call - telemetry, default guild, validation, category gate, preconditions, and audit.
+description: The multi-stage middleware chain wrapping every tool call - target resolution, validation, scope and write policy, confirmation, telemetry, and audit.
 sidebar:
   order: 2
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Every tool call goes through a six-stage middleware chain before reaching the
+Every tool call goes through a multi-stage middleware chain before reaching the
 tool's `run` method. The order is fixed and matters: each layer assumes the
 ones outside it have already run.
 
@@ -17,23 +17,21 @@ ones outside it have already run.
 graph LR
   A[tools/call] --> B[telemetry]
   B --> C[default guild]
-  C --> D[validate]
-  D --> E[category gate]
-  E --> F[preconditions]
-  F --> G[audit]
-  G --> H[Tool.run]
-  H --> G
-  G --> F
-  F --> E
-  E --> D
-  D --> C
-  C --> B
-  B --> A
+  C --> D[blueprint target]
+  D --> E[validate]
+  E --> F[guild scope]
+  F --> G[category gate]
+  G --> H[runtime access]
+  H --> I[write mode]
+  I --> J[preconditions]
+  J --> K[payload approval]
+  K --> L[audit]
+  L --> M[Tool.run]
 ```
 
 Read it as a Koa pipeline: each middleware wraps `next()`, runs setup, awaits
-the inner chain, runs teardown, returns. The arrows show the call descending
-to the handler then unwinding back out.
+the inner chain, runs teardown, and returns. The arrows show the call descending
+to the handler; the unwind is implicit in each `await next()`.
 
 The composition primitive is in
 [`packages/mcp-core/src/middleware/compose.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/compose.ts):
@@ -64,7 +62,15 @@ always wins; tools without `guild_id` are unchanged.
 Why before validation: the default must be present before a required
 `guild_id` schema is parsed.
 
-## Layer 3: validate
+## Layer 3: blueprint target
+
+Source: [`middleware/blueprint-plan-target.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/blueprint-plan-target.ts)
+
+For a blueprint apply or resume, resolves and checks the caller-local plan
+reference, locked guild, bot identity, and approval before a mutation can run.
+A stale or mismatched plan stops here.
+
+## Layer 4: validate
 
 Source: [`middleware/validate.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/validate.ts)
 
@@ -80,13 +86,22 @@ typed, well-formed payload.
 
 <Aside type="note">
 Validation strips unknown keys by default (zod's `.strict()` is opt-in
-per-tool). The `__confirm` raw flag is **not** in any tool's schema - it's
-extracted from the raw arg payload **before** zod runs (see
+per-tool). The `__confirm`, `__confirm_hash`, and `__confirm_id` authorization fields are **not**
+in individual tool schemas - they are extracted from the raw arg payload **before** zod runs (see
 [Confirmation](/discord-mcp/architecture/confirmation/)). This is the one
 place the chain reads pre-validation args.
 </Aside>
 
-## Layer 4: category gate
+## Layer 5: guild scope
+
+Source: [`middleware/guild-allowlist.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/guild-allowlist.ts)
+
+When `ALLOWED_GUILDS` is active, proves the target guild for direct calls,
+channels, webhooks, invites, stickers, and pipeline steps. It also keeps
+application-emoji operations tied to the locked bot identity. Unresolved scope
+fails closed before a Discord request.
+
+## Layer 6: category gate
 
 Source: [`middleware/category.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/category.ts)
 
@@ -97,7 +112,31 @@ re-enters the dispatcher and is checked against its own category.
 Why this is middleware: a new tool cannot accidentally bypass the allowlist by
 forgetting to declare a precondition.
 
-## Layer 5: preconditions
+## Layer 7: runtime access
+
+Source: [`middleware/runtime-access.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/runtime-access.ts)
+
+When `MCP_ACCESS_MODE` is `warn` or `enforce`, the server asks the configured
+read-only evidence resolver to verify the locked bot identity, target guild or
+channel, effective permission bits, Gateway intent state, and (where declared)
+role hierarchy. The built-in stdio and HTTP transports inject a bounded REST
+resolver; embedders may provide their own resolver through `BuildServerDeps`.
+
+`advisory` is the compatibility default and does not contact Discord for this
+extra gate. `warn` records evidence gaps and continues. `enforce` allows only
+complete evidence and fails closed for unknown or partial results. The resolver
+never infers access from a tool name and never performs a mutation. Permission
+snapshots are short-lived and invalid evidence is not cached.
+
+## Layer 8: write mode
+
+Source: [`middleware/write-preview.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/write-preview.ts)
+
+`MCP_WRITE_MODE=preview` blocks every mutating tool, including ordinary writes,
+after scope and category checks but before a payload approval is issued or
+consumed. Read-only tools continue to the next layer.
+
+## Layer 9: preconditions
 
 Source: [`middleware/precondition.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/precondition.ts)
 
@@ -108,7 +147,7 @@ built-in pieces, but only identifiers in that tool's metadata run:
   - gates destructive tools behind `__confirm:true` + `MCP_DRY_RUN=false`.
 - **`CategoryEnabled`** ([`preconditions/CategoryEnabled.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/CategoryEnabled.ts))
   - remains available for embedders; the built-in server applies the category
-  gate globally in layer 4.
+  gate globally in layer 6.
 
 Preconditions throw structured errors; the handler never runs if any
 precondition fails.
@@ -116,14 +155,28 @@ precondition fails.
 Why before audit: a precondition that rejects (for example, missing confirmation) shouldn't
 audit the tool body - the tool didn't actually execute.
 
-## Layer 6: audit (innermost)
+## Layer 10: payload-bound approval
+
+Source: [`middleware/payload-confirmation.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/payload-confirmation.ts)
+
+`components_v2_send`, `components_v2_edit`, and
+`components_v2_send_from_template` are validated at this narrow seam,
+classified for mentions, URLs, and interactive controls, and fingerprinted
+with canonical SHA-256. The first call returns a redacted preview and
+`payload_hash`; only `MCP_DRY_RUN=false`, `__confirm:true`, and the exact
+`__confirm_hash` plus the unconsumed `__confirm_id` reach the handler. A changed
+payload, expired approval, or replay fails closed. This stage intentionally
+runs after write mode and ordinary preconditions, so a blocked call cannot
+consume an approval that was never eligible to reach the handler.
+
+## Layer 11: audit (innermost)
 
 Source: [`middleware/audit.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/audit.ts)
 
 Captures the redacted args, the result (success / `tool_error` / thrown), the
 duration, and the OTel trace/span IDs (if active). Emits **once per call** to
-the configured sink. Skips calls where `tool.idempotent === true` - read
-patterns are already in telemetry.
+the configured sink for every non-read-only tool. Explicitly read-only calls
+are skipped; idempotent writes remain auditable.
 
 Why innermost: audit is meaningful only for actually-attempted operations.
 A call rejected by validation or preconditions never reaches the handler;
@@ -138,10 +191,15 @@ specific**:
 | ----- | ---- | ----------------- |
 | Telemetry | every call | nothing - always observes |
 | Default guild | raw call plus selected tool schema | no matching field/default |
+| Blueprint target | apply/resume calls | stale or mismatched plan |
 | Validate | defaulted arguments | malformed args |
-| Category gate | validated calls | disallowed category |
-| Preconditions | valid, category-allowed calls | confirmation or custom policy rejection |
-| Audit | calls that passed every earlier stage | skips `idempotent: true` tools |
+| Guild scope | validated calls | target outside allowlist or unresolved scope |
+| Category gate | validated, scope-checked calls | disallowed category |
+| Runtime access | validated, category-allowed calls | missing, partial, or denied bot evidence in `enforce` mode |
+| Write mode | mutating calls | `MCP_WRITE_MODE=preview` |
+| Preconditions | valid, policy-allowed calls | confirmation or custom policy rejection |
+| Payload approval | Components V2 writes | missing or stale payload approval |
+| Audit | calls that passed every earlier stage | skips only explicit `readOnlyHint: true` tools |
 
 Each inner stage assumes the outer guarantees: audit receives a valid,
 category-allowed call; preconditions receive parsed args; validation receives
@@ -160,6 +218,7 @@ interface MiddlewareContext<Args = unknown> {
   readonly tool: { name: string; category: string; idempotent: boolean };
   readonly args: Args;
   readonly meta: Map<string, unknown>;
+  readonly signal?: AbortSignal;
 }
 ```
 
@@ -177,6 +236,6 @@ validated arguments; cover that ordering decision with a dispatcher-level test.
 ## Related
 
 - [Operations → Telemetry](/discord-mcp/operations/telemetry/) - the metrics emitted by layer 1.
-- [Operations → Audit](/discord-mcp/operations/audit/) - the AuditEvent schema emitted by layer 6.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - the precondition behavior in layer 5.
+- [Operations → Audit](/discord-mcp/operations/audit/) - the AuditEvent schema emitted by layer 10.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - the confirmation behavior in layers 9-10.
 - [Architecture → Error handling](/discord-mcp/architecture/error-handling/) - how layer-thrown errors surface to the client.

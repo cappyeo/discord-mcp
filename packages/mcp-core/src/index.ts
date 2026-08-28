@@ -1,11 +1,72 @@
 import packageJson from '../package.json' with { type: 'json' };
 
+export {
+  type BotChannelSnapshot,
+  type BotMemberSnapshot,
+  type BotPermissionEvaluation,
+  type BotRoleSnapshot,
+  evaluateBotPermissions,
+} from './access/evaluator.js';
+export {
+  type DiscordIntent,
+  type DiscordIntentPlan,
+  type IntentPlanRequest,
+  type IntentPlanStep,
+  planDiscordIntent,
+} from './access/intent-plan.js';
+export {
+  type AccessCondition,
+  type AccessScope,
+  type AccessVerification,
+  type AuthKind,
+  auditToolAccessCoverage,
+  BLUEPRINT_GUILD_ACCESS,
+  BOT_APPLICATION_ACCESS,
+  BOT_APPLICATION_READ_ACCESS,
+  CHANNEL_READ_ACCESS,
+  CHANNEL_WRITE_ACCESS,
+  DISCORD_PERMISSION_BITS,
+  DISCORD_PERMISSION_NAMES,
+  type DiscordAccessRequirement,
+  type DiscordPermissionName,
+  EXTERNAL_ACCESS,
+  GATEWAY_INTENT_NAMES,
+  type GatewayIntentName,
+  GUILD_READ_ACCESS,
+  getToolAccessRequirement,
+  LOCAL_ACCESS,
+  listKnownToolAccessRequirements,
+  OPAQUE_TOKEN_ACCESS,
+  PUBLIC_GUILD_ACCESS,
+  resolveToolAccessRequirement,
+  type ToolAccessCoverageEntry,
+  type ToolAccessRequirement,
+  USER_SCOPED_ACCESS,
+} from './access/requirements.js';
+export {
+  createRuntimeAccessResolver,
+  type RuntimeAccessResolverHandle,
+  type RuntimeAccessResolverOptions,
+} from './access/resolver.js';
+export {
+  type AccessEvidenceStatus,
+  type AccessMode,
+  evaluateRuntimeAccess,
+  type HierarchyEvidenceStatus,
+  type RuntimeAccessDecision,
+  type RuntimeAccessEvidence,
+  type RuntimeAccessRequest,
+  type RuntimeAccessResolver,
+  runtimeAccessRequirement,
+  runtimeAccessRequirementForArgs,
+} from './access/runtime.js';
 // AsyncLocalStorage
 export { getCtx, runWithCtx, type ToolRequestContext, tryGetCtx } from './als/context.js';
 // Audit (Plan 8 Phase E)
 export { redactArgs } from './audit/redact.js';
 export type { AuditEvent } from './audit/schema.js';
 export {
+  type AuditLogEmitter,
   type AuditSink,
   createAuditSink,
   DEFAULT_AUDIT_FILE,
@@ -34,10 +95,21 @@ export {
   DiscordRateLimitError,
   DiscordServerError,
   DiscordServerErrorImpl,
+  DmConsentRejected,
+  DmConsentRequired,
+  DmOutcomeUnknown,
   DryRunPreview,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
   InternalError,
+  PayloadConfirmationApprovalExpired,
+  PayloadConfirmationApprovalMismatch,
+  PayloadConfirmationApprovalMissing,
+  PayloadConfirmationApprovalReplayed,
+  PayloadConfirmationMismatch,
+  PayloadConfirmationRequired,
+  RuntimeAccessDeniedError,
+  RuntimeAccessUnknownError,
   ScopeRejectedError,
   ValidationError,
   type ValidationIssue,
@@ -62,12 +134,32 @@ export {
   type MiddlewareToolInfo,
   type ToolMiddleware,
 } from './middleware/compose.js';
+export { dmConsentMiddleware } from './middleware/dm-consent.js';
+export {
+  type ComponentsV2Review,
+  FilePayloadApprovalLedger,
+  type PayloadApprovalBinding,
+  PayloadApprovalLedger,
+  type PayloadApprovalLedgerLike,
+  type PayloadConfirmationOptions,
+  payloadConfirmationMiddleware,
+  reviewComponentsV2,
+} from './middleware/payload-confirmation.js';
 export { preconditionMiddleware } from './middleware/precondition.js';
+export {
+  type RuntimeAccessMiddlewareOptions,
+  runtimeAccessMiddleware,
+} from './middleware/runtime-access.js';
 export { telemetryMiddleware } from './middleware/telemetry.js';
 export { validateMiddleware } from './middleware/validate.js';
 export { Precondition } from './pieces/Precondition.js';
 // Pieces
-export { Tool, type ToolAnnotations, type ToolRunContext } from './pieces/Tool.js';
+export {
+  Tool,
+  type ToolAnnotations,
+  type ToolConfirmation,
+  type ToolRunContext,
+} from './pieces/Tool.js';
 // Pipeline
 export {
   executePipeline,
@@ -107,6 +199,10 @@ export { buildResource } from './telemetry/resource.js';
 // Tool helpers
 export { defineTool, type ToolDefinition } from './tools/_lib/defineTool.js';
 export { type CursorPayload, decodeCursor, encodeCursor } from './tools/_lib/pagination.js';
+export {
+  canonicalizePayload,
+  fingerprintPayload,
+} from './tools/_lib/payload-fingerprint.js';
 export { type DualResultOpts, dualResult } from './tools/_lib/response.js';
 export {
   ApplicationId,

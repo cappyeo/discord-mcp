@@ -26,10 +26,11 @@ your agent needs.
 Discord. When set, the server verifies `/users/@me` before serving MCP and
 caches the successful result for the process. Keep the value stable during a
 normal token rotation; a mismatch usually means the wrong application's token
-was supplied. This identity lock also authorizes the application-emoji write
-surface when `ALLOWED_GUILDS` is active: those tools can affect the bot's
-application globally, never another application. See [Credential
-lifecycle](/discord-mcp/operations/credentials/).
+was supplied. This identity lock authorizes every bot-application route
+(application emojis, application commands, role-connection metadata, SKUs,
+entitlements, and the current application): those tools can affect the bot's
+application globally, never another application. They require the lock even
+when `ALLOWED_GUILDS` is unset. See [Credential lifecycle](/discord-mcp/operations/credentials/).
 
 ## Remote HTTP credential
 
@@ -130,7 +131,7 @@ readable.
 When the boundary is active, global writes and interaction-token routes whose
 guild cannot be proven before execution are omitted from `tools/list` and
 rejected on direct calls with `GUILD_SCOPE_UNRESOLVED`. A known but disallowed
-guild returns `GUILD_NOT_ALLOWED`. The application-emoji write tools are a
+guild returns `GUILD_NOT_ALLOWED`. The application-emoji operations are a
 bot-scoped exception when `DISCORD_EXPECTED_BOT_ID` is set: they may target only
 the locked bot application (and may omit `application_id` to resolve it from
 `/applications/@me`). Other application/global writes remain unavailable.
@@ -163,7 +164,7 @@ startup with the valid list instead of silently disabling a tool surface. The
 - **Use:** Controls how much of the already-authorized catalog is advertised to the model.
 - **Example:** `MCP_TOOL_SURFACE=progressive`
 
-`full` advertises the existing 208-tool catalog for maximum client
+`full` advertises the existing 209-tool catalog for maximum client
 compatibility. `progressive` advertises the direct read-only
 `build_discord_server` architecture front door plus `guild_blueprint_apply` and
 `guild_blueprint_evidence` when guild architecture is authorized, together with
@@ -184,3 +185,50 @@ by `ALLOWED_GUILDS` and `MCP_CATEGORIES`, and every dispatched call still passes
 validation, guild scope, category, confirmation, dry-run, audit, and resilience
 middleware. Keep both allowlists narrow even when progressive discovery is
 enabled.
+
+The current catalogues classify all 209 tools. Fifteen contracts are
+colocated directly on tool definitions; a reviewed central registry covers all
+208 Discord routes for credential-free reports. The `users_create_dm` route is
+`scope: user` and has a separate recipient-bound caller-approval policy
+controlled by `MCP_DM_CONSENT_MODE`; `require` enforces a one-time approval.
+The three blueprint
+lifecycle tools are marked as delegated because their own target-bound
+permission, drift, and readback verifiers remain authoritative. Unknown is
+never treated as ready.
+
+For a read-only capability report before a planned write, run
+`discord-mcp doctor --access --guild-id <guild-id> --json`. It verifies the
+locked bot identity, guild membership, role bitfields, optional channel
+overwrites, and the privileged intent flags visible on the application. The
+`intents` object keeps that application-side approval/availability separate
+from the privileged intents requested by this running Gateway client; the
+current client requests none of those privileged intents, so application flags
+must not be read as proof of runtime Gateway state. The report is advisory in
+this rollout: `unknown` evidence is kept separate from `denied`, and it does
+not replace the server-side authorization middleware. `tool_access` is an
+explicitly labelled catalogued subset (`tool_access_scope: catalogued_subset`,
+with its `tool_access_catalogued_count`). Future tools absent from the reviewed
+catalog are reported as unknown rather than silently admitted.
+
+For field-dependent tools such as `members_modify`, the report uses
+`conditional` until an exact action payload is available; the runtime gate then
+derives only the permissions for fields that are actually present.
+
+Message readers and intelligence tools that return user-authored message
+content also declare `MESSAGE_CONTENT`. The runtime gate does not infer this
+from a successful REST response: without explicit privileged-intent evidence,
+`enforce` keeps the call unresolved or denied.
+
+The permission catalogue tracks Discord's current split permissions: guild
+emoji/sticker/sound creation uses `CREATE_GUILD_EXPRESSIONS`, scheduled-event
+creation uses `CREATE_EVENTS`, pin/unpin uses `PIN_MESSAGES`, and stage-instance
+operations include the full moderator set (`MANAGE_CHANNELS`, `MUTE_MEMBERS`, and
+`MOVE_MEMBERS`). This keeps the preflight report aligned with the
+post-February-2026 Discord API rather than silently treating older manage-only
+permissions as sufficient.
+
+When `ALLOWED_GUILDS` is active, `users_create_dm` stays hidden by default
+because a guild allowlist is not consent to contact arbitrary users. Set
+`MCP_ALLOW_USER_SCOPED=true` together with `DISCORD_EXPECTED_BOT_ID` only when
+the deployment intentionally exposes user-scoped DM creation; the separate DM
+caller-approval gate still applies.

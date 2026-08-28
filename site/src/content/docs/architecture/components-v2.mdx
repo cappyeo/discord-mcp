@@ -104,9 +104,20 @@ displays it: container borders as box-drawing characters, sections as
 indented blocks, action rows as `[Button] [Select▼]` stubs. Useful for the
 agent to **sanity-check the layout** before spending a `send` call.
 
-`components_v2_send_from_template` does not return a preview. Its structured
-result contains `message_id`, `channel_id`, `jump_url`, and `template`; use
-`components_v2_preview` separately when a human needs to inspect a custom tree.
+`components_v2_send_from_template` resolves variables inside the shared
+approval middleware, so its first call returns the same bounded review and
+`payload_hash` contract. `components_v2_preview` remains useful when a human
+wants a rendered text approximation before starting that flow.
+
+`components_v2_send`, `components_v2_edit`, and
+`components_v2_send_from_template` add a server-side approval
+boundary after validation. The first call returns a redacted payload plus a
+bounded structural review, `payload_hash`, and one-time `approval_id` with an
+expiry; execute only after arming the server with `MCP_DRY_RUN=false` and
+repeating the exact call with `__confirm:true`, that `__confirm_hash`, and
+`__confirm_id`. Changing even one payload value invalidates the approval. For
+template sends, the hash covers the fully interpolated component tree and
+target channel. The approval is consumed once before the handler runs.
 
 ## The templates
 
@@ -157,4 +168,4 @@ mutually exclusive with the legacy embed path.
 
 - [`components-v2-announcement` recipe](/discord-mcp/recipes/components-v2-announcement/) - full end-to-end build + validate + send.
 - [Architecture → Pipeline](/discord-mcp/architecture/pipeline/) - chain a V2 send with later role and event calls in one sequential request.
-- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - note that `components_v2_send` / `_edit` / `_send_from_template` are **not** confirm-gated: they write to the channel on the first call, with no `__confirm` and regardless of `MCP_DRY_RUN`.
+- [Architecture → Confirmation](/discord-mcp/architecture/confirmation/) - the exact payload-hash approval for `components_v2_send` / `_edit` / `_send_from_template`, alongside the legacy `__confirm` gate for destructive tools.

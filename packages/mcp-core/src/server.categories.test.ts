@@ -3,7 +3,7 @@
  *
  * It was advertised in two published doc pages and in an error recovery hint,
  * but the `category_enabled` precondition that implemented it was referenced
- * by zero of the 208 tools, so the variable restricted nothing: an operator
+ * by zero of the 209 tools, so the variable restricted nothing: an operator
  * who set `MCP_CATEGORIES=messages` still shipped a server that could ban
  * members and delete channels.
  *
@@ -56,7 +56,7 @@ describe('MCP_CATEGORIES allowlist', () => {
     expect(names).not.toContain('inspiration_emoji_gg_search');
     // meta stays reachable so introspection does not vanish on a scoped deploy.
     expect(names).toContain('mcp_pipeline');
-    expect(tools.length).toBeLessThan(208);
+    expect(tools.length).toBeLessThan(209);
   });
 
   it('rejects a disallowed tool called by name, not just hidden from the list', async () => {
@@ -91,14 +91,14 @@ describe('MCP_CATEGORIES validation and defaults', () => {
   it('allows everything when unset', async () => {
     const client = await connect(BASE_ENV);
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(208);
+    expect(tools.length).toBe(209);
     await client.close();
   });
 
   it('allows everything when blank', async () => {
     const client = await connect({ ...BASE_ENV, MCP_CATEGORIES: '   ' });
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(208);
+    expect(tools.length).toBe(209);
     await client.close();
   });
 
@@ -128,7 +128,7 @@ describe('MCP_CATEGORIES validation and defaults', () => {
     await client.close();
   });
 
-  it('exposes bot-scoped application emoji writes when the bot identity is locked', async () => {
+  it('exposes all bot-scoped application emoji operations when the bot identity is locked', async () => {
     const client = await connect({
       ...BASE_ENV,
       ALLOWED_GUILDS: '111122223333444455',
@@ -137,26 +137,54 @@ describe('MCP_CATEGORIES validation and defaults', () => {
       DISCORD_EXPECTED_BOT_ID: '100002088458902020',
     });
     const names = (await client.listTools()).tools.map((tool) => tool.name);
-    expect(names).toContain('app_emojis_create');
-    expect(names).toContain('app_emojis_modify');
-    expect(names).toContain('app_emojis_delete');
+    for (const name of [
+      'app_emojis_list',
+      'app_emojis_get',
+      'app_emojis_create',
+      'app_emojis_modify',
+      'app_emojis_delete',
+    ]) {
+      expect(names).toContain(name);
+    }
     await client.close();
   });
 
-  it('rejects an application emoji write aimed at another application', async () => {
+  it('rejects application emoji operations aimed at another application', async () => {
     const client = await connect({
       ...BASE_ENV,
       ALLOWED_GUILDS: '111122223333444455',
       DISCORD_EXPECTED_BOT_ID: '100002088458902020',
     });
-    const result = await client.callTool({
-      name: 'app_emojis_create',
-      arguments: {
-        application_id: '999000999000999000',
-        name: 'spark',
-        image: 'data:image/png;base64,dGlueQ==',
-      },
-    });
+    for (const [name, arguments_] of [
+      ['app_emojis_list', { application_id: '999000999000999000' }],
+      ['app_emojis_get', { application_id: '999000999000999000', emoji_id: '850000000000000001' }],
+      [
+        'app_emojis_create',
+        {
+          application_id: '999000999000999000',
+          name: 'spark',
+          image: 'data:image/png;base64,dGlueQ==',
+        },
+      ],
+      [
+        'app_emojis_modify',
+        { application_id: '999000999000999000', emoji_id: '850000000000000001', name: 'spark' },
+      ],
+      [
+        'app_emojis_delete',
+        { application_id: '999000999000999000', emoji_id: '850000000000000001', __confirm: true },
+      ],
+    ] as const) {
+      const result = await client.callTool({ name, arguments: arguments_ });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({ code: 'BOT_SCOPE_UNRESOLVED' });
+    }
+    await client.close();
+  });
+
+  it('fails closed for app-emoji access when no bot identity lock is configured', async () => {
+    const client = await connect(BASE_ENV);
+    const result = await client.callTool({ name: 'app_emojis_list', arguments: {} });
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ code: 'BOT_SCOPE_UNRESOLVED' });
     await client.close();

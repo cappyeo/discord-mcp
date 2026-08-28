@@ -22,7 +22,7 @@ for the event schema and redaction policy.
 - **Type:** enum
 - **Allowed:** `stderr`, `file`, `otlp`, `none`
 - **Default:** `stderr`
-- **Use:** Chooses where mutation events go. `stderr` writes JSONL, `file` uses `MCP_AUDIT_FILE`, `otlp` is reserved for the OTLP sink, and `none` is an explicit opt-out.
+- **Use:** Chooses where mutation events go. `stderr` writes JSONL, `file` uses `MCP_AUDIT_FILE`, and `otlp` uses the server-owned OTLP Logs pipeline when `OTEL_ENABLED=true` and an endpoint is configured; otherwise it visibly falls back to stderr. `none` is an explicit opt-out.
 - **Example:** `MCP_AUDIT_SINK=file`
 
 ### `MCP_AUDIT_FILE`

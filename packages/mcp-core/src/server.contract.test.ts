@@ -119,9 +119,9 @@ describe('MCP protocol contract', () => {
     expect(JSON.stringify(r.structuredContent)).toMatch(/name|image/);
   });
 
-  it('lists 208 tools after auto-discovery', async () => {
+  it('lists 209 tools after auto-discovery', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(208);
+    expect(tools.length).toBe(209);
     const names = new Set(tools.map((t) => t.name));
     for (const expected of [
       'messages_send',
@@ -330,12 +330,12 @@ describe('MCP protocol contract', () => {
 
   it('sends instructions that describe the actual tool surface', () => {
     // Was 'v0/Plan-1 - only messages_send available', injected into the
-    // agent's system context on a 208-tool server - actively steering the
+    // agent's system context on a 209-tool server - actively steering the
     // model away from 198 of them.
     const instructions = client.getInstructions() ?? '';
     expect(instructions).not.toContain('only messages_send');
     expect(instructions).not.toContain('Plan-1');
-    expect(instructions).toContain('208 tools');
+    expect(instructions).toContain('209 tools');
     expect(instructions).toContain('guild_blueprint_plan first');
     expect(instructions).toContain('__confirm');
     expect(instructions).toContain('untrusted');
@@ -353,6 +353,45 @@ describe('MCP protocol contract', () => {
     // Ungated tools must not advertise it.
     const ungated = tools.find((t) => t.name === 'messages_send');
     expect(ungated?.inputSchema.properties).not.toHaveProperty('__confirm');
+  });
+
+  it('advertises payload-bound confirmation fields for Components V2 writes', async () => {
+    const { tools } = await client.listTools();
+    for (const name of [
+      'components_v2_send',
+      'components_v2_edit',
+      'components_v2_send_from_template',
+    ]) {
+      const tool = tools.find((entry) => entry.name === name);
+      expect(tool?.inputSchema.properties).toMatchObject({
+        __confirm: { type: 'boolean' },
+        __confirm_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        __confirm_id: { type: 'string', format: 'uuid' },
+      });
+      expect((tool?.inputSchema.required as string[]) ?? []).not.toContain('__confirm_hash');
+    }
+  });
+
+  it('previews a Components V2 write with a payload hash before Discord', async () => {
+    const r = await client.callTool({
+      name: 'components_v2_send',
+      arguments: {
+        channel_id: '112233445566778899',
+        components: [{ type: 10, content: 'review me' }],
+      },
+    });
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent).toMatchObject({
+      code: 'PAYLOAD_CONFIRMATION_REQUIRED',
+      tool: 'components_v2_send',
+      payload_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      approval_id: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      ),
+      approval_expires_at: expect.any(String),
+      risk_flags: [],
+    });
+    expect(JSON.stringify(r.structuredContent)).not.toContain('review me');
   });
 
   it('advertises exactly one local reference or legacy token for blueprint apply', async () => {
@@ -507,6 +546,92 @@ describe('destructive tool authorization (MCP_DRY_RUN=false)', () => {
     expect(r.structuredContent).toMatchObject({ code: 'DRY_RUN_PREVIEW' });
     expect(JSON.stringify(r.structuredContent?.preview)).not.toContain('__confirm');
   });
+
+  it('executes Components V2 only after approving the exact preview hash', async () => {
+    const args = {
+      channel_id: '111122223333444455',
+      components: [{ type: 10, content: 'hash-bound message' }],
+    };
+    const preview = await client.callTool({ name: 'components_v2_send', arguments: args });
+    expect(preview.structuredContent).toMatchObject({
+      code: 'PAYLOAD_CONFIRMATION_REQUIRED',
+    });
+    const payloadHash = (preview.structuredContent as { payload_hash: string }).payload_hash;
+    const approvalId = (preview.structuredContent as { approval_id: string }).approval_id;
+    expect(payloadHash).toMatch(/^[a-f0-9]{64}$/);
+
+    const executed = await client.callTool({
+      name: 'components_v2_send',
+      arguments: {
+        ...args,
+        __confirm: true,
+        __confirm_hash: payloadHash,
+        __confirm_id: approvalId,
+      },
+    });
+    expect(executed.isError).toBe(false);
+    expect(executed.structuredContent).toMatchObject({
+      message_id: '999000999000999000',
+      channel_id: '111122223333444455',
+    });
+  });
+
+  it('rejects a changed Components V2 payload even when the old hash is reused', async () => {
+    const args = {
+      channel_id: '111122223333444455',
+      components: [{ type: 10, content: 'original' }],
+    };
+    const preview = await client.callTool({ name: 'components_v2_send', arguments: args });
+    const payloadHash = (preview.structuredContent as { payload_hash: string }).payload_hash;
+    const approvalId = (preview.structuredContent as { approval_id: string }).approval_id;
+    const changed = await client.callTool({
+      name: 'components_v2_send',
+      arguments: {
+        ...args,
+        components: [{ type: 10, content: 'changed' }],
+        __confirm: true,
+        __confirm_hash: payloadHash,
+        __confirm_id: approvalId,
+      },
+    });
+    expect(changed.structuredContent).toMatchObject({
+      code: 'PAYLOAD_CONFIRMATION_MISMATCH',
+    });
+  });
+
+  it('binds template sends to the hash of their interpolated component tree', async () => {
+    const args = {
+      channel_id: '111122223333444455',
+      template: 'announcement',
+      vars: {
+        title: 'Release',
+        body: 'Hash-bound template',
+        cta_label: 'Read more',
+        cta_url: 'https://example.test/release',
+      },
+    };
+    const preview = await client.callTool({
+      name: 'components_v2_send_from_template',
+      arguments: args,
+    });
+    expect(preview.structuredContent).toMatchObject({
+      code: 'PAYLOAD_CONFIRMATION_REQUIRED',
+      risk_flags: expect.arrayContaining(['external_urls', 'interactive_components']),
+    });
+    const payloadHash = (preview.structuredContent as { payload_hash: string }).payload_hash;
+    const approvalId = (preview.structuredContent as { approval_id: string }).approval_id;
+    const executed = await client.callTool({
+      name: 'components_v2_send_from_template',
+      arguments: {
+        ...args,
+        __confirm: true,
+        __confirm_hash: payloadHash,
+        __confirm_id: approvalId,
+      },
+    });
+    expect(executed.isError).toBe(false);
+    expect(executed.structuredContent).toMatchObject({ template: 'announcement' });
+  });
 });
 
 describe('all-write preview authorization (MCP_WRITE_MODE=preview)', () => {
@@ -543,6 +668,21 @@ describe('all-write preview authorization (MCP_WRITE_MODE=preview)', () => {
       tool: 'channels_create_guild_channel',
       preview: { guild_id: '111122223333444455', name: 'preview-only' },
     });
+  });
+
+  it('blocks Components V2 before issuing a payload approval in global preview mode', async () => {
+    const r = await client.callTool({
+      name: 'components_v2_send',
+      arguments: {
+        channel_id: '111122223333444455',
+        components: [{ type: 10, content: 'preview-only' }],
+      },
+    });
+    expect(r.structuredContent).toMatchObject({
+      code: 'WRITE_PREVIEW',
+      tool: 'components_v2_send',
+    });
+    expect(JSON.stringify(r.structuredContent)).not.toContain('approval_id');
   });
 
   it('does not block read-only operations', async () => {

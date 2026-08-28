@@ -87,9 +87,9 @@
  *
  *   MCP Resources caveat:
  *     quadslab exposes MCP resources (per its README) through the
- *     server-level resource surface, not a tool. discord-mcp's Gateway can
- *     emit experimental subscription notifications, but it does not expose
- *     quadslab's live URIs through `resources/list` or `resources/read`.
+ *     server-level resource surface, not a tool. discord-mcp's Gateway now
+ *     lists/reads an allowlisted guild-info snapshot and emits experimental
+ *     notifications; other live URI families remain notification-only.
  *     Resource subscriptions are NOT tools and do not appear in
  *     `<category>Tools` arrays, so they are out of scope for this adapter.
  *

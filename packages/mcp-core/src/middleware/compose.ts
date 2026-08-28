@@ -8,6 +8,8 @@ export interface MiddlewareContext<Args = unknown> {
   readonly tool: MiddlewareToolInfo;
   readonly args: Args;
   readonly meta: Map<string, unknown>;
+  /** Caller cancellation signal, when the embedding has one. */
+  readonly signal?: AbortSignal;
 }
 
 export type CallNext<Args = unknown, R = unknown> = (ctx: MiddlewareContext<Args>) => Promise<R>;

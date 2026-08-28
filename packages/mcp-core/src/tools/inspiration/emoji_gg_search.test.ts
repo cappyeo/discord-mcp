@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import emojiGgSearch, { resetEmojiGgCatalogCache } from './emoji_gg_search.js';
 
 const catalog = [
   {
@@ -58,10 +59,8 @@ const catalog = [
 ];
 
 async function runSearch(query: string, limit = 8) {
-  vi.resetModules();
-  const { default: emojiGgSearch } = await import('./emoji_gg_search.js');
-  const Tool = emojiGgSearch;
-  const tool = new Tool(
+  resetEmojiGgCatalogCache();
+  const tool = new emojiGgSearch(
     { name: 'inspiration_emoji_gg_search', path: 'inline', root: 'inline', store: null as never },
     { name: 'inspiration_emoji_gg_search', enabled: true },
   );

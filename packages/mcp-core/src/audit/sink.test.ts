@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config.js';
 import type { AuditEvent } from './schema.js';
 import {
+  type AuditLogEmitter,
   createAuditSink,
   FileAuditSink,
   NoopAuditSink,
@@ -114,6 +115,33 @@ describe('FileAuditSink', () => {
       .filter((l) => l.length > 0);
     expect(lines).toHaveLength(1);
   });
+
+  it('swallows synchronous stream write failures', async () => {
+    const file = join(dir, 'audit-write-error.jsonl');
+    const sink = new FileAuditSink(file);
+    const stream = sink as unknown as {
+      stream: { write: () => void; end: (cb: () => void) => void };
+    };
+    stream.stream.write = () => {
+      throw new Error('write failed');
+    };
+    await expect(sink.emit(sampleEvent)).resolves.toBeUndefined();
+    await sink.shutdown();
+  });
+
+  it('reports asynchronous stream errors without throwing', async () => {
+    const file = join(dir, 'audit-stream-error.jsonl');
+    const sink = new FileAuditSink(file);
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const stream = sink as unknown as {
+      stream: { emit: (event: string, error: Error) => boolean };
+    };
+    stream.stream.emit('error', new Error('stream failed'));
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(String(writeSpy.mock.calls[0]?.[0])).toContain('audit file sink stream error');
+    writeSpy.mockRestore();
+    await sink.shutdown();
+  });
 });
 
 describe('NoopAuditSink', () => {
@@ -126,7 +154,7 @@ describe('NoopAuditSink', () => {
   });
 });
 
-describe('OtlpAuditSink (Phase E stub)', () => {
+describe('OtlpAuditSink', () => {
   let writeSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -147,6 +175,40 @@ describe('OtlpAuditSink (Phase E stub)', () => {
     const parsed = JSON.parse(json) as { level: string; tool: string };
     expect(parsed.level).toBe('audit');
     expect(parsed.tool).toBe('messages_send');
+  });
+
+  it('delegates to an injected emitter without writing the audit event to stderr', async () => {
+    const emitter: AuditLogEmitter = { emit: vi.fn() };
+    const sink = new OtlpAuditSink(emitter);
+    await sink.emit(sampleEvent);
+    expect(emitter.emit).toHaveBeenCalledWith(sampleEvent);
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the injected emitter fails and flushes on shutdown', async () => {
+    const emitter: AuditLogEmitter = {
+      emit: vi.fn().mockRejectedValue(new Error('collector down')),
+      forceFlush: vi.fn().mockRejectedValue(new Error('flush failed')),
+    };
+    const sink = new OtlpAuditSink(emitter);
+    await expect(sink.emit(sampleEvent)).resolves.toBeUndefined();
+    await expect(sink.shutdown()).resolves.toBeUndefined();
+    expect(emitter.emit).toHaveBeenCalledOnce();
+    expect(emitter.forceFlush).toHaveBeenCalledOnce();
+    expect(writeSpy).toHaveBeenCalledTimes(2);
+    expect(String(writeSpy.mock.calls[0]?.[0])).not.toContain('messages_send');
+  });
+
+  it('keeps emitter warning handling best-effort even when stderr is closed', async () => {
+    const emitter: AuditLogEmitter = {
+      emit: vi.fn().mockRejectedValue(new Error('collector down')),
+    };
+    const sink = new OtlpAuditSink(emitter);
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => {
+      throw new Error('EPIPE');
+    });
+    await expect(sink.emit(sampleEvent)).resolves.toBeUndefined();
+    writeSpy.mockRestore();
   });
 });
 
@@ -178,6 +240,29 @@ describe('createAuditSink factory', () => {
       MCP_AUDIT_SINK: 'otlp',
     } as NodeJS.ProcessEnv);
     expect(createAuditSink(cfg)).toBeInstanceOf(OtlpAuditSink);
+  });
+
+  it('injects the OTel emitter only at the transport boundary', () => {
+    const cfg = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      MCP_AUDIT_SINK: 'otlp',
+    } as NodeJS.ProcessEnv);
+    const emitter: AuditLogEmitter = { emit: vi.fn() };
+    const sink = createAuditSink(cfg, { otlpEmitter: emitter });
+    expect(sink).toBeInstanceOf(OtlpAuditSink);
+  });
+
+  it('keeps the explicit fallback when OTLP is selected without a server emitter', async () => {
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const cfg = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      MCP_AUDIT_SINK: 'otlp',
+    } as NodeJS.ProcessEnv);
+    const sink = createAuditSink(cfg);
+    await sink.emit(sampleEvent);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(String(writeSpy.mock.calls[0]?.[0])).toContain('[FALLBACK:logs-pipeline-not-wired]');
+    writeSpy.mockRestore();
   });
 
   it('returns NoopAuditSink when MCP_AUDIT_SINK=none', () => {

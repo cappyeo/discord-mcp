@@ -243,9 +243,7 @@ describe('cli - doctor sub-command (Plan 9 Phase B)', () => {
   });
 
   it('doctor accepts --online without breaking option shape', async () => {
-    // Phase B: --online filters checks but no online checks exist yet, so
-    // running with --online still produces the same offline check set
-    // (offline checks have online: false; --online just lifts the filter).
+    // --online lifts the offline-only filter and runs the live checks.
     await runCli(['doctor', '--online']);
     expect(process.exitCode).toBe(2);
     // --online alone must take the PRETTY path. With a shared program this
@@ -261,6 +259,9 @@ describe('cli - doctor sub-command (Plan 9 Phase B)', () => {
     const out = stdoutOutput();
     expect(out).toContain('--client <id>');
     expect(out).toContain('--config <path>');
+    expect(out).toContain('--access');
+    expect(out).toContain('--guild-id <id>');
+    expect(out).toContain('--channel-id <id>');
   });
 });
 

@@ -1,8 +1,10 @@
 /**
  * Audit event schema (Plan 8 Phase E).
  *
- * One AuditEvent is emitted per **mutating** tool call (`idempotent: false`).
- * Read-only / idempotent tools are skipped - see middleware/audit.ts. The
+ * One AuditEvent is emitted per **mutating** tool call (a tool whose
+ * `annotations.readOnlyHint` is false). Read-only tools are skipped; an
+ * idempotent write is still audited because idempotency describes retry
+ * semantics rather than whether Discord changed. See middleware/audit.ts. The
  * event is JSON-line-encoded and routed through an `AuditSink` (stderr,
  * file, OTLP logs, or no-op).
  *
@@ -10,9 +12,8 @@
  *   - `timestamp`: ISO-8601 UTC (`new Date().toISOString()`).
  *   - `request_id`: per-call UUID from the AsyncLocalStorage request
  *     context. Empty string if no context is active.
- *   - `tool`, `category`, `idempotent`: copied from MiddlewareToolInfo.
- *     `idempotent` is always `false` in practice (we skip the rest), but
- *     we keep the field for downstream consumers that filter by it.
+ *   - `tool`, `category`, `idempotent`: copied from MiddlewareToolInfo. The
+ *     idempotent value may be true for an audited idempotent write.
  *   - `args_redacted`: tool args after `redactArgs(args, toolName)` -
  *     Phase E ships a placeholder global redactor (see audit/redact.ts);
  *     Phase F adds per-tool sensitive keys.

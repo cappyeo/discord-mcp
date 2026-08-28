@@ -193,6 +193,8 @@ function makeResults(manifest = makeManifest()) {
     plan_snapshot_unchanged: true,
     progressive_discovery_succeeded: true,
     dry_run_observed_before_apply: true,
+    apply_result_loss_observed: false,
+    apply_result_loss_recovered: false,
     forced_resume_observed: trial.mode === 'forced_resume' ? true : null,
     operations_planned: 25,
     apply_calls: trial.mode === 'forced_resume' ? 2 : 1,
@@ -308,7 +310,10 @@ test('accepts the canonical 20-trial manifest and reports truthful guild reuse',
     success_rate: 1,
     serious_permission_failures: 0,
     safety_cases_passed: true,
+    apply_result_loss_cases: 0,
+    apply_result_loss_recoveries: 0,
     gate_passed: true,
+    verified_correctness_gate_passed: false,
   });
 });
 
@@ -544,7 +549,10 @@ test('computes the 95 percent and zero-serious-failure gate from observed result
     success_rate: 0.95,
     serious_permission_failures: 0,
     safety_cases_passed: true,
+    apply_result_loss_cases: 0,
+    apply_result_loss_recoveries: 0,
     gate_passed: true,
+    verified_correctness_gate_passed: false,
   });
 
   const seriousFailure = makeResults(manifest);
@@ -579,6 +587,22 @@ test('computes the 95 percent and zero-serious-failure gate from observed result
     createBenchmarkReport(manifest, makeResults(manifest), failedSafety).summary.gate_passed,
     false,
   );
+});
+
+test('requires recovery after an apply response is known to be lost after mutation', () => {
+  const results = makeResults();
+  results[0].apply_result_loss_observed = true;
+  results[0].apply_result_loss_recovered = false;
+  results[0].oracle_match = false;
+  const report = createBenchmarkReport(makeManifest(), results, safetyCases());
+  assert.equal(report.summary.gate_passed, true);
+  assert.equal(report.summary.verified_correctness_gate_passed, false);
+
+  results[0].apply_result_loss_recovered = true;
+  results[0].oracle_match = true;
+  const recovered = createBenchmarkReport(makeManifest(), results, safetyCases());
+  assert.equal(recovered.summary.gate_passed, true);
+  assert.equal(recovered.summary.verified_correctness_gate_passed, true);
 });
 
 test('rejects caller-asserted success that disagrees with lifecycle or safety evidence', () => {

@@ -371,6 +371,51 @@ describe('shared activation live adapter', () => {
     });
   });
 
+  it('marks an unsettled host process and refuses to claim cleanup certainty', async () => {
+    const processError = Object.assign(new Error('host process did not close'), {
+      code: 'CLAUDE_CODE_PROCESS_DID_NOT_CLOSE',
+    });
+    const responses = [
+      { stdout: '2.1.228', exitCode: 0, signal: null },
+      { stdout: 'initial', exitCode: 0, signal: null },
+      Promise.resolve().then(() => {
+        throw processError;
+      }),
+    ];
+    const { adapter } = createAdversarialAdapter({
+      responses,
+      parseJsonl: (stdout) =>
+        stdout === 'initial'
+          ? normalized(SESSION_ID, 'build_discord_server', CLAUDE_CODE_TOOLS.initial, plan())
+          : { malformed_json_lines: 0 },
+      classifyInitial: () => 'pass',
+      classifyResume: () => 'pass',
+    });
+    const target = { guildId: GUILD_ID, botId: BOT_ID };
+    const session = await adapter.launch({
+      release: '0.24.0',
+      hostVersion: '2.1.228',
+      target,
+      installRoot: 'C:/install',
+      install: { cliDigest: digest('cli'), coreDigest: digest('core') },
+      stateDirectory: 'C:/state',
+      configPath: 'C:/state/mcp.json',
+      env: { DISCORD_TOKEN: TOKEN },
+      binding: target,
+      registerSession: () => {},
+    });
+
+    await expect(adapter.apply({ session, target, binding: target })).rejects.toThrow(
+      'host process did not close',
+    );
+    expect(session.unsettled).toBe(true);
+    await expect(adapter.closeSession({ session })).resolves.toMatchObject({
+      settled: false,
+      closed: true,
+      authRemoved: true,
+    });
+  });
+
   it('does not let a dishonest classifier bypass a wrong qualified tool', async () => {
     const responses = [
       { stdout: '2.1.228', exitCode: 0, signal: null },

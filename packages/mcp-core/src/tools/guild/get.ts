@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { GUILD_READ_ACCESS } from '../../access/requirements.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, UserId } from '../_lib/snowflake.js';
@@ -21,6 +22,7 @@ interface RawGuild {
 export default defineTool({
   name: 'guild_get',
   category: 'guild',
+  access: GUILD_READ_ACCESS,
   description:
     '**Purpose**: Fetch guild metadata.\n\n**When to use**: server overview; compute boost-tier-dependent caps.\n\n**Returns**: `{id, name, icon, owner_id, member_count, description, premium_tier, preferred_locale, features}`. Structured `name` and `description` remain raw server-owner data; the human-readable text response fences them.',
   inputSchema: {

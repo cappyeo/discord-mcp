@@ -18,6 +18,17 @@ export interface AuditSink {
 }
 
 /**
+ * Transport-neutral adapter used when the server owns an OpenTelemetry logs
+ * provider. Core deliberately knows only this small boundary; importing an
+ * OTel SDK here would force every embedders' dependency graph to include it.
+ */
+export interface AuditLogEmitter {
+  emit(event: AuditEvent): void | Promise<void>;
+  /** Flush buffered records without taking ownership of provider shutdown. */
+  forceFlush?(): Promise<void>;
+}
+
+/**
  * StderrAuditSink - writes one JSON line to `process.stderr` per event,
  * with a `level: 'audit'` field so log aggregators can route audit
  * records separately from app logs.
@@ -86,23 +97,53 @@ export class FileAuditSink implements AuditSink {
 }
 
 /**
- * OtlpAuditSink - STUB (Plan 8 Phase E).
- *
- * Phase E does not wire `@opentelemetry/api-logs` LoggerProvider - that
- * requires extending mcp-server/otel.ts to add a logs exporter pipeline,
- * which is deferred to Phase F (or later). This stub falls back to
- * stderr, prefixing each line with `[FALLBACK:logs-pipeline-not-wired]`
- * so operators can see they configured `MCP_AUDIT_SINK=otlp` without a
- * real exporter behind it.
+ * OtlpAuditSink - a transport-neutral adapter for the server-owned OTel logs
+ * provider. When no emitter is injected (for example an embedding that only
+ * imports core, or OTEL is disabled), it keeps the explicit stderr fallback so
+ * selecting `MCP_AUDIT_SINK=otlp` never silently drops audit events.
  */
 export class OtlpAuditSink implements AuditSink {
+  public constructor(private readonly emitter?: AuditLogEmitter) {}
+
   async emit(event: AuditEvent): Promise<void> {
+    if (this.emitter !== undefined) {
+      try {
+        await this.emitter.emit(event);
+      } catch {
+        // The audit contract is best-effort and must never turn a completed
+        // Discord mutation into a tool failure. Do not print the event here:
+        // it may contain sensitive-but-redacted payload metadata.
+        this.writeWarning('otlp audit emitter failed');
+      }
+      return;
+    }
+    this.writeFallback(event);
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.emitter?.forceFlush === undefined) return;
+    try {
+      await this.emitter.forceFlush();
+    } catch {
+      this.writeWarning('otlp audit emitter flush failed');
+    }
+  }
+
+  private writeFallback(event: AuditEvent): void {
     try {
       const line = `[FALLBACK:logs-pipeline-not-wired] ${JSON.stringify({
         level: 'audit',
         ...event,
       })}\n`;
       process.stderr.write(line);
+    } catch {
+      // ignore
+    }
+  }
+
+  private writeWarning(message: string): void {
+    try {
+      process.stderr.write(`${JSON.stringify({ level: 'warn', msg: message })}\n`);
     } catch {
       // ignore
     }
@@ -128,7 +169,10 @@ export class NoopAuditSink implements AuditSink {
  * Same for the explicit `MCP_AUDIT_SINK=none` opt-out. Otherwise
  * dispatch on the enum.
  */
-export function createAuditSink(config: Config): AuditSink {
+export function createAuditSink(
+  config: Config,
+  options: { readonly otlpEmitter?: AuditLogEmitter } = {},
+): AuditSink {
   if (!config.MCP_AUDIT_ENABLED) {
     return new NoopAuditSink();
   }
@@ -138,7 +182,7 @@ export function createAuditSink(config: Config): AuditSink {
     case 'file':
       return new FileAuditSink(config.MCP_AUDIT_FILE);
     case 'otlp':
-      return new OtlpAuditSink();
+      return new OtlpAuditSink(options.otlpEmitter);
     default:
       return new StderrAuditSink();
   }

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { BOT_APPLICATION_READ_ACCESS } from '../../access/requirements.js';
 import { resolveApplicationId } from '../_lib/application.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
@@ -15,6 +16,7 @@ interface RawAppEmoji {
 export default defineTool({
   name: 'app_emojis_get',
   category: 'app_emojis',
+  access: BOT_APPLICATION_READ_ACCESS,
   description: [
     '**Purpose**: Fetch a single application emoji.',
     '',

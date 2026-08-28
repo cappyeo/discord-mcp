@@ -14,9 +14,20 @@ import {
   DiscordPermissionError,
   DiscordRateLimitError,
   DiscordServerError,
+  DmConsentRejected,
+  DmConsentRequired,
+  DmOutcomeUnknown,
   ExternalServiceError,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
+  PayloadConfirmationApprovalExpired,
+  PayloadConfirmationApprovalMismatch,
+  PayloadConfirmationApprovalMissing,
+  PayloadConfirmationApprovalReplayed,
+  PayloadConfirmationMismatch,
+  PayloadConfirmationRequired,
+  RuntimeAccessDeniedError,
+  RuntimeAccessUnknownError,
   ScopeRejectedError,
   ValidationError,
 } from './index.js';
@@ -406,6 +417,147 @@ export function formatErrorForUser(e: unknown, ctx: FormatErrorContext): CallToo
         `**Bot Scope Unresolved**: could not prove that \`${e.resource}\` belongs to the locked bot application.\n\n` +
         `**Recovery**: ${e.recoveryHint}`,
       structured: { resource: e.resource },
+    });
+  }
+
+  if (e instanceof RuntimeAccessDeniedError) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'grant the missing bot access, then retry',
+      text:
+        `**Runtime Access Denied** for \`${e.tool}\`.\n\n` +
+        `Missing permissions: ${e.missingPermissions.join(', ') || 'none'}; ` +
+        `missing intents: ${e.missingIntents.join(', ') || 'none'}; ` +
+        `role hierarchy: ${e.hierarchy}.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: {
+        tool: e.tool,
+        missing_permissions: [...e.missingPermissions],
+        missing_intents: [...e.missingIntents],
+        hierarchy: e.hierarchy,
+      },
+    });
+  }
+
+  if (e instanceof RuntimeAccessUnknownError) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'complete an access preflight, then retry',
+      text:
+        `**Runtime Access Unresolved** for \`${e.tool}\`.\n\n` +
+        `No complete permission conclusion was available.\n\n**Recovery**: ${e.recoveryHint}`,
+      structured: { tool: e.tool, reason: e.reason },
+    });
+  }
+
+  if (e instanceof PayloadConfirmationRequired) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'review the preview and confirm the exact payload',
+      text:
+        `**Payload Confirmation Required** for \`${e.tool}\` (no action taken).\n\n` +
+        `Review the bounded component summary and retry with the exact \`payload_hash\`; approval binds the payload supplied in the call.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: {
+        tool: e.tool,
+        payload_hash: e.payloadHash,
+        risk_flags: [...e.riskFlags],
+        approval_id: e.approvalId,
+        approval_expires_at: new Date(e.expiresAt).toISOString(),
+        preview: e.preview,
+      },
+    });
+  }
+
+  if (e instanceof DmConsentRequired) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'review the recipient and provide explicit caller approval',
+      text:
+        `**DM Caller Approval Required** for \`${e.tool}\` (no action taken).\n\n` +
+        `Have the host/operator review recipient \`${e.recipientId}\`, then retry with the exact consent hash and one-time approval ID.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: {
+        tool: e.tool,
+        recipient_id: e.recipientId,
+        consent_hash: e.payloadHash,
+        consent_id: e.approvalId,
+        consent_expires_at: new Date(e.expiresAt).toISOString(),
+      },
+    });
+  }
+
+  if (e instanceof DmConsentRejected) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'request a fresh DM consent preview after caller review',
+      text:
+        `**DM Consent Rejected** for \`${e.tool}\` (no action taken).\n\n` +
+        `The one-time approval is ${e.reason}.\n\n**Recovery**: ${e.recoveryHint}`,
+      structured: { tool: e.tool, reason: e.reason },
+    });
+  }
+
+  if (e instanceof DmOutcomeUnknown) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'verify the DM state before requesting fresh approval',
+      text:
+        `**DM Outcome Unknown** for recipient \`${e.recipientId}\`.\n\n` +
+        'Discord may have opened the DM channel before the response was lost. Do not retry with the consumed approval.\n\n' +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: { recipient_id: e.recipientId, outcome: 'unknown' },
+    });
+  }
+
+  if (e instanceof PayloadConfirmationMismatch) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint: e.recoveryHint ?? 'request a fresh preview and confirm its hash',
+      text:
+        `**Payload Confirmation Mismatch** for \`${e.tool}\` (no action taken).\n\n` +
+        `The approved hash does not match the current payload.\n\n` +
+        `**Recovery**: ${e.recoveryHint}`,
+      structured: {
+        tool: e.tool,
+        payload_hash: e.payloadHash,
+        received_hash: e.receivedHash,
+        risk_flags: [...e.riskFlags],
+        preview: e.preview,
+      },
+    });
+  }
+
+  if (
+    e instanceof PayloadConfirmationApprovalMissing ||
+    e instanceof PayloadConfirmationApprovalReplayed ||
+    e instanceof PayloadConfirmationApprovalExpired ||
+    e instanceof PayloadConfirmationApprovalMismatch
+  ) {
+    return makeError({
+      code: e.code,
+      retriable: false,
+      category: 'client',
+      recoveryHint:
+        e.recoveryHint ?? 'request a fresh payload preview and use its approval ID before expiry',
+      text:
+        `**Payload Approval Rejected** for \`${e.tool}\` (no action taken).\n\n` +
+        `**Recovery**: ${e.recoveryHint ?? 'request a fresh payload preview and use its approval ID before expiry'}`,
+      structured: { tool: e.tool, approval_id: e.approvalId },
     });
   }
 

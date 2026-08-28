@@ -6,7 +6,7 @@ vi.mock('../transports/catalog.js', () => ({
 vi.mock('./catalog-check.js', () => ({
   runCatalogCheck: vi.fn(async () => ({
     schema_version: 'discord-mcp.catalog-check.v1',
-    tool_count: 208,
+    tool_count: 209,
     resource_count: 6,
     execution_guard: 'CATALOG_ONLY',
     credentials_required: false,
@@ -27,7 +27,7 @@ describe('catalogAction', () => {
     vi.mocked(runCatalogCheck).mockClear();
     vi.mocked(runCatalogCheck).mockResolvedValue({
       schema_version: 'discord-mcp.catalog-check.v1',
-      tool_count: 208,
+      tool_count: 209,
       resource_count: 6,
       execution_guard: 'CATALOG_ONLY',
       credentials_required: false,
@@ -73,7 +73,7 @@ describe('catalogAction', () => {
         summary: 'Credential-free MCP catalog check passed',
         data: {
           schema_version: 'discord-mcp.catalog-check.v1',
-          tool_count: 208,
+          tool_count: 209,
           resource_count: 6,
           execution_guard: 'CATALOG_ONLY',
           credentials_required: false,

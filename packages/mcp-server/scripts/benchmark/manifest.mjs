@@ -131,6 +131,8 @@ const RESULT_KEYS = new Set([
   'plan_snapshot_unchanged',
   'progressive_discovery_succeeded',
   'dry_run_observed_before_apply',
+  'apply_result_loss_observed',
+  'apply_result_loss_recovered',
   'forced_resume_observed',
   'operations_planned',
   'apply_calls',
@@ -598,6 +600,10 @@ function evidencePassesTemplateAndActivity(result, trial = null) {
   );
 }
 
+function applyResultLossEvidencePass(result) {
+  return result.apply_result_loss_observed !== true || result.apply_result_loss_recovered === true;
+}
+
 export function resultEvidencePass(result, trial = null) {
   const restartPass =
     result.mode === 'forced_resume'
@@ -614,6 +620,7 @@ export function resultEvidencePass(result, trial = null) {
     result.evidence_status === 'verified' &&
     result.progressive_discovery_succeeded === true &&
     result.dry_run_observed_before_apply === true &&
+    applyResultLossEvidencePass(result) &&
     result.audit_trail_complete === true &&
     result.audit_entry_count > 0 &&
     result.baseline_verified_before === true &&
@@ -896,6 +903,11 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
           resultErrors.push(`${path}.${field}: must be boolean`);
         }
       }
+      for (const field of ['apply_result_loss_observed', 'apply_result_loss_recovered']) {
+        if (result[field] !== undefined && typeof result[field] !== 'boolean') {
+          resultErrors.push(`${path}.${field}: must be boolean when present`);
+        }
+      }
       if (
         result.forced_resume_observed !== null &&
         typeof result.forced_resume_observed !== 'boolean'
@@ -1042,6 +1054,21 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
     0,
   );
   const safetyCasesPassed = safetyCases.every((safetyCase) => safetyCase.passed);
+  const applyResultLossCases = trialResults.filter(
+    (result) => result.apply_result_loss_observed === true,
+  ).length;
+  const applyResultLossRecoveries = trialResults.filter(
+    (result) =>
+      result.apply_result_loss_observed === true && result.apply_result_loss_recovered === true,
+  ).length;
+  const verifiedCorrectnessGatePassed =
+    eligible === 20 &&
+    completed === 20 &&
+    seriousPermissionFailures === 0 &&
+    safetyCasesPassed &&
+    applyResultLossCases > 0 &&
+    applyResultLossCases === applyResultLossRecoveries &&
+    trialResults.every(applyResultLossEvidencePass);
 
   return {
     schema_version: REPORT_SCHEMA,
@@ -1065,8 +1092,11 @@ export function createBenchmarkReport(manifest, trialResults = [], safetyCases =
       success_rate: eligible === 0 ? 0 : completed / eligible,
       serious_permission_failures: seriousPermissionFailures,
       safety_cases_passed: safetyCasesPassed,
+      apply_result_loss_cases: applyResultLossCases,
+      apply_result_loss_recoveries: applyResultLossRecoveries,
       gate_passed:
         eligible === 20 && completed >= 19 && seriousPermissionFailures === 0 && safetyCasesPassed,
+      verified_correctness_gate_passed: verifiedCorrectnessGatePassed,
     },
   };
 }

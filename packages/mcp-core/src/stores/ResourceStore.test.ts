@@ -75,4 +75,71 @@ describe('ResourceStore', () => {
     expect(la.length).toBe(lb.length);
     expect(la.map((r) => r.uri).sort()).toEqual(lb.map((r) => r.uri).sort());
   });
+
+  it('lists and reads an allowlisted live guild snapshot with bounded caching', async () => {
+    const guildId = '111122223333444455';
+    const uri = `discord://guild/${guildId}/info`;
+    let calls = 0;
+    let version = 1;
+    let now = 1_000;
+    const authorized: string[] = [];
+    const store = new ResourceStore({
+      guildIds: [guildId],
+      now: () => now,
+      cacheTtlMs: 5_000,
+      authorize: (target) => authorized.push(target),
+      readGuildInfo: async (id) => ({ id, name: `Guild ${version++}` }),
+    });
+
+    expect((await store.list()).map((resource) => resource.uri)).toContain(uri);
+    const first = await store.read(uri);
+    const second = await store.read(uri);
+    expect(first).not.toBeNull();
+    expect(JSON.parse(first!.text).data.name).toBe('Guild 1');
+    expect(second).toEqual(first);
+    expect(calls).toBe(0);
+    expect(authorized).toEqual([uri, uri]);
+
+    // Count provider calls separately without changing the cache contract.
+    const live = new ResourceStore({
+      guildIds: [guildId],
+      now: () => now,
+      cacheTtlMs: 5_000,
+      readGuildInfo: async (id) => {
+        calls += 1;
+        return { id, version: calls };
+      },
+    });
+    await live.read(uri);
+    await live.read(uri);
+    expect(calls).toBe(1);
+    now += 5_001;
+    await live.read(uri);
+    expect(calls).toBe(2);
+    live.invalidate(uri);
+    await live.read(uri);
+    expect(calls).toBe(3);
+  });
+
+  it('does not expose dynamic guild URIs without a reader and returns null for them', async () => {
+    const guildId = '111122223333444455';
+    const store = new ResourceStore({ guildIds: [guildId] });
+    expect((await store.list()).map((resource) => resource.uri)).not.toContain(
+      `discord://guild/${guildId}/info`,
+    );
+    expect(await store.read(`discord://guild/${guildId}/info`)).toBeNull();
+  });
+
+  it('refuses an unconfigured guild URI before invoking the reader', async () => {
+    let calls = 0;
+    const store = new ResourceStore({
+      guildIds: ['111122223333444455'],
+      readGuildInfo: async () => {
+        calls += 1;
+        return {};
+      },
+    });
+    expect(await store.read('discord://guild/999988887777666655/info')).toBeNull();
+    expect(calls).toBe(0);
+  });
 });

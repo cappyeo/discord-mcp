@@ -1,6 +1,6 @@
 ---
 title: Verify a Gateway notification
-description: Test discord-mcp's experimental Gateway subscription signal without assuming list/read resource support.
+description: Test discord-mcp's Gateway subscription signal and reread the allowlisted live guild snapshot.
 sidebar:
   order: 6
 ---
@@ -8,10 +8,10 @@ sidebar:
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 Gateway mode can turn selected Discord events into MCP
-`notifications/resources/updated` signals. The current implementation is useful for
-experiments, but it is not a complete live-resource system: the URI patterns are not returned
-by `resources/list`, cannot be fetched with `resources/read`, and the server advertises
-subscription capability even when Gateway mode is inactive.
+`notifications/resources/updated` signals. The guild-info URI is also a bounded live resource:
+when its guild is allowlisted, `resources/read` performs a short-lived REST snapshot and Gateway
+updates invalidate that snapshot before notifying subscribers. The other URI patterns remain
+signals only, and the server advertises subscription capability even when Gateway mode is inactive.
 
 <Aside type="caution">
 Do not build a production workflow from the initialization capability alone. Verify that your
@@ -28,7 +28,8 @@ client can subscribe and that one real Discord event produces the expected notif
 | `discord://voice/{guild_id}/state` | Voice state update |
 | `discord://guild/{guild_id}/audit-log/recent` | Audit-log polling fallback |
 
-These URIs are notification keys, not readable resource documents.
+`discord://guild/{guild_id}/info` is a readable snapshot when the guild is allowlisted. The
+voice, presence, typing, and audit-log URIs are notification keys, not readable documents.
 
 <Steps>
 
@@ -60,36 +61,45 @@ These URIs are notification keys, not readable resource documents.
 
    ```json
    {
-     "method": "resources/subscribe",
-     "params": {
-       "uri": "discord://voice/111122223333444455/state"
+      "method": "resources/subscribe",
+      "params": {
+        "uri": "discord://guild/111122223333444455/info"
      }
    }
    ```
 
 5. **Trigger and observe one event.**
 
-   Join or leave a voice channel in the test guild. A working path emits:
+   Change the guild name or another guild setting in the test guild. A working path emits:
 
    ```json
    {
-     "method": "notifications/resources/updated",
-     "params": {
-       "uri": "discord://voice/111122223333444455/state"
+      "method": "notifications/resources/updated",
+      "params": {
+        "uri": "discord://guild/111122223333444455/info"
      }
    }
    ```
 
-   The notification contains the URI only. Use a matching REST tool to fetch current state if
-   your workflow needs data after the signal.
+   The notification contains the URI only. Read the URI again to obtain the fresh snapshot:
+
+   ```json
+   {
+     "method": "resources/read",
+     "params": { "uri": "discord://guild/111122223333444455/info" }
+   }
+   ```
+
+   The response is wrapped as `{ resource_uri, source, fetched_at, data }`. It is a reread after
+   the event, not an atomic event payload.
 
 6. **Unsubscribe when finished.**
 
    ```json
    {
-     "method": "resources/unsubscribe",
-     "params": {
-       "uri": "discord://voice/111122223333444455/state"
+      "method": "resources/unsubscribe",
+      "params": {
+        "uri": "discord://guild/111122223333444455/info"
      }
    }
    ```
@@ -98,7 +108,7 @@ These URIs are notification keys, not readable resource documents.
 
 ## Fallback design
 
-For a client without subscriptions-or until this feature is hardened-poll the narrowest
+For a client without subscriptions—or until this feature is hardened—poll the narrowest
 read-only Discord tool at a conservative interval and respect rate limits. Keep event-driven
 and polling paths behind the same application interface so the transport choice can change.
 

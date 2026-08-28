@@ -1,8 +1,11 @@
 import {
   buildPolicy,
   buildServer,
+  createAuditSink,
   createGatewayClient,
   createLogger,
+  createRuntimeAccessResolver,
+  FilePayloadApprovalLedger,
   type GatewayClient,
   loadConfig,
   wrapRestWithResilience,
@@ -37,6 +40,13 @@ export async function startStdio(
     logger.info({ otel: 'enabled' }, 'OpenTelemetry SDK started');
   }
 
+  // Core owns the audit contract; the server injects the process-scoped OTel
+  // logs adapter only when `MCP_AUDIT_SINK=otlp` is actually configured.
+  const configuredAuditSink = createAuditSink(
+    config,
+    otel?.auditEmitter === undefined ? {} : { otlpEmitter: otel.auditEmitter },
+  );
+
   // Cockatiel is the single retry owner: reject queued/pre-emptive 429s too,
   // otherwise discord.js can wait past our 30s operation timeout before it
   // gives Cockatiel a chance to honor Retry-After. Keep the SDK retry count off.
@@ -54,10 +64,39 @@ export async function startStdio(
     circuitHalfOpenAfterMs: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
   });
 
+  const payloadApprovalLedger =
+    config.MCP_APPROVAL_STATE_DIR !== undefined && config.MCP_APPROVAL_HMAC_KEY !== undefined
+      ? new FilePayloadApprovalLedger({
+          directory: config.MCP_APPROVAL_STATE_DIR,
+          secret: config.MCP_APPROVAL_HMAC_KEY,
+        })
+      : undefined;
+
+  const runtimeAccessResolver =
+    config.MCP_ACCESS_MODE === 'advisory'
+      ? undefined
+      : createRuntimeAccessResolver({
+          rest,
+          ...(config.DISCORD_EXPECTED_BOT_ID === undefined
+            ? {}
+            : { expectedBotId: config.DISCORD_EXPECTED_BOT_ID }),
+          // The current Gateway client intentionally requests no privileged
+          // intents. Keep that runtime fact separate from application flags.
+          runtimeIntents: { GUILD_MEMBERS: 'missing', MESSAGE_CONTENT: 'missing' },
+        });
+
   const { server, registeredTools, notifyResource, subscriptions, auditSink } = await buildServer({
     rest,
     logger,
     config,
+    auditSink: configuredAuditSink,
+    ...(runtimeAccessResolver === undefined ? {} : { runtimeAccessResolver }),
+    ...(payloadApprovalLedger === undefined ? {} : { payloadApprovalLedger }),
+    ...(runtimeAccessResolver === undefined
+      ? {}
+      : {
+          onRuntimeAccessWarning: (message: string) => logger.warn({ access: 'runtime' }, message),
+        }),
     onBlueprintLifecycle: recordBlueprintActivity,
   });
 

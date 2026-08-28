@@ -54,7 +54,7 @@ describe('buildCatalogServer', () => {
 
       const catalog = await catalogClient.listTools();
       const live = await liveClient.listTools();
-      expect(catalog.tools).toHaveLength(208);
+      expect(catalog.tools).toHaveLength(209);
       expect(normalized(catalog.tools)).toEqual(normalized(live.tools));
       expect(fetchSpy).not.toHaveBeenCalled();
 
@@ -78,7 +78,7 @@ describe('buildCatalogServer', () => {
       client.callTool({ name: 'unknown_catalog_tool', arguments: {} }),
     ]);
 
-    expect(results).toHaveLength(209);
+    expect(results).toHaveLength(210);
     for (const result of results) {
       expect(result).toMatchObject({
         isError: true,

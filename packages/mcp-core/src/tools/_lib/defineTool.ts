@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { Tool, type ToolAnnotations, type ToolRunContext } from '../../pieces/Tool.js';
+import type { DiscordAccessRequirement } from '../../access/requirements.js';
+import {
+  Tool,
+  type ToolAnnotations,
+  type ToolConfirmation,
+  type ToolRunContext,
+} from '../../pieces/Tool.js';
 
 const TOOL_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/;
 
@@ -12,6 +18,10 @@ export interface ToolDefinition<I extends Record<string, z.ZodTypeAny>, O> {
   preconditions?: readonly string[];
   /** Required MCP scopes (informational v1). */
   scopes?: readonly string[];
+  /** Optional shared approval contract. */
+  confirmation?: ToolConfirmation;
+  /** Optional machine-readable Discord permission/data-access contract. */
+  access?: DiscordAccessRequirement;
   inputSchema: I;
   outputSchema?: Record<string, z.ZodTypeAny>;
   annotations: ToolAnnotations;
@@ -36,6 +46,8 @@ export interface ToolMetadataStatic {
   annotations: ToolAnnotations;
   idempotent: boolean;
   preconditions: readonly string[];
+  confirmation?: ToolConfirmation;
+  access?: DiscordAccessRequirement;
 }
 
 /**
@@ -98,6 +110,8 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
     public override readonly idempotent = def.idempotent ?? false;
     public override readonly category = def.category ?? 'misc';
     public override readonly preconditions = def.preconditions ?? [];
+    public override readonly confirmation = def.confirmation;
+    public override readonly access = def.access;
     public override readonly scopes = def.scopes ?? [];
 
     constructor(...args: ConstructorParameters<typeof Tool>) {
@@ -132,6 +146,8 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
       annotations: def.annotations,
       idempotent: def.idempotent ?? false,
       preconditions: def.preconditions ?? [],
+      ...(def.confirmation === undefined ? {} : { confirmation: def.confirmation }),
+      ...(def.access === undefined ? {} : { access: def.access }),
     } satisfies ToolMetadataStatic,
   });
 

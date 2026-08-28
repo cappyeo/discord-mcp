@@ -1,8 +1,17 @@
-import { buildResource, type Config, redactRoute } from '@discord-mcp/core';
+import {
+  type AuditEvent,
+  type AuditLogEmitter,
+  buildResource,
+  type Config,
+  redactRoute,
+} from '@discord-mcp/core';
+import { logs, SeverityNumber } from '@opentelemetry/api-logs';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { PinoInstrumentation } from '@opentelemetry/instrumentation-pino';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
+import { BatchLogRecordProcessor, type LogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { type IMetricReader, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import {
@@ -16,12 +25,33 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 
 export interface OtelHandle {
-  /** Flush all pending spans/metrics and detach the global providers. */
+  /** Flush all pending spans/metrics/logs and detach the global providers. */
   shutdown: () => Promise<void>;
+  /** Present when the configured audit sink can emit through OTLP logs. */
+  auditEmitter?: AuditLogEmitter;
 }
 
 const SHUTDOWN_TIMEOUT_MS = 5_000;
 const METRIC_EXPORT_INTERVAL_MS = 30_000;
+const LOG_EXPORT_INTERVAL_MS = 1_000;
+const LOG_EXPORT_TIMEOUT_MS = 5_000;
+const LOG_MAX_QUEUE_SIZE = 1_024;
+const LOG_MAX_EXPORT_BATCH_SIZE = 128;
+
+async function boundedShutdown(shutdown: () => Promise<void>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      shutdown(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, SHUTDOWN_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 /**
  * Parses a comma-separated `k=v` string into a header map.
@@ -79,6 +109,82 @@ function buildMetricReader(config: Config): IMetricReader | null {
     }),
     exportIntervalMillis: METRIC_EXPORT_INTERVAL_MS,
   });
+}
+
+/**
+ * Build the explicit audit logs processor. The queue and batch limits are
+ * deliberately bounded: a collector outage may drop audit records, but it
+ * must not grow the bot process without limit or block a Discord mutation.
+ */
+function buildAuditLogProcessor(config: Config): LogRecordProcessor | null {
+  if (
+    !config.MCP_AUDIT_ENABLED ||
+    config.MCP_AUDIT_SINK !== 'otlp' ||
+    config.OTEL_EXPORTER_OTLP_ENDPOINT === undefined
+  ) {
+    return null;
+  }
+  const exporter = new OTLPLogExporter({
+    url: `${config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs`,
+    headers: parseHeaders(config.OTEL_EXPORTER_OTLP_HEADERS),
+    concurrencyLimit: 1,
+  });
+  return new BatchLogRecordProcessor({
+    exporter,
+    maxQueueSize: LOG_MAX_QUEUE_SIZE,
+    maxExportBatchSize: LOG_MAX_EXPORT_BATCH_SIZE,
+    scheduledDelayMillis: LOG_EXPORT_INTERVAL_MS,
+    exportTimeoutMillis: LOG_EXPORT_TIMEOUT_MS,
+  });
+}
+
+export interface AuditLogRecord {
+  readonly severityNumber: SeverityNumber;
+  readonly severityText: string;
+  readonly body: string;
+  readonly attributes: Readonly<Record<string, string | boolean>>;
+}
+
+/** Convert a redacted core event to the bounded OTel log shape. */
+export function buildAuditLogRecord(event: AuditEvent): AuditLogRecord {
+  return {
+    severityNumber: SeverityNumber.INFO,
+    severityText: 'INFO',
+    // Keep the full redacted event in the body for faithful audit replay;
+    // only bounded routing fields become attributes.
+    body: JSON.stringify({ level: 'audit', ...event }),
+    attributes: {
+      'mcp.audit.tool': event.tool,
+      'mcp.audit.category': event.category,
+      'mcp.audit.status': event.status,
+      'mcp.audit.transport': event.transport,
+      'mcp.audit.idempotent': event.idempotent,
+      ...(event.request_id.length === 0 ? {} : { 'mcp.audit.request_id': event.request_id }),
+      ...(event.result_code === undefined ? {} : { 'mcp.audit.result_code': event.result_code }),
+    },
+  };
+}
+
+function buildAuditEmitter(
+  processor: LogRecordProcessor | null,
+  config: Config,
+): AuditLogEmitter | undefined {
+  if (processor === null) return undefined;
+  const logger = logs.getLogger('discord-mcp.audit', config.OTEL_SERVICE_VERSION);
+  const provider = logs.getLoggerProvider() as {
+    forceFlush?: (options?: { timeoutMillis?: number }) => Promise<void>;
+  };
+  return {
+    emit(event: AuditEvent): void {
+      // `redactArgs` already ran in core's audit middleware before this
+      // boundary; this function only serializes the already-safe event.
+      logger.emit(buildAuditLogRecord(event));
+    },
+    async forceFlush(): Promise<void> {
+      if (provider.forceFlush === undefined) return;
+      await provider.forceFlush({ timeoutMillis: LOG_EXPORT_TIMEOUT_MS });
+    },
+  };
 }
 
 /**
@@ -166,8 +272,8 @@ function buildInstrumentations(): (UndiciInstrumentation | PinoInstrumentation)[
 
 /**
  * Boots the OpenTelemetry NodeSDK if `OTEL_ENABLED=true`, returns null
- * otherwise. The handle's `shutdown()` flushes spans and metrics with a
- * 5s timeout; callers (stdio transport) wire it to SIGTERM/SIGINT.
+ * otherwise. The handle's `shutdown()` flushes spans, metrics, and (when
+ * configured) audit logs with a 5s timeout; callers wire it to SIGTERM/SIGINT.
  *
  * Default behavior (OTEL_ENABLED unset) is identical to v0.7.0 - no
  * SDK boot, no global provider mutation.
@@ -177,6 +283,8 @@ export function startOtel(config: Config): OtelHandle | null {
 
   const traceExporter = buildTraceExporter(config);
   const metricReader = buildMetricReader(config);
+  const auditLogProcessor = buildAuditLogProcessor(config);
+  const instrumentations = buildInstrumentations();
 
   // If neither console nor OTLP is configured we still register the SDK
   // so the global tracer/meter providers exist (the middleware will use
@@ -189,19 +297,26 @@ export function startOtel(config: Config): OtelHandle | null {
   const sdk = new NodeSDK({
     resource: buildResource(config),
     sampler: buildSampler(config),
-    instrumentations: buildInstrumentations(),
+    instrumentations,
     ...(traceExporter !== null && { traceExporter }),
     ...(metricReader !== null && { metricReaders: [metricReader] }),
+    ...(auditLogProcessor !== null && { logRecordProcessors: [auditLogProcessor] }),
   });
 
   sdk.start();
+  const auditEmitter = buildAuditEmitter(auditLogProcessor, config);
 
   return {
+    ...(auditEmitter === undefined ? {} : { auditEmitter }),
     shutdown: async () => {
-      await Promise.race([
-        sdk.shutdown(),
-        new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
-      ]);
+      try {
+        await boundedShutdown(() => sdk.shutdown());
+      } finally {
+        // NodeSDK flushes providers but does not consistently disable every
+        // instrumentation instance. Explicitly detach ours so an embedding
+        // that starts a second server in-process does not duplicate spans.
+        for (const instrumentation of instrumentations) instrumentation.disable();
+      }
     },
   };
 }

@@ -62,7 +62,7 @@ describe('guild allowlist policy', () => {
         { application_id: '222233334444555566' },
         { inputSchema: { application_id: z.string(), guild_id: z.string().optional() } },
       ),
-    ).rejects.toBeInstanceOf(GuildScopeUnresolvedError);
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
   });
 
   it('resolves channel scope once and reuses the cached guild', async () => {
@@ -109,6 +109,41 @@ describe('guild allowlist policy', () => {
     ).rejects.toBeInstanceOf(GuildNotAllowedError);
   });
 
+  it('binds embedded channel targets to the declared guild target', async () => {
+    const get = vi.fn().mockResolvedValue({ guild_id: DENIED });
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    await expect(
+      policy.authorizeTool(
+        'events_create',
+        { guild_id: ALLOWED, channel_id: '222233334444555566' },
+        { inputSchema: { guild_id: z.string(), channel_id: z.string().optional() } },
+      ),
+    ).rejects.toBeInstanceOf(GuildNotAllowedError);
+    expect(get).toHaveBeenCalledWith('/channels/222233334444555566');
+  });
+
+  it('checks channel ID arrays and guild configuration channel fields', async () => {
+    const get = vi.fn().mockImplementation(async (route: string) => {
+      if (route === '/channels/222233334444555566') return { guild_id: DENIED };
+      return { guild_id: ALLOWED };
+    });
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    await expect(
+      policy.authorizeTool(
+        'onboarding_modify',
+        { guild_id: ALLOWED, default_channel_ids: ['222233334444555566'] },
+        { inputSchema: { guild_id: z.string(), default_channel_ids: z.array(z.string()) } },
+      ),
+    ).rejects.toBeInstanceOf(GuildNotAllowedError);
+    await expect(
+      policy.authorizeTool(
+        'guild_modify',
+        { guild_id: ALLOWED, rules_channel_id: '222233334444555566' },
+        { inputSchema: { guild_id: z.string(), rules_channel_id: z.string().optional() } },
+      ),
+    ).rejects.toBeInstanceOf(GuildNotAllowedError);
+  });
+
   it('resolves webhook and invite guilds, including token-auth webhooks', async () => {
     const get = vi
       .fn()
@@ -145,7 +180,7 @@ describe('guild allowlist policy', () => {
   });
 
   it('hides and blocks every unprovable global write and interaction route', async () => {
-    expect(GUILD_SCOPE_BLOCKED_TOOLS.size).toBe(22);
+    expect(GUILD_SCOPE_BLOCKED_TOOLS.size).toBe(33);
     const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()));
     for (const tool of GUILD_SCOPE_BLOCKED_TOOLS) {
       expect(isToolVisibleWithGuildAllowlist(tool, true)).toBe(false);
@@ -159,15 +194,35 @@ describe('guild allowlist policy', () => {
     expect(isToolVisibleWithGuildAllowlist('users_get_current', true)).toBe(true);
   });
 
-  it('allows application-emoji writes only for the locked bot application', async () => {
+  it('requires an explicit user-scope opt-in before exposing DM creation with an allowlist', async () => {
+    expect(isToolVisibleWithGuildAllowlist('users_create_dm', true)).toBe(false);
+    expect(isToolVisibleWithGuildAllowlist('users_create_dm', true, BOT_ID)).toBe(false);
+    expect(isToolVisibleWithGuildAllowlist('users_create_dm', true, BOT_ID, true)).toBe(true);
+
+    const schema = { inputSchema: { recipient_id: z.string() } };
+    const hidden = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()));
+    await expect(
+      hidden.authorizeTool('users_create_dm', { recipient_id: '999000999000999000' }, schema),
+    ).rejects.toBeInstanceOf(GuildScopeUnresolvedError);
+
+    const exposed = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID, true);
+    await exposed.authorizeTool('users_create_dm', { recipient_id: '999000999000999000' }, schema);
+  });
+
+  it('allows application-emoji operations only for the locked bot application', async () => {
+    expect(isToolVisibleWithGuildAllowlist('app_emojis_list', true, BOT_ID)).toBe(true);
+    expect(isToolVisibleWithGuildAllowlist('app_emojis_get', true, BOT_ID)).toBe(true);
     expect(isToolVisibleWithGuildAllowlist('app_emojis_create', true, BOT_ID)).toBe(true);
     expect(isToolVisibleWithGuildAllowlist('app_emojis_modify', true, BOT_ID)).toBe(true);
     expect(isToolVisibleWithGuildAllowlist('app_emojis_delete', true, BOT_ID)).toBe(true);
 
     const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID);
     const schema = { inputSchema: { application_id: z.string().optional() } };
+    await policy.authorizeTool('app_emojis_list', {}, schema);
+    await policy.authorizeTool('app_emojis_get', { application_id: BOT_ID }, schema);
     await policy.authorizeTool('app_emojis_create', {}, schema);
     await policy.authorizeTool('app_emojis_modify', { application_id: BOT_ID }, schema);
+    await policy.authorizeTool('app_emojis_delete', { application_id: BOT_ID }, schema);
     await expect(
       policy.authorizeTool('app_emojis_create', { application_id: DENIED }, schema),
     ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
@@ -178,8 +233,16 @@ describe('guild allowlist policy', () => {
     ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
   });
 
-  it('keeps bot-scoped emoji writes unavailable without an identity lock', async () => {
-    expect(isToolVisibleWithGuildAllowlist('app_emojis_create', true)).toBe(false);
+  it('keeps bot-scoped emoji operations unavailable without an identity lock', async () => {
+    for (const name of [
+      'app_emojis_list',
+      'app_emojis_get',
+      'app_emojis_create',
+      'app_emojis_modify',
+      'app_emojis_delete',
+    ]) {
+      expect(isToolVisibleWithGuildAllowlist(name, true)).toBe(false);
+    }
     const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()));
     await expect(
       policy.authorizeTool(
@@ -188,6 +251,67 @@ describe('guild allowlist policy', () => {
         { inputSchema: { application_id: z.string() } },
       ),
     ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+    await expect(
+      policy.authorizeTool('app_emojis_list', {}, { inputSchema: {} }),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+    await expect(
+      policy.authorizeTool('app_emojis_get', { application_id: DENIED }, { inputSchema: {} }),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+    const unlockedUnscopedPolicy = new GuildScopePolicy(null, fakeRest(vi.fn()));
+    await expect(
+      unlockedUnscopedPolicy.authorizeTool('app_emojis_list', {}, { inputSchema: {} }),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+  });
+
+  it('locks application command and monetization routes to the expected bot', async () => {
+    const applicationTools = [
+      'commands_create_global',
+      'commands_list_global',
+      'commands_create_guild',
+      'commands_get_guild',
+      'application_get_activity_instance',
+      'application_get_role_connection_metadata',
+      'application_modify_role_connection_metadata',
+      'skus_list',
+      'entitlements_list',
+      'entitlements_consume',
+    ];
+    const policy = new GuildScopePolicy(null, fakeRest(vi.fn()), BOT_ID);
+    for (const tool of applicationTools) {
+      await expect(
+        policy.authorizeTool(tool, { application_id: DENIED }, { inputSchema: {} }),
+      ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+    }
+  });
+
+  it('keeps the guild boundary after application identity validation', async () => {
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID);
+    await expect(
+      policy.authorizeTool(
+        'commands_create_guild',
+        { application_id: BOT_ID, guild_id: DENIED },
+        { inputSchema: { application_id: z.string(), guild_id: z.string() } },
+      ),
+    ).rejects.toBeInstanceOf(GuildNotAllowedError);
+  });
+
+  it('checks optional entitlement guild filters after locking the application', async () => {
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID);
+    const schema = {
+      inputSchema: { application_id: z.string(), guild_id: z.string().optional() },
+    };
+    await policy.authorizeTool(
+      'entitlements_list',
+      { application_id: BOT_ID, guild_id: ALLOWED },
+      schema,
+    );
+    await expect(
+      policy.authorizeTool(
+        'entitlements_list',
+        { application_id: BOT_ID, guild_id: DENIED },
+        schema,
+      ),
+    ).rejects.toBeInstanceOf(GuildNotAllowedError);
   });
 
   it('detects a newly added write route that lacks a verifiable guild seam', () => {

@@ -25,6 +25,11 @@ interface CachedCatalog {
 
 let catalogCache: CachedCatalog | undefined;
 
+/** @internal Test seam; production callers should rely on the TTL cache. */
+export function resetEmojiGgCatalogCache(): void {
+  catalogCache = undefined;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { BOT_APPLICATION_ACCESS } from '../../access/requirements.js';
 import { AppEmojiImage, AppEmojiName } from '../_lib/app-emoji.js';
 import { resolveApplicationId } from '../_lib/application.js';
 import { defineTool } from '../_lib/defineTool.js';
@@ -16,6 +17,7 @@ interface RawAppEmoji {
 export default defineTool({
   name: 'app_emojis_create',
   category: 'app_emojis',
+  access: BOT_APPLICATION_ACCESS,
   description: [
     '**Purpose**: Upload a new application-scoped custom emoji (applications can own up to 2,000).',
     '',

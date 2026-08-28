@@ -7,6 +7,7 @@ import {
   DiscordNotFoundError,
   DiscordPermissionError,
   DiscordRateLimitError,
+  DmOutcomeUnknown,
   DryRunPreview,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
@@ -173,5 +174,15 @@ describe('CancelledError', () => {
     expect(e.code).toBe('CANCELLED');
     expect(e.retriable).toBe(false);
     expect(e.recoveryHint).toContain('cancelled');
+  });
+});
+
+describe('DmOutcomeUnknown', () => {
+  it('forbids automatic retry and preserves the recipient binding', () => {
+    const error = new DmOutcomeUnknown('111122223333444499');
+    expect(error.code).toBe('DM_OUTCOME_UNKNOWN');
+    expect(error.retriable).toBe(false);
+    expect(error.recipientId).toBe('111122223333444499');
+    expect(error.recoveryHint).toContain('Do not retry');
   });
 });

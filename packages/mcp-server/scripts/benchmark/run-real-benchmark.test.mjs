@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertBenchmarkNotBefore,
+  attachApplyResultLossInjection,
   benchmarkProcessExitCode,
   main,
   parseBenchmarkCommand,
@@ -79,9 +80,28 @@ describe('real benchmark command boundary', () => {
         'Build a gaming server',
       ]),
     ).toMatchObject({ command: 'run', request: 'Build a gaming server', notBefore: NOT_BEFORE });
+    expect(
+      parseBenchmarkCommand([...runArgs(), '--inject-result-loss-trial', 'trial-01']),
+    ).toMatchObject({ injectResultLossTrial: 'trial-01' });
     expect(() => parseBenchmarkCommand([...runArgs(), '--token', 'never-allowed'])).toThrow(
       /unknown flag/,
     );
+  });
+
+  it('binds the response-loss injector to one manifest trial and never exposes credentials', async () => {
+    const dependencies = { marker: true };
+    const manifest = { trials: [{ trial_id: 'trial-01' }] };
+    const injected = attachApplyResultLossInjection(dependencies, manifest, 'trial-01');
+    await expect(injected.injectApplyResultLoss({ trial: { trial_id: 'trial-02' } })).resolves.toBe(
+      undefined,
+    );
+    await expect(
+      injected.injectApplyResultLoss({ trial: { trial_id: 'trial-01' } }),
+    ).rejects.toMatchObject({ code: 'RESULT_LOST_AFTER_MUTATION', retriable: true });
+    await expect(injected.injectApplyResultLoss({ trial: { trial_id: 'trial-01' } })).resolves.toBe(
+      undefined,
+    );
+    expect(JSON.stringify(injected)).not.toContain('token');
   });
 
   it('rejects missing, duplicate, malformed, and command-specific flags', () => {
@@ -138,6 +158,21 @@ describe('real benchmark command boundary', () => {
         'RESET_DISPOSABLE_GUILD:1533989004406558851',
         '--not-before',
         NOT_BEFORE,
+      ]),
+    ).toThrow(/only valid for run/);
+    expect(() =>
+      parseBenchmarkCommand([
+        'initialize',
+        '--expected-commit',
+        COMMIT,
+        '--artifact-root',
+        'C:/artifacts',
+        '--guild',
+        '1533989004406558851',
+        '--confirmation',
+        'RESET_DISPOSABLE_GUILD:1533989004406558851',
+        '--inject-result-loss-trial',
+        'trial-01',
       ]),
     ).toThrow(/only valid for run/);
     expect(() =>

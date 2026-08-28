@@ -17,6 +17,79 @@ describe('loadConfig', () => {
     expect(c.DISCORD_MCP_ACCESS_TOKEN).toBeUndefined();
     expect(c.LOG_LEVEL).toBe('info');
     expect(c.GATEWAY).toBe(false);
+    expect(c.MCP_ACCESS_MODE).toBe('advisory');
+    expect(c.MCP_DM_CONSENT_MODE).toBe('advisory');
+    expect(c.MCP_ALLOW_USER_SCOPED).toBe(false);
+    expect(c.MCP_APPROVAL_STATE_DIR).toBeUndefined();
+    expect(c.MCP_APPROVAL_HMAC_KEY).toBeUndefined();
+  });
+
+  it('requires both durable approval store settings together', () => {
+    expect(
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_APPROVAL_STATE_DIR: './state',
+        MCP_APPROVAL_HMAC_KEY: 'a'.repeat(32),
+      } as NodeJS.ProcessEnv),
+    ).toMatchObject({
+      MCP_APPROVAL_STATE_DIR: './state',
+      MCP_APPROVAL_HMAC_KEY: 'a'.repeat(32),
+    });
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_APPROVAL_STATE_DIR: './state',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/must be configured together/);
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_APPROVAL_HMAC_KEY: 'short',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/at least 32/);
+  });
+
+  it('accepts only the explicit DM consent modes', () => {
+    expect(
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_DM_CONSENT_MODE: 'require',
+      } as NodeJS.ProcessEnv).MCP_DM_CONSENT_MODE,
+    ).toBe('require');
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_DM_CONSENT_MODE: 'always',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/MCP_DM_CONSENT_MODE/);
+  });
+
+  it('accepts explicit user-scope exposure opt-in', () => {
+    expect(
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        DISCORD_EXPECTED_BOT_ID: '987654321098765432',
+        MCP_ALLOW_USER_SCOPED: 'true',
+      } as NodeJS.ProcessEnv).MCP_ALLOW_USER_SCOPED,
+    ).toBe(true);
+    expect(() =>
+      loadConfig({
+        DISCORD_TOKEN: VALID_TOKEN,
+        MCP_ALLOW_USER_SCOPED: 'true',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/requires DISCORD_EXPECTED_BOT_ID/);
+  });
+
+  it('accepts the bounded runtime access modes', () => {
+    for (const mode of ['advisory', 'warn', 'enforce'] as const) {
+      expect(
+        loadConfig({ DISCORD_TOKEN: VALID_TOKEN, MCP_ACCESS_MODE: mode } as NodeJS.ProcessEnv)
+          .MCP_ACCESS_MODE,
+      ).toBe(mode);
+    }
+    expect(() =>
+      loadConfig({ DISCORD_TOKEN: VALID_TOKEN, MCP_ACCESS_MODE: 'guess' } as NodeJS.ProcessEnv),
+    ).toThrow(/MCP_ACCESS_MODE/);
   });
 
   it('accepts a bot identity lock and rejects malformed IDs', () => {

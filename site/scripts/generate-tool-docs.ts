@@ -4,7 +4,7 @@
  * Reads the static `__toolMetadata` attached to every class returned by
  * `defineTool()` (see packages/mcp-core/src/tools/_lib/defineTool.ts) via
  * dynamic `import()` of each tool source file. Renders one MDX page per
- * tool, one index per category, and a top-level tools index - 208 + 31 + 1
+ * tool, one index per category, and a top-level tools index - 209 + 31 + 1
  * pages total.
  *
  * Run via `pnpm --filter site generate-tools`. Requires `tsx` to register
@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 // with Astro's content schema (which uses its own bundled zod via
 // astro:content).
 import { z } from '../../packages/mcp-core/node_modules/zod/index.js';
+import { getToolAccessRequirement } from '../../packages/mcp-core/src/access/requirements.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '../..');
@@ -39,6 +40,24 @@ export interface ToolMetadata {
   };
   idempotent: boolean;
   preconditions: readonly string[];
+  confirmation?: 'payload_hash';
+  access?: {
+    auth: 'bot' | 'bearer' | 'opaque' | 'either' | 'none';
+    permissions: readonly string[];
+    intents: readonly string[];
+    scope: 'global' | 'guild' | 'channel' | 'bot_application' | 'user' | 'local' | 'external';
+    hierarchy: 'required' | 'not_applicable';
+    verification?: 'runtime' | 'delegated';
+    conditions?: ReadonlyArray<{
+      fields: readonly string[];
+      permissions: readonly string[];
+      hierarchy?: 'required' | 'not_applicable';
+      nonNullFields?: readonly string[];
+    }>;
+    requireConditionMatch?: boolean;
+    permissionTargetFields?: readonly string[];
+    allowCrossGuild?: boolean;
+  };
   sourcePath: string;
 }
 
@@ -73,6 +92,8 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
           continue;
         }
         const m = metadata as Record<string, unknown>;
+        const colocatedAccess = m.access as ToolMetadata['access'];
+        const registryAccess = getToolAccessRequirement(m.name as string).requirement;
         tools.push({
           name: m.name as string,
           category: m.category as string,
@@ -82,6 +103,8 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
           annotations: m.annotations as ToolMetadata['annotations'],
           idempotent: (m.idempotent as boolean) ?? false,
           preconditions: (m.preconditions as readonly string[]) ?? [],
+          confirmation: m.confirmation as ToolMetadata['confirmation'],
+          access: colocatedAccess ?? registryAccess ?? undefined,
           sourcePath,
         });
       } catch (e) {
@@ -100,7 +123,7 @@ export async function loadAllTools(toolsDir: string = TOOLS_DIR): Promise<ToolMe
 
 /**
  * Tool descriptions follow the established 4-section format used across the
- * 208 tools. Headings are bold-asterisk markdown - capture body text up to
+ * 209 tools. Headings are bold-asterisk markdown - capture body text up to
  * the next bold-asterisk heading or end of string.
  */
 export function parseDescription(desc: string): {
@@ -840,12 +863,102 @@ const confirmField = z
   .describe(
     'Set true to authorize this destructive operation. Also requires MCP_DRY_RUN=false; otherwise the server returns DRY_RUN_PREVIEW.',
   );
+const payloadConfirmFields = {
+  __confirm: z
+    .boolean()
+    .optional()
+    .describe('Authorize the exact payload supplied in this call after reviewing its summary.'),
+  __confirm_hash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/u)
+    .optional()
+    .describe('SHA-256 payload_hash returned by the preview.'),
+  __confirm_id: z
+    .string()
+    .uuid()
+    .optional()
+    .describe('One-time approval ID returned by the preview; expires shortly.'),
+};
 
 function renderAccessGuidance(tool: ToolMetadata): string {
   const categoryAccess =
     tool.category === 'meta'
       ? '- The `meta` category remains available even when `MCP_CATEGORIES` is restricted.'
       : `- The \`${tool.category}\` category must be enabled by \`MCP_CATEGORIES\` when an allowlist is set.`;
+
+  if (tool.access !== undefined) {
+    const access = tool.access;
+    const authText =
+      access.auth === 'bot'
+        ? 'the configured bot credential'
+        : access.auth === 'bearer'
+          ? 'the supplied user OAuth2 bearer token'
+          : access.auth === 'opaque'
+            ? 'a short-lived interaction token in the route or a webhook token in the route'
+            : access.auth === 'none'
+              ? tool.name === 'guild_get_widget' || tool.name === 'guild_get_widget_image_url'
+                ? 'the public widget anonymously'
+                : 'no Discord credential (local or external operation)'
+              : 'the configured bot credential or a supported user bearer token';
+    const scopeText =
+      access.scope === 'bot_application'
+        ? 'the locked bot application (application-scoped, not guild-scoped)'
+        : access.scope === 'channel'
+          ? 'the target channel and its parent guild'
+          : access.scope === 'guild'
+            ? 'the target guild'
+            : access.scope === 'local'
+              ? 'the local compiler/validator only'
+              : access.scope === 'external'
+                ? 'an external provider response'
+                : access.scope === 'user'
+                  ? 'the explicitly supplied Discord user target (consent is a separate policy gate)'
+                  : 'the endpoint-wide/global resource';
+    const permissionText =
+      access.permissions.length === 0
+        ? 'No named Discord permission bit is asserted by this contract.'
+        : `Required permission bits: ${access.permissions.map((permission) => `\`${permission}\``).join(', ')}.`;
+    const intentText =
+      access.intents.length === 0
+        ? ''
+        : ` Required Gateway intents: ${access.intents.map((intent) => `\`${intent}\``).join(', ')}.`;
+    const hierarchyText =
+      access.hierarchy === 'required'
+        ? ' Role hierarchy must still be checked against the concrete target member or role.'
+        : '';
+    const verificationText =
+      access.verification === 'delegated'
+        ? ' Permission and readback checks are delegated to the tool’s internal verifier.'
+        : '';
+    const conditionText =
+      access.conditions === undefined
+        ? ''
+        : ` Conditional access is selected from payload fields: ${access.conditions
+            .map(
+              (condition) =>
+                `\`${condition.fields.join('`, `')}\`${
+                  condition.nonNullFields === undefined ? '' : ' (non-null)'
+                } → ${
+                  condition.permissions.map((permission) => `\`${permission}\``).join(', ') ||
+                  'no named permission'
+                }`,
+            )
+            .join(
+              '; ',
+            )}.${access.requireConditionMatch === true ? ' An unrecognized action payload remains unresolved.' : ''}`;
+    const targetText =
+      access.permissionTargetFields === undefined
+        ? ''
+        : ` Permission evidence is taken from target field(s): ${access.permissionTargetFields.map((field) => `\`${field}\``).join(', ')}.`;
+    const crossGuildText =
+      access.allowCrossGuild === true
+        ? ' This operation may intentionally span multiple guilds; every resolved target is checked.'
+        : '';
+    return `${categoryAccess}
+- Access contract: scope=\`${access.scope}\`; this tool uses ${authText} and is scoped to ${scopeText}.
+- ${permissionText}${intentText}${hierarchyText}${verificationText}${conditionText}${targetText}${crossGuildText}
+- Discord still makes the final authorization decision; an inaccessible resource commonly returns \`403\` or \`404\`.`;
+  }
 
   if (tool.inputSchema.bearer_token) {
     return `${categoryAccess}
@@ -879,16 +992,22 @@ function renderAccessGuidance(tool: ToolMetadata): string {
 export function renderToolMdx(tool: ToolMetadata, relatedTools: ToolMetadata[] = []): string {
   const desc = parseDescription(tool.description);
   const requiresConfirm = tool.preconditions.includes('confirm_required');
-  const publishedInputSchema = requiresConfirm
-    ? { ...tool.inputSchema, __confirm: confirmField }
-    : tool.inputSchema;
+  const requiresPayloadConfirmation = tool.confirmation === 'payload_hash';
+  const publishedInputSchema =
+    requiresConfirm || requiresPayloadConfirmation
+      ? {
+          ...tool.inputSchema,
+          ...(requiresConfirm ? { __confirm: confirmField } : {}),
+          ...(requiresPayloadConfirmation ? payloadConfirmFields : {}),
+        }
+      : tool.inputSchema;
   const inputTable = renderSchemaTable(publishedInputSchema);
   const outputTable = renderSchemaTable(tool.outputSchema, 'output');
   const inputSchema = renderJsonSchema(publishedInputSchema, 'input', tool.name);
   const outputSchema = renderJsonSchema(tool.outputSchema, 'output');
   const generatedInputExample = buildSchemaExample(publishedInputSchema, { toolName: tool.name });
   const inputExample =
-    generatedInputExample && requiresConfirm
+    generatedInputExample && requiresConfirm && !requiresPayloadConfirmation
       ? { ...generatedInputExample, __confirm: true }
       : generatedInputExample;
   const outputExample = buildOutputExample(tool);
@@ -943,7 +1062,7 @@ import { Badge } from '@astrojs/starlight/components';
   <a href="/discord-mcp/tools/${tool.category}/"><Badge text="${titleCaseCategory(tool.category)}" variant="note" /></a>{' '}
   ${a.readOnlyHint ? '<Badge text="Read only" variant="success" />' : '<Badge text="Writes to Discord" variant="caution" />'}{' '}
   ${a.destructiveHint ? '<Badge text="Destructive" variant="danger" />' : ''}
-  ${requiresConfirm ? '<Badge text="Confirmation required" variant="tip" />' : ''}
+  ${requiresConfirm ? '<Badge text="Confirmation required" variant="tip" />' : requiresPayloadConfirmation ? '<Badge text="Payload approval required" variant="tip" />' : ''}
 </p>
 
 ${escapeMdxProse(desc.purpose)}
@@ -954,7 +1073,7 @@ ${desc.whenNotToUse ? `## When not to use\n\n${escapeMdxProse(desc.whenNotToUse)
 
 ${authoredSections}
 
-${inputExample ? `## MCP call example\n\n${authoredExamples ? `${authoredExamples}\n\n` : ''}${requiresConfirm ? '> **Execution example:** first omit `__confirm` to get a safe `DRY_RUN_PREVIEW`. The payload below executes only when the server also runs with `MCP_DRY_RUN=false`.\n\n' : ''}\`\`\`json\n${JSON.stringify({ name: tool.name, arguments: inputExample }, null, 2)}\n\`\`\`` : ''}
+${inputExample ? `## MCP call example\n\n${authoredExamples ? `${authoredExamples}\n\n` : ''}${requiresConfirm ? '> **Execution example:** first omit `__confirm` to get a safe `DRY_RUN_PREVIEW`. The payload below executes only when the server also runs with `MCP_DRY_RUN=false`.\n\n' : requiresPayloadConfirmation ? '> **Approval example:** first send this payload without the hidden approval fields. Review the bounded component summary, returned `payload_hash`, and `approval_id`, then repeat it before expiry with `MCP_DRY_RUN=false`, `__confirm:true`, and the exact `__confirm_hash` plus `__confirm_id`. The approval is one-time.\n\n' : ''}\`\`\`json\n${JSON.stringify({ name: tool.name, arguments: inputExample }, null, 2)}\n\`\`\`` : ''}
 
 ## Input
 
@@ -982,7 +1101,7 @@ ${outputSchema ? `<details>\n<summary>Complete output JSON Schema</summary>\n\n\
 | Destructive | ${a.destructiveHint ? 'yes' : 'no'} |
 | Idempotent | ${a.idempotentHint ? 'yes' : 'no'} |
 | Open-world | ${a.openWorldHint ? 'yes' : 'no'} |
-| Confirmation required | ${requiresConfirm ? 'yes (`__confirm:true` required)' : 'no'} |
+| Confirmation required | ${requiresConfirm ? 'yes (`__confirm:true` required)' : requiresPayloadConfirmation ? 'yes (`payload_hash` + `__confirm_hash` + one-time `__confirm_id` required)' : 'no'} |
 
 ## Access and common errors
 
@@ -1146,9 +1265,9 @@ domain closest to your task, then use its focused category page to find the exac
 site search (<kbd>Ctrl</kbd> + <kbd>K</kbd>) when you already know an identifier.
 
 :::caution
-**Writes to Discord are not automatically safe.** Check the badges on each tool. Only tools
-marked **Confirmation required** participate in the \`__confirm\` and dry-run gate; ordinary
-writes can execute on the first call.
+**Writes to Discord are not automatically safe.** Check the badges on each tool. Tools marked
+**Confirmation required** or **Payload approval required** have a shared approval gate; other
+ordinary writes can execute on the first call.
 :::
 
 ${sections}

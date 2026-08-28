@@ -5,17 +5,20 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.24.0 and contains 208 tools.
+The current source tree keeps v0.24.0 package metadata and contains an
+unreleased 209th read-only planner tool.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.24.0)
+## Current source evidence (unreleased after v0.24.0)
 
-- The current source tree exposes 208 MCP tools across 31 categories; the
+- The current source tree exposes 209 MCP tools across 31 categories; the
   preceding v0.18.1 packages exposed 203.
-- v0.24.0 keeps the operational 208-tool contract unchanged and adds a bounded,
+- The tagged v0.24.0 release keeps the operational 208-tool contract unchanged;
+  the unreleased source adds `discord_intent_plan` as a bounded read-only tool.
+  v0.24.0 also adds a bounded,
   credential-free catalog self-check for the installed package, hardened
   activation evidence across five supported hosts, and bot-scoped application
   emoji management with self-application resolution and fail-closed upload
@@ -177,14 +180,14 @@ removal or rename fails CI instead of reaching a consumer.
 - [x] Config env var set frozen - `src/config.surface.test.ts` snapshots names
       **and** resolved defaults (a silently changed default is a behavioural
       break even when the name is unchanged)
-- [x] Tool surface (208 tools) frozen - `src/tools/registry.invariants.test.ts`
+- [x] Tool surface (209 tools) frozen - `src/tools/registry.invariants.test.ts`
       also asserts destructive-iff-confirm-gated and complete annotations
 
 ## v1.0.0 commitment
 
 - **Semver**: breaking changes require a major bump (v2.0.0).
 - **API stability**: `@discord-mcp/core` exports stable for 6+ months.
-- **Tool surface**: 208 tools maintained; new tools = minor version.
+- **Tool surface**: 209 tools maintained; new tools = minor version.
 - **CLI flags**: the ten committed subcommands and their options are frozen.
 - **Config**: env var names + defaults frozen (additions allowed; renames
   forbidden).

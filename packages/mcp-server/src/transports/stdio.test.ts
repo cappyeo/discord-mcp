@@ -96,6 +96,8 @@ beforeEach(() => {
   delete process.env.GATEWAY;
   delete process.env.OTEL_ENABLED;
   delete process.env.DISCORD_MCP_ACTIVITY;
+  delete process.env.MCP_APPROVAL_STATE_DIR;
+  delete process.env.MCP_APPROVAL_HMAC_KEY;
 });
 
 afterEach(() => {
@@ -162,6 +164,32 @@ describe('startStdio', () => {
         }),
       ]);
       expect(readFileSync(resolveActivityPath(), 'utf8')).not.toContain('must-not-be-recorded');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('wires the optional durable approval ledger into the stdio server', async () => {
+    const approvalDirectory = join(activityRoot, 'approvals');
+    process.env.MCP_APPROVAL_STATE_DIR = approvalDirectory;
+    process.env.MCP_APPROVAL_HMAC_KEY = 'stdio-approval-ledger-test-secret-0123456789';
+    const client = await boot();
+    try {
+      const result = await client.callTool({
+        name: 'components_v2_send',
+        arguments: {
+          channel_id: '111122223333444455',
+          components: [{ type: 10, content: 'durable preview' }],
+        },
+      });
+      expect(result.structuredContent).toMatchObject({
+        code: 'PAYLOAD_CONFIRMATION_REQUIRED',
+      });
+      const state = readFileSync(join(approvalDirectory, 'approvals.json'), 'utf8');
+      expect(state).toContain('"version":1');
+      expect(state).not.toContain(
+        (result.structuredContent as { approval_id: string }).approval_id,
+      );
     } finally {
       await client.close();
     }

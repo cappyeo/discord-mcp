@@ -1,6 +1,6 @@
 ---
 title: Confirmation
-description: The __confirm:true + MCP_DRY_RUN=false mechanical guard used by 31 explicitly registered high-risk tools, including its limits and client responsibilities.
+description: The payload-bound and __confirm:true + MCP_DRY_RUN=false approval guards used by Discord MCP writes, including their limits and client responsibilities.
 sidebar:
   order: 7
 ---
@@ -9,7 +9,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 discord-mcp's confirmation contract is a **mechanical two-key guard** for
 selected high-risk operations. A tool that declares the `confirm_required`
-precondition - **31 of the 208 tools**, listed
+precondition - **31 of the 209 tools**, listed
 [below](#which-tools-require-it) - does not fire unless **both** of these
 hold at the same time:
 
@@ -21,9 +21,47 @@ redacted arguments instead of executing. The MCP client may show that preview
 to a human before re-issuing the call, but the server does not require or
 verify human approval.
 
+## Payload-bound approval for Components V2
+
+`components_v2_send`, `components_v2_edit`, and
+`components_v2_send_from_template` use a stricter approval contract
+because their layout can contain mentions, external links, and interactive
+controls. The first validated call returns `PAYLOAD_CONFIRMATION_REQUIRED`
+with a redacted payload, bounded component review, `risk_flags`, and a SHA-256
+`payload_hash`, a one-time `approval_id`, and a short expiry; it never calls
+Discord. A later call executes only when all four conditions hold:
+
+1. `MCP_DRY_RUN=false` is set by the operator.
+2. The call includes `__confirm:true`.
+3. `__confirm_hash` exactly matches the latest `payload_hash`.
+4. `__confirm_id` exactly matches the unconsumed `approval_id` from that preview
+   and has not expired.
+
+If the payload changes, the server returns `PAYLOAD_CONFIRMATION_MISMATCH`
+and refuses the request. The digest excludes only the three authorization fields,
+so channel/message targets and every component value remain bound to the
+approval. For template sends, the digest covers the fully interpolated tree.
+When `DISCORD_EXPECTED_BOT_ID` is configured, the approval record also binds to
+that exact bot identity; an embedding that tries to apply it through another
+bot-scoped server fails closed. The preview intentionally omits untrusted text
+and raw identifiers;
+the caller approves the exact payload it supplied, using the digest as the
+binding. Use `MCP_WRITE_MODE=preview` to block any other ordinary writes at
+deployment level.
+
+<Aside type="caution">
+The ledger makes `__confirm_id` a one-time, short-lived approval in the current
+process/deployment. Replaying it returns
+`PAYLOAD_CONFIRMATION_APPROVAL_REPLAYED`; a process restart or a different
+HTTP replica requires a fresh preview. If a send times out after the request
+may have reached Discord, read back the target or otherwise reconcile the
+outcome before requesting a new approval; do not blindly replay the old one.
+</Aside>
+
 Tools that do **not** declare the precondition - including ordinary mutations
-like `messages_send` and `members_add_role` - are unaffected by both halves
-and execute immediately.
+like `messages_send` and `members_add_role` - are generally unaffected by both
+halves and execute immediately; the Components V2 tools are the explicit
+payload-bound exception.
 
 Source: [`packages/mcp-core/src/preconditions/ConfirmRequired.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/preconditions/ConfirmRequired.ts).
 
@@ -41,6 +79,12 @@ Splitting it gives you the two-key launch model:
   specific gated call should execute.
 
 Both must be set. Either alone fails closed.
+
+Components V2 adds a payload hash and one-time approval ID to that two-key
+model. The approval is consumed immediately before the handler is entered, so
+an uncertain transport result cannot be made safe by blindly retrying the same
+call. Use the target's readback/reconciliation path before obtaining a new
+approval.
 
 <Aside type="danger">
 This is not human-in-the-loop authorization. An autonomous or compromised
@@ -75,8 +119,9 @@ exact list, and do not assume a tool is covered because it mutates Discord.
 
 ## Why double-underscore
 
-`__confirm` is **not part of any tool's zod `inputSchema`**. It is an
-authorization flag, not a handler parameter - handlers must never see it:
+`__confirm`, `__confirm_hash`, and `__confirm_id` are **not part of any tool's
+zod `inputSchema`**. They are authorization fields, not handler parameters -
+handlers must never see them:
 
 - If it were in a tool's zod shape, every destructive handler would receive
   it as a business argument and each one would have to remember to ignore it.
@@ -94,14 +139,20 @@ ecosystem for transport-level metadata.
 `z.toJSONSchema` emits `additionalProperties: false` for every tool, so a
 spec-conforming client could not legally send an undeclared key, and an
 agent reading `tools/list` would have no way to discover the flag at all.
-So `server.ts` injects `__confirm` into the **published JSON Schema of the
-31 gated tools only**, after the zod → JSON Schema conversion:
+So `server.ts` injects the relevant authorization fields into the **published
+JSON Schema** after the zod → JSON Schema conversion: `__confirm` for the 31
+legacy-gated tools, and all three fields for the Components V2 payload-gated
+tools:
 
 ```ts
 // From server.ts - ListTools handler
 if (tool.preconditions.includes('confirm_required')) {
   jsonSchema.properties ??= {};
   jsonSchema.properties.__confirm = { type: 'boolean', description: '...' };
+}
+if (tool.confirmation === 'payload_hash') {
+  jsonSchema.properties.__confirm_hash = { type: 'string', pattern: '^[a-f0-9]{64}$' };
+  jsonSchema.properties.__confirm_id = { type: 'string', format: 'uuid' };
 }
 ```
 
@@ -113,9 +164,9 @@ Two consequences worth being precise about:
   `validateMiddleware` parses against the zod shape, which does not declare
   `__confirm`, so the parsed args that handlers receive have it stripped.
   `server.ts` stashes the pre-validation payload in `ctx.meta` under
-  `rawArgs`, and `ConfirmRequired` reads the boolean from there. That is the
-  **one** place we accept pre-validation state - narrowly scoped to one
-  boolean.
+  `rawArgs`, and the approval middleware reads the authorization fields from
+  there. That is the **one** place we accept pre-validation state - narrowly
+  scoped to these transport-level fields.
 
 <Aside type="caution">
 Advertising the key is not the same as enforcing it in the schema. A client
@@ -164,7 +215,7 @@ There is **no automatic rule**. `confirm_required` is attached explicitly,
 per tool, in each tool's own `defineTool({ preconditions: ['confirm_required'] })`
 call. A tool is gated if and only if it names the precondition itself.
 
-The current source registry has exactly **31 tools** out of 208 - every irreversible
+The current source registry has exactly **31 tools** out of 209 - every irreversible
 delete, plus ban / kick / prune / leave-guild and the two command
 bulk-overwrites (which replace a guild's entire command set in one call):
 
@@ -207,13 +258,13 @@ on the first call, in dry-run mode or not, with no `__confirm` required:
 - `webhooks_execute`
 - `roles_create`
 - `members_add_role`
-- `components_v2_send`
 
 That list is not exhaustive - it is the set operators most often assume is
-covered. The confirmation gate protects against **irreversible destruction**,
-not against mutation in general. `MCP_DRY_RUN=true` does **not** put the
-server into a global read-only mode: a tool with no `confirm_required`
-precondition never consults `MCP_DRY_RUN` at all.
+covered. The legacy confirmation gate protects against **irreversible
+destruction**, while the Components V2 send/edit/template payload gate protects the
+exact reviewed layout. `MCP_DRY_RUN=true` does **not** put the server into a
+global read-only mode: a tool with neither `confirm_required` nor the
+payload-bound policy never consults `MCP_DRY_RUN` at all.
 
 If you need "this deployment cannot write to Discord," the gate for that is
 the bot's own Discord permissions, not this precondition.

@@ -2,7 +2,7 @@ import { buildCatalogServer } from '@discord-mcp/core';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 
-const EXPECTED_TOOL_COUNT = 208;
+const EXPECTED_TOOL_COUNT = 209;
 const EXPECTED_TOOL_NAMES = [
   'guild_blueprint_plan',
   'guild_blueprint_apply',

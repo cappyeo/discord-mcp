@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { CHANNEL_WRITE_ACCESS } from '../../access/requirements.js';
 import { ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
@@ -12,8 +13,9 @@ const IS_COMPONENTS_V2 = 1 << 15;
 export default defineTool({
   name: 'components_v2_edit',
   category: 'components_v2',
+  access: CHANNEL_WRITE_ACCESS,
   description:
-    '**Purpose**: Edit a Components V2 message previously sent by this bot. The `IS_COMPONENTS_V2` flag is irreversible - V2 messages stay V2.\n\n**Returns**: `{message_id, channel_id, edited_timestamp}`.',
+    '**Purpose**: Edit a Components V2 message previously sent by this bot. The `IS_COMPONENTS_V2` flag is irreversible - V2 messages stay V2.\n\n**Returns**: `{message_id, channel_id, edited_timestamp}`. The server first returns a bounded component review with `payload_hash` and one-time `approval_id`; run with `MCP_DRY_RUN=false`, `__confirm:true`, the exact `__confirm_hash`, and `__confirm_id` before expiry to edit once.',
   inputSchema: {
     channel_id: ChannelId,
     message_id: MessageId,
@@ -30,6 +32,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
+  confirmation: 'payload_hash' as const,
   handler: async (args) => {
     const validation = validateComponentsV2(args.components);
     if (!validation.valid) {

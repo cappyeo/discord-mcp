@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { GUILD_READ_ACCESS } from '../../access/requirements.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, RoleId } from '../_lib/snowflake.js';
@@ -19,6 +20,7 @@ interface RawRole {
 export default defineTool({
   name: 'roles_list',
   category: 'roles',
+  access: GUILD_READ_ACCESS,
   description:
     '**Purpose**: List all roles in a guild.\n\n**When to use**: discover role IDs, audit hierarchy + permissions.\n\n**Example**: `{guild_id:"999000999000999000"}`\n\n**Returns**: `{roles:[{id,name,color,position,permissions,mentionable,hoist,managed}], count}`.',
   inputSchema: {

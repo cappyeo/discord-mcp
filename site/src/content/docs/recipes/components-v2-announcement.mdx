@@ -11,9 +11,12 @@ This workflow posts a structured announcement with a header thumbnail and image 
 builder returns `{ component }`; unwrap that field before passing the node to the next builder.
 
 <Aside type="caution">
-`components_v2_send` is an ordinary write and is not confirmation-gated. It validates locally,
-then posts immediately. Components V2 is irreversible for that message; it cannot later become
-a plain-content message.
+`components_v2_send` validates locally, then returns a redacted payload and bounded approval
+preview before posting.
+Keep the returned `payload_hash`; only a second call with `MCP_DRY_RUN=false`, `__confirm:true`,
+the exact `__confirm_hash`, and the one-time `__confirm_id` can publish it before expiry. Components
+V2 is irreversible for that message;
+it cannot later become a plain-content message.
 </Aside>
 
 <Steps>
@@ -219,8 +222,16 @@ a plain-content message.
    }
    ```
 
-   The result contains `message_id`, `channel_id`, `jump_url`, and
-   `component_count: 1` because there is one top-level container.
+    The first call returns `PAYLOAD_CONFIRMATION_REQUIRED` with a redacted
+    payload, bounded component review, risk flags, and a 64-character
+    `payload_hash`, `approval_id`, and its expiry; it does not call Discord. After reviewing the summary,
+    repeat the same arguments with
+    `"__confirm": true`, the returned `"__confirm_hash"`, and `"__confirm_id"`,
+    while the server is armed with `MCP_DRY_RUN=false`. The approval is consumed
+    once. The successful second call contains
+    `message_id`, `channel_id`, `jump_url`, and `component_count: 1` because
+    there is one top-level container. Any payload change requires a fresh
+    preview and hash.
 
 </Steps>
 

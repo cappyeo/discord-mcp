@@ -11,16 +11,17 @@ import { Aside } from '@astrojs/starlight/components';
 
 - **Type:** literal string comparison: `env.MCP_DRY_RUN !== 'false'`
 - **Default:** dry-run is on; an unset value counts as on
-- **Use:** Protects 31 destructive tools. With dry-run on, they return `DRY_RUN_PREVIEW` with redacted arguments instead of executing.
+- **Use:** Protects 31 destructive tools and arms the payload-bound preview for `components_v2_send`, `components_v2_edit`, and `components_v2_send_from_template`. With dry-run on, those calls return a redacted preview instead of executing.
 - **Example:** `MCP_DRY_RUN=false`
 
 With `MCP_WRITE_MODE=allow`, setting the literal string `false` removes the
 dry-run half of this gate, but every call still requires `__confirm: true`.
 `MCP_WRITE_MODE=preview` blocks every mutation before this gate. Tools without
-the `confirm_required` precondition are unaffected by `MCP_DRY_RUN`, so this is
-not a global read-only switch. With the default allow mode, ordinary writes can
-execute immediately. Set `MCP_WRITE_MODE=preview` when every mutation should
-return a preview instead.
+the `confirm_required` precondition are generally unaffected by `MCP_DRY_RUN`,
+with the exception of the payload-bound Components V2 send/edit/template policy. This is
+not a global read-only switch. With the default allow mode, other ordinary
+writes can execute immediately. Set `MCP_WRITE_MODE=preview` when every mutation
+should return a preview instead.
 
 <Aside type="danger">
 `MCP_DRY_RUN` is not in the Zod schema and `doctor` does not validate it. A typo
@@ -41,10 +42,98 @@ byte-for-byte first. For the call-level requirement, see
 
 `allow` retains the historical behavior for existing callers: non-destructive
 writes execute, while destructive tools still need the `MCP_DRY_RUN` and
-`__confirm` controls above. This makes `MCP_WRITE_MODE=preview` the explicit
+`__confirm` controls above; Components V2 send/edit/template additionally require the
+exact `__confirm_hash` and one-time `__confirm_id` from their preview. This makes `MCP_WRITE_MODE=preview` the explicit
 choice for no-mutation dogfood, audits, and planning sessions.
 
 ```toml
 [mcp_servers.discord-mcp.env]
 MCP_WRITE_MODE = "preview"
 ```
+
+### `MCP_ACCESS_MODE`
+
+- **Values:** `advisory` (default), `warn`, or `enforce`
+- **Use:** Controls the runtime Discord access-evidence gate. The built-in
+  stdio and Streamable HTTP transports provide a read-only REST evidence
+  resolver; embedders can replace it through the core `BuildServerDeps` API.
+
+`advisory` and `warn` preserve execution and surface evidence gaps to the
+operator. `enforce` fails closed for unknown or partial evidence, and denies
+only when complete evidence proves a declared permission, intent, or role
+hierarchy condition is missing. The gate never infers permissions from a tool
+name, and bearer-only tools are not checked against bot permissions. The
+resolver uses short-lived, bounded snapshots; it never performs a Discord
+mutation. The current Gateway client requests no privileged intents, so tools
+that require `GUILD_MEMBERS` or `MESSAGE_CONTENT` remain inadmissible until an
+embedding explicitly supplies matching runtime-intent evidence.
+
+```toml
+[mcp_servers.discord-mcp.env]
+MCP_ACCESS_MODE = "enforce"
+```
+
+`enforce` is intentionally an opt-in production posture. All shipped tools
+have a classified contract; the three blueprint lifecycle contracts are
+explicitly delegated to their stronger internal verifiers, while
+`users_create_dm` has a separate caller-approval gate. The host/operator must
+obtain any human consent separately; the returned MCP preview is not proof of a
+human click. Set `MCP_DM_CONSENT_MODE=require` to require a one-time approval
+bound to the exact recipient; the default
+`advisory` mode preserves compatibility.
+
+### `MCP_DM_CONSENT_MODE`
+
+- **Values:** `advisory` (default) or `require`
+- **Use:** Protect `users_create_dm` with an explicit recipient-bound preview
+  and one-time approval ID.
+
+When `require` is enabled, the first call returns `DM_CONSENT_REQUIRED` without
+contacting Discord. Retry only after reviewing the recipient with
+`__consent:true`, the returned `__consent_hash`, and `__consent_id`.
+
+If Discord may have accepted the POST but its response is lost, the tool
+returns `DM_OUTCOME_UNKNOWN`. The one-time approval is already consumed: do
+not retry automatically. Verify the desired state and request fresh approval
+only if another attempt is still necessary.
+
+Approval IDs are process-local by default. Stateless HTTP requests share the
+ledger only within one server process; a restart or load-balanced replica then
+fails closed and requires a fresh preview. For a same-filesystem deployment,
+configure the optional bounded durable ledger:
+
+### `MCP_APPROVAL_STATE_DIR`
+
+- **Value:** filesystem path
+- **Use:** Directory for the bounded approval state and lock files. Keep it
+  private to the bot process and on a filesystem shared by the processes that
+  must exchange approvals.
+
+### `MCP_APPROVAL_HMAC_KEY`
+
+- **Value:** at least 32 characters of random secret material
+- **Use:** HMAC key for the approval state. Provide it through the deployment
+  secret store; it is never written to the state directory.
+
+```toml
+[mcp_servers.discord-mcp.env]
+MCP_APPROVAL_STATE_DIR = "/var/lib/discord-mcp/approvals"
+MCP_APPROVAL_HMAC_KEY = "a-secret-of-at-least-32-random-characters"
+```
+
+Both values are required together. The directory stores only hashed approval
+identifiers and HMAC-protected records; the caller-visible approval ID and key
+are never persisted. Issue/consume operations use an exclusive lock and an
+atomic state replacement, with bounded records and TTL cleanup. An unavailable,
+locked, malformed, or tampered store fails closed. This is a same-filesystem
+primitive, not a distributed database or a guarantee across hosts.
+
+### `MCP_ALLOW_USER_SCOPED`
+
+- **Values:** boolean-like (`true`, `1`, `yes`; default `false`)
+- **Use:** Explicitly expose user-scoped routes such as `users_create_dm` when
+  `ALLOWED_GUILDS` is active.
+
+This flag never turns a guild allowlist into DM consent. It is honored only with
+`DISCORD_EXPECTED_BOT_ID`; `MCP_DM_CONSENT_MODE=require` remains the recommended
+caller-approval posture for the exposed DM route.

@@ -64,6 +64,26 @@ const ConfigSchema = z.object({
   // tool before it reaches Discord, including non-destructive writes.
   MCP_WRITE_MODE: z.enum(['allow', 'preview']).default('allow'),
 
+  // Runtime Discord permission gate. Advisory/warn preserve execution while
+  // exposing evidence gaps; enforce rejects unknown evidence fail-closed.
+  MCP_ACCESS_MODE: z.enum(['advisory', 'warn', 'enforce']).default('advisory'),
+
+  // User-targeted DM creation is consent-sensitive. Advisory preserves
+  // compatibility; require demands a one-time recipient-bound approval.
+  MCP_DM_CONSENT_MODE: z.enum(['advisory', 'require']).default('advisory'),
+  // An active guild allowlist does not imply permission to contact arbitrary
+  // users. This explicit opt-in is required before exposing user-scoped routes
+  // alongside ALLOWED_GUILDS, and still does not replace DM consent.
+  MCP_ALLOW_USER_SCOPED: boolish(false),
+
+  // Optional bounded cross-process approval ledger. Both values must be set
+  // together; the HMAC key is never written to the state directory.
+  MCP_APPROVAL_STATE_DIR: z.string().trim().min(1).optional(),
+  MCP_APPROVAL_HMAC_KEY: z
+    .string()
+    .min(32, 'MCP_APPROVAL_HMAC_KEY must be at least 32 characters')
+    .optional(),
+
   // Durable local checkpoints for resumable guild blueprint execution. The
   // default is the platform user-state directory; callers may override it for
   // containers/tests without introducing a cloud database.
@@ -158,6 +178,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   ) {
     throw new Error(
       'Invalid configuration:\n  - DISCORD_DEFAULT_GUILD_ID: must be included in ALLOWED_GUILDS',
+    );
+  }
+  if (parsed.data.MCP_ALLOW_USER_SCOPED && parsed.data.DISCORD_EXPECTED_BOT_ID === undefined) {
+    throw new Error(
+      'Invalid configuration:\n  - MCP_ALLOW_USER_SCOPED: requires DISCORD_EXPECTED_BOT_ID',
+    );
+  }
+  if (
+    (parsed.data.MCP_APPROVAL_STATE_DIR === undefined) !==
+    (parsed.data.MCP_APPROVAL_HMAC_KEY === undefined)
+  ) {
+    throw new Error(
+      'Invalid configuration:\n  - MCP_APPROVAL_STATE_DIR and MCP_APPROVAL_HMAC_KEY must be configured together',
     );
   }
   return parsed.data;

@@ -60,7 +60,19 @@ DiscordError
 | `GUILD_NOT_ALLOWED` | client | no | The resolved guild is not in `ALLOWED_GUILDS`. |
 | `GUILD_SCOPE_UNRESOLVED` | client | no | An active guild allowlist cannot prove the target guild before execution. |
 | `BOT_SCOPE_UNRESOLVED` | client | no | An application-scoped write cannot be tied to the identity-locked bot application. |
+| `RUNTIME_ACCESS_DENIED` | client | no | Complete runtime evidence proves a declared permission, intent, or hierarchy requirement is missing. |
+| `RUNTIME_ACCESS_UNKNOWN` | client | no | Runtime identity, scope, permission, or intent evidence could not be completed. |
 | `DRY_RUN_PREVIEW` | client | no | A confirm-gated tool was previewed, not executed. |
+| `WRITE_PREVIEW` | client | no | Global write-preview mode blocked a mutation before Discord. |
+| `DM_CONSENT_REQUIRED` | client | no | A recipient-bound caller approval is required before opening a DM channel. |
+| `DM_CONSENT_REJECTED` | client | no | A DM approval is missing, expired, replayed, or bound to a different recipient. |
+| `DM_OUTCOME_UNKNOWN` | client | no | A DM POST may have landed, but its response was lost; verify state before any new attempt. |
+| `PAYLOAD_CONFIRMATION_REQUIRED` | client | no | A Components V2 send/edit/template call was previewed and needs an exact payload hash approval. |
+| `PAYLOAD_CONFIRMATION_MISMATCH` | client | no | The supplied Components V2 approval hash does not match the current payload. |
+| `PAYLOAD_CONFIRMATION_APPROVAL_MISSING` | client | no | The one-time Components V2 approval ID is absent or unknown to this process. |
+| `PAYLOAD_CONFIRMATION_APPROVAL_EXPIRED` | client | no | The one-time Components V2 approval expired before execution. |
+| `PAYLOAD_CONFIRMATION_APPROVAL_REPLAYED` | client | no | The one-time Components V2 approval was already consumed. |
+| `PAYLOAD_CONFIRMATION_APPROVAL_MISMATCH` | client | no | The approval ID is bound to a different locked bot, tool, target, or payload. |
 | `CANCELLED` | client | no | The MCP client cancelled the call. |
 | `DISCORD_SERVER_ERROR` | server | yes | Discord returned an upstream server failure. |
 | `CIRCUIT_OPEN` | server | yes | The local circuit breaker is open. |
@@ -87,8 +99,10 @@ reaches the generic formatter is reported as `INTERNAL_ERROR`.
 
 ## Dry-run preview
 
-Only tools registered with confirmation metadata-currently 31 tools-participate
-in this gate. Ordinary writes such as `messages_send` can execute immediately.
+Legacy confirmation metadata currently covers 31 destructive tools. Components
+V2 `send`/`edit`/`send_from_template` writes use the separate payload-bound gate; ordinary writes
+such as `messages_send` can still execute immediately unless
+`MCP_WRITE_MODE=preview` is enabled.
 
 ```json
 {
@@ -108,6 +122,14 @@ in this gate. Ordinary writes such as `messages_send` can execute immediately.
 
 To execute a gated call, the server must run with `MCP_DRY_RUN=false` and the
 request must include `__confirm: true`. See [Confirmation](/discord-mcp/architecture/confirmation/).
+
+For a Components V2 write, the first call returns
+`PAYLOAD_CONFIRMATION_REQUIRED` with `payload_hash`, `approval_id`, its expiry,
+and `risk_flags`. Retry before expiry with `MCP_DRY_RUN=false`, `__confirm:true`,
+the exact `__confirm_hash`, and `__confirm_id`. The ID is consumed once; a
+replayed or expired ID must be replaced by a fresh preview.
+If any target or component value changes, the server returns
+`PAYLOAD_CONFIRMATION_MISMATCH` and makes no Discord request.
 
 ## Resilience mappings
 

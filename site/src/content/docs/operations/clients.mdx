@@ -16,8 +16,8 @@ unless your MCP host or deployment model requires something else.
 | Combination | Use it when | Host-visible catalog | Gateway | Continue with |
 |---|---|---|---|---|
 | **Local stdio + progressive** | A local client can start discord-mcp and use the direct plan/apply/evidence lifecycle for one-request architecture, then search/dispatch other tools. This is the guided setup default. | **7 visible tools when authorized** (4 search/dispatch tools plus 3 architecture tools) | Optional | [Client setup](/discord-mcp/start/client-setup/) |
-| **Local stdio + full** | A compatibility-oriented client must receive its allowed direct tool contracts up front. | up to 208 visible tools; allowlists can reduce this | Optional | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
-| **Streamable HTTP + full** | A remote caller has native deferred loading or tool search, such as the OpenAI Responses API. | up to 208 direct tools; the caller defers them | Unavailable | [OpenAI remote MCP](/discord-mcp/operations/openai/) |
+| **Local stdio + full** | A compatibility-oriented client must receive its allowed direct tool contracts up front. | up to 209 visible tools; allowlists can reduce this | Optional | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
+| **Streamable HTTP + full** | A remote caller has native deferred loading or tool search, such as the OpenAI Responses API. | up to 209 direct tools; the caller defers them | Unavailable | [OpenAI remote MCP](/discord-mcp/operations/openai/) |
 | **Streamable HTTP + progressive** | A remote MCP host lacks native deferred loading but can use the direct plan/apply/evidence lifecycle for one-request architecture, then search and dispatch other tools. | 7 tools when architecture is authorized; otherwise 4 visible tools for discovery/dispatch | Unavailable | [Tool-surface configuration](/discord-mcp/reference/config/access/#mcp_tool_surface) |
 
 <Aside type="caution" title="HTTP does not create per-user Discord identities">
@@ -70,7 +70,7 @@ discovery.
   obvious preview, approved apply/resume, and independent evidence lifecycle. Other Discord tools
   remain searchable under their canonical names and are called through the risk-matched dispatcher.
   Use it when the host does not already defer a large MCP catalog.
-- **`full`** advertises up to 208 direct tools. `MCP_CATEGORIES` and `ALLOWED_GUILDS` can
+- **`full`** advertises up to 209 direct tools. `MCP_CATEGORIES` and `ALLOWED_GUILDS` can
   intentionally hide contracts that the configured server scope cannot use. Choose this surface
   for compatibility or when the caller already supplies native deferred loading, such as OpenAI
   Responses API `tool_search`.
@@ -116,9 +116,9 @@ version matrix.
 | Discord tool catalog | `tools` list/call | Core functionality is unavailable. |
 | Progressive discovery | Ability to call the seven visible MCP tools when guild architecture is authorized, or the four search/dispatcher tools otherwise | Use the full surface if the host cannot search and dispatch. |
 | Components V2 schema/template catalog | `resources` list/read | Use the tool reference and builder tools instead. |
-| Live Gateway notifications | Resource subscriptions | REST tools still work; the client cannot receive push updates. |
+| Live Gateway notifications | Resource subscriptions | `guild/{id}/info` can be reread as an allowlisted snapshot; voice/presence/typing/audit URIs remain signal-only. |
 | Intelligence tools | Sampling | The tool returns a host-processing fallback payload instead of completed analysis. |
-| Confirmation gate | No capability beyond tools | `__confirm` is a tool argument; discord-mcp does not require MCP elicitation. |
+| Confirmation gate | No capability beyond tools | Legacy destructive calls use `__confirm`; Components V2 send/edit/template use `__confirm_hash` + one-time `__confirm_id`; discord-mcp does not require MCP elicitation. |
 
 <Aside type="caution">
 The server advertises subscription support even when Gateway mode is inactive. Treat a real
@@ -130,7 +130,7 @@ notification—not initialization metadata—as the success signal.
 1. Run `discord-mcp doctor --online --profile devbot` where `DISCORD_TOKEN` is available.
 2. Restart the MCP client and inspect `tools/list`: expect seven tools for `progressive` when
    guild architecture is authorized, or four search/dispatcher tools otherwise; `full` can
-   expose up to 208, with fewer expected when category or guild allowlists narrow the server.
+   expose up to 209, with fewer expected when category or guild allowlists narrow the server.
 3. Follow the [verified first-tool flow](/discord-mcp/start/quickstart/) for a read-only identity
    and channel check through the chosen surface.
 4. If the workflow needs sampling, verify whether the result is completed or a host-processing

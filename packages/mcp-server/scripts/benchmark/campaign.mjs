@@ -204,6 +204,8 @@ function failedTrialResult(trial) {
     plan_snapshot_unchanged: false,
     progressive_discovery_succeeded: false,
     dry_run_observed_before_apply: false,
+    apply_result_loss_observed: false,
+    apply_result_loss_recovered: false,
     forced_resume_observed: trial.mode === 'forced_resume' ? false : null,
     operations_planned: 0,
     apply_calls: 0,

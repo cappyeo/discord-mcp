@@ -1,5 +1,5 @@
 /**
- * Registry-wide invariants over all 208 tools.
+ * Registry-wide invariants over all 209 tools.
  *
  * These are the checks that per-tool test files structurally cannot make: a
  * tool that forgets its confirm gate, mislabels itself as read-only, or
@@ -15,6 +15,11 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { DiscordAccessRequirement } from '../access/requirements.js';
+import {
+  auditToolAccessCoverage,
+  listKnownToolAccessRequirements,
+} from '../access/requirements.js';
 
 interface ToolMeta {
   name: string;
@@ -29,6 +34,7 @@ interface ToolMeta {
   };
   preconditions: readonly string[];
   sourcePath: string;
+  access?: DiscordAccessRequirement;
 }
 
 const TOOLS_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -69,7 +75,7 @@ beforeAll(async () => {
 
 describe('tool registry invariants', () => {
   it('discovers the full advertised tool surface', () => {
-    expect(tools.length).toBe(208);
+    expect(tools.length).toBe(209);
     expect(new Set(tools.map((t) => t.name)).size).toBe(tools.length);
     expect(new Set(tools.map((t) => t.category)).size).toBe(31);
   });
@@ -121,13 +127,45 @@ describe('tool registry invariants', () => {
     expect(incomplete).toEqual([]);
   });
 
+  it('reports every tool with a reviewed access contract', () => {
+    const coverage = auditToolAccessCoverage(tools);
+    expect(coverage.total).toBe(tools.length);
+    expect(coverage.registryFallback).toBeLessThan(listKnownToolAccessRequirements().length);
+    expect(coverage.known).toBeGreaterThanOrEqual(listKnownToolAccessRequirements().length);
+    expect(coverage.unknown).toBe(0);
+    expect(coverage.unknown).toBe(coverage.total - coverage.known);
+    expect(coverage.entries.filter((entry) => entry.status === 'unknown')).toEqual([]);
+    expect(coverage.entries.find((entry) => entry.toolName === 'app_emojis_create')).toMatchObject({
+      status: 'known',
+      source: 'colocated',
+    });
+    expect(coverage.entries.find((entry) => entry.toolName === 'components_v2_send')).toMatchObject(
+      {
+        status: 'known',
+        source: 'colocated',
+      },
+    );
+    expect(
+      coverage.entries.find((entry) => entry.toolName === 'guild_blueprint_apply'),
+    ).toMatchObject({
+      status: 'known',
+      source: 'registry',
+      requirement: { verification: 'delegated' },
+    });
+    expect(coverage.entries.find((entry) => entry.toolName === 'users_create_dm')).toMatchObject({
+      status: 'known',
+      source: 'colocated',
+      requirement: { scope: 'user' },
+    });
+  });
+
   it('names every tool `<category>_<verb>` and keeps it MCP-legal', () => {
     // Two categories ship a prefix that differs from the directory name. Both
     // predate the freeze and renaming a tool is a breaking change, so they are
     // allowlisted rather than "fixed" - the point of the check is to catch a
     // NEW tool landing under the wrong prefix.
     const PREFIX_EXCEPTIONS: Record<string, readonly string[]> = {
-      meta: ['mcp_'],
+      meta: ['mcp_', 'discord_'],
       monetization: ['entitlements_', 'skus_', 'subscriptions_'],
     };
     for (const t of tools) {

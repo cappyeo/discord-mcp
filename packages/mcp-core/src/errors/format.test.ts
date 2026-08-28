@@ -16,8 +16,13 @@ import {
   DiscordNotFoundError,
   DiscordPermissionError,
   DiscordRateLimitError,
+  DmOutcomeUnknown,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
+  PayloadConfirmationApprovalExpired,
+  PayloadConfirmationApprovalMismatch,
+  PayloadConfirmationApprovalMissing,
+  PayloadConfirmationApprovalReplayed,
   ScopeRejectedError,
   ValidationError,
 } from './index.js';
@@ -208,6 +213,35 @@ describe('formatErrorForUser', () => {
     const text = (r.content as Array<{ text: string }>)[0]!.text;
     expect(text).toMatch(/Write Preview/);
     expect(text).toContain('MCP_WRITE_MODE=allow');
+  });
+
+  it('formats an ambiguous DM result as non-retriable outcome-unknown evidence', () => {
+    const r = formatErrorForUser(new DmOutcomeUnknown('111122223333444499'), stdio);
+    expect(r.structuredContent).toMatchObject({
+      code: 'DM_OUTCOME_UNKNOWN',
+      retriable: false,
+      recipient_id: '111122223333444499',
+      outcome: 'unknown',
+    });
+    expect((r.content as Array<{ text: string }>)[0]!.text).toContain('Do not retry');
+  });
+
+  it.each([
+    [PayloadConfirmationApprovalMissing, 'PAYLOAD_CONFIRMATION_APPROVAL_MISSING'],
+    [PayloadConfirmationApprovalReplayed, 'PAYLOAD_CONFIRMATION_APPROVAL_REPLAYED'],
+    [PayloadConfirmationApprovalExpired, 'PAYLOAD_CONFIRMATION_APPROVAL_EXPIRED'],
+    [PayloadConfirmationApprovalMismatch, 'PAYLOAD_CONFIRMATION_APPROVAL_MISMATCH'],
+  ] as const)('formats %p as a safe approval rejection', (ErrorType, code) => {
+    const r = formatErrorForUser(new ErrorType('components_v2_send', 'approval-1'), stdio);
+    expect(r.structuredContent).toMatchObject({
+      code,
+      tool: 'components_v2_send',
+      approval_id: 'approval-1',
+      retriable: false,
+      category: 'client',
+      recovery_hint: expect.any(String),
+    });
+    expect((r.content as Array<{ text: string }>)[0]!.text).toContain('no action taken');
   });
 
   it('formats CancelledError', () => {

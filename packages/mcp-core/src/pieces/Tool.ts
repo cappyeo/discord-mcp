@@ -1,5 +1,6 @@
 import { Piece } from '@sapphire/pieces';
 import type { z } from 'zod';
+import type { DiscordAccessRequirement } from '../access/requirements.js';
 
 export interface ToolAnnotations {
   readonly readOnlyHint: boolean;
@@ -7,6 +8,8 @@ export interface ToolAnnotations {
   readonly idempotentHint: boolean;
   readonly openWorldHint: boolean;
 }
+
+export type ToolConfirmation = 'payload_hash';
 
 export interface ToolRunContext {
   readonly signal: AbortSignal;
@@ -33,6 +36,12 @@ export abstract class Tool extends Piece<Tool.Options, 'tools'> {
 
   /** Identifiers of preconditions to run before the handler. */
   public readonly preconditions: readonly string[] = [];
+
+  /** Optional approval contract enforced by shared middleware. */
+  public readonly confirmation: ToolConfirmation | undefined = undefined;
+
+  /** Optional machine-readable Discord permission/data-access contract. */
+  public readonly access: DiscordAccessRequirement | undefined = undefined;
 
   /** Optional MCP scopes the tool requires (informational v1; gating lands v2 with OAuth). */
   public readonly scopes: readonly string[] = [];

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { CHANNEL_READ_ACCESS } from '../../access/requirements.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId } from '../_lib/snowflake.js';
@@ -23,6 +24,7 @@ interface RawChannelDetail {
 export default defineTool({
   name: 'channels_get',
   category: 'channels',
+  access: CHANNEL_READ_ACCESS,
   description:
     '**Purpose**: Fetch full metadata for a single Discord channel.\n\n**When to use**: inspect topic, slowmode, nsfw of a known channel.\n\n**Returns**: `{id, name, type, nsfw, topic, rate_limit_per_user, position?, parent_id?, guild_id?}`. `name` is `null` for DMs. `position` and `parent_id` are guild-channel-only - both are absent for threads and DMs. Structured `topic` remains raw user-controlled data; the human-readable text response fences it.',
   inputSchema: {

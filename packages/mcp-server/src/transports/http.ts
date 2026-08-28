@@ -6,7 +6,10 @@ import {
   buildServer,
   createAuditSink,
   createLogger,
+  createRuntimeAccessResolver,
+  FilePayloadApprovalLedger,
   loadConfig,
+  PayloadApprovalLedger,
   verifyExpectedBotIdentity,
   wrapRestWithResilience,
 } from '@discord-mcp/core';
@@ -129,6 +132,18 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     circuitHalfOpenAfterMs: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
   });
   await verifyExpectedBotIdentity(rest, config.DISCORD_EXPECTED_BOT_ID);
+  const runtimeAccessResolver =
+    config.MCP_ACCESS_MODE === 'advisory'
+      ? undefined
+      : createRuntimeAccessResolver({
+          rest,
+          ...(config.DISCORD_EXPECTED_BOT_ID === undefined
+            ? {}
+            : { expectedBotId: config.DISCORD_EXPECTED_BOT_ID }),
+          // Streamable HTTP is REST-only here; no privileged Gateway intents
+          // are active, so intent-requiring calls stay non-admissible.
+          runtimeIntents: { GUILD_MEMBERS: 'missing', MESSAGE_CONTENT: 'missing' },
+        });
   const otel: OtelHandle | null = config.OTEL_ENABLED
     ? (await import('../otel.js')).startOtel(config)
     : null;
@@ -138,7 +153,20 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
 
   // The v2 handler builds a fresh MCP server for every request. Audit output,
   // however, is process-scoped so file/OTLP sinks are opened and flushed once.
-  const auditSink = createAuditSink(config);
+  const auditSink = createAuditSink(
+    config,
+    otel?.auditEmitter === undefined ? {} : { otlpEmitter: otel.auditEmitter },
+  );
+  // HTTP builds a fresh MCP server per request. Keep approval state at the
+  // process/deployment boundary so preview and one-time execution can occur
+  // across two stateless HTTP exchanges without sharing Discord credentials.
+  const payloadApprovalLedger =
+    config.MCP_APPROVAL_STATE_DIR !== undefined && config.MCP_APPROVAL_HMAC_KEY !== undefined
+      ? new FilePayloadApprovalLedger({
+          directory: config.MCP_APPROVAL_STATE_DIR,
+          secret: config.MCP_APPROVAL_HMAC_KEY,
+        })
+      : new PayloadApprovalLedger();
   const reportMcpError = (error: Error): void => {
     logger.error({ err: error }, 'MCP HTTP request failed');
   };
@@ -151,6 +179,14 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           config,
           transport: 'http',
           auditSink,
+          payloadApprovalLedger,
+          ...(runtimeAccessResolver === undefined ? {} : { runtimeAccessResolver }),
+          ...(runtimeAccessResolver === undefined
+            ? {}
+            : {
+                onRuntimeAccessWarning: (message: string) =>
+                  logger.warn({ access: 'runtime' }, message),
+              }),
           onBlueprintLifecycle: recordBlueprintActivity,
         })
       ).server,

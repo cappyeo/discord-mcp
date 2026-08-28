@@ -23,8 +23,11 @@ exports[`CLI surface > matches the frozen snapshot 1`] = `
       "isDefault": false,
       "name": "doctor",
       "options": [
+        "--access",
+        "--channel-id <id>",
         "--client <id>",
         "--config <path>",
+        "--guild-id <id>",
         "--json",
         "--online",
         "--profile <name>",

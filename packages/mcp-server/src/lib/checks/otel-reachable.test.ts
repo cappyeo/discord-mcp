@@ -257,6 +257,50 @@ describe('otelReachableCheck', () => {
     expect(r.details?.headers_configured).toBe(3);
   });
 
+  it('probes OTLP logs for an enabled otlp audit sink and sends configured headers', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('', { status: 405 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await otelReachableCheck.run(
+      makeConfig({
+        OTEL_ENABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318',
+        OTEL_EXPORTER_OTLP_HEADERS: 'x-api-key=secret-value',
+        MCP_AUDIT_ENABLED: true,
+        MCP_AUDIT_SINK: 'otlp',
+      }),
+    );
+    expect(r.status).toBe('ok');
+    expect(r.details?.logs_status).toBe(204);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'HEAD',
+      headers: { 'x-api-key': 'secret-value' },
+    });
+    expect(JSON.stringify(r)).not.toContain('secret-value');
+  });
+
+  it('warns when the configured OTLP audit logs endpoint rejects the probe', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(new Response('', { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await otelReachableCheck.run(
+      makeConfig({
+        OTEL_ENABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318',
+        MCP_AUDIT_ENABLED: true,
+        MCP_AUDIT_SINK: 'otlp',
+      }),
+    );
+    expect(r.status).toBe('warn');
+    expect(r.details?.logs_status).toBe(401);
+    expect(r.message).toContain('audit logs');
+  });
+
   it('hits the configured endpoint at /v1/traces with HEAD method', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

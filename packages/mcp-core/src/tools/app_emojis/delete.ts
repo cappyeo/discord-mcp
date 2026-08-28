@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { BOT_APPLICATION_ACCESS } from '../../access/requirements.js';
 import { resolveApplicationId } from '../_lib/application.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
@@ -9,6 +10,7 @@ import { ApplicationId, EmojiId } from '../_lib/snowflake.js';
 export default defineTool({
   name: 'app_emojis_delete',
   category: 'app_emojis',
+  access: BOT_APPLICATION_ACCESS,
   preconditions: ['confirm_required'] as const,
   description: [
     '**Purpose**: Delete an application emoji. **DESTRUCTIVE - IRREVERSIBLE.**',

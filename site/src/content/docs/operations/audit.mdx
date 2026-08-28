@@ -7,10 +7,12 @@ sidebar:
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-The audit middleware emits an event for tools whose metadata declares
-`idempotent: false`. This is not the same as a complete write audit: some
-Discord writes are idempotent and are skipped by the current predicate. Use
-the trail as an operational aid, not proof that every mutation was captured.
+The audit middleware emits an event for every tool whose metadata is not
+explicitly read-only and whose handler is actually reached. Idempotent writes
+are included: idempotency describes retry semantics, not whether Discord
+changed. Validation, scope, write-mode, and precondition rejections stop before
+the audit layer. Use the trail as an operational aid and verify coverage against
+the exact tool set before making a compliance claim.
 
 This page covers sink configuration, log forwarding, retention, and the
 on-disk JSONL schema.
@@ -21,7 +23,7 @@ on-disk JSONL schema.
 | ---- | -------- | -------- |
 | `stderr` (default) | `MCP_AUDIT_SINK=stderr` | Local stdio (the default) or HTTP deployments whose stderr is shipped to a log aggregator (Loki, CloudWatch, Datadog Logs). |
 | `file` | `MCP_AUDIT_SINK=file` + optional `MCP_AUDIT_FILE=/path/to/audit.jsonl` | Long-running daemon deployments where stderr is owned by another process. |
-| `otlp` (stub) | `MCP_AUDIT_SINK=otlp` | Reserved for the OTel Logs pipeline. **Currently a stub** - falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]` prefix so misconfiguration is visible. Will become real once `@opentelemetry/api-logs` LoggerProvider lands in `mcp-server/otel.ts`. |
+| `otlp` | `MCP_AUDIT_SINK=otlp` + `OTEL_ENABLED=true` + `OTEL_EXPORTER_OTLP_ENDPOINT=...` | Sends redacted audit records through the server-owned OTel Logs pipeline to `/v1/logs`. If telemetry or the endpoint is not configured, it falls back to stderr with a visible `[FALLBACK:logs-pipeline-not-wired]` prefix; a runtime collector outage is best-effort and may drop queued records. |
 | `none` | `MCP_AUDIT_SINK=none` or `MCP_AUDIT_ENABLED=false` | When the deployment is in a regulated context that explicitly bans logging the body of mutating ops, or for unit-test isolation. |
 
 <Aside type="note">
@@ -61,26 +63,34 @@ to "force-on" audit when it's disabled at the master switch.
   `mcp-server/src/transports/stdio.ts`).
 
   </TabItem>
-  <TabItem label="OTLP (stub)">
+  <TabItem label="OTLP Logs">
+
+  The server boots a `LoggerProvider` with a bounded
+  `BatchLogRecordProcessor` and an OTLP HTTP logs exporter. The exporter posts
+  JSON log batches to the same base endpoint used by traces and metrics, at
+  `/v1/logs`.
 
   ```bash
+  export OTEL_ENABLED=true
+  export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+  export OTEL_EXPORTER_OTLP_HEADERS=x-api-key=YOUR_KEY
   export MCP_AUDIT_ENABLED=true
   export MCP_AUDIT_SINK=otlp
   discord-mcp serve
   ```
 
-  Today this falls back to stderr with a `[FALLBACK:logs-pipeline-not-wired]`
-  prefix. It is intentionally not silent - enabling `otlp` should not drop
-  events when the LoggerProvider is not yet wired.
+  The queue is bounded (1,024 records; batches up to 128) and exports have a
+  five-second timeout. Collector failure never turns a Discord mutation into
+  a tool failure; records can be dropped and the SDK reports exporter errors
+  through its diagnostics. Shutdown attempts a bounded flush. This is
+  best-effort delivery, not a durable disk spool or compliance-grade
+  write-once ledger.
 
-  The full OTLP path requires:
-
-  1. `@opentelemetry/api-logs` LoggerProvider boot in `mcp-server/src/otel.ts`.
-  2. A logs pipeline (BatchLogRecordProcessor → OTLPLogExporter) wired to the
-     same OTLP endpoint as traces.
-  3. `OtlpAuditSink` swapped from stderr-fallback to `logger.emit(...)`.
-
-  Tracked but out of scope for v0.8.x.
+  If `OTEL_ENABLED` or the endpoint is missing, the explicit stderr fallback
+  remains active so selecting `otlp` cannot silently discard events. Once the
+  pipeline is running, exporter failure is reported without replaying the
+  event to stderr; configure a separate durable collector or file sink when
+  guaranteed retention is required.
 
   </TabItem>
   <TabItem label="none">
@@ -132,18 +142,18 @@ the `stderr` sink, not the `file` sink, in a container.
 
 ## Coverage and compliance limits
 
-### Idempotent tools are NOT audited
+### Read-only tools are NOT audited
 
-The audit middleware short-circuits when `tool.idempotent === true`. This
-covers read-only operations, but it also excludes idempotent writes. The
-current catalog contains write tools that therefore do not emit an event.
+The audit middleware short-circuits only when the tool's
+`annotations.readOnlyHint` is explicitly true. This keeps read patterns out of
+the mutation trail while retaining idempotent writes.
 
 - `messages_read`, `messages_get`, `channels_list`, `channels_get`,
   `members_search`, etc. - anything that returns data without mutation.
 
 Read patterns remain visible through telemetry when it is enabled, but spans
 and audit events have different retention and integrity properties. There is
-currently no flag to include reads or idempotent writes. If your controls
+currently no flag to include reads. If your controls
 require complete change or access logging, add an external boundary and verify
 coverage against the exact tool set before production use.
 
@@ -189,7 +199,7 @@ Every event written to the sink is a single JSON object on one line. Fields:
 | `request_id` | string | yes | UUID v4 from the MCP request. Empty string if not yet set (rare; should not happen in practice). |
 | `tool` | string | yes | Tool name, e.g. `messages_send`. |
 | `category` | string | yes | Tool category (e.g. `messages`, `webhooks`). |
-| `idempotent` | boolean | yes | Always `false` for emitted events (idempotent tools are skipped). |
+| `idempotent` | boolean | yes | Retry-semantics hint copied from the tool; may be `true` for an audited idempotent write. |
 | `args_redacted` | object | yes | Redacted arg payload - see redaction section above. |
 | `status` | `success` / `tool_error` / `thrown` | yes | Outcome: handler succeeded, returned `isError: true`, or threw. |
 | `duration_ms` | number | yes | Wall-clock duration of the tool call. |
@@ -200,7 +210,11 @@ Every event written to the sink is a single JSON object on one line. Fields:
 
 Stderr-sink emissions also wrap the event with `{"level":"audit",...}` so
 log routers can filter by level. File-sink emissions are the bare event (no
-wrapper) - the file path itself is the routing.
+wrapper) - the file path itself is the routing. OTLP emissions use the same
+`level: "audit"` JSON body and add only bounded routing attributes (`tool`,
+`category`, `status`, `transport`, `idempotent`, and optional request/result
+identifiers); credentials and raw authorization headers are never copied into
+those attributes.
 
 ## Reference: env vars
 

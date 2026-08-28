@@ -32,7 +32,7 @@ the installed package before setup. This command requires no Discord token, does
 It is catalog validation only and does not count as Activity Evidence. After a successful
 check, continue to the first-time setup flow to connect a caller-owned bot.
 With `--json`, the schema is `discord-mcp.catalog-check.v1` and the result reports
-208 tools, 6 static resources, `CATALOG_ONLY`, `credentials_required: false`,
+209 tools, 6 static resources, `CATALOG_ONLY`, `credentials_required: false`,
 `discord_execution: "disabled"`, and `activity_evidence_created: false`; it does not
 prove AI-host or live Discord connectivity.
 

@@ -81,6 +81,10 @@ const SENSITIVE_KEYS_BY_TOOL: Record<string, ReadonlySet<string>> = {
   interactions_edit_original_response: new Set(['content', 'embeds', 'components', 'payload_json']),
   interactions_create_followup: new Set(['content', 'embeds', 'components', 'payload_json']),
   interactions_edit_followup: new Set(['content', 'embeds', 'components', 'payload_json']),
+  // Approval material is a short-lived capability, not ordinary telemetry.
+  // Keep the recipient visible for audit correlation but never persist the
+  // hash or one-time ID that could be replayed within its TTL.
+  users_create_dm: new Set(['__consent_hash', '__consent_id']),
   // `mcp_pipeline` is deliberately absent: its sensitive values live in
   // `steps[].args`, which `redactPipelineArgs` redacts under each step's own
   // tool rules. A flat key set here could not do that.
