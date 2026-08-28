@@ -94,6 +94,26 @@ describe('evaluateBotPermissions', () => {
     expect(result.confidence).toBe('complete');
   });
 
+  it('keeps administrator evidence complete when Discord adds an unknown bit', () => {
+    const result = evaluateBotPermissions({
+      guildId: GUILD_ID,
+      roles: [
+        everyone,
+        {
+          ...everyone,
+          id: ROLE_ID,
+          position: 4,
+          permissions: String(8n | (1n << 47n)),
+        },
+      ],
+      member: { id: BOT_ID, roles: [ROLE_ID] },
+    });
+
+    expect(result.administrator).toBe(true);
+    expect(result.unknownPermissionBits).toBe(1n << 47n);
+    expect(result.confidence).toBe('complete');
+  });
+
   it('keeps channel access partial when overwrites are not returned', () => {
     const result = evaluateBotPermissions({
       guildId: GUILD_ID,

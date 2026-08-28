@@ -208,7 +208,10 @@ this rollout: `unknown` evidence is kept separate from `denied`, and it does
 not replace the server-side authorization middleware. `tool_access` is an
 explicitly labelled catalogued subset (`tool_access_scope: catalogued_subset`,
 with its `tool_access_catalogued_count`). Future tools absent from the reviewed
-catalog are reported as unknown rather than silently admitted.
+catalog are reported as unknown rather than silently admitted. A guild owner or
+Administrator is treated as complete evidence for the declared known permission
+bits even if Discord returns a newer unknown bit; that bit remains visible in
+`unknown_permission_bits` for upgrade diagnostics.
 
 For field-dependent tools such as `members_modify`, the report uses
 `conditional` until an exact action payload is available; the runtime gate then
