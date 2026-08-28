@@ -13,6 +13,7 @@ import { evaluateRuntimeAccess, type RuntimeAccessRequest } from './runtime.js';
 const BOT_ID = '987654321098765432';
 const GUILD_ID = '111122223333444455';
 const CHANNEL_ID = '222233334444555566';
+const SECOND_CHANNEL_ID = '333344445555666688';
 const ROLE_ID = '333344445555666677';
 const TARGET_ROLE_ID = '444455556666777788';
 const SKU_ID = '555566667777888899';
@@ -61,6 +62,61 @@ function guildRoutes(overrides: Record<string, unknown> = {}): Record<string, un
 }
 
 describe('createRuntimeAccessResolver', () => {
+  it('resolves array channel targets and rejects malformed arrays', async () => {
+    const requirement = {
+      auth: 'bot',
+      permissions: ['VIEW_CHANNEL'],
+      intents: [],
+      scope: 'guild',
+      hierarchy: 'not_applicable',
+      permissionTargetFields: ['default_channel_ids'],
+    } as const;
+    const { rest } = restFor(
+      guildRoutes({
+        [Routes.channel(CHANNEL_ID)]: {
+          id: CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 0,
+          permission_overwrites: [],
+        },
+        [Routes.channel(SECOND_CHANNEL_ID)]: {
+          id: SECOND_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 0,
+          permission_overwrites: [],
+        },
+      }),
+    );
+    const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+    await expect(
+      resolver({
+        toolName: 'onboarding_modify',
+        args: { guild_id: GUILD_ID, default_channel_ids: [CHANNEL_ID, SECOND_CHANNEL_ID] },
+        requirement,
+        expectedBotId: BOT_ID,
+      }),
+    ).resolves.toMatchObject({
+      status: 'complete',
+      target: GUILD_ID,
+    });
+    await expect(
+      resolver({
+        toolName: 'onboarding_modify',
+        args: { guild_id: GUILD_ID, default_channel_ids: 'not-an-array' },
+        requirement,
+        expectedBotId: BOT_ID,
+      }),
+    ).resolves.toMatchObject({ status: 'unknown' });
+    await expect(
+      resolver({
+        toolName: 'onboarding_modify',
+        args: { guild_id: GUILD_ID, default_channel_ids: [CHANNEL_ID, 'bad-id'] },
+        requirement,
+        expectedBotId: BOT_ID,
+      }),
+    ).resolves.toMatchObject({ status: 'unknown' });
+  });
+
   it('honors the request bot lock even when the resolver has no configured lock', async () => {
     const { rest } = restFor(identityRoutes());
     const resolver = createRuntimeAccessResolver({ rest });
@@ -342,6 +398,46 @@ describe('createRuntimeAccessResolver', () => {
     expect(evidence.status).toBe('complete');
     expect(evidence.target).toContain(`${GUILD_ID}/${CHANNEL_ID}`);
     expect(evidence.target).toContain(`${FOREIGN_GUILD_ID}/${FOREIGN_CHANNEL_ID}`);
+    expect(evaluateRuntimeAccess(request, evidence).status).toBe('allowed');
+  });
+
+  it('intersects permission evidence when a contract names multiple channel targets', async () => {
+    const { rest } = restFor(
+      guildRoutes({
+        [Routes.channel(CHANNEL_ID)]: {
+          id: CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 0,
+          permission_overwrites: [],
+        },
+        [Routes.channel(SECOND_CHANNEL_ID)]: {
+          id: SECOND_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 0,
+          permission_overwrites: [],
+        },
+      }),
+    );
+    const requirement = {
+      ...CHANNEL_WRITE_ACCESS,
+      permissionTargetFields: ['channel_id', 'webhook_channel_id'],
+    } as const;
+    const request = {
+      toolName: 'test_multi_channel_write',
+      args: { channel_id: CHANNEL_ID, webhook_channel_id: SECOND_CHANNEL_ID },
+      requirement,
+      expectedBotId: BOT_ID,
+    } satisfies RuntimeAccessRequest;
+
+    const evidence = await createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID })(request);
+
+    expect(evidence).toMatchObject({
+      status: 'complete',
+      identityVerified: true,
+      botId: BOT_ID,
+    });
+    expect(evidence.target).toContain(`${GUILD_ID}/${CHANNEL_ID}`);
+    expect(evidence.target).toContain(`${GUILD_ID}/${SECOND_CHANNEL_ID}`);
     expect(evaluateRuntimeAccess(request, evidence).status).toBe('allowed');
   });
 
