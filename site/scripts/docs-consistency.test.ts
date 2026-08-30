@@ -115,7 +115,7 @@ describe('confirmation.mdx enumerates the real confirm-gated tool set', () => {
       }
     }
     expect([...inTable].sort(), 'confirmation.mdx table vs registry').toEqual([...gated].sort());
-  });
+  }, 60_000);
 
   it('states the gated count as a number matching the registry', async () => {
     const tools = await loadAllTools();

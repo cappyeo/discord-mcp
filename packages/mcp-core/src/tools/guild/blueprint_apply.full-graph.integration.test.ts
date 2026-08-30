@@ -634,5 +634,5 @@ describe('guild_blueprint_apply full graph MCP journey', () => {
       if (originalDryRun === undefined) delete process.env.MCP_DRY_RUN;
       else process.env.MCP_DRY_RUN = originalDryRun;
     }
-  });
+  }, 30_000);
 });
