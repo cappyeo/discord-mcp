@@ -281,10 +281,17 @@ describe('MCP result byte regression evidence', () => {
         channel_id: CHANNEL_ID,
         limit: 1,
         before: '999000999000990001',
-        after: '999000999000990002',
       },
     });
     expect(seenCursors.messageBefore).toBe('999000999000990001');
+    await client.callTool({
+      name: 'messages_read',
+      arguments: {
+        channel_id: CHANNEL_ID,
+        limit: 1,
+        after: '999000999000990002',
+      },
+    });
     expect(seenCursors.messageAfter).toBe('999000999000990002');
     for (const limit of [1, 50, 100]) {
       const result = await client.callTool({

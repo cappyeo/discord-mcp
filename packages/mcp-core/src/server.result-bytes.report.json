@@ -38,8 +38,8 @@
       "inputShape": "maximum",
       "itemCount": 100,
       "contentBytes": 206816,
-      "structuredContentBytes": 216177,
-      "totalSerializedBytes": 423042,
+      "structuredContentBytes": 216259,
+      "totalSerializedBytes": 423124,
       "duplicatedFieldBytes": 200000,
       "classBudgetBytes": 768000,
       "budgetBytes": 500000
@@ -90,8 +90,8 @@
       "inputShape": "default",
       "itemCount": 50,
       "contentBytes": 103514,
-      "structuredContentBytes": 108125,
-      "totalSerializedBytes": 211688,
+      "structuredContentBytes": 108207,
+      "totalSerializedBytes": 211770,
       "duplicatedFieldBytes": 100000,
       "classBudgetBytes": 768000,
       "budgetBytes": 500000
@@ -123,6 +123,19 @@
       "budgetBytes": 768000
     },
     {
+      "tool": "messages_search_recent",
+      "resultClass": "paginated_collection",
+      "budgetClass": "messages",
+      "inputShape": "small",
+      "itemCount": 1,
+      "contentBytes": 2287,
+      "structuredContentBytes": 2325,
+      "totalSerializedBytes": 4661,
+      "duplicatedFieldBytes": 2000,
+      "classBudgetBytes": 768000,
+      "budgetBytes": 500000
+    },
+    {
       "tool": "messages_read",
       "resultClass": "paginated_collection",
       "budgetClass": "messages",
@@ -131,19 +144,6 @@
       "contentBytes": 2287,
       "structuredContentBytes": 2291,
       "totalSerializedBytes": 4627,
-      "duplicatedFieldBytes": 2000,
-      "classBudgetBytes": 768000,
-      "budgetBytes": 500000
-    },
-    {
-      "tool": "messages_search_recent",
-      "resultClass": "paginated_collection",
-      "budgetClass": "messages",
-      "inputShape": "small",
-      "itemCount": 1,
-      "contentBytes": 2287,
-      "structuredContentBytes": 2243,
-      "totalSerializedBytes": 4579,
       "duplicatedFieldBytes": 2000,
       "classBudgetBytes": 768000,
       "budgetBytes": 500000
