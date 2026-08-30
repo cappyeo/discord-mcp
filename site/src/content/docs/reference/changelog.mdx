@@ -22,6 +22,10 @@ commit history and downloadable artifacts, see
 - Hardened blueprint checkpoint, Activity Evidence, and apply-lock reads with
   bounded descriptor I/O, regular-file identity checks, symlink rejection, and
   descriptor-verified publication permissions.
+- Hardened local profile storage with bounded descriptor reads, regular-file
+  identity checks, atomic exclusive publication, and final profile
+  file/directory symlink rejection. Profile metadata and command behavior
+  remain unchanged.
 - Updated compatible patch/minor dependencies across Discord REST, HTTP,
   validation, testing, and documentation tooling. Dependabot now keeps major
   and known Node-floor/toolchain migrations in dedicated review increments.
