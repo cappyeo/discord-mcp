@@ -144,6 +144,24 @@ describe('renderSchemaTable', () => {
     expect(md).toMatch(/`component`.*\|\s*yes\s*\|/);
   });
 
+  it('escapes table delimiters while preserving regex and inline-code backslashes', () => {
+    const md = renderSchemaTable({
+      mode: z
+        .enum(['left', 'right'])
+        .describe('Outside \\path | code `C:\\tmp|file` and `literal\\|pipe`'),
+      image: z.string().regex(/^data:image\/(jpeg|png)$/),
+      literal: z.string().regex(/^jpeg\|png$/),
+    });
+    const escapedLiteralPipe = `literal${'\\'.repeat(3)}|pipe`;
+    const escapedLiteralPattern = `pattern: \`^jpeg${'\\'.repeat(3)}|png$\``;
+
+    expect(md).toContain('"left" \\| "right"');
+    expect(md).toContain('Outside \\\\path \\| code `C:\\tmp\\|file`');
+    expect(md).toContain(`and \`${escapedLiteralPipe}\``);
+    expect(md).toContain('pattern: `^data:image\\/(jpeg\\|png)$`');
+    expect(md).toContain(escapedLiteralPattern);
+  });
+
   it('renders the complete JSON schema for nested inspection', () => {
     const schema = renderJsonSchema({ options: z.array(z.object({ label: z.string() })) });
     expect(schema).toContain('"options"');
