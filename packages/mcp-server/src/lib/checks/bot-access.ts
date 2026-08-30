@@ -10,6 +10,7 @@ import type { CheckResult } from './index.js';
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const PERMISSION_RE = /^\d+$/;
 const REQUEST_TIMEOUT_MS = 8_000;
+const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
 const INTENT_FLAGS: Readonly<
   Record<GatewayIntentName, { readonly approved: bigint; readonly limited: bigint }>
 > = {
@@ -91,13 +92,6 @@ function permissionString(value: unknown, label: string): string {
   return value;
 }
 
-function baseUrl(): string {
-  const configured = process.env.DISCORD_API_BASE_URL?.trim();
-  const raw =
-    configured === undefined || configured === '' ? 'https://discord.com/api/v10' : configured;
-  return raw.replace(/\/$/u, '');
-}
-
 function authHeader(token: string): string {
   return `Bot ${token.startsWith('Bot ') ? token.slice(4) : token}`;
 }
@@ -119,6 +113,7 @@ async function fetchJson(
 ): Promise<JsonResponse> {
   const response = await fetcher(`${base}${path}`, {
     method: 'GET',
+    redirect: 'error',
     headers: {
       Authorization: authHeader(token),
       'User-Agent': 'discord-mcp-doctor (https://github.com/cappyeo/discord-mcp)',
@@ -622,7 +617,7 @@ export async function botAccessPreflightCheck(options: BotAccessOptions): Promis
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const warnings: string[] = [];
-  const base = baseUrl();
+  const base = DISCORD_API_BASE_URL;
   let user: RawUser;
   let application: RawApplication | null = null;
 

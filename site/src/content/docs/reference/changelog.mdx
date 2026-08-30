@@ -11,6 +11,11 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
+- Hardened network and parsing boundaries found by the first CodeQL baseline:
+  bot credentials can no longer follow a remote `DISCORD_API_BASE_URL`, release
+  checks validate the exact GitHub repository path, npm update checks use the
+  fixed public registry endpoint, and adversarial fence/template/auth inputs
+  are handled without backtracking-prone regular expressions.
 - Updated compatible patch/minor dependencies across Discord REST, HTTP,
   validation, testing, and documentation tooling. Dependabot now keeps major
   and known Node-floor/toolchain migrations in dedicated review increments.

@@ -33,6 +33,7 @@ const originalStdinTTY = process.stdin.isTTY;
 const originalStdoutTTY = process.stdout.isTTY;
 const originalExitCode = process.exitCode;
 const originalDiscordToken = process.env.DISCORD_TOKEN;
+const originalDiscordApiBaseUrl = process.env.DISCORD_API_BASE_URL;
 
 let stdoutWrites: string[] = [];
 
@@ -66,6 +67,8 @@ afterEach(() => {
   } else {
     process.env.DISCORD_TOKEN = originalDiscordToken;
   }
+  if (originalDiscordApiBaseUrl === undefined) delete process.env.DISCORD_API_BASE_URL;
+  else process.env.DISCORD_API_BASE_URL = originalDiscordApiBaseUrl;
   Object.defineProperty(process.stdin, 'isTTY', {
     value: originalStdinTTY,
     configurable: true,
@@ -365,6 +368,7 @@ describe('initAction - live guild discovery', () => {
 
   it('uses DISCORD_TOKEN to verify a sole guild without persisting the secret', async () => {
     process.env.DISCORD_TOKEN = VALID_TOKEN;
+    process.env.DISCORD_API_BASE_URL = 'https://attacker.example/api/v10';
     const guildId = '111122223333444455';
     const fetchMock = stubDiscord([{ id: guildId, name: 'Test Guild', permissions: '0' }]);
 
@@ -384,7 +388,13 @@ describe('initAction - live guild discovery', () => {
     expect(parsed.data?.content).not.toContain('x'.repeat(60));
     expect(parsed.data?.discord?.bot).toEqual({ id: BOT.id, username: BOT.username });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.every(([input]) =>
+        String(input).startsWith('https://discord.com/api/v10/'),
+      ),
+    ).toBe(true);
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      redirect: 'error',
       headers: expect.objectContaining({ Authorization: VALID_TOKEN }),
     });
   });

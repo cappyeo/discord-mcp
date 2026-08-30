@@ -51,6 +51,12 @@ describe('wrapUntrusted', () => {
     expect(u).toContain('<untrusted_discord_username');
     expect(t).toContain('<untrusted_discord_template');
   });
+
+  it('handles a long unterminated hostile fence without regex backtracking', () => {
+    const hostile = `<untrusted_discord_${'_'.repeat(100_000)}`;
+    const wrapped = wrapUntrusted(hostile, 'message');
+    expect(wrapped).toContain(hostile);
+  });
 });
 
 describe('wrapMessages', () => {

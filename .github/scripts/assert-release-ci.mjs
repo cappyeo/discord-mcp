@@ -1,6 +1,21 @@
 import { pathToFileURL } from 'node:url';
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/i;
+const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const REPOSITORY_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,100}$/;
+
+function parseRepository(value) {
+  if (typeof value !== 'string') throw new Error('GITHUB_REPOSITORY is required');
+  const parts = value.split('/');
+  if (
+    parts.length !== 2 ||
+    !OWNER_PATTERN.test(parts[0] ?? '') ||
+    !REPOSITORY_PATTERN.test(parts[1] ?? '')
+  ) {
+    throw new Error('GITHUB_REPOSITORY must use the exact owner/repository form');
+  }
+  return parts;
+}
 
 export async function assertReleaseCi({
   sha,
@@ -12,12 +27,17 @@ export async function assertReleaseCi({
   if (!SHA_PATTERN.test(sha ?? '')) {
     throw new Error(`RELEASE_SHA must be a 40-character commit SHA, received ${sha ?? '(unset)'}`);
   }
-  if (!repository) throw new Error('GITHUB_REPOSITORY is required');
+  const [owner, name] = parseRepository(repository);
   if (!token) throw new Error('GITHUB_TOKEN is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetch is unavailable');
 
-  const url = `https://api.github.com/repos/${repository}/actions/runs?head_sha=${sha}&per_page=100`;
+  const url = new URL(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/runs`,
+  );
+  url.searchParams.set('head_sha', sha);
+  url.searchParams.set('per_page', '100');
   const response = await fetchImpl(url, {
+    redirect: 'error',
     headers: {
       accept: 'application/vnd.github+json',
       authorization: `Bearer ${token}`,

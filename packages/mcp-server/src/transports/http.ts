@@ -34,11 +34,18 @@ export interface StartHttpOptions {
   registerSignalHandlers?: boolean;
 }
 
-function hasValidBearerToken(authorization: string | undefined, expectedToken: string): boolean {
-  const match = authorization?.match(/^Bearer +(.+)$/i);
-  if (match === undefined || match === null) return false;
+export function hasValidBearerToken(
+  authorization: string | undefined,
+  expectedToken: string,
+): boolean {
+  if (authorization === undefined) return false;
+  const separator = authorization.indexOf(' ');
+  if (separator < 1 || authorization.slice(0, separator).toLowerCase() !== 'bearer') return false;
+  let tokenStart = separator + 1;
+  while (authorization[tokenStart] === ' ') tokenStart += 1;
+  if (tokenStart >= authorization.length) return false;
 
-  const suppliedToken = Buffer.from(match[1] as string);
+  const suppliedToken = Buffer.from(authorization.slice(tokenStart));
   const expected = Buffer.from(expectedToken);
   return suppliedToken.length === expected.length && timingSafeEqual(suppliedToken, expected);
 }

@@ -83,6 +83,10 @@ describe('escapeMdx', () => {
     expect(escapeMdx('{key:value}')).toBe('\\{key:value\\}');
   });
 
+  it('escapes backslashes before MDX control characters', () => {
+    expect(escapeMdx(String.raw`\{value}\<tag>`)).toBe(String.raw`\\\{value\}\\\<tag>`);
+  });
+
   it('leaves regular text untouched', () => {
     expect(escapeMdx('plain text 123')).toBe('plain text 123');
   });

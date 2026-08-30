@@ -20,7 +20,6 @@ export interface UpdateOptions {
   profileDirectory?: string;
   homeDirectory?: string;
   env?: NodeJS.ProcessEnv;
-  registryUrl?: string;
 }
 
 interface VersionParts {
@@ -133,11 +132,12 @@ function resolveCodexConfigPath(
   return join(root, 'config.toml');
 }
 
-async function latestPublishedVersion(registryUrl = REGISTRY_URL): Promise<string> {
+async function latestPublishedVersion(): Promise<string> {
   let response: Response;
   try {
-    response = await fetch(registryUrl, {
+    response = await fetch(REGISTRY_URL, {
       headers: { accept: 'application/json' },
+      redirect: 'error',
       signal: AbortSignal.timeout(5_000),
     });
   } catch (error) {
@@ -435,13 +435,13 @@ function writeAtomically(path: string, content: string): void {
 
 export async function inspectCodexLauncherUpdate(
   profile: DiscordMcpProfile,
-  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env' | 'registryUrl'> = {},
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'> = {},
 ): Promise<CodexLauncherUpdateInspection> {
   const source = readGeneratedCodexLauncher(profile, options);
 
   let targetVersion: string;
   try {
-    targetVersion = await latestPublishedVersion(options.registryUrl);
+    targetVersion = await latestPublishedVersion();
   } catch (error) {
     throw new CodexLauncherUpdateError(
       'registry-unavailable',

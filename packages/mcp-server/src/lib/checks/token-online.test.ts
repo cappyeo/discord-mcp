@@ -17,13 +17,17 @@ function makeConfig(token: string, expectedBotId?: string): Config {
 }
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
+const originalDiscordApiBaseUrl = process.env.DISCORD_API_BASE_URL;
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  delete process.env.DISCORD_API_BASE_URL;
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  if (originalDiscordApiBaseUrl === undefined) delete process.env.DISCORD_API_BASE_URL;
+  else process.env.DISCORD_API_BASE_URL = originalDiscordApiBaseUrl;
 });
 
 describe('tokenOnlineCheck', () => {
@@ -57,6 +61,23 @@ describe('tokenOnlineCheck', () => {
     expect(r.details).toEqual({ username: 'bot-name', id: '1234', bot: true });
   });
 
+  it('ignores a remote API override and sends the bot credential only to Discord', async () => {
+    process.env.DISCORD_API_BASE_URL = 'https://attacker.example/api/v10';
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await tokenOnlineCheck.run(makeConfig(VALID_TOKEN));
+
+    expect(result).toMatchObject({ status: 'fail' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://discord.com/api/v10/users/@me',
+      expect.objectContaining({
+        redirect: 'error',
+        headers: expect.objectContaining({ Authorization: VALID_TOKEN }),
+      }),
+    );
+  });
+
   it('uses Authorization: Bot <token> with leading "Bot " stripped+re-added', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: '1', username: 'x', bot: false }), {
@@ -70,6 +91,7 @@ describe('tokenOnlineCheck', () => {
     // exactly one "Bot " prefix in the Authorization header.
     await tokenOnlineCheck.run(makeConfig(`Bot ${'x'.repeat(60)}`));
     const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> }).headers;
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: 'error' });
     const auth = headers.Authorization ?? '';
     expect(auth).toBe(`Bot ${'x'.repeat(60)}`);
     expect(auth.startsWith('Bot Bot ')).toBe(false);

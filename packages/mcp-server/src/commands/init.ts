@@ -100,9 +100,9 @@ function discordAuthHeader(token: string): string {
 }
 
 async function discordGet(path: string, token: string): Promise<unknown> {
-  const baseUrl = process.env.DISCORD_API_BASE_URL ?? DISCORD_API_DEFAULT;
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await fetch(`${DISCORD_API_DEFAULT}${path}`, {
     method: 'GET',
+    redirect: 'error',
     headers: {
       Authorization: discordAuthHeader(token),
       'User-Agent': 'discord-mcp-init (https://github.com/cappyeo/discord-mcp)',
