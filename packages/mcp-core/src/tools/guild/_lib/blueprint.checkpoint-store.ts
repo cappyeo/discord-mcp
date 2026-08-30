@@ -4,12 +4,11 @@ import {
   chmod,
   copyFile,
   link,
+  lstat,
   mkdir,
   open,
   readdir,
-  readFile,
   rename,
-  stat,
   unlink,
 } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -33,6 +32,7 @@ const ACTIVITY_EVIDENCE_FILE_NAME = 'activity-evidence.json';
 // owners remain protected by the PID check regardless of lock age.
 const DEFAULT_STALE_LOCK_MS = 15_000;
 const MAX_LOCK_BYTES = 4_096;
+const MAX_CHECKPOINT_BYTES = 1_048_576;
 const MAX_ACTIVITY_EVIDENCE_BYTES = 1_048_576;
 
 const LockRecordSchema = z
@@ -78,14 +78,17 @@ export class BlueprintCheckpointStoreError extends Error {
     | 'INVALID_PLAN_ID'
     | 'INVALID_CHECKPOINT'
     | 'CHECKPOINT_MALFORMED'
+    | 'CHECKPOINT_UNSAFE'
     | 'CHECKPOINT_TAMPERED'
     | 'CHECKPOINT_VERSION_CONFLICT'
     | 'INVALID_EVIDENCE'
     | 'EVIDENCE_MALFORMED'
+    | 'EVIDENCE_UNSAFE'
     | 'EVIDENCE_TAMPERED'
     | 'EVIDENCE_CONFLICT'
     | 'EVIDENCE_IO'
     | 'LOCK_MALFORMED'
+    | 'LOCK_UNSAFE'
     | 'CHECKPOINT_IO';
 
   constructor(
@@ -133,6 +136,114 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
+type FileMetadata = Awaited<ReturnType<typeof lstat>>;
+
+function sameFileIdentity(expected: FileMetadata, actual: FileMetadata): boolean {
+  if (expected.ino !== actual.ino || expected.ino === 0) return false;
+  if (expected.dev === actual.dev) return true;
+  return process.platform === 'win32' && (expected.dev === 0 || actual.dev === 0);
+}
+
+async function inspectDirectory(
+  path: string,
+  unsafeCode: BlueprintCheckpointStoreError['code'],
+): Promise<boolean> {
+  let metadata: FileMetadata;
+  try {
+    metadata = await lstat(path);
+  } catch (error) {
+    if (isMissing(error)) return false;
+    throw error;
+  }
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    throw new BlueprintCheckpointStoreError(unsafeCode, 'Blueprint state directory is unsafe.');
+  }
+  return true;
+}
+
+interface BoundedFileRead {
+  readonly bytes: Buffer;
+  readonly stat: FileMetadata;
+}
+
+async function readBoundedRegularFile(
+  path: string,
+  maxBytes: number,
+  codes: {
+    readonly unsafe: BlueprintCheckpointStoreError['code'];
+    readonly nonFile: BlueprintCheckpointStoreError['code'];
+    readonly malformed: BlueprintCheckpointStoreError['code'];
+    readonly io: BlueprintCheckpointStoreError['code'];
+  },
+): Promise<BoundedFileRead | null> {
+  let metadata: FileMetadata;
+  try {
+    metadata = await lstat(path);
+  } catch (error) {
+    if (isMissing(error)) return null;
+    throw new BlueprintCheckpointStoreError(codes.io, 'Blueprint state could not be inspected.', {
+      cause: error,
+    });
+  }
+  if (metadata.isSymbolicLink()) {
+    throw new BlueprintCheckpointStoreError(codes.unsafe, 'Blueprint state file is unsafe.');
+  }
+  if (!metadata.isFile()) {
+    throw new BlueprintCheckpointStoreError(codes.nonFile, 'Blueprint state path is not a file.');
+  }
+  if (metadata.size > maxBytes) {
+    throw new BlueprintCheckpointStoreError(codes.malformed, 'Blueprint state file is too large.');
+  }
+
+  let handle: Awaited<ReturnType<typeof open>>;
+  try {
+    handle = await open(
+      path,
+      process.platform === 'win32' ? 'r' : fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+    );
+  } catch (error) {
+    if (isMissing(error)) return null;
+    throw new BlueprintCheckpointStoreError(codes.unsafe, 'Blueprint state file is unsafe.', {
+      cause: error,
+    });
+  }
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || !sameFileIdentity(metadata, opened) || opened.size > maxBytes) {
+      throw new BlueprintCheckpointStoreError(codes.unsafe, 'Blueprint state file is unsafe.');
+    }
+    const bytes = await readHandleBounded(handle, maxBytes);
+    if (bytes === null) {
+      throw new BlueprintCheckpointStoreError(
+        codes.malformed,
+        'Blueprint state file is too large.',
+      );
+    }
+    return { bytes, stat: opened };
+  } catch (error) {
+    if (error instanceof BlueprintCheckpointStoreError) throw error;
+    throw new BlueprintCheckpointStoreError(codes.io, 'Blueprint state file could not be read.', {
+      cause: error,
+    });
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+async function readHandleBounded(
+  handle: Awaited<ReturnType<typeof open>>,
+  maxBytes: number,
+): Promise<Buffer | null> {
+  const bytes = Buffer.alloc(maxBytes + 1);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const { bytesRead } = await handle.read(bytes, offset, bytes.length - offset, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  return offset > maxBytes ? null : bytes.subarray(0, offset);
+}
+
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -154,6 +265,34 @@ async function chmodSecure(path: string, mode: number): Promise<void> {
     await chmod(path, mode);
   } catch (error) {
     if (!isUnsupportedChmod(error)) throw error;
+  }
+}
+
+async function chmodVerifiedRegularFile(
+  path: string,
+  mode: number,
+  unsafeCode: BlueprintCheckpointStoreError['code'],
+): Promise<void> {
+  const metadata = await lstat(path);
+  if (metadata.isSymbolicLink() || !metadata.isFile()) {
+    throw new BlueprintCheckpointStoreError(unsafeCode, 'Blueprint state file is unsafe.');
+  }
+  const handle = await open(
+    path,
+    process.platform === 'win32' ? 'r' : fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+  );
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || !sameFileIdentity(metadata, opened)) {
+      throw new BlueprintCheckpointStoreError(unsafeCode, 'Blueprint state file is unsafe.');
+    }
+    try {
+      await handle.chmod(mode);
+    } catch (error) {
+      if (!isUnsupportedChmod(error)) throw error;
+    }
+  } finally {
+    await handle.close().catch(() => undefined);
   }
 }
 
@@ -192,27 +331,24 @@ function lockRecordFromText(text: string): LockRecord | null {
   }
 }
 
-async function readLock(
-  path: string,
-): Promise<{ record: LockRecord; stat: Awaited<ReturnType<typeof stat>> } | null> {
-  let lockStat: Awaited<ReturnType<typeof stat>>;
+async function readLock(path: string): Promise<{ record: LockRecord; stat: FileMetadata } | null> {
+  let file: BoundedFileRead | null;
   try {
-    lockStat = await stat(path);
+    file = await readBoundedRegularFile(path, MAX_LOCK_BYTES, {
+      unsafe: 'LOCK_UNSAFE',
+      nonFile: 'LOCK_UNSAFE',
+      malformed: 'LOCK_MALFORMED',
+      io: 'CHECKPOINT_IO',
+    });
   } catch (error) {
-    if (isMissing(error)) return null;
+    if (error instanceof BlueprintCheckpointStoreError && error.code === 'LOCK_MALFORMED') {
+      return null;
+    }
     throw error;
   }
-
-  if (lockStat.size > MAX_LOCK_BYTES) return null;
-  let text: string;
-  try {
-    text = await readFile(path, 'utf8');
-  } catch (error) {
-    if (isMissing(error)) return null;
-    throw error;
-  }
-  const record = lockRecordFromText(text);
-  return record === null ? null : { record, stat: lockStat };
+  if (file === null) return null;
+  const record = lockRecordFromText(file.bytes.toString('utf8'));
+  return record === null ? null : { record, stat: file.stat };
 }
 
 export interface AuthenticatedBlueprintCheckpointOptions {
@@ -271,6 +407,16 @@ export class BlueprintCheckpointStore {
   }
 
   async load(): Promise<BlueprintCheckpoint | null> {
+    try {
+      if (!(await inspectDirectory(this.#planDirectory, 'CHECKPOINT_UNSAFE'))) return null;
+    } catch (error) {
+      if (error instanceof BlueprintCheckpointStoreError) throw error;
+      throw new BlueprintCheckpointStoreError(
+        'CHECKPOINT_IO',
+        'Unable to inspect checkpoint state',
+        { cause: error },
+      );
+    }
     let entries: string[];
     try {
       entries = await readdir(this.#planDirectory);
@@ -289,20 +435,22 @@ export class BlueprintCheckpointStore {
     if (highest === undefined) return null;
 
     const path = join(this.#planDirectory, `checkpoint-v${highest}.json`);
-    let text: string;
-    try {
-      text = await readFile(path, 'utf8');
-    } catch (error) {
+    const file = await readBoundedRegularFile(path, MAX_CHECKPOINT_BYTES, {
+      unsafe: 'CHECKPOINT_UNSAFE',
+      nonFile: 'CHECKPOINT_MALFORMED',
+      malformed: 'CHECKPOINT_MALFORMED',
+      io: 'CHECKPOINT_IO',
+    });
+    if (file === null) {
       throw new BlueprintCheckpointStoreError(
         'CHECKPOINT_MALFORMED',
-        'Highest checkpoint could not be read',
-        { cause: error },
+        'Highest checkpoint disappeared while reading',
       );
     }
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(file.bytes.toString('utf8'));
     } catch (error) {
       throw new BlueprintCheckpointStoreError(
         'CHECKPOINT_MALFORMED',
@@ -380,8 +528,6 @@ export class BlueprintCheckpointStore {
       await tempHandle.sync();
       await tempHandle.close();
       tempHandle = undefined;
-      await chmodSecure(temporary, 0o600);
-
       // Hard-link publication is atomic and no-clobber. It is used instead of
       // rename because rename() replaces an existing destination on POSIX.
       try {
@@ -400,7 +546,7 @@ export class BlueprintCheckpointStore {
         await assertAbsent(destination);
         await rename(temporary, destination);
       }
-      await chmodSecure(destination, 0o600);
+      await chmodVerifiedRegularFile(destination, 0o600, 'CHECKPOINT_UNSAFE');
       await fsyncDirectory(this.#planDirectory);
     } catch (error) {
       if (error instanceof BlueprintCheckpointStoreError) throw error;
@@ -414,37 +560,30 @@ export class BlueprintCheckpointStore {
   }
 
   async loadEvidence(): Promise<GuildBlueprintActivityEvidence | null> {
-    let evidenceStat: Awaited<ReturnType<typeof stat>>;
     try {
-      evidenceStat = await stat(this.#activityEvidencePath);
+      if (!(await inspectDirectory(this.#planDirectory, 'EVIDENCE_UNSAFE'))) return null;
     } catch (error) {
-      if (isMissing(error)) return null;
+      if (error instanceof BlueprintCheckpointStoreError) throw error;
       throw new BlueprintCheckpointStoreError(
         'EVIDENCE_IO',
-        'Activity Evidence metadata could not be read.',
+        'Activity Evidence directory could not be inspected.',
         { cause: error },
       );
     }
-    if (evidenceStat.size > MAX_ACTIVITY_EVIDENCE_BYTES) {
-      throw new BlueprintCheckpointStoreError(
-        'EVIDENCE_MALFORMED',
-        'Activity Evidence exceeds the maximum supported size.',
-      );
-    }
-    let text: string;
-    try {
-      text = await readFile(this.#activityEvidencePath, 'utf8');
-    } catch (error) {
-      if (isMissing(error)) return null;
-      throw new BlueprintCheckpointStoreError(
-        'EVIDENCE_IO',
-        'Activity Evidence could not be read.',
-        { cause: error },
-      );
-    }
+    const file = await readBoundedRegularFile(
+      this.#activityEvidencePath,
+      MAX_ACTIVITY_EVIDENCE_BYTES,
+      {
+        unsafe: 'EVIDENCE_UNSAFE',
+        nonFile: 'EVIDENCE_IO',
+        malformed: 'EVIDENCE_MALFORMED',
+        io: 'EVIDENCE_IO',
+      },
+    );
+    if (file === null) return null;
     let raw: unknown;
     try {
-      raw = JSON.parse(text);
+      raw = JSON.parse(file.bytes.toString('utf8'));
     } catch (error) {
       throw new BlueprintCheckpointStoreError(
         'EVIDENCE_MALFORMED',
@@ -503,8 +642,9 @@ export class BlueprintCheckpointStore {
     }
 
     try {
-      await this.#ensureDirectory();
+      await this.#ensureDirectory('EVIDENCE_UNSAFE');
     } catch (error) {
+      if (error instanceof BlueprintCheckpointStoreError) throw error;
       throw new BlueprintCheckpointStoreError(
         'EVIDENCE_IO',
         'Unable to prepare the Activity Evidence directory.',
@@ -537,7 +677,6 @@ export class BlueprintCheckpointStore {
       await tempHandle.sync();
       await tempHandle.close();
       tempHandle = undefined;
-      await chmodSecure(temporary, 0o600);
       try {
         await link(temporary, this.#activityEvidencePath);
       } catch (error) {
@@ -566,7 +705,7 @@ export class BlueprintCheckpointStore {
           );
         }
       }
-      await chmodSecure(this.#activityEvidencePath, 0o600);
+      await chmodVerifiedRegularFile(this.#activityEvidencePath, 0o600, 'EVIDENCE_UNSAFE');
       await fsyncDirectory(this.#planDirectory);
     } catch (error) {
       if (error instanceof BlueprintCheckpointStoreError) throw error;
@@ -580,7 +719,7 @@ export class BlueprintCheckpointStore {
   }
 
   async tryAcquireLock(): Promise<BlueprintCheckpointLockResult> {
-    await this.#ensureDirectory();
+    await this.#ensureDirectory('LOCK_UNSAFE');
     const nonce = randomBytes(16).toString('hex');
     const record: LockRecord = {
       schema_version: 'guild_blueprint_lock.v1',
@@ -599,7 +738,6 @@ export class BlueprintCheckpointStore {
       } finally {
         await handle.close();
       }
-      await chmodSecure(this.#lockPath, 0o600);
       return this.#lease(record);
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
@@ -617,7 +755,7 @@ export class BlueprintCheckpointStore {
       confirmed === null ||
       confirmed.record.nonce !== existing.record.nonce ||
       confirmed.record.plan_id !== this.#planId ||
-      confirmed.stat.ino !== existing.stat.ino ||
+      !sameFileIdentity(confirmed.stat, existing.stat) ||
       confirmed.stat.mtimeMs !== existing.stat.mtimeMs ||
       !this.#isStale(confirmed.record, confirmed.stat)
     ) {
@@ -637,7 +775,6 @@ export class BlueprintCheckpointStore {
       } finally {
         await handle.close();
       }
-      await chmodSecure(this.#lockPath, 0o600);
       return this.#lease(record);
     } catch (error) {
       if (isAlreadyExists(error)) return { acquired: false, reason: 'busy' };
@@ -645,14 +782,22 @@ export class BlueprintCheckpointStore {
     }
   }
 
-  async #ensureDirectory(): Promise<void> {
+  async #ensureDirectory(
+    unsafeCode: BlueprintCheckpointStoreError['code'] = 'CHECKPOINT_UNSAFE',
+  ): Promise<void> {
     await mkdir(this.#stateDirectory, { recursive: true, mode: 0o700 });
+    if (!(await inspectDirectory(this.#stateDirectory, unsafeCode))) {
+      throw new BlueprintCheckpointStoreError(unsafeCode, 'State directory is unsafe.');
+    }
     await chmodSecure(this.#stateDirectory, 0o700);
     await mkdir(this.#planDirectory, { recursive: true, mode: 0o700 });
+    if (!(await inspectDirectory(this.#planDirectory, unsafeCode))) {
+      throw new BlueprintCheckpointStoreError(unsafeCode, 'Plan directory is unsafe.');
+    }
     await chmodSecure(this.#planDirectory, 0o700);
   }
 
-  #isStale(record: LockRecord, lockStat: Awaited<ReturnType<typeof stat>>): boolean {
+  #isStale(record: LockRecord, lockStat: FileMetadata): boolean {
     const now = this.#now();
     const modifiedAt = Number(lockStat.mtimeMs);
     return (
@@ -670,17 +815,35 @@ export class BlueprintCheckpointStore {
       acquired: true,
       heartbeat: async () => {
         if (released) return false;
+        const before = await readLock(this.#lockPath);
+        if (
+          before === null ||
+          before.record.nonce !== record.nonce ||
+          before.record.plan_id !== this.#planId
+        ) {
+          return false;
+        }
         let handle: Awaited<ReturnType<typeof open>>;
         try {
-          handle = await open(this.#lockPath, 'r+');
+          handle = await open(
+            this.#lockPath,
+            process.platform === 'win32' ? 'r+' : fsConstants.O_RDWR | fsConstants.O_NOFOLLOW,
+          );
         } catch (error) {
           if (isMissing(error)) return false;
           throw error;
         }
         try {
           const ownedStat = await handle.stat();
-          if (ownedStat.size > MAX_LOCK_BYTES) return false;
-          const currentRecord = lockRecordFromText(await handle.readFile('utf8'));
+          if (
+            !ownedStat.isFile() ||
+            ownedStat.size > MAX_LOCK_BYTES ||
+            !sameFileIdentity(before.stat, ownedStat)
+          )
+            return false;
+          const lockBytes = await readHandleBounded(handle, MAX_LOCK_BYTES);
+          if (lockBytes === null) return false;
+          const currentRecord = lockRecordFromText(lockBytes.toString('utf8'));
           if (
             currentRecord === null ||
             currentRecord.nonce !== record.nonce ||
@@ -695,7 +858,7 @@ export class BlueprintCheckpointStore {
             current !== null &&
             current.record.nonce === record.nonce &&
             current.record.plan_id === this.#planId &&
-            current.stat.ino === ownedStat.ino
+            sameFileIdentity(current.stat, ownedStat)
           );
         } finally {
           await handle.close();
@@ -711,6 +874,14 @@ export class BlueprintCheckpointStore {
           current.record.plan_id !== this.#planId
         )
           return;
+        let latest: FileMetadata;
+        try {
+          latest = await lstat(this.#lockPath);
+        } catch (error) {
+          if (isMissing(error)) return;
+          throw error;
+        }
+        if (latest.isSymbolicLink() || !sameFileIdentity(current.stat, latest)) return;
         await unlink(this.#lockPath).catch((error) => {
           if (!isMissing(error)) throw error;
         });
@@ -739,7 +910,7 @@ function isLinkUnsupported(error: unknown): boolean {
 
 async function assertAbsent(path: string): Promise<void> {
   try {
-    await stat(path);
+    await lstat(path);
   } catch (error) {
     if (isMissing(error)) return;
     throw error;

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -275,6 +275,35 @@ describe('Guild Blueprint Activity Evidence', () => {
     expect(saved).not.toContain('plan_token');
     expect(saved).not.toContain('bot_token');
     expect(saved).not.toContain('dmbp1.');
+  });
+
+  it('fails closed without reading through symlinked Activity Evidence', async ({ skip }) => {
+    const stateDirectory = temporaryDirectory();
+    const evidence = evidenceFromFixture();
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: evidence.plan_id,
+      signingSecret: SIGNING_SECRET,
+    });
+    await store.saveEvidence(evidence);
+    const path = join(
+      stateDirectory,
+      evidence.plan_id.slice('sha256:'.length),
+      'activity-evidence.json',
+    );
+    const externalPath = join(stateDirectory, 'external-evidence.json');
+    renameSync(path, externalPath);
+    try {
+      symlinkSync(externalPath, path, 'file');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+
+    await expect(store.loadEvidence()).rejects.toMatchObject({ code: 'EVIDENCE_UNSAFE' });
+    expect(readFileSync(externalPath, 'utf8')).toContain(
+      'guild_blueprint_activity_evidence_envelope.v1',
+    );
   });
 
   it('fails closed for tampered, malformed, and conflicting records', async () => {
