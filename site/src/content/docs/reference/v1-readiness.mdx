@@ -5,17 +5,17 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.25.0 and contains 209 tools.
+The current source tree targets discord-mcp v0.25.1 and contains 209 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.25.0)
+## Current source evidence (v0.25.1)
 
 - The current source tree exposes 209 MCP tools across 31 categories; the
   preceding v0.18.1 packages exposed 203.
-- v0.25.0 adds `discord_intent_plan` as a bounded read-only 209th tool, runtime
+- v0.25.1 carries forward `discord_intent_plan` as a bounded read-only 209th tool, runtime
   access evidence, payload-bound approvals, an optional same-filesystem durable
   approval ledger, and current Discord permission contracts. The tagged
   v0.24.0 release kept the operational 208-tool contract unchanged and added a bounded,
@@ -114,6 +114,10 @@ unchecked items are real gates, not aspirational release notes.
       declared by zero tools, so the documented control restricted nothing)
 - [x] `outputSchema` published for every declaring tool and enforced against
       handler results under test
+- [x] Representative MCP result-byte budgets are measured in contract tests,
+      keeping response growth bounded and reviewable
+- [x] Astro 7 documentation build and `astro check` typecheck pass in the
+      release verification path
 
 ### Distribution
 
@@ -124,6 +128,9 @@ unchecked items are real gates, not aspirational release notes.
       `publishConfig.provenance: true` is actually satisfiable
       (`.github/workflows/release.yml`, behind `workflow_dispatch` + a
       protected environment)
+- [x] Release publication is bound to a trusted exact tag, exact commit, and
+      successful protected-main CI; branch protection itself remains an
+      operator/repository control rather than package code
 - [x] CI fails if the `workspace:` protocol survives into a published
       manifest - npm does not rewrite it, and such a tarball is unrecoverable
       without a deprecate + republish

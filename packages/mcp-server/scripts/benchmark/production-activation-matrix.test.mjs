@@ -21,7 +21,7 @@ import {
   PRODUCTION_ACTIVATION_HOSTS,
 } from './verify-activation-trials.mjs';
 
-const RELEASE = '0.25.0';
+const RELEASE = '0.25.1';
 const MATRIX_RUN_ID = 'five-host-live-001';
 const SOURCE_COMMIT = 'a'.repeat(40);
 const GUILD_ID = CONTROLLED_GUILD_IDS[0];
