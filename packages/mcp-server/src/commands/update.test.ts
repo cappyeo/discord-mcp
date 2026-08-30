@@ -1,4 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,6 +59,32 @@ function registry(version = NEXT): ReturnType<typeof vi.fn> {
   );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+function deferredRegistry(): {
+  readonly fetchMock: ReturnType<typeof vi.fn>;
+  readonly respond: (version?: string) => void;
+} {
+  let resolveResponse: ((response: Response) => void) | undefined;
+  const fetchMock = vi.fn().mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return {
+    fetchMock,
+    respond(version = NEXT): void {
+      if (resolveResponse === undefined) throw new Error('Registry request has not started');
+      resolveResponse(
+        new Response(JSON.stringify({ 'dist-tags': { latest: version } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    },
+  };
 }
 
 function output(): Record<string, unknown> {
@@ -253,6 +289,147 @@ describe('updateAction', () => {
     expect(output()).toMatchObject({ summary: 'could not check for an update' });
     expect(readFileSync(configPath, 'utf8')).toBe(config);
   });
+
+  it('rejects an oversized UTF-8 config before contacting the registry', async () => {
+    createProfile();
+    writeFileSync(configPath, 'é'.repeat(1024 * 1024), 'utf8');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await updateAction({ profile: 'devbot', config: configPath, profileDirectory, json: true });
+
+    expect(process.exitCode).toBe(2);
+    expect(output()).toMatchObject({ summary: 'could not read the Codex configuration file' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a symlinked config without replacing its target', async ({ skip }) => {
+    createProfile();
+    const externalPath = join(directory, 'external-config.toml');
+    const config = generatedLauncher();
+    writeFileSync(externalPath, config, 'utf8');
+    try {
+      symlinkSync(externalPath, configPath, 'file');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+    registry();
+
+    await updateAction({
+      profile: 'devbot',
+      apply: true,
+      config: configPath,
+      profileDirectory,
+      json: true,
+    });
+
+    expect(process.exitCode).toBe(2);
+    expect(output()).toMatchObject({ summary: 'could not read the Codex configuration file' });
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true);
+    expect(readFileSync(externalPath, 'utf8')).toBe(config);
+  });
+
+  it('rejects a symlinked config parent', async ({ skip }) => {
+    createProfile();
+    const externalDirectory = join(directory, 'external-config');
+    const linkedDirectory = join(directory, 'linked-config');
+    mkdirSync(externalDirectory);
+    try {
+      symlinkSync(externalDirectory, linkedDirectory, 'junction');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+    const linkedConfigPath = join(linkedDirectory, 'config.toml');
+    writeFileSync(join(externalDirectory, 'config.toml'), generatedLauncher(), 'utf8');
+    registry();
+
+    await updateAction({
+      profile: 'devbot',
+      apply: true,
+      config: linkedConfigPath,
+      profileDirectory,
+      json: true,
+    });
+
+    expect(process.exitCode).toBe(2);
+    expect(output()).toMatchObject({ summary: 'could not read the Codex configuration file' });
+  });
+
+  it('preserves an in-place config change made while the registry request is pending', async () => {
+    createProfile();
+    writeFileSync(configPath, generatedLauncher(), 'utf8');
+    const pendingRegistry = deferredRegistry();
+
+    const pendingUpdate = updateAction({
+      profile: 'devbot',
+      apply: true,
+      config: configPath,
+      profileDirectory,
+      json: true,
+    });
+    expect(pendingRegistry.fetchMock).toHaveBeenCalledOnce();
+    const concurrentConfig = `${generatedLauncher()}# caller edit\n`;
+    writeFileSync(configPath, concurrentConfig, 'utf8');
+    pendingRegistry.respond();
+    await pendingUpdate;
+
+    expect(process.exitCode).toBe(2);
+    expect(output()).toMatchObject({ summary: 'could not update the Codex configuration file' });
+    expect(readFileSync(configPath, 'utf8')).toBe(concurrentConfig);
+  });
+
+  it.runIf(process.platform !== 'win32')(
+    'rejects a parent replaced by a symlink while the registry request is pending',
+    async () => {
+      createProfile();
+      const configDirectory = join(directory, 'codex-config');
+      const movedDirectory = join(directory, 'moved-codex-config');
+      const delayedConfigPath = join(configDirectory, 'config.toml');
+      mkdirSync(configDirectory);
+      writeFileSync(delayedConfigPath, generatedLauncher(), 'utf8');
+      const pendingRegistry = deferredRegistry();
+
+      const pendingUpdate = updateAction({
+        profile: 'devbot',
+        apply: true,
+        config: delayedConfigPath,
+        profileDirectory,
+        json: true,
+      });
+      expect(pendingRegistry.fetchMock).toHaveBeenCalledOnce();
+      renameSync(configDirectory, movedDirectory);
+      symlinkSync(movedDirectory, configDirectory, 'dir');
+      pendingRegistry.respond();
+      await pendingUpdate;
+
+      expect(process.exitCode).toBe(2);
+      expect(output()).toMatchObject({ summary: 'could not update the Codex configuration file' });
+      expect(readFileSync(join(movedDirectory, 'config.toml'), 'utf8')).toBe(generatedLauncher());
+    },
+  );
+
+  it.runIf(process.platform !== 'win32')(
+    'preserves the existing config permission mode during apply',
+    async () => {
+      createProfile();
+      writeFileSync(configPath, generatedLauncher(), 'utf8');
+      chmodSync(configPath, 0o640);
+      registry();
+
+      await updateAction({
+        profile: 'devbot',
+        apply: true,
+        config: configPath,
+        profileDirectory,
+        json: true,
+      });
+
+      expect(process.exitCode).toBe(0);
+      expect(lstatSync(configPath).mode & 0o777).toBe(0o640);
+    },
+  );
 
   it('rejects conflicting check and apply flags before reading local state', async () => {
     await updateAction({ profile: 'devbot', check: true, apply: true, json: true });
