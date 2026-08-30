@@ -41,7 +41,7 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args) => {
-    await container.rest.delete(Routes.channelPin(args.channel_id, args.message_id), {
+    await container.rest.delete(Routes.channelMessagesPin(args.channel_id, args.message_id), {
       reason: args.audit_reason,
     });
     return dualResult({

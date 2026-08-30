@@ -13,7 +13,7 @@ describe('messages_unpin', () => {
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     server.use(
       http.delete(
-        `${DISCORD_API}/channels/:channelId/pins/:messageId`,
+        `${DISCORD_API}/channels/:channelId/messages/pins/:messageId`,
         async () => new HttpResponse(null, { status: 204 }),
       ),
     );

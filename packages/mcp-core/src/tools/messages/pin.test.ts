@@ -12,7 +12,7 @@ describe('messages_pin', () => {
   it('PUTs to pins endpoint and returns pinned:true', async () => {
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     server.use(
-      http.put(`${DISCORD_API}/channels/:channelId/pins/:messageId`, async () => {
+      http.put(`${DISCORD_API}/channels/:channelId/messages/pins/:messageId`, async () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
