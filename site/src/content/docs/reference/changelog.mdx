@@ -16,6 +16,9 @@ commit history and downloadable artifacts, see
   checks validate the exact GitHub repository path, npm update checks use the
   fixed public registry endpoint, and adversarial fence/template/auth inputs
   are handled without backtracking-prone regular expressions.
+- Hardened the local activity journal against symlink redirection, cross-process
+  compaction races, oversized files, and stale-lock reclamation while keeping
+  activity evidence best-effort and local-only.
 - Updated compatible patch/minor dependencies across Discord REST, HTTP,
   validation, testing, and documentation tooling. Dependabot now keeps major
   and known Node-floor/toolchain migrations in dedicated review increments.

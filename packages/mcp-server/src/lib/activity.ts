@@ -7,7 +7,23 @@
  * setup, doctor, smoke, and blueprint lifecycle calls are succeeding before
  * the project makes broader onboarding and adoption decisions.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import {
+  appendFileSync,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  type Stats,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BlueprintLifecycleObservation } from '@discord-mcp/core';
 import type { CommandResult } from './output.js';
@@ -17,6 +33,11 @@ const ACTIVITY_VERSION = 1;
 const BLUEPRINT_ACTIVITY_VERSION = 2;
 export const ACTIVITY_RETENTION = 200;
 const RECENT_ACTIVITY_LIMIT = 10;
+const MAX_ACTIVITY_BYTES = 1024 * 1024;
+const ACTIVITY_FILE_NAME = 'activity.jsonl';
+const ACTIVITY_LOCK_NAME = '.activity.lock';
+const ACTIVITY_LOCK_STALE_MS = 30_000;
+const MAX_ACTIVITY_LOCK_BYTES = 32;
 const ACTIVITY_COMMANDS = ['setup', 'doctor', 'smoke'] as const;
 const ACTIVITY_OUTCOMES = ['success', 'warning', 'failure'] as const;
 const BLUEPRINT_ACTIVITY_STAGES = ['plan', 'apply', 'evidence'] as const;
@@ -152,6 +173,7 @@ function parseActivityEvent(value: unknown): ActivityEvent | undefined {
     !isActivityCommand(record.command) ||
     !isActivityOutcome(record.outcome) ||
     !Array.isArray(record.signals) ||
+    record.signals.length > 64 ||
     record.signals.some((signal) => typeof signal !== 'string' || signal.length > 80)
   ) {
     return undefined;
@@ -166,50 +188,306 @@ function parseActivityEvent(value: unknown): ActivityEvent | undefined {
 }
 
 export function resolveActivityPath(options: ProfileLocationOptions = {}): string {
-  return join(dirname(resolveProfileDirectory(options)), 'activity.jsonl');
+  return join(dirname(resolveProfileDirectory(options)), ACTIVITY_FILE_NAME);
+}
+
+function missing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
+}
+
+function sameFileIdentity(expected: Stats, actual: Stats): boolean {
+  if (expected.ino !== actual.ino || expected.ino === 0) return false;
+  if (expected.dev === actual.dev) return true;
+  return process.platform === 'win32' && (expected.dev === 0 || actual.dev === 0);
+}
+
+function canonicalActivityDirectory(directory: string): string | undefined {
+  let metadata: Stats;
+  try {
+    metadata = lstatSync(directory);
+  } catch (error) {
+    if (missing(error)) return undefined;
+    throw error;
+  }
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    throw new Error('Activity directory must be a regular directory');
+  }
+  return realpathSync(directory);
+}
+
+function ensureActivityDirectory(directory: string): string {
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const canonical = canonicalActivityDirectory(directory);
+  if (canonical === undefined) {
+    throw new Error('Activity directory disappeared while opening');
+  }
+  return canonical;
+}
+
+function inspectActivityFile(path: string): Stats | undefined {
+  let metadata: Stats;
+  try {
+    metadata = lstatSync(path);
+  } catch (error) {
+    if (missing(error)) return undefined;
+    throw error;
+  }
+  if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > MAX_ACTIVITY_BYTES) {
+    throw new Error('Activity journal must be a bounded regular file');
+  }
+  return metadata;
+}
+
+function openVerifiedActivity(path: string, flags: number): number | undefined {
+  const expected = inspectActivityFile(path);
+  if (expected === undefined) return undefined;
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(path, flags | (fsConstants.O_NOFOLLOW ?? 0));
+    const actual = fstatSync(descriptor);
+    if (!actual.isFile() || !sameFileIdentity(expected, actual)) {
+      throw new Error('Activity journal changed while opening');
+    }
+    return descriptor;
+  } catch (error) {
+    if (descriptor !== undefined) closeSync(descriptor);
+    throw error;
+  }
+}
+
+function openActivityForAppend(path: string): number {
+  const existing = openVerifiedActivity(path, fsConstants.O_WRONLY | fsConstants.O_APPEND);
+  if (existing !== undefined) return existing;
+
+  try {
+    const descriptor = openSync(
+      path,
+      fsConstants.O_WRONLY |
+        fsConstants.O_APPEND |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    try {
+      if (!fstatSync(descriptor).isFile()) throw new Error('Activity journal is not a file');
+      return descriptor;
+    } catch (error) {
+      closeSync(descriptor);
+      throw error;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code !== 'EEXIST') throw error;
+    const raced = openVerifiedActivity(path, fsConstants.O_WRONLY | fsConstants.O_APPEND);
+    if (raced === undefined) throw new Error('Activity journal disappeared while opening');
+    return raced;
+  }
+}
+
+function readActivityText(path: string): string | undefined {
+  const descriptor = openVerifiedActivity(path, fsConstants.O_RDONLY);
+  if (descriptor === undefined) return undefined;
+  try {
+    return readFileSync(descriptor, 'utf8');
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function parseActivityText(text: string): ActivityEvent[] {
+  return text
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .flatMap((line) => {
+      try {
+        const event = parseActivityEvent(JSON.parse(line));
+        return event === undefined ? [] : [event];
+      } catch {
+        return [];
+      }
+    });
+}
+
+interface ActivityLock {
+  readonly path: string;
+  readonly identity: Stats;
+}
+
+function createActivityLock(path: string): ActivityLock | undefined {
+  let descriptor: number;
+  try {
+    descriptor = openSync(
+      path,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code === 'EEXIST') return undefined;
+    throw error;
+  }
+  try {
+    writeFileSync(descriptor, `${process.pid}\n`, { encoding: 'utf8' });
+    fsyncSync(descriptor);
+    const identity = fstatSync(descriptor);
+    if (!identity.isFile()) throw new Error('Activity lock is not a regular file');
+    return { path, identity };
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function reclaimStaleActivityLock(path: string): boolean {
+  let first: Stats;
+  try {
+    first = lstatSync(path);
+  } catch (error) {
+    if (missing(error)) return false;
+    throw error;
+  }
+  if (
+    first.isSymbolicLink() ||
+    !first.isFile() ||
+    first.size > MAX_ACTIVITY_LOCK_BYTES ||
+    Date.now() - first.mtimeMs <= ACTIVITY_LOCK_STALE_MS
+  ) {
+    return false;
+  }
+  let descriptor: number | undefined;
+  let ownerText: string;
+  try {
+    descriptor = openSync(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    const opened = fstatSync(descriptor);
+    if (!opened.isFile() || !sameFileIdentity(first, opened)) return false;
+    ownerText = readFileSync(descriptor, 'utf8').trim();
+  } catch (error) {
+    if (missing(error)) return false;
+    throw error;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+  const ownerPid = Number(ownerText);
+  if (!/^\d{1,10}$/.test(ownerText) || !Number.isSafeInteger(ownerPid) || ownerPid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(ownerPid, 0);
+    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code !== 'ESRCH') return false;
+  }
+  let current: Stats;
+  try {
+    current = lstatSync(path);
+  } catch (error) {
+    if (missing(error)) return false;
+    throw error;
+  }
+  if (!sameFileIdentity(first, current)) return false;
+  unlinkSync(path);
+  return true;
+}
+
+function acquireActivityLock(directory: string): ActivityLock {
+  const path = join(directory, ACTIVITY_LOCK_NAME);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const lock = createActivityLock(path);
+    if (lock !== undefined) return lock;
+    if (attempt === 0 && reclaimStaleActivityLock(path)) continue;
+    break;
+  }
+  throw new Error('Activity journal is busy');
+}
+
+function releaseActivityLock(lock: ActivityLock): void {
+  let current: Stats;
+  try {
+    current = lstatSync(lock.path);
+  } catch (error) {
+    if (missing(error)) return;
+    throw error;
+  }
+  if (current.isSymbolicLink() || !sameFileIdentity(lock.identity, current)) return;
+  unlinkSync(lock.path);
 }
 
 export function readActivity(options: ProfileLocationOptions = {}): ActivityEvent[] {
-  const path = resolveActivityPath(options);
-  if (!existsSync(path)) return [];
+  const requested = resolveActivityPath(options);
   try {
-    return readFileSync(path, 'utf8')
-      .split('\n')
-      .filter((line) => line.length > 0)
-      .flatMap((line) => {
-        try {
-          const event = parseActivityEvent(JSON.parse(line));
-          return event === undefined ? [] : [event];
-        } catch {
-          return [];
-        }
-      });
+    const directory = canonicalActivityDirectory(dirname(requested));
+    if (directory === undefined) return [];
+    return parseActivityText(readActivityText(join(directory, ACTIVITY_FILE_NAME)) ?? '');
   } catch {
     return [];
   }
 }
 
-function writeActivity(events: readonly ActivityEvent[], options: ProfileLocationOptions): void {
-  const path = resolveActivityPath(options);
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
+function writeActivity(events: readonly ActivityEvent[], path: string, directory: string): void {
+  inspectActivityFile(path);
+  const content = `${events.map((event) => JSON.stringify(event)).join('\n')}\n`;
+  if (Buffer.byteLength(content, 'utf8') > MAX_ACTIVITY_BYTES) {
+    throw new Error('Compacted activity journal is too large');
+  }
+  const temporary = join(directory, `.activity.${process.pid}.${randomUUID()}.tmp`);
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(
+      temporary,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    writeFileSync(descriptor, content, { encoding: 'utf8' });
+    fsyncSync(descriptor);
+    closeSync(descriptor);
+    descriptor = undefined;
+    inspectActivityFile(path);
+    renameSync(temporary, path);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // Best-effort cleanup must not replace the original journal error.
+    }
+  }
 }
 
 export function recordActivity(event: ActivityEvent, options: ProfileLocationOptions = {}): void {
   try {
-    const existing = readActivity(options);
-    const retained = [...existing, event].slice(-ACTIVITY_RETENTION);
-    if (existing.length >= ACTIVITY_RETENTION) {
-      writeActivity(retained, options);
-      return;
-    }
+    const normalized = parseActivityEvent(event);
+    if (normalized === undefined) return;
+    const requested = resolveActivityPath(options);
+    const directory = ensureActivityDirectory(dirname(requested));
+    const path = join(directory, ACTIVITY_FILE_NAME);
+    const lock = acquireActivityLock(directory);
+    try {
+      const existing = parseActivityText(readActivityText(path) ?? '');
+      const retained = [...existing, normalized].slice(-ACTIVITY_RETENTION);
+      if (existing.length >= ACTIVITY_RETENTION) {
+        writeActivity(retained, path, directory);
+        return;
+      }
 
-    const path = resolveActivityPath(options);
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    appendFileSync(path, `${JSON.stringify(event)}\n`, { encoding: 'utf8', mode: 0o600 });
+      const line = `${JSON.stringify(normalized)}\n`;
+      const descriptor = openActivityForAppend(path);
+      try {
+        const currentSize = fstatSync(descriptor).size;
+        if (currentSize + Buffer.byteLength(line, 'utf8') > MAX_ACTIVITY_BYTES) {
+          throw new Error('Activity journal is too large');
+        }
+        appendFileSync(descriptor, line, { encoding: 'utf8' });
+        fsyncSync(descriptor);
+      } finally {
+        closeSync(descriptor);
+      }
+    } finally {
+      releaseActivityLock(lock);
+    }
   } catch {
     // Activity evidence must never change a command's visible result.
   }
