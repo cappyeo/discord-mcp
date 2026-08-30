@@ -19,6 +19,9 @@ commit history and downloadable artifacts, see
 - Hardened the local activity journal against symlink redirection, cross-process
   compaction races, oversized files, and stale-lock reclamation while keeping
   activity evidence best-effort and local-only.
+- Hardened blueprint checkpoint, Activity Evidence, and apply-lock reads with
+  bounded descriptor I/O, regular-file identity checks, symlink rejection, and
+  descriptor-verified publication permissions.
 - Updated compatible patch/minor dependencies across Discord REST, HTTP,
   validation, testing, and documentation tooling. Dependabot now keeps major
   and known Node-floor/toolchain migrations in dedicated review increments.

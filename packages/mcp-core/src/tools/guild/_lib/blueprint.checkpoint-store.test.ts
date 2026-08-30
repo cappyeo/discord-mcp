@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -136,6 +144,53 @@ describe('BlueprintCheckpointStore', () => {
     writeFileSync(join(planDirectory, 'checkpoint-v1.json'), '{not-json', { mode: 0o600 });
 
     await expect(store.load()).rejects.toMatchObject({ code: 'CHECKPOINT_MALFORMED' });
+  });
+
+  it('fails closed without reading through a symlinked checkpoint', async ({ skip }) => {
+    const stateDirectory = makeDirectory();
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+    });
+    await store.save(checkpoint(0));
+    const planDirectory = join(stateDirectory, 'a'.repeat(64));
+    const checkpointPath = join(planDirectory, 'checkpoint-v0.json');
+    const externalPath = join(stateDirectory, 'external-checkpoint.json');
+    renameSync(checkpointPath, externalPath);
+    try {
+      symlinkSync(externalPath, checkpointPath, 'file');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+
+    await expect(store.load()).rejects.toMatchObject({ code: 'CHECKPOINT_UNSAFE' });
+    expect(readFileSync(externalPath, 'utf8')).toContain('guild_blueprint_checkpoint_envelope.v1');
+  });
+
+  it('rejects a symlinked plan directory across checkpoint and lock operations', async ({
+    skip,
+  }) => {
+    const stateDirectory = makeDirectory();
+    const planDirectory = join(stateDirectory, 'a'.repeat(64));
+    const externalDirectory = join(stateDirectory, 'external-plan');
+    mkdirSync(externalDirectory);
+    try {
+      symlinkSync(externalDirectory, planDirectory, 'junction');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+    });
+
+    await expect(store.load()).rejects.toMatchObject({ code: 'CHECKPOINT_UNSAFE' });
+    await expect(store.save(checkpoint(0))).rejects.toMatchObject({ code: 'CHECKPOINT_UNSAFE' });
+    await expect(store.tryAcquireLock()).rejects.toMatchObject({ code: 'LOCK_UNSAFE' });
   });
 
   it('fails closed when a schema-valid checkpoint envelope is modified', async () => {
@@ -280,6 +335,48 @@ describe('BlueprintCheckpointStore', () => {
     now += 10 * 60_000;
     await expect(store.tryAcquireLock()).resolves.toEqual({ acquired: false, reason: 'busy' });
     if (lock.acquired) await lock.release();
+  });
+
+  it('keeps an oversized lock busy instead of reading or reclaiming it', async () => {
+    const stateDirectory = makeDirectory();
+    let now = Date.now();
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+      now: () => now,
+    });
+    const lock = await store.tryAcquireLock();
+    expect(lock.acquired).toBe(true);
+    const lockPath = join(stateDirectory, 'a'.repeat(64), 'apply.lock');
+    writeFileSync(lockPath, 'x'.repeat(4_097), { mode: 0o600 });
+    now += 10 * 60_000;
+
+    await expect(store.tryAcquireLock()).resolves.toEqual({ acquired: false, reason: 'busy' });
+    if (lock.acquired) await expect(lock.heartbeat()).resolves.toBe(false);
+  });
+
+  it('does not read or reclaim a symlinked lock', async ({ skip }) => {
+    const stateDirectory = makeDirectory();
+    const store = new BlueprintCheckpointStore({
+      stateDirectory,
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+    });
+    await store.save(checkpoint(0));
+    const planDirectory = join(stateDirectory, 'a'.repeat(64));
+    const lockPath = join(planDirectory, 'apply.lock');
+    const externalPath = join(stateDirectory, 'external-lock.json');
+    writeFileSync(externalPath, '{malformed}', { mode: 0o600 });
+    try {
+      symlinkSync(externalPath, lockPath, 'file');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+
+    await expect(store.tryAcquireLock()).rejects.toMatchObject({ code: 'LOCK_UNSAFE' });
+    expect(readFileSync(externalPath, 'utf8')).toBe('{malformed}');
   });
 
   it('does not accept a checkpoint belonging to another plan', async () => {
