@@ -1,5 +1,19 @@
-import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  closeSync,
+  fchmodSync,
+  constants as fsConstants,
+  fstatSync,
+  fsyncSync,
+  lstatSync,
+  openSync,
+  readSync,
+  realpathSync,
+  renameSync,
+  type Stats,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { emitResult } from '../lib/output.js';
@@ -8,6 +22,7 @@ import { type DiscordMcpProfile, loadProfile } from '../lib/profiles.js';
 const PACKAGE_NAME = '@discord-mcp/cli';
 const REGISTRY_URL = 'https://registry.npmjs.org/@discord-mcp%2fcli';
 const RECOMMENDED_CODEX_TOOL_TIMEOUT_SEC = 180;
+const MAX_CONFIG_BYTES = 1024 * 1024;
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
@@ -77,6 +92,29 @@ export interface CodexLauncherUpdateInspection {
   readonly currentVersion: string;
   readonly targetVersion: string;
   readonly updateAvailable: boolean;
+}
+
+interface ConfigLocation {
+  readonly requestedPath: string;
+  readonly storagePath: string;
+  readonly directoryIdentity: Stats;
+}
+
+interface StoredConfig {
+  readonly location: ConfigLocation;
+  readonly config: string;
+  readonly contentDigest: string;
+  readonly identity: Stats;
+}
+
+interface ConfigStorage {
+  readonly location: ConfigLocation;
+  readonly fileIdentity: Stats;
+  readonly contentDigest: string;
+}
+
+interface InternalCodexLauncherUpdateInspection extends CodexLauncherUpdateInspection {
+  readonly storage: ConfigStorage;
 }
 
 function parseVersion(value: string): VersionParts | undefined {
@@ -237,6 +275,7 @@ function findGeneratedCodexLaunchers(content: string, profile: string): Launcher
 
 interface GeneratedCodexLauncherFile {
   readonly configPath: string;
+  readonly storage: ConfigStorage;
   readonly config: string;
   readonly launcher: LauncherMatch;
   readonly section: string;
@@ -278,24 +317,160 @@ function migrateGeneratedCodexLauncherSettings(
   };
 }
 
-function readGeneratedCodexLauncher(
-  profile: DiscordMcpProfile,
-  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'>,
-): GeneratedCodexLauncherFile {
-  const configPath = resolveCodexConfigPath(options);
-  if (!existsSync(configPath)) {
-    throw new CodexLauncherUpdateError('config-missing', `Expected ${configPath}.`);
-  }
+function missing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
+}
 
-  let config: string;
+function sameFileIdentity(expected: Stats, actual: Stats): boolean {
+  if (expected.ino !== actual.ino || expected.ino === 0) return false;
+  if (expected.dev === actual.dev) return true;
+  return process.platform === 'win32' && (expected.dev === 0 || actual.dev === 0);
+}
+
+function inspectConfigDirectory(path: string): { readonly path: string; readonly identity: Stats } {
+  const expected = lstatSync(path);
+  if (expected.isSymbolicLink() || !expected.isDirectory()) {
+    throw new Error('Codex configuration parent must be a regular directory');
+  }
+  const canonicalPath = realpathSync(path);
+  const actual = lstatSync(canonicalPath);
+  if (actual.isSymbolicLink() || !actual.isDirectory() || !sameFileIdentity(expected, actual)) {
+    throw new Error('Codex configuration parent changed while opening');
+  }
+  return { path: canonicalPath, identity: actual };
+}
+
+function resolveConfigLocation(
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'>,
+): ConfigLocation {
+  const requestedPath = resolveCodexConfigPath(options);
+  const parent = dirname(requestedPath);
+  let directory: ReturnType<typeof inspectConfigDirectory>;
   try {
-    config = readFileSync(configPath, 'utf8');
+    directory = inspectConfigDirectory(parent);
+  } catch (error) {
+    if (missing(error)) {
+      throw new CodexLauncherUpdateError('config-missing', `Expected ${requestedPath}.`);
+    }
+    throw error;
+  }
+  return {
+    requestedPath,
+    storagePath: join(directory.path, basename(requestedPath)),
+    directoryIdentity: directory.identity,
+  };
+}
+
+function inspectConfigFile(path: string): Stats {
+  const metadata = lstatSync(path);
+  if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > MAX_CONFIG_BYTES) {
+    throw new Error('Codex configuration must be a bounded regular file');
+  }
+  return metadata;
+}
+
+function readBounded(descriptor: number): Buffer {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  while (total <= MAX_CONFIG_BYTES) {
+    const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_CONFIG_BYTES + 1 - total));
+    const bytesRead = readSync(descriptor, chunk, 0, chunk.length, null);
+    if (bytesRead === 0) break;
+    chunks.push(chunk.subarray(0, bytesRead));
+    total += bytesRead;
+  }
+  if (total > MAX_CONFIG_BYTES) {
+    throw new Error('Codex configuration must be a bounded regular file');
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function contentDigest(content: Uint8Array | string): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function readStoredConfig(location: ConfigLocation): StoredConfig {
+  try {
+    const directory = inspectConfigDirectory(dirname(location.storagePath));
+    if (!sameFileIdentity(location.directoryIdentity, directory.identity)) {
+      throw new Error('Codex configuration parent changed while opening');
+    }
   } catch (error) {
     throw new CodexLauncherUpdateError(
       'config-read',
       error instanceof Error ? error.message : String(error),
     );
   }
+  let expected: Stats;
+  try {
+    expected = inspectConfigFile(location.storagePath);
+  } catch (error) {
+    if (missing(error)) {
+      throw new CodexLauncherUpdateError('config-missing', `Expected ${location.requestedPath}.`);
+    }
+    throw new CodexLauncherUpdateError(
+      'config-read',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(
+      location.storagePath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+    );
+    const actual = fstatSync(descriptor);
+    if (!actual.isFile() || actual.size > MAX_CONFIG_BYTES || !sameFileIdentity(expected, actual)) {
+      throw new Error('Codex configuration changed while opening');
+    }
+    const bytes = readBounded(descriptor);
+    const afterRead = fstatSync(descriptor);
+    if (
+      !afterRead.isFile() ||
+      afterRead.size !== actual.size ||
+      afterRead.mtimeMs !== actual.mtimeMs ||
+      afterRead.ctimeMs !== actual.ctimeMs ||
+      !sameFileIdentity(actual, afterRead)
+    ) {
+      throw new Error('Codex configuration changed while reading');
+    }
+    const directory = inspectConfigDirectory(dirname(location.storagePath));
+    if (!sameFileIdentity(location.directoryIdentity, directory.identity)) {
+      throw new Error('Codex configuration parent changed while reading');
+    }
+    return {
+      location,
+      config: bytes.toString('utf8'),
+      contentDigest: contentDigest(bytes),
+      identity: afterRead,
+    };
+  } catch (error) {
+    if (error instanceof CodexLauncherUpdateError) throw error;
+    throw new CodexLauncherUpdateError(
+      'config-read',
+      error instanceof Error ? error.message : String(error),
+    );
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function readGeneratedCodexLauncher(
+  profile: DiscordMcpProfile,
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'>,
+): GeneratedCodexLauncherFile {
+  let location: ConfigLocation;
+  try {
+    location = resolveConfigLocation(options);
+  } catch (error) {
+    if (error instanceof CodexLauncherUpdateError) throw error;
+    throw new CodexLauncherUpdateError(
+      'config-read',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  const stored = readStoredConfig(location);
+  const config = stored.config;
 
   const launchers = findGeneratedCodexLaunchers(config, profile.name);
   if (launchers.length === 0) {
@@ -320,7 +495,12 @@ function readGeneratedCodexLauncher(
   }
 
   return {
-    configPath,
+    configPath: location.requestedPath,
+    storage: {
+      location,
+      fileIdentity: stored.identity,
+      contentDigest: stored.contentDigest,
+    },
     config,
     launcher,
     section: config.slice(launcher.sectionStart, launcher.sectionEnd),
@@ -421,22 +601,86 @@ export function inspectCodexClientConfig(
   };
 }
 
-function writeAtomically(path: string, content: string): void {
-  const directory = dirname(path);
-  const mode = statSync(path).mode & 0o777;
-  const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
-  try {
-    writeFileSync(temporary, content, { encoding: 'utf8', flag: 'wx', mode });
-    renameSync(temporary, path);
-  } finally {
-    if (existsSync(temporary)) unlinkSync(temporary);
+function assertConfigUnchanged(stored: StoredConfig, expected: ConfigStorage): void {
+  if (
+    !sameFileIdentity(expected.fileIdentity, stored.identity) ||
+    stored.contentDigest !== expected.contentDigest
+  ) {
+    throw new Error('Codex configuration changed while updating');
   }
 }
 
-export async function inspectCodexLauncherUpdate(
+function writeAtomically(storage: ConfigStorage, content: string): void {
+  const path = storage.location.storagePath;
+  const directory = dirname(path);
+  const current = readStoredConfig(storage.location);
+  assertConfigUnchanged(current, storage);
+  const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
+  let descriptor: number | undefined;
+  let temporaryIdentity: Stats | undefined;
+  try {
+    const contentBytes = Buffer.byteLength(content, 'utf8');
+    if (contentBytes > MAX_CONFIG_BYTES) {
+      throw new Error('Codex configuration must be a bounded regular file');
+    }
+    descriptor = openSync(
+      temporary,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      current.identity.mode & 0o777,
+    );
+    temporaryIdentity = fstatSync(descriptor);
+    if (!temporaryIdentity.isFile()) {
+      throw new Error('Codex configuration temporary file is unsafe');
+    }
+    writeFileSync(descriptor, content, { encoding: 'utf8' });
+    if (process.platform !== 'win32') fchmodSync(descriptor, current.identity.mode & 0o777);
+    fsyncSync(descriptor);
+    const finalTemporaryIdentity = fstatSync(descriptor);
+    if (
+      !finalTemporaryIdentity.isFile() ||
+      finalTemporaryIdentity.size !== contentBytes ||
+      finalTemporaryIdentity.size > MAX_CONFIG_BYTES ||
+      !sameFileIdentity(temporaryIdentity, finalTemporaryIdentity)
+    ) {
+      throw new Error('Codex configuration temporary file changed while writing');
+    }
+    closeSync(descriptor);
+    descriptor = undefined;
+    const prepared = inspectConfigFile(temporary);
+    if (prepared.size !== contentBytes || !sameFileIdentity(temporaryIdentity, prepared)) {
+      throw new Error('Codex configuration temporary file changed before publishing');
+    }
+    const revalidated = readStoredConfig(storage.location);
+    assertConfigUnchanged(revalidated, storage);
+    renameSync(temporary, path);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+    if (temporaryIdentity !== undefined) {
+      try {
+        const currentTemporary = lstatSync(temporary);
+        if (
+          !currentTemporary.isSymbolicLink() &&
+          currentTemporary.isFile() &&
+          sameFileIdentity(temporaryIdentity, currentTemporary)
+        ) {
+          unlinkSync(temporary);
+        }
+      } catch (error) {
+        if (!missing(error)) {
+          // Best-effort cleanup must not replace the original update error.
+        }
+      }
+    }
+  }
+}
+
+async function inspectCodexLauncherUpdateInternal(
   profile: DiscordMcpProfile,
   options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'> = {},
-): Promise<CodexLauncherUpdateInspection> {
+): Promise<InternalCodexLauncherUpdateInspection> {
   const source = readGeneratedCodexLauncher(profile, options);
 
   let targetVersion: string;
@@ -459,11 +703,27 @@ export async function inspectCodexLauncherUpdate(
 
   return {
     configPath: source.configPath,
+    storage: source.storage,
     config: source.config,
     launcher: source.launcher,
     currentVersion: source.launcher.currentVersion,
     targetVersion,
     updateAvailable: comparison > 0,
+  };
+}
+
+export async function inspectCodexLauncherUpdate(
+  profile: DiscordMcpProfile,
+  options: Pick<UpdateOptions, 'config' | 'homeDirectory' | 'env'> = {},
+): Promise<CodexLauncherUpdateInspection> {
+  const inspection = await inspectCodexLauncherUpdateInternal(profile, options);
+  return {
+    configPath: inspection.configPath,
+    config: inspection.config,
+    launcher: inspection.launcher,
+    currentVersion: inspection.currentVersion,
+    targetVersion: inspection.targetVersion,
+    updateAvailable: inspection.updateAvailable,
   };
 }
 
@@ -546,9 +806,9 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
     return;
   }
 
-  let inspection: CodexLauncherUpdateInspection;
+  let inspection: InternalCodexLauncherUpdateInspection;
   try {
-    inspection = await inspectCodexLauncherUpdate(profile, options);
+    inspection = await inspectCodexLauncherUpdateInternal(profile, options);
   } catch (error) {
     emitInspectionError(error, options.json === true);
     return;
@@ -607,7 +867,7 @@ export async function updateAction(options: UpdateOptions): Promise<void> {
   );
   const updatedConfig = `${migration.config.slice(0, inspection.launcher.argsStart)}${nextArgs}${migration.config.slice(inspection.launcher.argsEnd)}`;
   try {
-    writeAtomically(inspection.configPath, updatedConfig);
+    writeAtomically(inspection.storage, updatedConfig);
   } catch (error) {
     emitResult(
       {
