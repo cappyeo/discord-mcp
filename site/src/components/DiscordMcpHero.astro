@@ -21,14 +21,15 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
       {
         actions.length > 0 && (
           <div class="actions sl-flex">
-            {actions.map(
-              ({ attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant }) => (
+            {actions.map((action: (typeof actions)[number]) => {
+              const { attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant } = action;
+              return (
                 <LinkButton {href} {variant} icon={icon?.name} class:list={[className]} {...attrs}>
                   {text}
                   {icon?.html && <Fragment set:html={icon.html} />}
                 </LinkButton>
-              )
-            )}
+              );
+            })}
           </div>
         )
       }

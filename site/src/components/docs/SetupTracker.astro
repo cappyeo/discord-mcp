@@ -1,5 +1,5 @@
 ---
-import { getCollection } from 'astro:content';
+import { type CollectionEntry, getCollection } from 'astro:content';
 import TutorialProgress from './TutorialProgress.astro';
 import TutorialUnitProgress from './TutorialUnitProgress.astro';
 
@@ -13,8 +13,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 const hrefFor = (entryId: string) => `${basePath}${entryId}/`;
 
 const tutorialPages = (await getCollection('docs'))
-  .filter((entry) => entry.data.type === 'tutorial')
-  .sort((left, right) => {
+  .filter((entry: CollectionEntry<'docs'>) => entry.data.type === 'tutorial')
+  .sort((left: CollectionEntry<'docs'>, right: CollectionEntry<'docs'>) => {
     const leftOrder = left.data.sidebar.order ?? Number.MAX_SAFE_INTEGER;
     const rightOrder = right.data.sidebar.order ?? Number.MAX_SAFE_INTEGER;
     return leftOrder - rightOrder || left.id.localeCompare(right.id);
@@ -254,12 +254,13 @@ const tabProgressId = (index: number) => `${id}-unit-progress-${index}`;
 
     connectedCallback() {
       this.controller?.abort();
-      this.controller = new AbortController();
+      const controller = new AbortController();
+      this.controller = controller;
       const tabs = Array.from(this.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
 
       tabs.forEach((tab, index) => {
         tab.addEventListener('click', () => this.select(index), {
-          signal: this.controller?.signal,
+          signal: controller.signal,
         });
         tab.addEventListener(
           'keydown',
@@ -278,7 +279,7 @@ const tabProgressId = (index: number) => `${id}-unit-progress-${index}`;
             event.preventDefault();
             this.select(destination, true);
           },
-          { signal: this.controller.signal },
+          { signal: controller.signal },
         );
       });
     }

@@ -91,6 +91,6 @@ import Default from '@astrojs/starlight/components/MarkdownContent.astro';
     for (const table of tables) observer.observe(table);
     for (const codeBlock of codeBlocks) observer.observe(codeBlock);
   } else {
-    window.addEventListener('resize', updateAll);
+    globalThis.addEventListener('resize', updateAll);
   }
 </script>

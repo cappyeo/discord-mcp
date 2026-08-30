@@ -1,3 +1,5 @@
+import type { StarlightConfig } from '@astrojs/starlight/types';
+
 export const siteOrigin = 'https://cappyeo.github.io';
 export const siteBasePath = '/discord-mcp';
 export const docsUrl = `${siteOrigin}${siteBasePath}/`;
@@ -45,7 +47,7 @@ const structuredData = {
   ],
 };
 
-export const siteHead = [
+export const siteHead: StarlightConfig['head'] = [
   { tag: 'meta', attrs: { name: 'application-name', content: 'discord-mcp' } },
   { tag: 'meta', attrs: { property: 'og:image', content: socialImageUrl } },
   {

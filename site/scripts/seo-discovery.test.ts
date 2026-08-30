@@ -12,6 +12,8 @@ import {
   verifiedOutcomeUrl,
 } from '../src/seo.js';
 
+type SiteHeadEntry = (typeof siteHead)[number];
+
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const SITE_ROOT = join(__dirname, '..');
 const PUBLIC_DIR = join(SITE_ROOT, 'public');
@@ -21,7 +23,7 @@ const STALE_REGISTRY_URL =
   'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.cappyeo/discord-mcp';
 
 function headEntry(attribute: string, value: string) {
-  return siteHead.find((entry) => entry.attrs?.[attribute] === value);
+  return siteHead.find((entry: SiteHeadEntry) => entry.attrs?.[attribute] === value);
 }
 
 describe('crawl and AI discovery artifacts', () => {
@@ -60,7 +62,8 @@ describe('crawl and AI discovery artifacts', () => {
     expect(headEntry('name', 'twitter:image')?.attrs?.content).toBe(socialImageUrl);
 
     const llmsLink = siteHead.find(
-      (entry) => entry.tag === 'link' && entry.attrs?.href === `${siteBasePath}/llms.txt`,
+      (entry: SiteHeadEntry) =>
+        entry.tag === 'link' && entry.attrs?.href === `${siteBasePath}/llms.txt`,
     );
     expect(llmsLink?.attrs?.type).toBe('text/plain');
 
