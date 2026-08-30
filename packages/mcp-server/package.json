@@ -76,9 +76,9 @@
   },
   "devDependencies": {
     "@discord-mcp/server-mocks": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.20.1",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.0",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }
