@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId, UserId } from '../_lib/snowflake.js';
@@ -29,7 +30,7 @@ export default defineTool({
     '',
     '**Example**: `{channel_id:"111122223333444401", query:"deploy", limit:100}`',
     '',
-    '**Returns**: `{matches:[…], scanned_count, channel_id, query}`. Structured matches remain raw Discord data; the human-readable MCP `content` response fences matched message text.',
+    '**Returns**: `{matches:[…], scanned_count, oldest_scanned_id?, newest_scanned_id?, channel_id, query}`. Structured matches remain raw Discord data; the human-readable MCP `content` response fences matched message text. Resume older history with `before: oldest_scanned_id`.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel to scan'),
@@ -41,8 +42,12 @@ export default defineTool({
       .max(100)
       .default(100)
       .describe('Max recent messages to scan (1-100, default 100). NOT a result cap.'),
-    before: MessageId.optional().describe('Scan window: messages before this ID (older)'),
-    after: MessageId.optional().describe('Scan window: messages after this ID (newer)'),
+    before: MessageId.optional().describe(
+      'Scan window: messages before this ID (older); mutually exclusive with after',
+    ),
+    after: MessageId.optional().describe(
+      'Scan window: messages after this ID (newer); mutually exclusive with before',
+    ),
   },
   outputSchema: {
     matches: z.array(
@@ -55,6 +60,8 @@ export default defineTool({
       }),
     ),
     scanned_count: z.number().int(),
+    oldest_scanned_id: MessageId.optional(),
+    newest_scanned_id: MessageId.optional(),
     channel_id: ChannelId,
     query: z.string(),
   },
@@ -66,7 +73,12 @@ export default defineTool({
   },
   idempotent: true,
   handler: async (args) => {
-    const query = new URLSearchParams({ limit: String(args.limit) });
+    if (args.before !== undefined && args.after !== undefined) {
+      throw new ValidationError([
+        { path: 'before', message: 'before and after are mutually exclusive', code: 'custom' },
+      ]);
+    }
+    const query = new URLSearchParams({ limit: String(args.limit ?? 100) });
     if (args.before !== undefined) query.set('before', args.before);
     if (args.after !== undefined) query.set('after', args.after);
 
@@ -97,6 +109,12 @@ export default defineTool({
       data: {
         matches,
         scanned_count: raw.length,
+        ...(raw.length > 0
+          ? {
+              oldest_scanned_id: raw[raw.length - 1]!.id,
+              newest_scanned_id: raw[0]!.id,
+            }
+          : {}),
         channel_id: args.channel_id,
         query: args.query,
       },
