@@ -38,6 +38,11 @@ const CLIENT_SETUP_MDX = join(ROOT, 'site/src/content/docs/start/client-setup.md
 const CONFIGURE_MDX = join(ROOT, 'site/src/content/docs/operations/configure.mdx');
 const SAFETY_REFERENCE_MDX = join(ROOT, 'site/src/content/docs/reference/config/safety.mdx');
 const REFERENCE_INDEX_MDX = join(ROOT, 'site/src/content/docs/reference/index.mdx');
+const ACTIVATION_MATRIX_MDX = join(ROOT, 'site/src/content/docs/reference/activation-matrix.mdx');
+const ACTIVATION_VERIFIER_SOURCE = join(
+  ROOT,
+  'packages/mcp-server/scripts/benchmark/verify-activation-trials.mjs',
+);
 const CLI_REFERENCE_MDX = join(ROOT, 'site/src/content/docs/reference/cli.mdx');
 const HUBDUSTRY_MIGRATION_MDX = join(ROOT, 'site/src/content/docs/migrate/hubdustry.mdx');
 const HUBDUSTRY_FIXTURE_ROOT = join(ROOT, 'packages/mcp-server/test-fixtures/hubdustry-go-mcp');
@@ -423,6 +428,15 @@ describe('handwritten docs do not regress to known stale contracts', () => {
     expect(clientSetup).toContain(`**up to ${tools.length} visible direct tools**`);
     expect(clientSetup).toContain('`MCP_CATEGORIES`');
     expect(clientSetup).toContain('`ALLOWED_GUILDS`');
+  });
+
+  it('keeps the activation matrix schema aligned with the production verifier', () => {
+    const verifier = readFileSync(ACTIVATION_VERIFIER_SOURCE, 'utf8');
+    const schema = verifier.match(/export const ACTIVATION_VERIFIER_SCHEMA = '([^']+)'/)?.[1];
+    expect(schema).toBeDefined();
+
+    const activationMatrix = readFileSync(ACTIVATION_MATRIX_MDX, 'utf8');
+    expect(activationMatrix).toContain(`\`${schema}\``);
   });
 
   it('documents the complete write-control boundary from runtime metadata', async () => {

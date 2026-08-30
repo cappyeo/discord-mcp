@@ -10,7 +10,7 @@ import {
   runCursorCliActivationCampaign,
 } from './cursor-cli-activation-campaign.mjs';
 
-const RELEASE = '0.25.0';
+const RELEASE = '0.25.1';
 const RUN_ID = 'activation-cursor-20260815';
 const HOST_VERSION = '2.4.1';
 const GUILD_ID = '1537332825978568744';

@@ -11,9 +11,20 @@ commit history and downloadable artifacts, see
 
 ## Unreleased
 
-- Runtime access evidence now keeps Administrator and guild-owner grants
-  complete for declared known permissions even when Discord returns a newer
-  unknown permission bit; the bit remains visible in diagnostics.
+No unreleased changes.
+
+## v0.25.1 - release and runtime hardening
+
+- Corrected runtime access evidence so Administrator and guild-owner grants
+  remain complete for declared known permissions when Discord returns a newer
+  unknown permission bit; the unknown bit remains visible in diagnostics.
+- Upgraded dependencies, security baselines, and the build toolchain,
+  including Astro 7 documentation builds and type checks.
+- Added trusted exact-tag release gates and documented protected-main branch
+  operations; branch protection is an operator control, not package runtime
+  code.
+- Added result-byte budget evidence for representative MCP responses to keep
+  payload growth bounded and measurable.
 
 ## v0.25.0 - verified access and approval hardening
 

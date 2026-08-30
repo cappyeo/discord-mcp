@@ -20,7 +20,7 @@ import {
   validateAntigravityCliActivationRequest,
 } from './antigravity-cli-activation-trial.mjs';
 
-const RELEASE = '0.25.0';
+const RELEASE = '0.25.1';
 const RUN_ID = 'antigravity-cli-activation-run-001';
 const TRIAL_ID = 'antigravity-cli-activation-001';
 const GUILD_ID = '1537332825978568744';

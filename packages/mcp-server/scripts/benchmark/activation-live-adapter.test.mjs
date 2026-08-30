@@ -285,7 +285,7 @@ describe('shared activation live adapter', () => {
     const binding = { guildId: GUILD_ID, botId: BOT_ID };
     let registered;
     const session = await adapter.launch({
-      release: '0.25.0',
+      release: '0.25.1',
       hostVersion: '2.1.228',
       target,
       installRoot: 'C:/install',
@@ -353,7 +353,7 @@ describe('shared activation live adapter', () => {
     });
     const target = { guildId: GUILD_ID, botId: BOT_ID };
     const session = await adapter.launch({
-      release: '0.25.0',
+      release: '0.25.1',
       hostVersion: '2.1.228',
       target,
       installRoot: 'C:/install',
@@ -393,7 +393,7 @@ describe('shared activation live adapter', () => {
     });
     const target = { guildId: GUILD_ID, botId: BOT_ID };
     const session = await adapter.launch({
-      release: '0.25.0',
+      release: '0.25.1',
       hostVersion: '2.1.228',
       target,
       installRoot: 'C:/install',
@@ -438,7 +438,7 @@ describe('shared activation live adapter', () => {
     const target = { guildId: GUILD_ID, botId: BOT_ID };
     await expect(
       adapter.launch({
-        release: '0.25.0',
+        release: '0.25.1',
         hostVersion: '2.1.228',
         target,
         installRoot: 'C:/install',
@@ -477,7 +477,7 @@ describe('shared activation live adapter', () => {
     });
     const target = { guildId: GUILD_ID, botId: BOT_ID };
     const session = await adapter.launch({
-      release: '0.25.0',
+      release: '0.25.1',
       hostVersion: '2.1.228',
       target,
       installRoot: 'C:/install',

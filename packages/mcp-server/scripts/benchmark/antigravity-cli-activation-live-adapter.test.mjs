@@ -285,7 +285,7 @@ describe('Antigravity CLI activation live adapter', () => {
     });
     try {
       const session = await adapter.launch({
-        release: '0.25.0',
+        release: '0.25.1',
         hostVersion: '1.1.13',
         target,
         installRoot: root,

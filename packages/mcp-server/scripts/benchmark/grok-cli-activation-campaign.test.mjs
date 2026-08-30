@@ -10,7 +10,7 @@ import {
   runGrokCliActivationCampaign,
 } from './grok-cli-activation-campaign.mjs';
 
-const RELEASE = '0.25.0';
+const RELEASE = '0.25.1';
 const RUN_ID = 'activation-grok-20260815';
 const HOST_VERSION = '1.0.3';
 const GUILD_ID = '1537332825978568744';
