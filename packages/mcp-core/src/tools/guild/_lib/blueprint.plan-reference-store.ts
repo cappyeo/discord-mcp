@@ -19,7 +19,7 @@ const MAX_ENVELOPE_BYTES = 1_048_576;
 const MAX_REFERENCE_RECORDS = 256;
 const MAX_REFERENCE_TOTAL_BYTES = 64 * 1024 * 1024;
 const QUOTA_LOCK_RETRY_MS = 10;
-const QUOTA_LOCK_TIMEOUT_MS = 5_000;
+const QUOTA_LOCK_TIMEOUT_MS = 15_000;
 const QUOTA_LOCK_STALE_MS = 30_000;
 const MAX_QUOTA_LOCK_BYTES = 4_096;
 
@@ -108,6 +108,16 @@ function isMissing(error: unknown): boolean {
 
 function isAlreadyExists(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'EEXIST';
+}
+
+function isRetryableQuotaLockError(error: unknown): boolean {
+  return (
+    isAlreadyExists(error) ||
+    (process.platform === 'win32' &&
+      error instanceof Error &&
+      'code' in error &&
+      ['EACCES', 'EBUSY', 'EPERM'].includes(String(error.code)))
+  );
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -470,38 +480,44 @@ async function withQuotaLock<T>(directory: string, operation: () => Promise<T>):
       await chmodSecure(lockPath, 0o600);
       break;
     } catch (error) {
-      if (!isAlreadyExists(error)) {
+      if (!isRetryableQuotaLockError(error)) {
         throw new BlueprintPlanReferenceStoreError(
           'PLAN_REFERENCE_IO',
           'Plan reference storage is unavailable.',
         );
       }
-      try {
-        const existing = await readQuotaLock(lockPath);
-        if (existing !== null && isStaleQuotaLock(existing)) {
-          // Match the checkpoint-store lock discipline: a malformed, live, or
-          // replaced record is never reclaimed. The second read narrows the
-          // stale-owner race before the exclusive-create retry below.
-          const confirmed = await readQuotaLock(lockPath);
-          if (
-            confirmed !== null &&
-            confirmed.record.nonce === existing.record.nonce &&
-            confirmed.metadata.ino === existing.metadata.ino &&
-            confirmed.metadata.mtimeMs === existing.metadata.mtimeMs &&
-            isStaleQuotaLock(confirmed)
-          ) {
-            await unlink(lockPath).catch((unlinkError) => {
-              if (!isMissing(unlinkError)) throw unlinkError;
-            });
-            continue;
+      if (isAlreadyExists(error)) {
+        try {
+          const existing = await readQuotaLock(lockPath);
+          if (existing !== null && isStaleQuotaLock(existing)) {
+            // Match the checkpoint-store lock discipline: a malformed, live, or
+            // replaced record is never reclaimed. The second read narrows the
+            // stale-owner race before the exclusive-create retry below.
+            const confirmed = await readQuotaLock(lockPath);
+            if (
+              confirmed !== null &&
+              confirmed.record.nonce === existing.record.nonce &&
+              confirmed.metadata.ino === existing.metadata.ino &&
+              confirmed.metadata.mtimeMs === existing.metadata.mtimeMs &&
+              isStaleQuotaLock(confirmed)
+            ) {
+              await unlink(lockPath).catch((unlinkError) => {
+                if (!isMissing(unlinkError)) throw unlinkError;
+              });
+              continue;
+            }
           }
-        }
-      } catch (metadataError) {
-        if (!isMissing(metadataError) && !(metadataError instanceof SyntaxError)) {
-          throw new BlueprintPlanReferenceStoreError(
-            'PLAN_REFERENCE_IO',
-            'Plan reference storage is unavailable.',
-          );
+        } catch (metadataError) {
+          if (
+            !isMissing(metadataError) &&
+            !(metadataError instanceof SyntaxError) &&
+            !isRetryableQuotaLockError(metadataError)
+          ) {
+            throw new BlueprintPlanReferenceStoreError(
+              'PLAN_REFERENCE_IO',
+              'Plan reference storage is unavailable.',
+            );
+          }
         }
       }
       if (Date.now() >= deadline) {
