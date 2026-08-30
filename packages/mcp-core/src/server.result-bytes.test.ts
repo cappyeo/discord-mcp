@@ -198,8 +198,14 @@ describe('MCP result byte regression evidence', () => {
         const limit = Math.min(Number(url.searchParams.get('limit') ?? 1), 1000);
         return HttpResponse.json(Array.from({ length: limit }, (_, i) => memberFixture(i + 1)));
       }),
-      http.get('https://discord.com/api/v10/channels/:channelId/pins', () =>
-        HttpResponse.json(Array.from({ length: 50 }, (_, index) => messageFixture(index + 201))),
+      http.get('https://discord.com/api/v10/channels/:channelId/messages/pins', () =>
+        HttpResponse.json({
+          items: Array.from({ length: 50 }, (_, index) => ({
+            pinned_at: `2026-04-30T12:${String(59 - index).padStart(2, '0')}:00.000Z`,
+            message: messageFixture(index + 201),
+          })),
+          has_more: true,
+        }),
       ),
     );
     const rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');

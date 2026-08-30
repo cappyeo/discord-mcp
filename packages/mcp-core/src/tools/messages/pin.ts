@@ -14,9 +14,6 @@ export default defineTool({
     '**When to use**:',
     '- Highlight a community announcement / FAQ in the channel.',
     '',
-    '**When NOT to use**:',
-    '- Channel already has 50 pins (Discord limit) - call returns 400.',
-    '',
     '**Returns**: `{pinned, channel_id, message_id}`.',
   ].join('\n'),
   inputSchema: {
@@ -41,7 +38,7 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args) => {
-    await container.rest.put(Routes.channelPin(args.channel_id, args.message_id), {
+    await container.rest.put(Routes.channelMessagesPin(args.channel_id, args.message_id), {
       reason: args.audit_reason,
     });
     return dualResult({

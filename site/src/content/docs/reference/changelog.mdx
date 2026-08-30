@@ -13,6 +13,8 @@ commit history and downloadable artifacts, see
 
 - Added resumable `audit_log_get` pages through an optional `before` cursor and
   `oldest_id` continuation marker.
+- Migrated message pin list, pin, and unpin calls off Discord's deprecated
+  routes; pin listing now exposes timestamp pagination and `has_more`.
 - Hardened network and parsing boundaries found by the first CodeQL baseline:
   bot credentials can no longer follow a remote `DISCORD_API_BASE_URL`, release
   checks validate the exact GitHub repository path, npm update checks use the
