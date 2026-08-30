@@ -31,7 +31,7 @@ function writeConfig(tokenReference = '${DISCORD_TOKEN}', profileName = 'devbot'
             args: [
               '--yes',
               '--loglevel=error',
-              '@discord-mcp/cli@0.25.1',
+              '@discord-mcp/cli@0.26.0',
               'serve',
               '--profile',
               profileName,
@@ -63,7 +63,7 @@ describe('inspectGeminiCliConfig', () => {
 
     expect(inspectGeminiCliConfig(profile, { config: configPath })).toEqual({
       configName: 'discord-mcp',
-      currentVersion: '0.25.1',
+      currentVersion: '0.26.0',
       environmentForwarding: true,
       credentialPersisted: false,
     });
@@ -107,7 +107,7 @@ describe('inspectGeminiCliConfig', () => {
     writeConfig();
 
     expect(inspectGeminiCliConfig(profile, { homeDirectory: directory }).currentVersion).toBe(
-      '0.25.1',
+      '0.26.0',
     );
   });
 
@@ -116,7 +116,7 @@ describe('inspectGeminiCliConfig', () => {
 
     expect(
       inspectGeminiCliConfig(profile, { env: { GEMINI_CLI_HOME: directory } }).currentVersion,
-    ).toBe('0.25.1');
+    ).toBe('0.26.0');
   });
 
   it('rejects oversized settings before parsing them', () => {

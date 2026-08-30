@@ -18,7 +18,7 @@ import {
 } from './claude-code-activation-trial.mjs';
 import { buildClaudeCodeMcpConfig } from './claude-code-driver.mjs';
 
-const RELEASE = '0.25.1';
+const RELEASE = '0.26.0';
 const RUN_ID = 'claude-code-activation-run-001';
 const TRIAL_ID = 'claude-code-activation-001';
 const GUILD_ID = '1537332825978568744';
