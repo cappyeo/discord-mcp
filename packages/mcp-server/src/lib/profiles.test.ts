@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -9,6 +17,7 @@ import {
   loadProfile,
   normalizeProfileCategories,
   normalizeProfileName,
+  profileExists,
   profilePath,
   removeProfile,
   resolveProfileDirectory,
@@ -147,6 +156,67 @@ describe('profile storage', () => {
     removeProfile('remove', { directory });
 
     expect(listProfiles({ directory }).map((item) => item.name)).toEqual(['keep']);
+  });
+
+  it('rejects profile file symlinks without reading, replacing, or removing their target', ({
+    skip,
+  }) => {
+    const externalDirectory = join(directory, 'external');
+    const externalPath = join(externalDirectory, 'devbot.json');
+    const target = profilePath('devbot', { directory });
+    const externalContent = JSON.stringify(profile());
+    mkdirSync(externalDirectory);
+    writeFileSync(externalPath, externalContent, 'utf8');
+    try {
+      symlinkSync(externalPath, target, 'file');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+
+    expect(() => profileExists('devbot', { directory })).toThrow('bounded regular file');
+    expect(() => loadProfile('devbot', { directory })).toThrow('bounded regular file');
+    expect(() => saveProfile(profile(), { directory, overwrite: true })).toThrow(
+      'bounded regular file',
+    );
+    expect(() => removeProfile('devbot', { directory })).toThrow('bounded regular file');
+    expect(listProfiles({ directory })).toEqual([]);
+    expect(lstatSync(target).isSymbolicLink()).toBe(true);
+    expect(readFileSync(externalPath, 'utf8')).toBe(externalContent);
+  });
+
+  it('rejects a symlinked profile directory without touching its contents', ({ skip }) => {
+    const externalDirectory = join(directory, 'external-profiles');
+    const linkedDirectory = join(directory, 'linked-profiles');
+    const externalPath = join(externalDirectory, 'devbot.json');
+    const externalContent = JSON.stringify(profile());
+    mkdirSync(externalDirectory);
+    writeFileSync(externalPath, externalContent, 'utf8');
+    try {
+      symlinkSync(externalDirectory, linkedDirectory, 'junction');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') skip();
+      throw error;
+    }
+
+    const options = { directory: linkedDirectory };
+    expect(() => profileExists('devbot', options)).toThrow('regular directory');
+    expect(() => loadProfile('devbot', options)).toThrow('regular directory');
+    expect(() => listProfiles(options)).toThrow('regular directory');
+    expect(() => saveProfile(profile(), { ...options, overwrite: true })).toThrow(
+      'regular directory',
+    );
+    expect(() => removeProfile('devbot', options)).toThrow('regular directory');
+    expect(lstatSync(linkedDirectory).isSymbolicLink()).toBe(true);
+    expect(readFileSync(externalPath, 'utf8')).toBe(externalContent);
+  });
+
+  it('rejects oversized profile files by UTF-8 bytes before parsing them', () => {
+    const path = profilePath('devbot', { directory });
+    writeFileSync(path, 'é'.repeat(512 * 1024 + 1), 'utf8');
+
+    expect(() => profileExists('devbot', { directory })).toThrow('bounded regular file');
+    expect(() => loadProfile('devbot', { directory })).toThrow('bounded regular file');
   });
 });
 

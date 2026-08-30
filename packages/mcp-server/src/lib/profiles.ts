@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import {
-  existsSync,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  fsyncSync,
   linkSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
-  readFileSync,
+  readSync,
+  realpathSync,
   renameSync,
+  type Stats,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -30,6 +37,7 @@ const CLIENT_IDS = [
 const TOOL_SURFACES = ['full', 'progressive'] as const;
 const WRITE_MODES = ['allow', 'preview'] as const;
 const PROFILE_CATEGORY = /^[a-z][a-z0-9_]*$/;
+const MAX_PROFILE_BYTES = 1024 * 1024;
 
 export type ProfileClientId = (typeof CLIENT_IDS)[number];
 export type ProfileToolSurface = (typeof TOOL_SURFACES)[number];
@@ -233,18 +241,96 @@ export function profilePath(name: string, options: ProfileLocationOptions = {}):
   return join(resolveProfileDirectory(options), `${normalizeProfileName(name)}.json`);
 }
 
-export function profileExists(name: string, options: ProfileLocationOptions = {}): boolean {
-  return existsSync(profilePath(name, options));
+function missing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
 }
 
-export function loadProfile(name: string, options: ProfileLocationOptions = {}): DiscordMcpProfile {
-  const normalizedName = normalizeProfileName(name);
-  const path = profilePath(normalizedName, options);
-  if (!existsSync(path)) throw new Error(`Profile not found: ${normalizedName}`);
+function sameFileIdentity(expected: Stats, actual: Stats): boolean {
+  if (expected.ino !== actual.ino || expected.ino === 0) return false;
+  if (expected.dev === actual.dev) return true;
+  return process.platform === 'win32' && (expected.dev === 0 || actual.dev === 0);
+}
 
+// The directory path is caller-owned. Resolve its selected ancestor chain once,
+// but reject a final symlink/junction so each operation uses a stable directory.
+function canonicalProfileDirectory(directory: string): string | undefined {
+  let metadata: Stats;
+  try {
+    metadata = lstatSync(directory);
+  } catch (error) {
+    if (missing(error)) return undefined;
+    throw error;
+  }
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    throw new Error('Profile directory must be a regular directory');
+  }
+  return realpathSync(directory);
+}
+
+function ensureProfileDirectory(directory: string): string {
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const canonical = canonicalProfileDirectory(directory);
+  if (canonical === undefined) throw new Error('Profile directory disappeared while opening');
+  return canonical;
+}
+
+function inspectProfileFile(path: string): Stats | undefined {
+  let metadata: Stats;
+  try {
+    metadata = lstatSync(path);
+  } catch (error) {
+    if (missing(error)) return undefined;
+    throw error;
+  }
+  if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > MAX_PROFILE_BYTES) {
+    throw new Error('Profile must be a bounded regular file');
+  }
+  return metadata;
+}
+
+function readDescriptorBounded(descriptor: number): string {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  while (total <= MAX_PROFILE_BYTES) {
+    const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_PROFILE_BYTES + 1 - total));
+    const bytesRead = readSync(descriptor, chunk, 0, chunk.length, null);
+    if (bytesRead === 0) break;
+    chunks.push(chunk.subarray(0, bytesRead));
+    total += bytesRead;
+  }
+  if (total > MAX_PROFILE_BYTES) throw new Error('Profile must be a bounded regular file');
+  return Buffer.concat(chunks, total).toString('utf8');
+}
+
+interface StoredProfile {
+  readonly text: string;
+  readonly identity: Stats;
+}
+
+function readStoredProfile(path: string): StoredProfile | undefined {
+  const expected = inspectProfileFile(path);
+  if (expected === undefined) return undefined;
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    const actual = fstatSync(descriptor);
+    if (
+      !actual.isFile() ||
+      actual.size > MAX_PROFILE_BYTES ||
+      !sameFileIdentity(expected, actual)
+    ) {
+      throw new Error('Profile changed while opening');
+    }
+    return { text: readDescriptorBounded(descriptor), identity: actual };
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function parseStoredProfile(stored: StoredProfile, normalizedName: string): DiscordMcpProfile {
   let value: unknown;
   try {
-    value = JSON.parse(readFileSync(path, 'utf8'));
+    value = JSON.parse(stored.text);
   } catch (error) {
     throw new Error(
       `Cannot read profile ${normalizedName}: ${error instanceof Error ? error.message : String(error)}`,
@@ -253,21 +339,59 @@ export function loadProfile(name: string, options: ProfileLocationOptions = {}):
   return parseProfileValue(value, normalizedName);
 }
 
+function storedProfilePath(directory: string, normalizedName: string): string {
+  return join(directory, `${normalizedName}.json`);
+}
+
+export function profileExists(name: string, options: ProfileLocationOptions = {}): boolean {
+  const normalizedName = normalizeProfileName(name);
+  const directory = canonicalProfileDirectory(resolveProfileDirectory(options));
+  return (
+    directory !== undefined &&
+    inspectProfileFile(storedProfilePath(directory, normalizedName)) !== undefined
+  );
+}
+
+export function loadProfile(name: string, options: ProfileLocationOptions = {}): DiscordMcpProfile {
+  const normalizedName = normalizeProfileName(name);
+  let stored: StoredProfile | undefined;
+  try {
+    const directory = canonicalProfileDirectory(resolveProfileDirectory(options));
+    stored =
+      directory === undefined
+        ? undefined
+        : readStoredProfile(storedProfilePath(directory, normalizedName));
+  } catch (error) {
+    throw new Error(
+      `Cannot read profile ${normalizedName}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (stored === undefined) throw new Error(`Profile not found: ${normalizedName}`);
+  return parseStoredProfile(stored, normalizedName);
+}
+
 export function listProfiles(options: ProfileLocationOptions = {}): DiscordMcpProfile[] {
-  const directory = resolveProfileDirectory(options);
-  if (!existsSync(directory)) return [];
+  const directory = canonicalProfileDirectory(resolveProfileDirectory(options));
+  if (directory === undefined) return [];
   return readdirSync(directory, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => loadProfile(basename(entry.name, '.json'), options))
+    .map((entry) => {
+      const normalizedName = normalizeProfileName(basename(entry.name, '.json'));
+      const stored = readStoredProfile(storedProfilePath(directory, normalizedName));
+      if (stored === undefined) throw new Error(`Profile not found: ${normalizedName}`);
+      return parseStoredProfile(stored, normalizedName);
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function saveProfile(profile: DiscordMcpProfile, options: SaveProfileOptions = {}): string {
   const validated = parseProfileValue(profile);
-  const target = profilePath(validated.name, options);
-  const targetExisted = existsSync(target);
-  if (targetExisted) {
-    const current = loadProfile(validated.name, options);
+  const requestedTarget = profilePath(validated.name, options);
+  const directory = ensureProfileDirectory(resolveProfileDirectory(options));
+  const target = storedProfilePath(directory, validated.name);
+  const existing = readStoredProfile(target);
+  if (existing !== undefined) {
+    const current = parseStoredProfile(existing, validated.name);
     if (options.overwrite !== true) {
       throw new Error(`Profile ${validated.name} already exists; use --force to update it`);
     }
@@ -278,16 +402,48 @@ export function saveProfile(profile: DiscordMcpProfile, options: SaveProfileOpti
     }
   }
 
-  const directory = resolveProfileDirectory(options);
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const content = `${JSON.stringify(validated, null, 2)}\n`;
+  if (Buffer.byteLength(content, 'utf8') > MAX_PROFILE_BYTES) {
+    throw new Error('Profile must be a bounded regular file');
+  }
   const temporary = join(directory, `.${validated.name}.${process.pid}.${randomUUID()}.tmp`);
+  let descriptor: number | undefined;
+  let temporaryIdentity: Stats | undefined;
   try {
-    writeFileSync(temporary, `${JSON.stringify(validated, null, 2)}\n`, {
-      encoding: 'utf8',
-      flag: 'wx',
-      mode: 0o600,
-    });
-    if (targetExisted) {
+    descriptor = openSync(
+      temporary,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    temporaryIdentity = fstatSync(descriptor);
+    if (!temporaryIdentity.isFile()) throw new Error('Profile temporary file is unsafe');
+    writeFileSync(descriptor, content, { encoding: 'utf8' });
+    fsyncSync(descriptor);
+    const written = fstatSync(descriptor);
+    if (
+      !written.isFile() ||
+      written.size > MAX_PROFILE_BYTES ||
+      !sameFileIdentity(temporaryIdentity, written)
+    ) {
+      throw new Error('Profile temporary file is unsafe');
+    }
+    closeSync(descriptor);
+    descriptor = undefined;
+
+    const prepared = inspectProfileFile(temporary);
+    if (prepared === undefined || !sameFileIdentity(temporaryIdentity, prepared)) {
+      throw new Error('Profile temporary file changed before publishing');
+    }
+    if (existing !== undefined) {
+      const current = inspectProfileFile(target);
+      if (current === undefined || !sameFileIdentity(existing.identity, current)) {
+        throw new Error(
+          `Profile ${validated.name} changed while updating; inspect it before retrying`,
+        );
+      }
       renameSync(temporary, target);
     } else {
       try {
@@ -300,19 +456,47 @@ export function saveProfile(profile: DiscordMcpProfile, options: SaveProfileOpti
         }
         throw error;
       }
+      const published = inspectProfileFile(target);
+      if (published === undefined || !sameFileIdentity(temporaryIdentity, published)) {
+        throw new Error(`Profile ${validated.name} changed while publishing`);
+      }
     }
   } finally {
-    if (existsSync(temporary)) unlinkSync(temporary);
+    if (descriptor !== undefined) closeSync(descriptor);
+    if (temporaryIdentity !== undefined) {
+      try {
+        const current = lstatSync(temporary);
+        if (
+          !current.isSymbolicLink() &&
+          current.isFile() &&
+          sameFileIdentity(temporaryIdentity, current)
+        ) {
+          unlinkSync(temporary);
+        }
+      } catch (error) {
+        if (!missing(error)) {
+          // Best-effort cleanup must not replace the profile operation result.
+        }
+      }
+    }
   }
-  return target;
+  return requestedTarget;
 }
 
 export function removeProfile(name: string, options: ProfileLocationOptions = {}): string {
   const normalizedName = normalizeProfileName(name);
-  const target = profilePath(normalizedName, options);
-  if (!existsSync(target)) throw new Error(`Profile not found: ${normalizedName}`);
+  const requestedTarget = profilePath(normalizedName, options);
+  const directory = canonicalProfileDirectory(resolveProfileDirectory(options));
+  if (directory === undefined) throw new Error(`Profile not found: ${normalizedName}`);
+  const target = storedProfilePath(directory, normalizedName);
+  const expected = inspectProfileFile(target);
+  if (expected === undefined) throw new Error(`Profile not found: ${normalizedName}`);
+  const current = inspectProfileFile(target);
+  if (current === undefined || !sameFileIdentity(expected, current)) {
+    throw new Error(`Profile ${normalizedName} changed while removing; inspect it before retrying`);
+  }
   unlinkSync(target);
-  return target;
+  return requestedTarget;
 }
 
 export function activateProfile(
