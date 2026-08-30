@@ -62,11 +62,11 @@ export CURSOR_API_KEY='<Cursor provider key>'
 export XAI_API_KEY='<Grok provider key>'
 
 pnpm benchmark:activation:matrix -- \
-  --release 0.25.1 \
+  --release 0.26.0 \
   --run-id five-host-live-001 \
   --source-commit '<40-character source commit>' \
   --guild '<disposable guild id>' \
-  --confirmation 'APPROVE_FIVE_HOST_ACTIVATION_MATRIX:0.25.1:five-host-live-001:<guild id>:<expected bot id>:<40-character source commit>' \
+  --confirmation 'APPROVE_FIVE_HOST_ACTIVATION_MATRIX:0.26.0:five-host-live-001:<guild id>:<expected bot id>:<40-character source commit>' \
   --codex-version '<installed Codex version>' \
   --claude-code-version '<installed Claude Code version>' \
   --antigravity-cli-version '<installed Antigravity CLI version>' \
@@ -92,7 +92,7 @@ export DISCORD_EXPECTED_BOT_ID='<expected bot id>'
 
 pnpm benchmark:activation:matrix:verify -- \
   --artifact-root /private/discord-mcp-activation \
-  --expected-release 0.25.1 \
+  --expected-release 0.26.0 \
   --expected-commit '<40-character source commit>' \
   --expected-build-digest 'sha256:<64 hex characters>' \
   --codex-run-id codex-activation-live-001 \

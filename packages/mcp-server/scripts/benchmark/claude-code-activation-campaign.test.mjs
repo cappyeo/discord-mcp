@@ -15,7 +15,7 @@ import {
   runClaudeCodeActivationCampaign,
 } from './claude-code-activation-campaign.mjs';
 
-const RELEASE = '0.25.1';
+const RELEASE = '0.26.0';
 const RUN_ID = 'activation-claude-code-20260815';
 const HOST_VERSION = '1.0.0';
 const GUILD_ID = '1537332825978568744';

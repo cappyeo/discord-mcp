@@ -17,7 +17,7 @@ import {
   validateGrokCliActivationRequest,
 } from './grok-cli-activation-trial.mjs';
 
-const RELEASE = '0.25.1';
+const RELEASE = '0.26.0';
 const RUN_ID = 'grok-cli-activation-run-001';
 const TRIAL_ID = 'grok-cli-activation-001';
 const GUILD_ID = '1537332825978568744';
@@ -204,20 +204,20 @@ describe('Grok CLI activation trial guard', () => {
 
   it('binds operator consent to host, release, and trial', () => {
     const value = validateGrokCliActivationRequest({
-      release: '0.25.1',
+      release: '0.26.0',
       runId: 'run-001',
       trialId: 'trial-001',
       hostVersion: '1.2.3',
       sourceCommit: 'a'.repeat(40),
       target,
-      operatorConfirmation: 'APPROVE_GROK_CLI_ACTIVATION:0.25.1:trial-001',
+      operatorConfirmation: 'APPROVE_GROK_CLI_ACTIVATION:0.26.0:trial-001',
       token: 'discord-token',
       executionMode: 'test',
     });
     expect(value.target).toMatchObject(target);
     expect(() =>
       validateGrokCliActivationRequest({
-        release: '0.25.1',
+        release: '0.26.0',
         runId: 'run-001',
         trialId: 'trial-001',
         hostVersion: '1.2.3',
@@ -257,7 +257,7 @@ describe('Grok CLI activation trial guard', () => {
           args: [
             '--yes',
             '--loglevel=error',
-            '@discord-mcp/cli@0.25.1',
+            '@discord-mcp/cli@0.26.0',
             'serve',
             '--profile',
             'devbot',
@@ -270,25 +270,25 @@ describe('Grok CLI activation trial guard', () => {
     };
     expect(
       assertGrokCliConfigReady(config, {
-        release: '0.25.1',
+        release: '0.26.0',
         profile: 'devbot',
         token: 'discord-token',
       }),
     ).toBe(true);
     config.mcp_servers['discord-mcp'].args[2] = '@discord-mcp/cli@0.22.0';
     expect(() =>
-      assertGrokCliConfigReady(config, { release: '0.25.1', profile: 'devbot' }),
+      assertGrokCliConfigReady(config, { release: '0.26.0', profile: 'devbot' }),
     ).toThrow('pinned');
     expect(() =>
       assertGrokCliConfigReady(
         '[permission]\nrules = []\n\n[mcp_servers.discord-mcp]\ncommand = "npx"\n',
-        { release: '0.25.1', profile: 'devbot' },
+        { release: '0.26.0', profile: 'devbot' },
       ),
     ).toThrow('only the generated Grok MCP tables');
     expect(() =>
       assertGrokCliConfigReady(
         'XAI_API_KEY = "persisted"\n\n[mcp_servers.discord-mcp]\ncommand = "npx"\n',
-        { release: '0.25.1', profile: 'devbot' },
+        { release: '0.26.0', profile: 'devbot' },
       ),
     ).toThrow('only the generated Grok MCP tables');
   });

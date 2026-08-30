@@ -15,7 +15,7 @@ const profile = {
   gateway: false,
 };
 
-const launcher = `[models]\nmodel = "grok-build"\nenv_key = "XAI_API_KEY"\n\n[mcp_servers.discord-mcp]\ncommand = "npx"\nargs = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.25.1", "serve", "--profile", "devbot"]\nenabled = true\nstartup_timeout_sec = 90\ntool_timeout_sec = 180\n`;
+const launcher = `[models]\nmodel = "grok-build"\nenv_key = "XAI_API_KEY"\n\n[mcp_servers.discord-mcp]\ncommand = "npx"\nargs = ["--yes", "--loglevel=error", "@discord-mcp/cli@0.26.0", "serve", "--profile", "devbot"]\nenabled = true\nstartup_timeout_sec = 90\ntool_timeout_sec = 180\n`;
 const roots: string[] = [];
 
 function fixture(): { path: string; root: string } {
@@ -33,7 +33,7 @@ describe('inspectGrokCliConfig', () => {
     const { path } = fixture();
     writeFileSync(path, launcher);
     expect(inspectGrokCliConfig(profile, { config: path })).toMatchObject({
-      currentVersion: '0.25.1',
+      currentVersion: '0.26.0',
       credentialPersisted: false,
     });
   });
@@ -73,7 +73,7 @@ describe('inspectGrokCliConfig', () => {
     const { root } = fixture();
     writeFileSync(join(root, 'config.toml'), launcher);
     expect(inspectGrokCliConfig(profile, { environment: { GROK_HOME: root } })).toMatchObject({
-      currentVersion: '0.25.1',
+      currentVersion: '0.26.0',
     });
   });
 });
