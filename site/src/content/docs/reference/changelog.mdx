@@ -29,6 +29,9 @@ commit history and downloadable artifacts, see
 - Hardened Codex launcher updates with bounded descriptor reads, caller-owned
   path validation, symlink-safe atomic writes, permission preservation, and
   stale-target content and identity checks.
+- Stabilized blueprint plan-reference quota locking under Windows I/O
+  contention by retrying bounded transient lock errors and extending the wait
+  from 5 to 15 seconds, without weakening fail-closed storage errors.
 - Updated compatible patch/minor dependencies across Discord REST, HTTP,
   validation, testing, and documentation tooling. Dependabot now keeps major
   and known Node-floor/toolchain migrations in dedicated review increments.
