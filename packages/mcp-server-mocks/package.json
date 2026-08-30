@@ -9,6 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "msw": "^2.7.0"
+    "msw": "^2.15.0"
   }
 }
