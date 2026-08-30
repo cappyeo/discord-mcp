@@ -7,11 +7,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
 import { buildServer } from './server.js';
+import expectedReport from './server.result-bytes.report.json' with { type: 'json' };
 
 const CHANNEL_ID = '112233445566778899';
+const GUILD_ID = '999000999000999000';
 const LONG_CONTENT = `fixture-${'x'.repeat(1_992)}`;
 // This is a serialized UTF-8 payload budget, not a model-token or billing claim.
-const MAX_RESULT_BYTES = 500_000;
+const CLASS_BUDGET_BYTES = 768_000;
+const TOOL_BUDGET_BYTES = {
+  messages: 500_000,
+  audit_log: 256_000,
+  members: 768_000,
+} as const;
 
 function messageFixture(index: number) {
   return {
@@ -33,6 +40,35 @@ function messageFixture(index: number) {
 
 function utf8Bytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8');
+}
+
+function auditEntryFixture(index: number) {
+  return {
+    id: `999000999010${String(index).padStart(6, '0')}`,
+    target_id: `999000999020${String(index).padStart(6, '0')}`,
+    user_id: `999000999030${String(index).padStart(6, '0')}`,
+    action_type: 20 + (index % 5),
+    reason: `fixture moderation reason ${index} ${'r'.repeat(900)}`,
+  };
+}
+
+function memberFixture(index: number) {
+  return {
+    user: {
+      id: `999000999040${String(index).padStart(6, '0')}`,
+      username: `fixture-member-${index}-${'u'.repeat(40)}`,
+      global_name: `Fixture Member ${index} ${'g'.repeat(40)}`,
+      bot: index % 17 === 0,
+    },
+    nick: `fixture-nick-${index}-${'n'.repeat(40)}`,
+    roles: Array.from(
+      { length: 5 },
+      (_, role) => `99900099905${String(role + 1).padStart(7, '0')}`,
+    ),
+    joined_at: '2026-04-28T12:00:00.000000+00:00',
+    premium_since: null,
+    pending: false,
+  };
 }
 
 function repeatedMessageContentBytes(result: {
@@ -60,6 +96,36 @@ function repeatedMessageContentBytes(result: {
   }, 0);
 }
 
+function duplicatedFieldBytes(
+  result: { content?: unknown; structuredContent?: unknown },
+  fields: string[],
+) {
+  const stringLeaves = (value: unknown): string[] => {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value.flatMap(stringLeaves);
+    if (value !== null && typeof value === 'object') {
+      return Object.values(value as Record<string, unknown>).flatMap(stringLeaves);
+    }
+    return [];
+  };
+  const text =
+    (result.content as Array<{ type?: string; text?: string }> | undefined)
+      ?.filter((block) => block.type === 'text')
+      .map((block) => block.text ?? '')
+      .join('\n') ?? '';
+  const structured = result.structuredContent as Record<string, unknown> | undefined;
+  return fields.reduce((total, field) => {
+    const values = stringLeaves(structured?.[field]);
+    return (
+      total +
+      values.reduce(
+        (sum, value) => (text.includes(value) ? sum + Buffer.byteLength(value, 'utf8') : sum),
+        0,
+      )
+    );
+  }, 0);
+}
+
 function measure(result: {
   content?: unknown;
   structuredContent?: unknown;
@@ -75,6 +141,29 @@ function measure(result: {
   };
 }
 
+function reportRecord(
+  tool: string,
+  budgetClass: keyof typeof TOOL_BUDGET_BYTES,
+  inputShape: string,
+  itemCount: number,
+  metrics: ReturnType<typeof measure>,
+  duplicatedFieldBytes: number,
+) {
+  return {
+    tool,
+    resultClass: 'paginated_collection',
+    budgetClass,
+    inputShape,
+    itemCount,
+    contentBytes: metrics.contentBytes,
+    structuredContentBytes: metrics.structuredContentBytes,
+    totalSerializedBytes: metrics.totalSerializedBytes,
+    duplicatedFieldBytes,
+    classBudgetBytes: CLASS_BUDGET_BYTES,
+    budgetBytes: TOOL_BUDGET_BYTES[budgetClass],
+  };
+}
+
 describe('MCP result byte regression evidence', () => {
   const config = loadConfig({
     DISCORD_TOKEN: 'Bot fake.test.token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -82,32 +171,33 @@ describe('MCP result byte regression evidence', () => {
   });
   const logger = createLogger(config);
   let client: Client;
+  const seenCursors = { messageBefore: '', messageAfter: '', memberAfter: '' };
 
   beforeAll(async () => {
     server.use(
       http.get('https://discord.com/api/v10/channels/:channelId/messages', ({ request }) => {
-        const limit = Math.min(Number(new URL(request.url).searchParams.get('limit') ?? 50), 100);
+        const url = new URL(request.url);
+        seenCursors.messageBefore = url.searchParams.get('before') ?? '';
+        seenCursors.messageAfter = url.searchParams.get('after') ?? '';
+        const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 100);
         return HttpResponse.json(
           Array.from({ length: limit }, (_, index) => messageFixture(index + 1)),
         );
       }),
+      http.get('https://discord.com/api/v10/guilds/:guildId/audit-logs', ({ request }) => {
+        const limit = Math.min(Number(new URL(request.url).searchParams.get('limit') ?? 50), 100);
+        return HttpResponse.json({
+          audit_log_entries: Array.from({ length: limit }, (_, i) => auditEntryFixture(i + 1)),
+        });
+      }),
+      http.get('https://discord.com/api/v10/guilds/:guildId/members', ({ request }) => {
+        const url = new URL(request.url);
+        seenCursors.memberAfter = url.searchParams.get('after') ?? '';
+        const limit = Math.min(Number(url.searchParams.get('limit') ?? 1), 1000);
+        return HttpResponse.json(Array.from({ length: limit }, (_, i) => memberFixture(i + 1)));
+      }),
       http.get('https://discord.com/api/v10/channels/:channelId/pins', () =>
-        HttpResponse.json([
-          {
-            id: '999000999000999001',
-            channel_id: CHANNEL_ID,
-            content: LONG_CONTENT,
-            author: { id: '999000999000999010', username: 'pinbot', global_name: 'Pin Bot' },
-            timestamp: '2026-04-28T12:00:00.000000+00:00',
-          },
-          {
-            id: '999000999000999002',
-            channel_id: CHANNEL_ID,
-            content: LONG_CONTENT,
-            author: { id: '999000999000999011', username: 'helper', global_name: 'Helper' },
-            timestamp: '2026-04-28T12:01:00.000000+00:00',
-          },
-        ]),
+        HttpResponse.json(Array.from({ length: 50 }, (_, index) => messageFixture(index + 201))),
       ),
     );
     const rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');
@@ -122,6 +212,7 @@ describe('MCP result byte regression evidence', () => {
   });
 
   it('keeps bounded deterministic byte evidence across representative result shapes', async () => {
+    const report: Array<Record<string, string | number>> = [];
     const shapes = [1, 50, 100];
     for (const limit of shapes) {
       const read = await client.callTool({
@@ -138,11 +229,21 @@ describe('MCP result byte regression evidence', () => {
         [`messages_search_recent_${limit}`, search],
       ] as const) {
         const metrics = measure(result as never);
-        expect(metrics.totalSerializedBytes, name).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+        expect(metrics.totalSerializedBytes, name).toBeLessThanOrEqual(TOOL_BUDGET_BYTES.messages);
         expect(metrics.contentBytes, name).toBeGreaterThan(0);
         expect(metrics.structuredContentBytes, name).toBeGreaterThan(0);
         expect(metrics.duplicatedMessageContentBytes, name).toBe(
           limit * Buffer.byteLength(LONG_CONTENT, 'utf8'),
+        );
+        report.push(
+          reportRecord(
+            name.replace(/_\d+$/, ''),
+            'messages',
+            limit === 1 ? 'small' : limit === 50 ? 'default' : 'maximum',
+            limit,
+            metrics,
+            metrics.duplicatedMessageContentBytes,
+          ),
         );
       }
     }
@@ -152,9 +253,87 @@ describe('MCP result byte regression evidence', () => {
       arguments: { channel_id: CHANNEL_ID },
     });
     const pinMetrics = measure(pins as never);
-    expect(pinMetrics.totalSerializedBytes).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+    expect(pinMetrics.totalSerializedBytes).toBeLessThanOrEqual(TOOL_BUDGET_BYTES.messages);
     expect(pinMetrics.duplicatedMessageContentBytes).toBe(
-      2 * Buffer.byteLength(LONG_CONTENT, 'utf8'),
+      50 * Buffer.byteLength(LONG_CONTENT, 'utf8'),
     );
+    report.push(
+      reportRecord(
+        'messages_list_pins',
+        'messages',
+        'maximum',
+        50,
+        pinMetrics,
+        pinMetrics.duplicatedMessageContentBytes,
+      ),
+    );
+    await client.callTool({
+      name: 'messages_read',
+      arguments: {
+        channel_id: CHANNEL_ID,
+        limit: 1,
+        before: '999000999000990001',
+        after: '999000999000990002',
+      },
+    });
+    expect(seenCursors.messageBefore).toBe('999000999000990001');
+    expect(seenCursors.messageAfter).toBe('999000999000990002');
+    for (const limit of [1, 50, 100]) {
+      const result = await client.callTool({
+        name: 'audit_log_get',
+        arguments: { guild_id: GUILD_ID, limit },
+      });
+      const metrics = measure(result as never);
+      expect(metrics.totalSerializedBytes).toBeLessThanOrEqual(TOOL_BUDGET_BYTES.audit_log);
+      report.push(
+        reportRecord(
+          'audit_log_get',
+          'audit_log',
+          limit === 1 ? 'small' : limit === 50 ? 'default' : 'maximum',
+          limit,
+          metrics,
+          duplicatedFieldBytes(result as never, ['entries']),
+        ),
+      );
+    }
+    for (const limit of [1, 100, 1000]) {
+      const result = await client.callTool({
+        name: 'members_list',
+        arguments: {
+          guild_id: GUILD_ID,
+          limit,
+          ...(limit === 1 ? { after: '999000999040000001' } : {}),
+        },
+      });
+      const metrics = measure(result as never);
+      expect(metrics.totalSerializedBytes).toBeLessThanOrEqual(TOOL_BUDGET_BYTES.members);
+      report.push(
+        reportRecord(
+          'members_list',
+          'members',
+          limit === 1 ? 'small' : limit === 100 ? 'default' : 'maximum',
+          limit,
+          metrics,
+          duplicatedFieldBytes(result as never, ['members']),
+        ),
+      );
+      if (limit === 1) expect(seenCursors.memberAfter).toBe('999000999040000001');
+    }
+    const ranked = [...report].sort(
+      (a, b) =>
+        Number(b.totalSerializedBytes) - Number(a.totalSerializedBytes) ||
+        (String(a.tool) < String(b.tool) ? -1 : String(a.tool) > String(b.tool) ? 1 : 0) ||
+        Number(a.itemCount) - Number(b.itemCount),
+    );
+    expect({
+      schemaVersion: 1,
+      claimBoundary: 'serialized UTF-8 MCP payload bytes only; not token or billing claims',
+      classBudgets: { paginated_collection: CLASS_BUDGET_BYTES },
+      records: ranked,
+    }).toEqual(expectedReport);
+    expect(ranked.every((entry) => entry.totalSerializedBytes <= entry.classBudgetBytes)).toBe(
+      true,
+    );
+    expect(ranked.every((entry) => entry.totalSerializedBytes <= entry.budgetBytes)).toBe(true);
   });
 });
