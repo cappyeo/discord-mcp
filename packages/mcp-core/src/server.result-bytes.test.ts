@@ -171,7 +171,7 @@ describe('MCP result byte regression evidence', () => {
   });
   const logger = createLogger(config);
   let client: Client;
-  const seenCursors = { messageBefore: '', messageAfter: '', memberAfter: '' };
+  const seenCursors = { messageBefore: '', messageAfter: '', auditBefore: '', memberAfter: '' };
 
   beforeAll(async () => {
     server.use(
@@ -185,7 +185,9 @@ describe('MCP result byte regression evidence', () => {
         );
       }),
       http.get('https://discord.com/api/v10/guilds/:guildId/audit-logs', ({ request }) => {
-        const limit = Math.min(Number(new URL(request.url).searchParams.get('limit') ?? 50), 100);
+        const url = new URL(request.url);
+        seenCursors.auditBefore = url.searchParams.get('before') ?? '';
+        const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 100);
         return HttpResponse.json({
           audit_log_entries: Array.from({ length: limit }, (_, i) => auditEntryFixture(i + 1)),
         });
@@ -281,7 +283,11 @@ describe('MCP result byte regression evidence', () => {
     for (const limit of [1, 50, 100]) {
       const result = await client.callTool({
         name: 'audit_log_get',
-        arguments: { guild_id: GUILD_ID, limit },
+        arguments: {
+          guild_id: GUILD_ID,
+          limit,
+          ...(limit === 1 ? { before: '999000999010999999' } : {}),
+        },
       });
       const metrics = measure(result as never);
       expect(metrics.totalSerializedBytes).toBeLessThanOrEqual(TOOL_BUDGET_BYTES.audit_log);
@@ -295,14 +301,20 @@ describe('MCP result byte regression evidence', () => {
           duplicatedFieldBytes(result as never, ['entries']),
         ),
       );
+      if (limit === 1) expect(seenCursors.auditBefore).toBe('999000999010999999');
     }
-    for (const limit of [1, 100, 1000]) {
+    const memberShapes = [
+      { inputShape: 'default', itemCount: 1, limit: undefined },
+      { inputShape: 'representative', itemCount: 100, limit: 100 },
+      { inputShape: 'maximum', itemCount: 1000, limit: 1000 },
+    ] as const;
+    for (const shape of memberShapes) {
       const result = await client.callTool({
         name: 'members_list',
         arguments: {
           guild_id: GUILD_ID,
-          limit,
-          ...(limit === 1 ? { after: '999000999040000001' } : {}),
+          ...(shape.limit === undefined ? {} : { limit: shape.limit }),
+          ...(shape.inputShape === 'default' ? { after: '999000999040000001' } : {}),
         },
       });
       const metrics = measure(result as never);
@@ -311,13 +323,15 @@ describe('MCP result byte regression evidence', () => {
         reportRecord(
           'members_list',
           'members',
-          limit === 1 ? 'small' : limit === 100 ? 'default' : 'maximum',
-          limit,
+          shape.inputShape,
+          shape.itemCount,
           metrics,
           duplicatedFieldBytes(result as never, ['members']),
         ),
       );
-      if (limit === 1) expect(seenCursors.memberAfter).toBe('999000999040000001');
+      if (shape.inputShape === 'default') {
+        expect(seenCursors.memberAfter).toBe('999000999040000001');
+      }
     }
     const ranked = [...report].sort(
       (a, b) =>
