@@ -50,9 +50,9 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.0.0",
-    "publint": "^0.3.22",
+    "@biomejs/biome": "^2.5.10",
+    "publint": "^0.3.24",
     "turbo": "^2.10.12",
-    "typescript": "^5.6.0"
+    "typescript": "^7.0.2"
   }
 }

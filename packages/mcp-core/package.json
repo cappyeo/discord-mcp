@@ -62,7 +62,7 @@
     "@discordjs/rest": "^2.4.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@sapphire/pieces": "^4.4.1",
-    "discord.js": "^14.16.3",
+    "discord.js": "^14.27.0",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
@@ -75,18 +75,18 @@
     "@discordjs/rest": "^2.4.0",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
-    "@mswjs/interceptors": "^0.41.3",
+    "@mswjs/interceptors": "^0.42.3",
     "@opentelemetry/context-async-hooks": "^2.0.0",
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@sapphire/pieces": "^4.4.1",
-    "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "3.2.6",
-    "discord.js": "^14.16.3",
+    "@types/node": "^26.4.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "discord.js": "^14.27.0",
     "msw": "^2.7.0",
-    "tsdown": "^0.21.10",
-    "typescript": "^5.6.0",
-    "vitest": "^3.2.6",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
     "zod": "^4.0.0"
   }
 }

@@ -21,13 +21,13 @@
     "@astrojs/check": "^0.9.10",
     "@astrojs/markdown-remark": "^7.2.4",
     "@astrojs/starlight": "^0.41.10",
-    "@axe-core/playwright": "^4.12.1",
+    "@axe-core/playwright": "^4.13.0",
     "@discord-mcp/core": "workspace:*",
     "astro": "^7.2.9",
-    "parse5": "^7.3.0",
+    "parse5": "^8.0.1",
     "playwright": "^1.62.1",
     "sharp": "^0.35.4",
     "tsx": "^4.23.13",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.11"
   }
 }
