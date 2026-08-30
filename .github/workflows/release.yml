@@ -26,6 +26,7 @@ env:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
@@ -78,6 +79,7 @@ jobs:
     needs: preflight
     if: ${{ !inputs.registry_only }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: npm-publish
     permissions:
       contents: read
@@ -106,6 +108,7 @@ jobs:
     needs: [preflight, publish]
     if: ${{ always() && needs.preflight.result == 'success' && (inputs.registry_only || needs.publish.result == 'success') }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
