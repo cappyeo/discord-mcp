@@ -13,11 +13,10 @@
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// Resolve zod via the mcp-core workspace package - pnpm ensures
-// packages/mcp-core/node_modules/zod is always present for the workspace,
-// avoiding a duplicate zod copy at site/node_modules that would conflict
-// with Astro's content schema (which uses its own bundled zod via
-// astro:content).
+// Resolve Zod through mcp-core so the generator inspects the same schemas it
+// renders. mcp-core intentionally pins its dev copy to 4.3.6: Zod 4.5 changes
+// the internal representation used here and drops structured examples, while
+// the published peer range remains compatible with all supported Zod 4.x.
 import { z } from '../../packages/mcp-core/node_modules/zod/index.js';
 import { getToolAccessRequirement } from '../../packages/mcp-core/src/access/requirements.js';
 
