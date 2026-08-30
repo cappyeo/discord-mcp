@@ -13,6 +13,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # Keep routine automation reviewable. Major migrations and the two known
+    # toolchain-floor changes below need dedicated branches and full evidence.
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@biomejs/biome'
+        versions: ['>=2.5.0']
+      - dependency-name: tsdown
+        versions: ['>=0.22.0']
     groups:
       production-dependencies:
         dependency-type: production
