@@ -172,6 +172,52 @@ export function escapeMdxProse(s: string): string {
     .join('');
 }
 
+function escapeTablePipes(s: string): string {
+  const escaped: string[] = [];
+  let precedingBackslashes = 0;
+  for (const character of s) {
+    if (character === '\\') {
+      escaped.push(character);
+      precedingBackslashes += 1;
+      continue;
+    }
+    if (character === '|') escaped.push('\\'.repeat(precedingBackslashes + 1));
+    escaped.push(character);
+    precedingBackslashes = 0;
+  }
+  return escaped.join('');
+}
+
+function escapeMdxTableCell(s: string): string {
+  const escaped: string[] = [];
+  for (const character of s) {
+    if (
+      character === '\\' ||
+      character === '<' ||
+      character === '{' ||
+      character === '}' ||
+      character === '|'
+    ) {
+      escaped.push('\\');
+    }
+    escaped.push(character);
+  }
+  return escaped.join('');
+}
+
+function escapeMdxTableProse(s: string): string {
+  return s
+    .split(/(`[^`\n]*`)/g)
+    .map((part) =>
+      part.startsWith('`') && part.endsWith('`')
+        ? escapeTablePipes(part)
+        : escapeMdxTableCell(part),
+    )
+    .join('')
+    .split('\n')
+    .join(' ');
+}
+
 type JsonSchema = Record<string, unknown>;
 
 function cleanJsonSchema(value: unknown): unknown {
@@ -263,16 +309,16 @@ export function renderSchemaTable(
     '|---|---|---|---|---|',
   ];
   for (const [name, prop] of Object.entries(props)) {
-    const type = escapeMdx(schemaType(prop)).replace(/\|/g, '\\|');
+    const type = escapeMdxTableCell(schemaType(prop));
     // z.default() is optional for callers even though Zod's output JSON Schema
     // lists it as required after default materialization.
     const req = required.has(name) && !('default' in prop) ? 'yes' : 'no';
     // Description text appears inside an MDX paragraph. Escape `<`, `{`, `}`
     // so placeholders like `<channel_id>` and `{{...}}` render as text.
-    const description = escapeMdxProse(typeof prop.description === 'string' ? prop.description : '')
-      .replace(/\|/g, '\\|')
-      .replace(/\n/g, ' ');
-    const constraints = schemaConstraints(prop).replace(/\|/g, '\\|');
+    const description = escapeMdxTableProse(
+      typeof prop.description === 'string' ? prop.description : '',
+    );
+    const constraints = escapeTablePipes(schemaConstraints(prop));
     rows.push(`| \`${name}\` | ${type} | ${req} | ${constraints} | ${description} |`);
   }
   return rows.join('\n');
