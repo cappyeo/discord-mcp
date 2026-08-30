@@ -390,6 +390,7 @@ const routes: RouteAudit[] = [
       );
       await requireCount(teaser, 1, 'before-and-after teaser video');
       const teaserSource = await teaser.locator('source[type="video/mp4"]').getAttribute('src');
+      if (!teaserSource) throw new Error('before-and-after teaser MP4 source is missing');
       const teaserAsset = await page.evaluate(async (source) => {
         const response = await fetch(source, {
           cache: 'no-store',

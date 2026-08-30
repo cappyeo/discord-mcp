@@ -3,7 +3,7 @@ name: release
 # Both publishable manifests set `publishConfig.provenance: true`, which
 # requires an OIDC token - publishing from a laptop hard-fails and the usual
 # workaround silently drops the attestation. This workflow supplies `id-token:
-# write` and only runs after an explicit `workflow_dispatch` for an existing tag.
+# write` and only runs after a trusted-main preflight verifies an existing tag.
 on:
   workflow_dispatch:
     inputs:
@@ -12,38 +12,87 @@ on:
         required: true
         type: string
       registry_only:
-        description: 'Skip npm and retry MCP Registry metadata from the selected branch'
+        description: 'Skip npm and retry MCP Registry metadata from the exact release tag'
         required: false
         default: false
         type: boolean
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      release_sha: ${{ steps.release-sha.outputs.sha }}
+    steps:
+      - name: Require the protected main workflow revision
+        env:
+          ACTUAL_WORKFLOW_REF: ${{ github.workflow_ref }}
+          EXPECTED_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/release.yml@refs/heads/main
+        run: test "$ACTUAL_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+      - name: Checkout trusted release controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-trust
+          sparse-checkout: |
+            .github/scripts/assert-release-ci.mjs
+            .github/scripts/assert-release-metadata.mjs
+            .github/scripts/assert-release-ref.mjs
+          sparse-checkout-cone-mode: false
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          path: release-source
+          ref: ${{ inputs.tag }}
+      - name: Verify release metadata
+        working-directory: release-source
+        run: node ../.release-trust/.github/scripts/assert-release-metadata.mjs
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+      - name: Verify immutable release tag
+        working-directory: release-source
+        run: node ../.release-trust/.github/scripts/assert-release-ref.mjs
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+      - name: Resolve release commit
+        id: release-sha
+        working-directory: release-source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Verify exact-SHA main CI passed
+        run: node .release-trust/.github/scripts/assert-release-ci.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: main
+          RELEASE_SHA: ${{ steps.release-sha.outputs.sha }}
+
   publish:
+    needs: preflight
     if: ${{ !inputs.registry_only }}
     runs-on: ubuntu-24.04
     environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24.x'
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
       - run: pnpm install --frozen-lockfile
-      - name: Verify release metadata
-        run: node .github/scripts/assert-release-metadata.mjs
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
       - run: pnpm build
       - run: pnpm test
       - name: Verify packed package manifests
@@ -54,8 +103,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   registry:
-    needs: publish
-    if: ${{ always() && (inputs.registry_only || needs.publish.result == 'success') }}
+    needs: [preflight, publish]
+    if: ${{ always() && needs.preflight.result == 'success' && (inputs.registry_only || needs.publish.result == 'success') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -63,7 +112,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.registry_only && github.sha || inputs.tag }}
+          ref: ${{ needs.preflight.outputs.release_sha }}
       - name: Install MCP Registry publisher
         run: |
           curl -fsSLo mcp-publisher.tar.gz \

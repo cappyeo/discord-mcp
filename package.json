@@ -17,7 +17,8 @@
       "@hono/node-server": "2.0.12",
       "ws": ">=8.21.0",
       "undici": "^6.27.0",
-      "express-rate-limit": "^8.6.0"
+      "express-rate-limit": "^8.6.0",
+      "js-yaml": "^4.3.1"
     }
   },
   "scripts": {
@@ -51,7 +52,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
     "publint": "^0.3.22",
-    "turbo": "^2.0.0",
+    "turbo": "^2.10.12",
     "typescript": "^5.6.0"
   }
 }

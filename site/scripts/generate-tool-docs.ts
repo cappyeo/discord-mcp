@@ -874,7 +874,6 @@ const payloadConfirmFields = {
     .optional()
     .describe('SHA-256 payload_hash returned by the preview.'),
   __confirm_id: z
-    .string()
     .uuid()
     .optional()
     .describe('One-time approval ID returned by the preview; expires shortly.'),

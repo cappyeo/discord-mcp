@@ -183,7 +183,7 @@ describe('buildSchemaExample', () => {
 
   it('builds nested object and array examples', () => {
     const fields = {
-      items: z.array(z.object({ url: z.string().url(), label: z.string() })).min(1),
+      items: z.array(z.object({ url: z.url(), label: z.string() })).min(1),
     };
     const example = buildSchemaExample(fields);
     expect(z.object(fields).safeParse(example).success).toBe(true);
@@ -199,7 +199,7 @@ describe('buildSchemaExample', () => {
       guild_id: z.string(),
       entity_type: z.union([z.literal(1), z.literal(2), z.literal(3)]),
       channel_id: z.string().optional(),
-      scheduled_start_time: z.string().datetime(),
+      scheduled_start_time: z.iso.datetime(),
     };
     expect(buildSchemaExample(fields, { toolName: 'events_create' })).toEqual({
       guild_id: '123456789012345678',

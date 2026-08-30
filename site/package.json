@@ -14,17 +14,20 @@
     "test:browser": "tsx scripts/audit-rendered-docs.ts",
     "test:external-links": "tsx scripts/verify-external-links.ts",
     "test:links": "tsx scripts/verify-dist-links.ts",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "astro check"
   },
   "devDependencies": {
-    "@astrojs/starlight": "^0.37.0",
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/markdown-remark": "^7.2.4",
+    "@astrojs/starlight": "^0.41.10",
     "@axe-core/playwright": "^4.12.1",
     "@discord-mcp/core": "workspace:*",
-    "astro": "^5.0.0",
+    "astro": "^7.2.9",
     "parse5": "^7.3.0",
     "playwright": "^1.62.1",
-    "sharp": "^0.33.0",
-    "tsx": "^4.19.0",
-    "vitest": "^3.2.0"
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.13",
+    "vitest": "^3.2.6"
   }
 }

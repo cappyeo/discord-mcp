@@ -11,7 +11,7 @@ const { path, index } = Astro.props;
   <span class="sr-only status">Not complete</span>
   <span class="circle" aria-hidden="true">
     <span class="index">{index}</span>
-    <svg viewBox="0 0 16 16" aria-hidden="true" hidden>
+    <svg class="completion-icon is-hidden" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm3.78-9.72a.75.75 0 0 0-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5z" />
     </svg>
   </span>
@@ -41,7 +41,7 @@ const { path, index } = Astro.props;
     fill: var(--sl-color-green);
   }
 
-  svg[hidden],
+  .completion-icon.is-hidden,
   .index[hidden] {
     display: none;
   }
@@ -65,7 +65,8 @@ const { path, index } = Astro.props;
         if (this.parentElement) this.parentElement.dataset.status = this.dataset.status;
         status.textContent = done ? 'Complete' : 'Not complete';
         index.hidden = done;
-        icon.hidden = !done;
+        icon.classList.toggle('is-hidden', !done);
+        icon.toggleAttribute('hidden', !done);
       });
     }
 
