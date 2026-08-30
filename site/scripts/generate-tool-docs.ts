@@ -161,7 +161,7 @@ export function parseDescription(desc: string): {
  * would otherwise try to parse as JSX expressions.
  */
 export function escapeMdx(s: string): string {
-  return s.replace(/</g, '\\<').replace(/\{/g, '\\{').replace(/\}/g, '\\}');
+  return s.replace(/\\/g, '\\\\').replace(/</g, '\\<').replace(/\{/g, '\\{').replace(/\}/g, '\\}');
 }
 
 /** Escape MDX syntax in prose without adding visible backslashes inside code spans. */

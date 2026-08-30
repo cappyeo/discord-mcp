@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readActivity, resolveActivityPath } from '../lib/activity.js';
-import { startHttp } from './http.js';
+import { hasValidBearerToken, startHttp } from './http.js';
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
 const ACCESS_TOKEN = 'test-access-token-with-at-least-32-characters';
@@ -17,6 +17,14 @@ const savedEnv = { ...process.env };
 
 let server: Server | undefined;
 let activityRoot: string;
+
+describe('HTTP bearer parser', () => {
+  it('accepts case-insensitive schemes and rejects whitespace-only adversarial headers', () => {
+    expect(hasValidBearerToken(`bearer    ${ACCESS_TOKEN}`, ACCESS_TOKEN)).toBe(true);
+    expect(hasValidBearerToken(`Bearer ${' '.repeat(100_000)}`, ACCESS_TOKEN)).toBe(false);
+    expect(hasValidBearerToken(`Basic ${ACCESS_TOKEN}`, ACCESS_TOKEN)).toBe(false);
+  });
+});
 
 function endpoint(): URL {
   const address = server?.address() as AddressInfo | null;

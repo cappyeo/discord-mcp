@@ -98,6 +98,21 @@ describe('release CI gate', () => {
     ).rejects.toThrow('no successful CI run');
   });
 
+  it.each([
+    'https://attacker.example/repo',
+    'owner/repo?per_page=1',
+    'owner/repo#fragment',
+    'owner/../other',
+    'owner/.',
+  ])('rejects an unsafe repository identifier before fetching: %s', async (repository) => {
+    const fetchImpl = () => {
+      throw new Error('fetch must not run');
+    };
+    await expect(
+      assertReleaseCi({ sha, repository, token: 'test-token', fetchImpl }),
+    ).rejects.toThrow('exact owner/repository form');
+  });
+
   it('wires npm publish and registry-only retries through trusted-main preflight', () => {
     const workflow = readFileSync(
       new URL('../../../.github/workflows/release.yml', import.meta.url),

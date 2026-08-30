@@ -15,11 +15,9 @@
  *   - GET /api/v10/users/@me  → mocks Discord (token-online)
  *   - HEAD /v1/traces         → mocks OTLP collector (otel-reachable)
  *
- * Test-only env overrides used here:
- *   - DISCORD_API_BASE_URL → swaps the Discord base URL inside
- *     token-online.ts so we hit the loopback server. Documented in that
- *     file's header as test-only.
- *   - OTEL_EXPORTER_OTLP_ENDPOINT → standard config knob; we just point
+ * Test-only seams used here:
+ *   - global fetch redirects only the fixed Discord origin to loopback.
+ *   - OTEL_EXPORTER_OTLP_ENDPOINT → standard config knob; we point
  *     it at the loopback server (this is its real production knob).
  *
  * The test asserts all 7 checks appear in the JSON output with their
@@ -35,11 +33,11 @@ let baseUrl: string;
 
 const VALID_TOKEN = `Bot ${'a'.repeat(60)}`;
 
-const originalDiscordApiBase = process.env.DISCORD_API_BASE_URL;
 const originalToken = process.env.DISCORD_TOKEN;
 const originalOtelEnabled = process.env.OTEL_ENABLED;
 const originalOtelEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 const originalExitCode = process.exitCode;
+const realFetch = globalThis.fetch;
 
 let stdoutWrites: string[] = [];
 
@@ -80,8 +78,7 @@ beforeEach(() => {
     stdoutWrites.push(typeof chunk === 'string' ? chunk : String(chunk));
     return true;
   });
-  // Point Discord at our loopback server.
-  process.env.DISCORD_API_BASE_URL = `${baseUrl}/api/v10`;
+  vi.stubGlobal('fetch', discordLoopbackFetch(baseUrl));
   process.env.DISCORD_TOKEN = VALID_TOKEN;
   process.env.OTEL_ENABLED = 'true';
   process.env.OTEL_EXPORTER_OTLP_ENDPOINT = baseUrl;
@@ -90,11 +87,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  if (originalDiscordApiBase !== undefined) {
-    process.env.DISCORD_API_BASE_URL = originalDiscordApiBase;
-  } else {
-    delete process.env.DISCORD_API_BASE_URL;
-  }
+  vi.unstubAllGlobals();
   if (originalToken !== undefined) {
     process.env.DISCORD_TOKEN = originalToken;
   } else {
@@ -115,6 +108,17 @@ afterEach(() => {
 
 function stdoutOutput(): string {
   return stdoutWrites.join('');
+}
+
+function discordLoopbackFetch(loopbackOrigin: string): typeof fetch {
+  return (async (input, init) => {
+    const raw = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+    const url = new URL(raw);
+    if (url.origin === 'https://discord.com' && url.pathname.startsWith('/api/v10/')) {
+      return realFetch(new URL(`${url.pathname}${url.search}`, loopbackOrigin), init);
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
 }
 
 /**
@@ -144,10 +148,6 @@ async function runDoctorAndCapture(
 
 describe('doctorAction online integration (Plan 9 Phase C)', () => {
   it('runs all 7 checks against a live loopback server and reports JSON', async () => {
-    // NOTE: token-online.ts caches DISCORD_API_BASE at module-eval time. We
-    // import doctor here AFTER setting DISCORD_API_BASE_URL so the cached
-    // value picks up the loopback URL. vi.resetModules() ensures a fresh
-    // import even if a previous test already evaluated the module.
     vi.resetModules();
     const { doctorAction } = await import('./doctor.js');
 
@@ -194,7 +194,7 @@ describe('doctorAction online integration (Plan 9 Phase C)', () => {
     // response by toggling a flag the handler checks.
     //
     // Simpler approach: spin up a SECOND server for this test that always
-    // returns 401, point DISCORD_API_BASE_URL there, run doctor.
+    // returns 401 and redirect only the fixed Discord fetch to it.
     const failingServer = createServer((req, res) => {
       if (req.method === 'GET' && req.url === '/api/v10/users/@me') {
         res.writeHead(401);
@@ -214,8 +214,8 @@ describe('doctorAction online integration (Plan 9 Phase C)', () => {
     const failingUrl = `http://127.0.0.1:${failingAddr.port}`;
 
     try {
-      process.env.DISCORD_API_BASE_URL = `${failingUrl}/api/v10`;
       process.env.OTEL_EXPORTER_OTLP_ENDPOINT = failingUrl;
+      vi.stubGlobal('fetch', discordLoopbackFetch(failingUrl));
 
       vi.resetModules();
       const { doctorAction } = await import('./doctor.js');

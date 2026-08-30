@@ -40,16 +40,15 @@ function createProfile(client: 'codex' | 'generic' = 'codex', name = 'devbot'): 
   );
 }
 
-function registry(version = NEXT): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ 'dist-tags': { latest: version } }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    ),
+function registry(version = NEXT): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ 'dist-tags': { latest: version } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
   );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 function output(): Record<string, unknown> {
@@ -79,7 +78,7 @@ describe('updateAction', () => {
   it('reports an available update without changing the launcher', async () => {
     createProfile();
     writeFileSync(configPath, generatedLauncher());
-    registry();
+    const fetchMock = registry();
 
     await updateAction({ profile: 'devbot', config: configPath, profileDirectory, json: true });
 
@@ -95,6 +94,10 @@ describe('updateAction', () => {
       },
     });
     expect(readFileSync(configPath, 'utf8')).toBe(generatedLauncher());
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://registry.npmjs.org/@discord-mcp%2fcli',
+      expect.objectContaining({ redirect: 'error' }),
+    );
   });
 
   it('updates only the exact generated launcher after --apply', async () => {

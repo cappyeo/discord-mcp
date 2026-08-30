@@ -346,8 +346,7 @@ function createGrokCliProfileFixture(credential?: { name: string; value: string 
 
 function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: string | URL | Request): Promise<Response> => {
-    const url = String(input);
-    if (url.includes('registry.npmjs.org')) {
+    if (isNpmRegistryRequest(input)) {
       return latestVersion === undefined
         ? new Response('', { status: 503 })
         : new Response(JSON.stringify({ 'dist-tags': { latest: latestVersion } }), {
@@ -361,6 +360,28 @@ function onlineDoctorFetch(latestVersion: string | undefined): ReturnType<typeof
     });
   });
 }
+
+function isNpmRegistryRequest(input: string | URL | Request): boolean {
+  const raw = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+  try {
+    const url = new URL(raw);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'registry.npmjs.org' &&
+      url.pathname === '/@discord-mcp%2fcli'
+    );
+  } catch {
+    return false;
+  }
+}
+
+describe('npm registry request boundary', () => {
+  it('matches only the exact HTTPS npm registry endpoint', () => {
+    expect(isNpmRegistryRequest('https://registry.npmjs.org/@discord-mcp%2fcli')).toBe(true);
+    expect(isNpmRegistryRequest('https://attacker.example/?next=registry.npmjs.org')).toBe(false);
+    expect(isNpmRegistryRequest('http://registry.npmjs.org/@discord-mcp%2fcli')).toBe(false);
+  });
+});
 
 describe('doctor profile activation', () => {
   it('reports a missing profile without running the check suite', async () => {
@@ -741,9 +762,7 @@ describe('doctorAction - Codex launcher update discovery', () => {
       const updateCheck = parsed.data.checks.find((check) => check.id === 'codex-launcher-update');
       expect(parsed.exitCode).toBe(0);
       expect(updateCheck).toMatchObject({ status: 'ok', details: { managed: false } });
-      expect(
-        fetchMock.mock.calls.some(([input]) => String(input).includes('registry.npmjs.org')),
-      ).toBe(false);
+      expect(fetchMock.mock.calls.some(([input]) => isNpmRegistryRequest(input))).toBe(false);
     } finally {
       rmSync(fixture.directory, { recursive: true, force: true });
     }

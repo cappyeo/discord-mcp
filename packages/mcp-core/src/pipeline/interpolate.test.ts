@@ -35,6 +35,7 @@ describe('interpolate', () => {
   const vars = {
     step1: { id: 'msg_123', count: 5 },
     step2: { url: 'https://example.com' },
+    'step{3': { id: 'brace-compatible' },
   };
 
   it('returns raw value (type-preserved) when entire string is a single template', () => {
@@ -53,6 +54,11 @@ describe('interpolate', () => {
     expect(interpolate('hello {{absent.var}}', vars)).toBe('hello {{absent.var}}');
   });
 
+  it('preserves the existing support for opening braces inside a path', () => {
+    expect(interpolate('{{step{3.id}}', vars)).toBe('brace-compatible');
+    expect(interpolate('value={{step{3.id}}', vars)).toBe('value=brace-compatible');
+  });
+
   it('returns undefined when a single-template references a missing path', () => {
     expect(interpolate('{{absent.var}}', vars)).toBeUndefined();
   });
@@ -69,6 +75,11 @@ describe('interpolate', () => {
 
   it('does not interpolate non-string primitives', () => {
     expect(interpolate({ n: 42, b: true, nul: null }, vars)).toEqual({ n: 42, b: true, nul: null });
+  });
+
+  it('handles a long unterminated template prefix without regex backtracking', () => {
+    const hostile = '{{'.repeat(20_000);
+    expect(interpolate(hostile, vars)).toBe(hostile);
   });
 });
 

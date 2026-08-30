@@ -10,19 +10,17 @@
  * surface the resolved bot identity (username, id, bot flag) on success
  * and HTTP status / error message on failure.
  *
- * Test-only escape hatch: `DISCORD_API_BASE_URL` env override. Defaults
- * to `https://discord.com/api/v10`. Integration tests set this to a
- * loopback `node:http` server (see doctor.integration.test.ts). NEVER
- * documented in user-facing help - it exists purely to avoid pulling in
- * `nock` / `msw` for ONLINE network tests.
+ * The request target is fixed to Discord. Integration tests redirect fetch at
+ * the test boundary rather than exposing a production URL override.
  *
  * Timeout: 5 seconds via AbortController. On abort we report 'warn'
  * (treating the result as inconclusive rather than failed) so transient
  * network issues don't block the user from running their MCP server.
  */
+
 import type { DoctorCheck } from './index.js';
 
-const DISCORD_API_BASE = process.env.DISCORD_API_BASE_URL ?? 'https://discord.com/api/v10';
+const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
 const REQUEST_TIMEOUT_MS = 5000;
 
 /**
@@ -54,13 +52,14 @@ export const tokenOnlineCheck: DoctorCheck = {
       };
     }
 
-    const url = `${DISCORD_API_BASE}/users/@me`;
+    const url = `${DISCORD_API_BASE_URL}/users/@me`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
 
     try {
       const res = await fetch(url, {
         method: 'GET',
+        redirect: 'error',
         headers: {
           Authorization: authHeader(config.DISCORD_TOKEN),
           'User-Agent': 'discord-mcp-doctor (https://github.com/cappyeo/discord-mcp)',

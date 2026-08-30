@@ -223,10 +223,9 @@ export function isOtlpSelfTrace(url: string): boolean {
  * so the hook silently did nothing in production while its test passed by
  * handing it an origin undici never produces.
  *
- * The path-shape arm also covers `DISCORD_API_BASE_URL` pointing at a
- * self-hosted proxy: the credential is in the path either way, so a
- * host-only rule would fail open exactly where the operator is least likely
- * to notice.
+ * The path-shape arm remains defense-in-depth for an instrumented request
+ * whose origin is unavailable or non-standard: the credential is in the path,
+ * so a host-only rule would fail open.
  */
 const DISCORD_HOST = /(^|\.)discord(app)?\.com$/i;
 /** `/webhooks/{id}/{token}` and `/interactions/{id}/{token}` carry a credential. */

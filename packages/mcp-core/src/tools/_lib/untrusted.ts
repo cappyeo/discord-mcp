@@ -21,15 +21,34 @@ function escapeAttr(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
-function stripTags(content: string, tagPattern: RegExp): string {
-  return content.replace(tagPattern, '[FILTERED_TAG]');
+function stripPrefixedTags(content: string, prefix: string): string {
+  const lower = content.toLowerCase();
+  const pieces: string[] = [];
+  let cursor = 0;
+  while (cursor < content.length) {
+    const start = content.indexOf('<', cursor);
+    if (start === -1) break;
+    const nameStart = lower[start + 1] === '/' ? start + 2 : start + 1;
+    if (!lower.startsWith(prefix, nameStart)) {
+      pieces.push(content.slice(cursor, start + 1));
+      cursor = start + 1;
+      continue;
+    }
+    const end = content.indexOf('>', nameStart + prefix.length);
+    if (end === -1) break;
+    pieces.push(content.slice(cursor, start), '[FILTERED_TAG]');
+    cursor = end + 1;
+  }
+  pieces.push(content.slice(cursor));
+  return pieces.join('');
 }
 
-const outerRe = /<\/?untrusted_discord_[a-z_]*[^>]*>/gi;
+const OUTER_TAG_PREFIX = 'untrusted_discord_';
+const MESSAGE_TAG_PREFIX = 'msg';
 
 export function wrapUntrusted(content: string, kind: UntrustedKind): string {
   const tag = `untrusted_discord_${kind}`;
-  const safe = stripTags(content, outerRe);
+  const safe = stripPrefixedTags(content, OUTER_TAG_PREFIX);
   const n = nonce();
   return [
     `<${tag} nonce="${n}">`,
@@ -47,12 +66,11 @@ export interface MessageForWrap {
 
 export function wrapMessages(messages: readonly MessageForWrap[], channelId: string): string {
   const n = nonce();
-  const msgTagRe = /<\/?msg[^>]*>/gi;
   const inner = messages
     .map(
       (m) =>
         `<msg id="${escapeAttr(m.id)}" author="${escapeAttr(m.author)}">` +
-        `${stripTags(stripTags(m.content, msgTagRe), outerRe)}` +
+        `${stripPrefixedTags(stripPrefixedTags(m.content, MESSAGE_TAG_PREFIX), OUTER_TAG_PREFIX)}` +
         `</msg>`,
     )
     .join('\n');

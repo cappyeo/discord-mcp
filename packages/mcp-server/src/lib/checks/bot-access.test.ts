@@ -1,5 +1,5 @@
 import { loadConfig } from '@discord-mcp/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { botAccessPreflightCheck } from './bot-access.js';
 
 const GUILD_ID = '111122223333444455';
@@ -29,6 +29,7 @@ function fetcherFor(
   authorizationHeaders: string[] = [],
 ): typeof fetch {
   return (async (input, init) => {
+    expect(init?.redirect).toBe('error');
     const url = String(input);
     const path = new URL(url).pathname;
     calls.push(path);
@@ -43,7 +44,6 @@ function fetcherFor(
 
 describe('botAccessPreflightCheck', () => {
   it('returns identity, permission, intent, and tool evidence for one guild', async () => {
-    process.env.DISCORD_API_BASE_URL = 'https://doctor.test/api/v10';
     const calls: string[] = [];
     const authorizationHeaders: string[] = [];
     const result = await botAccessPreflightCheck({
@@ -144,7 +144,6 @@ describe('botAccessPreflightCheck', () => {
   });
 
   it('reports consent-required DM execution separately from identity readiness', async () => {
-    process.env.DISCORD_API_BASE_URL = 'https://doctor.test/api/v10';
     const result = await botAccessPreflightCheck({
       config: loadConfig({
         DISCORD_TOKEN: TOKEN,
@@ -201,6 +200,23 @@ describe('botAccessPreflightCheck', () => {
     expect(result.status).toBe('fail');
     expect(result.message).toContain('identity mismatch');
     expect(JSON.stringify(result)).not.toContain(TOKEN);
+  });
+
+  it('ignores a remote API override and sends the bot credential only to Discord', async () => {
+    process.env.DISCORD_API_BASE_URL = 'https://attacker.example/api/v10';
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(new URL(String(input)).origin).toBe('https://discord.com');
+      expect(new Headers(init?.headers).get('authorization')).toBe(TOKEN);
+      return new Response('', { status: 401 });
+    });
+
+    const result = await botAccessPreflightCheck({
+      config: config(),
+      fetcher: fetcher as typeof fetch,
+    });
+
+    expect(result).toMatchObject({ id: 'bot-access', status: 'fail' });
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it('fails closed when the application points at a different bot', async () => {
