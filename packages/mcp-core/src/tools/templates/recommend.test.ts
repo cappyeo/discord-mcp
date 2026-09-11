@@ -3,12 +3,14 @@ import { REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { PermissionFlagsBits } from 'discord-api-types/v10';
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../container.js';
 import recommend from './recommend.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const preferredCode = 'WNSCpfHWnqXr';
+
+afterEach(() => vi.restoreAllMocks());
 
 function makeTool<T>(Piece: new (...args: never[]) => T, name: string): T {
   return new Piece(
@@ -137,6 +139,149 @@ function malformedTemplate(code: string, malformed: MalformedSourceCase) {
 }
 
 describe('templates_recommend', () => {
+  const source = safeTemplate(preferredCode).serialized_source_guild;
+  const overwrite = { id: 0, type: 0, allow: null, deny: '0' };
+
+  it.each([
+    ['missing source', { serialized_source_guild: null }],
+    ['invalid code', { code: 'bad/code' }],
+    ['invalid name', { name: 42 }],
+    ['invalid description', { description: 42 }],
+    ['negative usage', { usage_count: -1 }],
+    ['invalid creator', { creator_id: 'bad' }],
+    ['invalid guild', { source_guild_id: 'bad' }],
+    ['invalid timestamp', { created_at: 42 }],
+    ['invalid dirty flag', { is_dirty: 'true' }],
+    [
+      'too many channels',
+      { serialized_source_guild: { ...source, channels: Array(501).fill(source.channels[0]) } },
+    ],
+    [
+      'invalid channel name',
+      { serialized_source_guild: { ...source, channels: [{ name: '', type: 0 }] } },
+    ],
+    [
+      'invalid overwrite list',
+      {
+        serialized_source_guild: {
+          ...source,
+          channels: [{ name: 'general', type: 0, permission_overwrites: {} }],
+        },
+      },
+    ],
+    [
+      'invalid overwrite type',
+      {
+        serialized_source_guild: {
+          ...source,
+          channels: [
+            { name: 'general', type: 0, permission_overwrites: [{ ...overwrite, type: 2 }] },
+          ],
+        },
+      },
+    ],
+    [
+      'invalid overwrite permission',
+      {
+        serialized_source_guild: {
+          ...source,
+          channels: [
+            { name: 'general', type: 0, permission_overwrites: [{ ...overwrite, allow: '-1' }] },
+          ],
+        },
+      },
+    ],
+    [
+      'too many overwrites',
+      {
+        serialized_source_guild: {
+          ...source,
+          channels: Array.from({ length: 9 }, () => ({
+            name: 'general',
+            type: 0,
+            permission_overwrites: Array(256).fill(overwrite),
+          })),
+        },
+      },
+    ],
+  ])('rejects %s while retaining other valid candidates', async (_label, overrides) => {
+    const get = vi.fn(async (route: string) => {
+      const code = route.split('/').at(-1)!;
+      return safeTemplate(code, get.mock.calls.length === 1 ? overrides : {});
+    });
+    container.rest = { get } as unknown as REST;
+    const result = await run({ request: 'gaming community' });
+    expect(result.structuredContent).toMatchObject({
+      status: 'ready',
+      verification: { rest_failed: 1, rest_verified: 7 },
+    });
+  });
+
+  it('rejects a non-object upstream response', async () => {
+    container.rest = { get: vi.fn().mockResolvedValue(null) } as unknown as REST;
+    const result = await run({ request: 'gaming community' });
+    expect(result.structuredContent).toMatchObject({ status: 'partial', primary: null });
+  });
+
+  it('accepts nullable overwrite permissions and numeric source IDs', async () => {
+    container.rest = {
+      get: vi.fn(async (route: string) =>
+        safeTemplate(route.split('/').at(-1)!, {
+          is_dirty: undefined,
+          serialized_source_guild: {
+            ...source,
+            channels: [
+              { name: 'general', type: 0, permission_overwrites: [overwrite] },
+              ...source.channels,
+            ],
+          },
+        }),
+      ),
+    } as unknown as REST;
+    const result = await run({ request: 'gaming community' });
+    expect(result.structuredContent).toMatchObject({
+      status: 'ready',
+      verification: { rest_failed: 0, rest_verified: 8 },
+    });
+  });
+
+  it('refreshes live evidence after its cache lifetime', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    const get = vi.fn(async (route: string) => safeTemplate(route.split('/').at(-1)!));
+    container.rest = { get } as unknown as REST;
+    await run({ request: 'gaming community' });
+    now.mockReturnValue(1_800_000_600_001);
+    const result = await run({ request: 'gaming community' });
+    expect(result.structuredContent.verification).toMatchObject({
+      rest_requests: 8,
+      cache_hits: 0,
+    });
+    expect(get).toHaveBeenCalledTimes(16);
+  });
+
+  it.each([
+    Object.assign(new Error('connection reset'), { code: 'ECONNRESET' }),
+    new Error('fetch failed', {
+      cause: Object.assign(new Error('DNS failure'), { code: 'ENOTFOUND' }),
+    }),
+  ])('reports transient network failures as unavailable evidence', async (error) => {
+    container.rest = { get: vi.fn().mockRejectedValue(error) } as unknown as REST;
+    const result = await run({ request: 'gaming community' });
+    expect(result.structuredContent).toMatchObject({
+      status: 'partial',
+      primary: null,
+      verification: { rest_failed: 8 },
+    });
+  });
+
+  it.each([
+    new Error('unexpected error'),
+    'non-error rejection',
+  ])('propagates unexpected failures without presenting a partial recommendation', async (error) => {
+    container.rest = { get: vi.fn().mockRejectedValue(error) } as unknown as REST;
+    await expect(run({ request: 'gaming community' })).rejects.toBe(error);
+  });
+
   it('performs one bounded strict flow, pins a safe preference, and caches live evidence', async () => {
     useRest();
     const requestedCodes: string[] = [];

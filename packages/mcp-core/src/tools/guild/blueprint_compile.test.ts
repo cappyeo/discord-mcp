@@ -67,6 +67,48 @@ function safeTemplate(code: string) {
 }
 
 describe('guild_blueprint_compile', () => {
+  it('compiles structural inspiration and deduplicates permission risks across sources', async () => {
+    useRest();
+    server.use(
+      http.get(`${DISCORD_API}/guilds/templates/:code`, ({ params }) => {
+        const template = safeTemplate(String(params.code));
+        if (params.code === preferredCode) template.serialized_source_guild.channels[1]!.type = 0;
+        if (params.code !== preferredCode) {
+          template.serialized_source_guild.channels.push(
+            ...Array.from({ length: 6 }, (_, index) => ({
+              id: String(10 + index),
+              name: `Forum ${index}`,
+              type: 15,
+            })),
+          );
+          template.serialized_source_guild.roles.push({
+            id: '3',
+            name: 'Manager',
+            permissions: String(PermissionFlagsBits.ManageGuild),
+          });
+        }
+        return HttpResponse.json(template);
+      }),
+    );
+    const result = await run({
+      request: 'gaming lfg voice forum events',
+      preferred_primary_code: preferredCode,
+    });
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent).toMatchObject({
+      status: 'ready',
+      source: {
+        inspirations: expect.arrayContaining([
+          expect.objectContaining({ code: expect.any(String) }),
+        ]),
+      },
+    });
+    expect(JSON.stringify(result.structuredContent)).toContain('MANAGE_GUILD');
+    expect(result.structuredContent.warnings).toContainEqual(
+      expect.stringContaining('2 risky permission class(es)'),
+    );
+  });
+
   it('performs one bounded read-only flow and emits a stable safe blueprint', async () => {
     useRest();
     const methods: string[] = [];

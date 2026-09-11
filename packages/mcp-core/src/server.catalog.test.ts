@@ -30,6 +30,38 @@ describe('buildCatalogServer', () => {
     vi.restoreAllMocks();
   });
 
+  it('serves static resources and notifies only active subscriptions without Discord access', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const built = await buildCatalogServer();
+    const client = await connect(built.server);
+    const notify = vi.spyOn(built.server, 'sendResourceUpdated');
+    const uri = 'discord://components-v2/templates/announcement';
+    try {
+      const listed = await client.listResources();
+      expect(listed.resources).toHaveLength(6);
+      expect(listed.resources.map((resource) => resource.uri)).toContain(uri);
+      const read = await client.readResource({ uri });
+      expect(JSON.parse(read.contents[0]!.text as string).name).toBe('announcement');
+      await expect(client.readResource({ uri: 'discord://missing/resource' })).rejects.toThrow(
+        /Resource not found/,
+      );
+
+      await built.notifyResource(uri);
+      expect(notify).not.toHaveBeenCalled();
+      await client.subscribeResource({ uri });
+      expect(built.subscriptions.has(uri)).toBe(true);
+      await built.notifyResource(uri);
+      expect(notify).toHaveBeenCalledWith({ uri });
+      await client.unsubscribeResource({ uri });
+      expect(built.subscriptions.has(uri)).toBe(false);
+      await built.notifyResource(uri);
+      expect(notify).toHaveBeenCalledOnce();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      await client.close();
+    }
+  });
+
   it('advertises the exact full live tool surface without reading ambient credentials', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const previous = {

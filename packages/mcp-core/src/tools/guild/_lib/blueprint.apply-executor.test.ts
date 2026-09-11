@@ -108,6 +108,58 @@ const snapshot = {
 const signal = new AbortController().signal;
 
 describe('blueprint operation response validation', () => {
+  it.each([
+    'role',
+    'category',
+    'channel',
+    'automod_rule',
+  ] as const)('rejects an update to an unbound %s before writing', async (resource) => {
+    const key =
+      resource === 'role'
+        ? blueprint.roles[0]!.key
+        : resource === 'category'
+          ? blueprint.categories[0]!.key
+          : resource === 'channel'
+            ? blueprint.channels[0]!.key
+            : blueprint.automod.rules[0]!.key;
+    const patch = vi.fn();
+    await expect(
+      executeBlueprintOperation({
+        rest: { patch } as unknown as REST,
+        plan,
+        operation: operation(resource, 'update', key),
+        bindings: emptyBlueprintBindings(),
+        snapshot,
+        signal,
+      }),
+    ).rejects.toMatchObject({ code: 'PLAN_DEPENDENCY_UNRESOLVED' });
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('cancels a publication retry delay and clears the pending timer', async () => {
+    const controller = new AbortController();
+    const post = vi.fn().mockRejectedValue(Object.assign(new Error('Not ready'), { status: 404 }));
+    vi.useFakeTimers();
+    try {
+      const execution = executeBlueprintOperation({
+        rest: { post } as unknown as REST,
+        plan,
+        operation: operation('publication', 'send', blueprint.components_v2.publications[0]!.key),
+        bindings: bindings(),
+        snapshot,
+        signal: controller.signal,
+      });
+      const cancelled = expect(execution).rejects.toMatchObject({ code: 'CANCELLED' });
+      await vi.advanceTimersByTimeAsync(100);
+      controller.abort();
+      await cancelled;
+      expect(post).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('forwards the apply signal to the role create request', async () => {
     const controller = new AbortController();
     const role = blueprint.roles[0]!;

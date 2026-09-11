@@ -156,6 +156,44 @@ async function runAudit(args: Record<string, unknown>): Promise<{
 }
 
 describe('permissions_audit_channel', () => {
+  it('rejects an empty action selection before reading Discord', async () => {
+    const counts = installFixture({});
+    await expect(
+      runAudit({ guild_id: GUILD_ID, channel_id: CHANNEL_ID, actions: [] }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect(counts).toEqual({ guild: 0, roles: 0, member: 0, channel: 0 });
+  });
+
+  it.each(['duplicate', 'missing_everyone'] as const)('rejects %s role evidence', async (mode) => {
+    const roles = baseRoles();
+    installFixture({ roles: mode === 'duplicate' ? [...roles, roles[1]!] : roles.slice(1) });
+    await expect(runAudit({ guild_id: GUILD_ID, channel_id: CHANNEL_ID })).rejects.toMatchObject({
+      code: mode === 'duplicate' ? 'VALIDATION_FAILED' : 'DISCORD_NOT_FOUND',
+    });
+  });
+
+  it('rejects a thread whose parent belongs to another guild', async () => {
+    installFixture({
+      channelResponses: {
+        [THREAD_ID]: {
+          id: THREAD_ID,
+          type: ChannelType.PublicThread,
+          guild_id: GUILD_ID,
+          parent_id: PARENT_ID,
+        },
+        [PARENT_ID]: {
+          id: PARENT_ID,
+          type: ChannelType.GuildText,
+          guild_id: OTHER_GUILD_ID,
+          permission_overwrites: [],
+        },
+      },
+    });
+    await expect(runAudit({ guild_id: GUILD_ID, channel_id: THREAD_ID })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
   it('audits every role independently and ignores member-specific overwrites', async () => {
     const counts = installFixture({
       channels: [

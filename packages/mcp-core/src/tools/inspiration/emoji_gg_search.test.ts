@@ -70,6 +70,55 @@ async function runSearch(query: string, limit = 8) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('inspiration_emoji_gg_search', () => {
+  it('filters malformed rows and invalid asset URLs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify([
+              null,
+              { ...catalog[0], image: 42 },
+              { ...catalog[0], image: 'not-a-url' },
+              catalog[0],
+            ]),
+          ),
+        ),
+    );
+    const result = await runSearch('code_sparkle');
+    expect(result).toMatchObject({
+      isError: false,
+      structuredContent: { candidates: [expect.objectContaining({ name: 'code_sparkle' })] },
+    });
+  });
+
+  it.each([
+    'not-json',
+    JSON.stringify({ unexpected: 'object' }),
+  ])('rejects malformed catalog responses', async (body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+    await expect(runSearch('code')).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE_UNAVAILABLE' });
+  });
+
+  it('reports network failures and reuses the cache after recovery', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection failed'))
+      .mockResolvedValueOnce(new Response(JSON.stringify(catalog)));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(runSearch('code')).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE_UNAVAILABLE' });
+    await runSearch('code');
+    const tool = new emojiGgSearch(
+      { name: 'inspiration_emoji_gg_search', path: 'inline', root: 'inline', store: null as never },
+      { name: 'inspiration_emoji_gg_search', enabled: true },
+    );
+    await expect(
+      tool.run({ query: 'cloud', limit: 1 }, { signal: new AbortController().signal }),
+    ).resolves.toMatchObject({ isError: false });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('returns only safe Emoji.gg-hosted assets without importing anything', async () => {
     const fetchMock = vi
       .fn()

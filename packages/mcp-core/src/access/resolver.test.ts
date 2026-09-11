@@ -62,6 +62,139 @@ function guildRoutes(overrides: Record<string, unknown> = {}): Record<string, un
 }
 
 describe('createRuntimeAccessResolver', () => {
+  it.each([
+    [Routes.guild(GUILD_ID), null],
+    [Routes.guild(GUILD_ID), { id: FOREIGN_GUILD_ID }],
+    [Routes.guildMember(GUILD_ID, BOT_ID), { user: { id: TARGET_ROLE_ID }, roles: [] }],
+    [Routes.guildRoles(GUILD_ID), {}],
+    [Routes.guildRoles(GUILD_ID), [null]],
+    [Routes.channel(CHANNEL_ID), null],
+    [Routes.channel(CHANNEL_ID), { id: SECOND_CHANNEL_ID }],
+    [
+      Routes.channel(CHANNEL_ID),
+      { id: CHANNEL_ID, guild_id: GUILD_ID, type: 0, permission_overwrites: [null] },
+    ],
+  ])('does not trust malformed or mismatched evidence from %s', async (route, payload) => {
+    const { rest } = restFor(
+      guildRoutes({
+        [Routes.channel(CHANNEL_ID)]: {
+          id: CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 0,
+          permission_overwrites: [],
+        },
+        [route as string]: payload,
+      }),
+    );
+    const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+    await expect(
+      resolver({
+        toolName: 'components_v2_send',
+        args: { channel_id: CHANNEL_ID },
+        requirement: CHANNEL_WRITE_ACCESS,
+        expectedBotId: BOT_ID,
+      }),
+    ).resolves.toMatchObject({ status: 'unknown' });
+  });
+
+  it('keeps a malformed application and missing invite code unresolved', async () => {
+    const resolver = createRuntimeAccessResolver({
+      rest: restFor({ ...identityRoutes(), [Routes.currentApplication()]: null }).rest,
+      expectedBotId: BOT_ID,
+    });
+    await expect(
+      resolver({
+        toolName: 'app_emojis_list',
+        args: {},
+        requirement: getToolAccessRequirement('app_emojis_list').requirement!,
+        expectedBotId: BOT_ID,
+      }),
+    ).resolves.toMatchObject({ status: 'unknown' });
+    await expect(
+      resolver({
+        toolName: 'invites_get',
+        args: {},
+        requirement: getToolAccessRequirement('invites_get').requirement!,
+        expectedBotId: BOT_ID,
+      }),
+    ).resolves.toMatchObject({ status: 'unknown' });
+  });
+
+  it('keeps invalid or unselected permission channel targets unresolved', async () => {
+    const resolver = createRuntimeAccessResolver({
+      rest: restFor(
+        guildRoutes({
+          [Routes.channel(CHANNEL_ID)]: {
+            id: CHANNEL_ID,
+            guild_id: GUILD_ID,
+            type: 0,
+            permission_overwrites: [],
+          },
+        }),
+      ).rest,
+      expectedBotId: BOT_ID,
+    });
+    for (const scope of ['guild', 'channel'] as const) {
+      const requirement = {
+        ...GUILD_READ_ACCESS,
+        scope,
+        permissionTargetFields: ['source_channel_id'],
+      } as const;
+      for (const channel_id of [CHANNEL_ID, 'bad-id']) {
+        await expect(
+          resolver({
+            toolName: 'fixture_read',
+            args: { guild_id: GUILD_ID, channel_id },
+            requirement,
+            expectedBotId: BOT_ID,
+          }),
+        ).resolves.toMatchObject({ status: 'unknown' });
+      }
+    }
+  });
+
+  it.each([
+    [[], 'satisfied'],
+    [[TARGET_ROLE_ID], 'satisfied'],
+    [[FOREIGN_GUILD_ID], 'unknown'],
+  ] as const)('evaluates member hierarchy from resolved target roles %j', async (roles, hierarchy) => {
+    const targetUserId = '888899990000111122';
+    const base = guildRoutes();
+    const resolver = createRuntimeAccessResolver({
+      rest: restFor({
+        ...base,
+        [Routes.guildRoles(GUILD_ID)]: [
+          ...(base[Routes.guildRoles(GUILD_ID)] as object[]),
+          { id: TARGET_ROLE_ID, name: 'Target', position: 2, permissions: '0', managed: false },
+        ],
+        [Routes.guildMember(GUILD_ID, targetUserId)]: { user: { id: targetUserId }, roles },
+      }).rest,
+      expectedBotId: BOT_ID,
+    });
+    const evidence = await resolver({
+      toolName: 'members_kick',
+      args: { guild_id: GUILD_ID, user_id: targetUserId },
+      requirement: getToolAccessRequirement('members_kick').requirement!,
+      expectedBotId: BOT_ID,
+    });
+    expect(evidence.hierarchy).toBe(hierarchy);
+  });
+
+  it('recognizes the bot as its own member target without an extra lookup', async () => {
+    const { rest, get } = restFor(guildRoutes());
+    const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+    const evidence = await resolver({
+      toolName: 'members_modify',
+      args: { guild_id: GUILD_ID, user_id: BOT_ID },
+      requirement: { ...GUILD_READ_ACCESS, hierarchy: 'required' },
+      expectedBotId: BOT_ID,
+    });
+    expect(evidence.hierarchy).toBe('satisfied');
+    expect(
+      get.mock.calls.filter(([route]) => route === Routes.guildMember(GUILD_ID, BOT_ID)),
+    ).toHaveLength(1);
+  });
+
   it('resolves array channel targets and rejects malformed arrays', async () => {
     const requirement = {
       auth: 'bot',

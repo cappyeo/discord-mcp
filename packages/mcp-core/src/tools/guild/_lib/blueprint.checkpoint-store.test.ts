@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BlueprintCheckpointStore,
   BlueprintCheckpointStoreError,
@@ -22,6 +22,11 @@ const otherPlanId = `sha256:${'b'.repeat(64)}`;
 const BLUEPRINT_ID = `sha256:${'c'.repeat(64)}`;
 const SIGNING_SECRET = 'test-checkpoint-signing-secret';
 const directories: string[] = [];
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...original, link: vi.fn(original.link) };
+});
 
 function makeDirectory(): string {
   const directory = mkdtempSync(join(tmpdir(), 'discord-mcp-blueprint-checkpoint-'));
@@ -47,6 +52,7 @@ function checkpoint(version: number): BlueprintCheckpoint {
 }
 
 afterEach(async () => {
+  vi.clearAllMocks();
   const { rm } = await import('node:fs/promises');
   await Promise.all(
     directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
@@ -54,6 +60,25 @@ afterEach(async () => {
 });
 
 describe('BlueprintCheckpointStore', () => {
+  it('persists and authenticates a checkpoint when hard links are unsupported', async () => {
+    const { link } = await import('node:fs/promises');
+    vi.mocked(link).mockRejectedValueOnce(
+      Object.assign(new Error('Unsupported'), { code: 'ENOTSUP' }),
+    );
+    const store = new BlueprintCheckpointStore({
+      stateDirectory: makeDirectory(),
+      planId: PLAN_ID,
+      signingSecret: SIGNING_SECRET,
+    });
+    expect(store.planId).toBe(PLAN_ID);
+    await store.save(checkpoint(0));
+    await expect(store.load()).resolves.toEqual(checkpoint(0));
+    expect(link).toHaveBeenCalledOnce();
+    await expect(store.save(checkpoint(0))).rejects.toMatchObject({
+      code: 'CHECKPOINT_VERSION_CONFLICT',
+    });
+  });
+
   it('writes immutable versioned checkpoints and loads the highest version', async () => {
     const stateDirectory = makeDirectory();
     const store = new BlueprintCheckpointStore({

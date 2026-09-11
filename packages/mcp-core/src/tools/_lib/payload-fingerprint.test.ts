@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { canonicalizePayload, fingerprintPayload } from './payload-fingerprint.js';
 
 describe('payload fingerprint', () => {
+  it('canonicalizes non-JSON numeric values deterministically', () => {
+    expect(
+      canonicalizePayload({ id: 123n, positive: Infinity, negative: -Infinity, invalid: NaN }),
+    ).toBe('{"id":"123","invalid":"NaN","negative":"-Infinity","positive":"Infinity"}');
+  });
   it('canonicalizes object key order and excludes authorization metadata', () => {
     const a = { z: 1, nested: { b: true, a: 'x' }, __confirm: true };
     const b = {

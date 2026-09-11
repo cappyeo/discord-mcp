@@ -41,6 +41,50 @@ function gamingBlueprint() {
 }
 
 describe('guild blueprint compiler', () => {
+  it.each([
+    [
+      'role',
+      (value: GuildBlueprint) => value.roles.push(structuredClone(value.roles[0]!)),
+      'Role keys must be unique',
+    ],
+    [
+      'category',
+      (value: GuildBlueprint) => value.categories.push(structuredClone(value.categories[0]!)),
+      'Category keys must be unique',
+    ],
+    [
+      'channel',
+      (value: GuildBlueprint) => value.channels.push(structuredClone(value.channels[0]!)),
+      'Channel keys must be unique',
+    ],
+    [
+      'onboarding prompt',
+      (value: GuildBlueprint) =>
+        value.onboarding.prompts.push(structuredClone(value.onboarding.prompts[0]!)),
+      'Onboarding prompt keys must be unique',
+    ],
+    [
+      'AutoMod rule',
+      (value: GuildBlueprint) => value.automod.rules.push(structuredClone(value.automod.rules[0]!)),
+      'AutoMod rule keys must be unique',
+    ],
+    [
+      'role order',
+      (value: GuildBlueprint) => value.role_order.push(value.role_order[0]!),
+      'Role order must be unique',
+    ],
+    [
+      'onboarding default',
+      (value: GuildBlueprint) =>
+        value.onboarding.default_channel_keys.push(value.onboarding.default_channel_keys[0]!),
+      'Onboarding default channels must be unique',
+    ],
+  ] as const)('rejects duplicate %s identities', (_label, mutate, message) => {
+    const value = gamingBlueprint();
+    mutate(value);
+    expect(() => assertBlueprintSafe(value)).toThrow(message);
+  });
+
   it('compiles a deterministic complete gaming blueprint from symbolic trusted evidence', () => {
     const first = gamingBlueprint();
     const second = gamingBlueprint();
@@ -183,6 +227,10 @@ describe('guild blueprint compiler', () => {
     const exemptReference = structuredClone(gamingBlueprint()) as GuildBlueprint;
     exemptReference.automod.rules[0]!.exempt_role_keys = ['missing'];
     expect(() => assertBlueprintSafe(exemptReference)).toThrow('unknown exempt role');
+
+    const exemptChannelReference = structuredClone(gamingBlueprint()) as GuildBlueprint;
+    exemptChannelReference.automod.rules[0]!.exempt_channel_keys = ['missing'];
+    expect(() => assertBlueprintSafe(exemptChannelReference)).toThrow('unknown exempt channel');
 
     const invalidAutoModAction = structuredClone(gamingBlueprint()) as GuildBlueprint;
     invalidAutoModAction.automod.rules[0]!.actions[1]!.alert_channel_key = null;

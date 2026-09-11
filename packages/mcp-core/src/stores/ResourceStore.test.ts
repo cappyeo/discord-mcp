@@ -1,7 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ResourceStore } from './ResourceStore.js';
 
 describe('ResourceStore', () => {
+  it('evicts failed snapshots so the next read can recover', async () => {
+    const guildId = '111122223333444455';
+    const uri = `discord://guild/${guildId}/info`;
+    const error = new Error('Discord temporarily unavailable');
+    const readGuildInfo = vi.fn().mockRejectedValueOnce(error).mockResolvedValue({ id: guildId });
+    const store = new ResourceStore({ guildIds: [guildId], readGuildInfo });
+
+    await expect(store.read(uri)).rejects.toBe(error);
+    const recovered = await store.read(uri);
+    expect(JSON.parse(recovered!.text).data).toEqual({ id: guildId });
+    expect(readGuildInfo).toHaveBeenCalledTimes(2);
+  });
+
   it('list() returns 6 V2 resources (5 templates + 1 schema)', async () => {
     const store = new ResourceStore();
     const resources = await store.list();

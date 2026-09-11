@@ -252,6 +252,39 @@ function snapshotFrom(fixture: ReturnType<typeof buildConvergedFixture>): Bluepr
 }
 
 describe('guild_blueprint_apply resumable MCP journey', () => {
+  it('reuses the newest exact managed copy and blocks an edited duplicate', () => {
+    const fixture = buildConvergedFixture();
+    const publication = blueprint.components_v2.publications[0]!;
+    const channelId = fixture.bindings.channels[publication.channel_key]!;
+    const messages = fixture.messages.get(channelId)!;
+    const original = messages[0]!;
+    const newer = { ...structuredClone(original), id: snowflake(900) };
+    messages.push(newer);
+    delete fixture.bindings.publications[publication.key];
+    const duplicate = reconcileGuildBlueprint(
+      BLUEPRINT_ID,
+      blueprint,
+      snapshotFrom(fixture),
+      fixture.bindings,
+    );
+    expect(duplicate.bindings.publications[publication.key]).toBe(newer.id);
+    expect(duplicate.operations).toEqual([]);
+    expect(duplicate.warnings).toContainEqual(expect.stringContaining('2 exact managed copies'));
+
+    const edited = { ...structuredClone(original), id: snowflake(901) };
+    (edited.components![0] as Record<string, unknown>).spoiler = true;
+    messages.push(edited);
+    const conflict = reconcileGuildBlueprint(
+      BLUEPRINT_ID,
+      blueprint,
+      snapshotFrom(fixture),
+      fixture.bindings,
+    );
+    expect(conflict.blockers).toContainEqual(
+      expect.objectContaining({ code: 'RESOURCE_CONFLICT', resource: `message:${edited.id}` }),
+    );
+  });
+
   it('treats Discord materializing the default container spoiler as equivalent', () => {
     const fixture = buildConvergedFixture();
     for (const messages of fixture.messages.values()) {

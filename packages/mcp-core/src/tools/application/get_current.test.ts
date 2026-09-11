@@ -20,6 +20,12 @@ describe('application_get_current', () => {
           name: 'Test App',
           description: 'a test app',
           icon: null,
+          cover_image: null,
+          bot_public: false,
+          bot_require_code_grant: false,
+          custom_install_url: 'https://example.test/install',
+          interactions_endpoint_url: null,
+          role_connections_verification_url: 'https://example.test/verify',
           flags: 64,
           tags: ['dev', 'test'],
           owner: { id: '222222222222222222' },
@@ -38,6 +44,15 @@ describe('application_get_current', () => {
     // Routes.currentApplication() returns the literal "/applications/@me" template.
     expect(url).toMatch(/\/applications\/(?:@me|%40me)/);
     expect(r.structuredContent.id).toBe('111111111111111111');
+    expect(r.structuredContent).toMatchObject({
+      cover_image: null,
+      bot_public: false,
+      bot_require_code_grant: false,
+      custom_install_url: 'https://example.test/install',
+      interactions_endpoint_url: null,
+      role_connections_verification_url: 'https://example.test/verify',
+      owner_id: '222222222222222222',
+    });
     expect(r.structuredContent.untrusted_text).toContain('untrusted_discord_channel_topic');
     expect(r.structuredContent.untrusted_text).toContain('Test App');
   });

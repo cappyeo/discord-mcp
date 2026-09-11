@@ -6,6 +6,7 @@ import {
   TaskCancelledError,
 } from 'cockatiel';
 import { describe, expect, it } from 'vitest';
+import { DiscordClientError } from './base.js';
 import { DryRunPreview, WritePreview } from './client.js';
 import { formatErrorForUser } from './format.js';
 import {
@@ -16,6 +17,7 @@ import {
   DiscordNotFoundError,
   DiscordPermissionError,
   DiscordRateLimitError,
+  DmConsentRejected,
   DmOutcomeUnknown,
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
@@ -23,6 +25,7 @@ import {
   PayloadConfirmationApprovalMismatch,
   PayloadConfirmationApprovalMissing,
   PayloadConfirmationApprovalReplayed,
+  RuntimeAccessUnknownError,
   ScopeRejectedError,
   ValidationError,
 } from './index.js';
@@ -48,6 +51,47 @@ function apiError(status: number, code = 0, extra: Record<string, unknown> = {})
 }
 
 describe('formatErrorForUser', () => {
+  it.each([
+    new RuntimeAccessUnknownError('messages_send', 'missing evidence'),
+    new DmConsentRejected('users_open_dm', 'expired'),
+  ])('preserves the actionable reason for $code', (error) => {
+    const result = formatErrorForUser(error, stdio);
+    expect(result.structuredContent).toMatchObject({
+      code: error.code,
+      tool: error.tool,
+      reason: error.reason,
+      retriable: false,
+    });
+  });
+
+  it.each([
+    apiError(503),
+    new TaskCancelledError(),
+  ])('includes a trace ID for an upstream failure', (error) => {
+    const result = formatErrorForUser(error, { ...stdio, sentryEventId: 'trace-123' });
+    expect(result.structuredContent).toMatchObject({
+      category: 'server',
+      retriable: true,
+      trace_id: 'trace-123',
+    });
+  });
+
+  it('preserves an unfamiliar domain error and safely handles an unclassified HTTP status', () => {
+    class OtherError extends DiscordClientError {
+      readonly code = 'OTHER_CLIENT_ERROR';
+      readonly retriable = false;
+    }
+    const result = formatErrorForUser(new OtherError('Action rejected'), stdio);
+    expect(result.structuredContent).toMatchObject({
+      code: 'OTHER_CLIENT_ERROR',
+      category: 'client',
+      retriable: false,
+    });
+    expect(formatErrorForUser(apiError(302), stdio).structuredContent).toMatchObject({
+      code: 'INTERNAL_ERROR',
+      category: 'server',
+    });
+  });
   it('formats upstream timeout cancellation as a retriable server error', () => {
     const r = formatErrorForUser(
       new TaskCancelledError('Operation timed out after 30000ms'),

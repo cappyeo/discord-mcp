@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGatewayClient } from './client.js';
 import { SubscriptionRegistry } from './subscription_registry.js';
 
+const discord = vi.hoisted(() => ({ Client: vi.fn() }));
+vi.mock('discord.js', () => ({
+  Client: discord.Client,
+  GatewayIntentBits: { Guilds: 1, GuildVoiceStates: 128, GuildPresences: 256 },
+}));
+
 interface FakeClient extends EventEmitter {
   login: (token: string) => Promise<void>;
   destroy: () => Promise<void>;
@@ -20,6 +26,48 @@ function makeFakeClient(): FakeClient {
 describe('createGatewayClient', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it('configures the default Discord client and polls subscribed audit logs', async () => {
+    const fakeClient = makeFakeClient();
+    discord.Client.mockImplementation(function MockDiscordClient() {
+      return fakeClient;
+    });
+    const registry = new SubscriptionRegistry();
+    registry.subscribe('discord://guild/123/audit-log/recent');
+    const notify = vi.fn();
+    vi.mocked(fakeClient.rest.get)
+      .mockResolvedValueOnce({ audit_log_entries: [{ id: 'first' }] })
+      .mockResolvedValueOnce({ audit_log_entries: [{ id: 'second' }] });
+    const gateway = createGatewayClient({ token: 'fake-token', registry, notifyResource: notify });
+
+    await gateway.start();
+    expect(discord.Client).toHaveBeenCalledWith({ intents: [1, 128, 256] });
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fakeClient.rest.get).toHaveBeenCalledWith('/guilds/123/audit-logs?limit=1');
+    expect(notify).toHaveBeenCalledWith('discord://guild/123/audit-log/recent');
+    await gateway.stop();
+    await gateway.stop();
+    expect(fakeClient.destroy).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('preserves the login error when cleanup also fails', async () => {
+    const fakeClient = makeFakeClient();
+    const loginError = new Error('Login failed');
+    vi.mocked(fakeClient.login).mockRejectedValue(loginError);
+    vi.mocked(fakeClient.destroy).mockRejectedValue(new Error('Cleanup failed'));
+    const gateway = createGatewayClient({
+      token: 'fake-token',
+      registry: new SubscriptionRegistry(),
+      notifyResource: vi.fn(),
+      clientFactory: () => fakeClient,
+    });
+
+    await expect(gateway.start()).rejects.toBe(loginError);
+    await gateway.stop();
+    expect(fakeClient.eventNames()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('returns { start, stop } object', () => {
     const registry = new SubscriptionRegistry();

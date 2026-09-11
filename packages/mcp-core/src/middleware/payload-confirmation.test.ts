@@ -45,6 +45,33 @@ function context(
 }
 
 describe('assessComponentsV2Payload', () => {
+  it('recognizes custom IDs and media URLs without returning their private values', () => {
+    const components = [
+      { type: 2, custom_id: 'private-action' },
+      { type: 11, media: { url: 'https://images.example.test/picture.png' } },
+      { type: 13, file: { url: 'https://files.example.test/document.pdf' } },
+    ];
+    expect(assessComponentsV2Payload('components_v2_send', { components }).riskFlags).toContain(
+      'interactive_components',
+    );
+    const review = reviewComponentsV2(components);
+    expect(review.externalUrlHosts).toEqual(['files.example.test', 'images.example.test']);
+    expect(JSON.stringify(review)).not.toContain('private-action');
+  });
+
+  it('expires both pending and consumed in-memory approvals during cleanup', () => {
+    let now = 10_000;
+    const ledger = new PayloadApprovalLedger(() => now, 1_000);
+    const binding = { tool: 'components_v2_send', payloadHash: 'a'.repeat(64), target: channelId };
+    const pending = ledger.issue(binding);
+    const consumed = ledger.issue(binding);
+    expect(ledger.consume(consumed.approvalId, binding)).toBe('ok');
+    now += 1_001;
+    expect(ledger.size).toBe(0);
+    expect(ledger.consume(pending.approvalId, binding)).toBe('missing');
+    expect(ledger.consume(consumed.approvalId, binding)).toBe('missing');
+  });
+
   it('reports target-sensitive risk flags without exposing component content', () => {
     const assessment = assessComponentsV2Payload('components_v2_edit', {
       channel_id: channelId,

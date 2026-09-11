@@ -132,6 +132,150 @@ async function runExplain(args: Record<string, unknown>): Promise<{
 }
 
 describe('permissions_explain', () => {
+  it.each([
+    { user_id: USER_ID },
+    { user_id: USER_ID, action: 'view_channel' },
+    { role_id: ACTOR_ROLE_ID, action: 'kick_member', target_user_id: TARGET_USER_ID },
+    { user_id: USER_ID, action: 'assign_role' },
+    { user_id: USER_ID, action: 'kick_member' },
+    { user_id: USER_ID, requested_permissions: ['VIEW_CHANNEL'], target_role_id: TARGET_ROLE_ID },
+    { user_id: USER_ID, requested_permissions: ['VIEW_CHANNEL'], target_user_id: TARGET_USER_ID },
+  ])('rejects incomplete or contradictory action arguments: %j', async (args) => {
+    await expect(runExplain({ guild_id: GUILD_ID, ...args })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
+  it.each([
+    'view_channel',
+    'manage_channel',
+    'ban_member',
+  ])('derives required permissions for %s', async (action) => {
+    installFixture({ roles: baseRoles({ [ACTOR_ROLE_ID]: { permissions: '8' } }) });
+    const result = await runExplain({
+      guild_id: GUILD_ID,
+      user_id: USER_ID,
+      action,
+      ...(action === 'ban_member'
+        ? { target_user_id: TARGET_USER_ID }
+        : { channel_id: CHANNEL_ID }),
+    });
+    expect(result.structuredContent).toMatchObject({ allowed: true, missing_permissions: [] });
+    expect(result.structuredContent.requested_permissions).toEqual(
+      action === 'view_channel'
+        ? ['VIEW_CHANNEL']
+        : action === 'manage_channel'
+          ? ['VIEW_CHANNEL', 'MANAGE_CHANNELS']
+          : ['BAN_MEMBERS'],
+    );
+  });
+
+  it.each([
+    ['everyone', { action: 'remove_role', target_role_id: GUILD_ID }],
+    ['owner', { action: 'kick_member', target_user_id: OWNER_ID }],
+    ['self', { action: 'kick_member', target_user_id: USER_ID }],
+  ])('denies hierarchy operations against %s', async (_label, args) => {
+    installFixture({ roles: baseRoles({ [ACTOR_ROLE_ID]: { permissions: '8' } }) });
+    const result = await runExplain({ guild_id: GUILD_ID, user_id: USER_ID, ...args });
+    expect(result.structuredContent).toMatchObject({
+      allowed: false,
+      role_hierarchy_check: { status: 'denied', allowed: false },
+    });
+  });
+
+  it('reports unknown hierarchy when the target refers to a missing role', async () => {
+    installFixture({
+      roles: baseRoles({ [ACTOR_ROLE_ID]: { permissions: '8' } }),
+      targetRoleIds: ['333344445555666699'],
+    });
+    const result = await runExplain({
+      guild_id: GUILD_ID,
+      user_id: USER_ID,
+      action: 'kick_member',
+      target_user_id: TARGET_USER_ID,
+    });
+    expect(result.structuredContent).toMatchObject({
+      allowed: null,
+      confidence: 'partial',
+      role_hierarchy_check: { status: 'unknown' },
+      warnings: [expect.stringContaining('Target member references missing guild roles')],
+    });
+  });
+
+  it.each([
+    ['everyone', [], { user_id: USER_ID, requested_permissions: ['VIEW_CHANNEL'] }],
+    [
+      'subject',
+      baseRoles(),
+      { role_id: '333344445555666699', requested_permissions: ['VIEW_CHANNEL'] },
+    ],
+    [
+      'target',
+      baseRoles(),
+      { user_id: USER_ID, action: 'assign_role', target_role_id: '333344445555666699' },
+    ],
+  ] as const)('rejects a missing %s role', async (_label, roles, args) => {
+    installFixture({ roles: [...roles] });
+    await expect(runExplain({ guild_id: GUILD_ID, ...args })).rejects.toMatchObject({
+      code: 'DISCORD_NOT_FOUND',
+    });
+  });
+
+  it('keeps a thread with no parent unknown', async () => {
+    installFixture({
+      roles: baseRoles({ [ACTOR_ROLE_ID]: { permissions: '1024' } }),
+      channels: [{ id: THREAD_ID, type: 11, guild_id: GUILD_ID }],
+    });
+    const result = await runExplain({
+      guild_id: GUILD_ID,
+      user_id: USER_ID,
+      channel_id: THREAD_ID,
+      action: 'view_channel',
+    });
+    expect(result.structuredContent).toMatchObject({
+      allowed: null,
+      confidence: 'partial',
+      warnings: [expect.stringContaining('omitted parent_id')],
+    });
+  });
+
+  it('rejects a thread parent in another guild', async () => {
+    installFixture({
+      roles: baseRoles(),
+      channels: [
+        { id: THREAD_ID, type: 11, guild_id: GUILD_ID, parent_id: PARENT_ID },
+        { id: PARENT_ID, type: 0, guild_id: '999000999000999001' },
+      ],
+    });
+    await expect(
+      runExplain({
+        guild_id: GUILD_ID,
+        user_id: USER_ID,
+        channel_id: THREAD_ID,
+        action: 'view_channel',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('rejects unknown permission names and reports unknown upstream bits', async () => {
+    installFixture({ roles: baseRoles({ [ACTOR_ROLE_ID]: { permissions: String(1n << 100n) } }) });
+    await expect(
+      runExplain({
+        guild_id: GUILD_ID,
+        user_id: USER_ID,
+        requested_permissions: ['NOT_A_PERMISSION'],
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    const result = await runExplain({
+      guild_id: GUILD_ID,
+      role_id: ACTOR_ROLE_ID,
+      requested_permissions: ['VIEW_CHANNEL'],
+    });
+    expect(result.structuredContent.warnings).toEqual([
+      expect.stringContaining('permission bits unknown to this build'),
+    ]);
+  });
+
   it('applies everyone, combined role, and member overwrites in Discord order', async () => {
     installFixture({
       roles: baseRoles({ [GUILD_ID]: { permissions: '1024' } }),

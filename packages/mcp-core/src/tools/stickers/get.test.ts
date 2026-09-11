@@ -21,6 +21,8 @@ describe('stickers_get', () => {
           type: 1,
           format_type: 1,
           available: true,
+          guild_id: '999000999000999000',
+          user: { id: '111122223333444455' },
         }),
       ),
     );
@@ -39,6 +41,10 @@ describe('stickers_get', () => {
     };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.name).toBe('WaveHello');
+    expect(r.structuredContent).toMatchObject({
+      guild_id: '999000999000999000',
+      user_id: '111122223333444455',
+    });
     expect(r.content[0]?.text).toMatch(/<untrusted_discord_embed/);
   });
 });

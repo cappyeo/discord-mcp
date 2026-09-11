@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineTool, type ToolMetadataStatic } from './defineTool.js';
+import { defineTool, OutputSchemaViolation, type ToolMetadataStatic } from './defineTool.js';
 
 describe('defineTool', () => {
+  it('rejects invalid structured output with the tool name and field path', async () => {
+    const InvalidTool = defineTool({
+      name: 'invalid_output',
+      description: 'Exercise the output contract guard',
+      inputSchema: {},
+      outputSchema: { count: z.number() },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      handler: async () => ({ structuredContent: { count: 'wrong type' } }),
+    });
+    const tool = new InvalidTool(
+      { name: 'invalid_output', path: 'memory', root: 'memory', store: null as never },
+      { name: 'invalid_output', enabled: true },
+    );
+    const result = tool.run({}, { signal: new AbortController().signal });
+    await expect(result).rejects.toBeInstanceOf(OutputSchemaViolation);
+    await expect(result).rejects.toThrow(/invalid_output.*count:/);
+  });
+
   it('produces a Tool subclass with correct name + schema', async () => {
     const EchoCls = defineTool({
       name: 'test_echo',

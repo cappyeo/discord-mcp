@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  desiredAutoModBody,
   desiredOnboardingBody,
   onboardingResponseHasIds,
   onboardingSemanticallyMatches,
@@ -44,6 +45,24 @@ function bindings() {
 }
 
 describe('blueprint onboarding request contract', () => {
+  it('resolves AutoMod exemptions and refuses missing bindings', () => {
+    const roleKey = blueprint.roles[0]!.key;
+    const channelKey = blueprint.channels[0]!.key;
+    const rule = {
+      ...blueprint.automod.rules[0]!,
+      exempt_role_keys: [roleKey],
+      exempt_channel_keys: [channelKey],
+    };
+    const current = bindings();
+    expect(desiredAutoModBody(rule, current)).toMatchObject({
+      exempt_roles: [current.roles[roleKey]],
+      exempt_channels: [current.channels[channelKey]],
+    });
+    delete current.roles[roleKey];
+    expect(desiredAutoModBody(rule, current)).toBeNull();
+    expect(desiredAutoModBody(rule, { ...bindings(), channels: {} })).toBeNull();
+  });
+
   it('supplies required prompt placeholders and reuses authoritative Discord IDs', () => {
     const request = desiredOnboardingBody(blueprint, bindings())!;
     const requestPrompts = request.prompts as Array<Record<string, unknown>>;

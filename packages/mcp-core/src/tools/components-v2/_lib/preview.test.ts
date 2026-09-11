@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { renderPreview } from './preview.js';
 
 describe('renderPreview', () => {
+  it('renders file and select controls with safe placeholders for incomplete nodes', () => {
+    const out = renderPreview([
+      { type: 13, file: { url: 'attachment://report.txt' } },
+      { type: 13 },
+      { type: 3, custom_id: 'choose' },
+      { type: 8 },
+      { type: 999 },
+      {},
+    ]);
+    expect(out).toContain('File attachment://report.txt');
+    expect(out).toContain('File ?');
+    expect(out).toContain('Select (type 3, custom_id:choose)');
+    expect(out).toContain('Select (type 8, custom_id:?)');
+    expect(out).toContain('<unknown type 999>');
+    expect(out).toContain('<unknown type ?>');
+  });
   it('renders a TextDisplay as plain text', () => {
     const out = renderPreview([{ type: 10, content: 'hello world' }]);
     expect(out).toContain('hello world');

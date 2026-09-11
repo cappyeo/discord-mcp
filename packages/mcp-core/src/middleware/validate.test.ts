@@ -32,6 +32,12 @@ function ctx(
 }
 
 describe('validateMiddleware', () => {
+  it('passes through when no tool piece is attached', async () => {
+    const { dispatch, middlewareCtx } = ctx({ value: 'unchanged' }, validateMiddleware());
+    middlewareCtx.meta.delete('toolPiece');
+    await expect(dispatch(undefined)).resolves.toEqual({ value: 'unchanged' });
+  });
+
   it('passes parsed args through when valid', async () => {
     const { dispatch } = ctx(
       { channel_id: '112233445566778899', content: 'hi' },

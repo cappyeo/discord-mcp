@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,6 +35,63 @@ function make(now: () => number = () => 10_000, options: { maxRecords?: number }
 }
 
 describe('FilePayloadApprovalLedger', () => {
+  it('returns missing for an unknown approval without granting or consuming another approval', () => {
+    const { ledger } = make();
+    const approval = ledger.issue(BINDING);
+    expect(ledger.consume('unknown-approval', BINDING)).toBe('missing');
+    expect(ledger.consume(approval.approvalId, BINDING)).toBe('ok');
+  });
+
+  it.each([
+    null,
+    { id: 'bad' },
+    { id: 'a'.repeat(64), state: 'unknown', expiresAt: 10_100, binding: BINDING },
+    { id: 'a'.repeat(64), state: 'pending', expiresAt: 'invalid', binding: BINDING },
+    { id: 'a'.repeat(64), state: 'pending', expiresAt: 10_100, binding: null },
+    {
+      id: 'a'.repeat(64),
+      state: 'pending',
+      expiresAt: 10_100,
+      binding: { ...BINDING, botId: 123 },
+    },
+  ])('rejects malformed records even when their envelope is authenticated', (record) => {
+    const { ledger, directory } = make();
+    const state = { version: 1, records: [record] };
+    const mac = createHmac('sha256', SECRET).update(JSON.stringify(state)).digest('hex');
+    writeFileSync(join(directory, 'approvals.json'), JSON.stringify({ ...state, mac }));
+    expect(() => ledger.issue(BINDING)).toThrow(
+      expect.objectContaining({
+        message: 'Approval ledger operation failed closed',
+        cause: expect.objectContaining({ message: 'Approval ledger record is invalid' }),
+      }),
+    );
+  });
+
+  it.each([
+    null,
+    { version: 2, records: [], mac: '' },
+    { version: 1, records: {} },
+  ])('rejects malformed persisted envelopes', (state) => {
+    const { ledger, directory } = make();
+    writeFileSync(join(directory, 'approvals.json'), JSON.stringify(state));
+    expect(() => ledger.issue(BINDING)).toThrow(
+      expect.objectContaining({
+        message: 'Approval ledger operation failed closed',
+        cause: expect.objectContaining({ message: 'Approval ledger state is invalid' }),
+      }),
+    );
+  });
+
+  it('rejects a state directory that resolves to an existing file', () => {
+    const { directory } = make();
+    const file = join(directory, 'not-a-directory');
+    writeFileSync(file, 'existing data');
+    expect(() => new FilePayloadApprovalLedger({ directory: file, secret: SECRET })).toThrow(
+      /store is unavailable/,
+    );
+    expect(readFileSync(file, 'utf8')).toBe('existing data');
+  });
+
   it('shares an approval across instances and survives restart without persisting the token', () => {
     const first = make();
     const approval = first.ledger.issue(BINDING);

@@ -24,6 +24,93 @@ function fakeRest(get: ReturnType<typeof vi.fn>): REST {
 }
 
 describe('guild allowlist policy', () => {
+  it.each([
+    ['messages_send', null, {}],
+    ['guild_get', {}, { guild_id: z.string() }],
+    ['onboarding_modify', { default_channel_ids: 'not-an-array' }, {}],
+    ['onboarding_modify', { default_channel_ids: [null] }, {}],
+    ['stickers_get', {}, {}],
+  ] as const)('rejects malformed scope arguments for %s', async (name, args, inputSchema) => {
+    const get = vi.fn();
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    await expect(policy.authorizeTool(name, args, { inputSchema })).rejects.toBeInstanceOf(
+      GuildScopeUnresolvedError,
+    );
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed bot-scoped arguments even with a locked identity', async () => {
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID);
+    await expect(policy.authorizeTool('app_emojis_list', null, undefined)).rejects.toBeInstanceOf(
+      BotScopeUnresolvedError,
+    );
+  });
+
+  it.each([
+    'not-a-uri',
+    'https://example.com/guild',
+    'discord://guild',
+    'discord://unknown/123',
+  ])('rejects an unresolvable subscription URI: %s', async (uri) => {
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()));
+    await expect(policy.authorizeSubscription(uri)).rejects.toBeInstanceOf(
+      GuildScopeUnresolvedError,
+    );
+  });
+
+  it('resolves channel subscriptions and accepts static resources', async () => {
+    const get = vi.fn().mockResolvedValue({ guild_id: ALLOWED });
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    await policy.authorizeSubscription('discord://channel/222233334444555566/messages');
+    await policy.authorizeSubscription('discord://components-v2/schema');
+    expect(get).toHaveBeenCalledOnce();
+    await new GuildScopePolicy(null, fakeRest(get)).authorizeSubscription('not-a-uri');
+    expect(get).toHaveBeenCalledOnce();
+  });
+
+  it('recovers a webhook lookup after failure and falls back to its channel guild', async () => {
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValueOnce({ channel_id: '222233334444555566' })
+      .mockResolvedValueOnce({ guild_id: ALLOWED });
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    const args = { webhook_id: '222233334444555599' };
+    await expect(policy.authorizeTool('webhooks_modify', args, undefined)).rejects.toThrow(
+      'temporary failure',
+    );
+    await policy.authorizeTool('webhooks_modify', args, undefined);
+    await policy.authorizeTool('webhooks_modify', args, undefined);
+    expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ['webhooks_modify', { webhook_id: '222233334444555599' }],
+    ['invites_get', { code: 'invite-code' }],
+  ])('rejects a %s response without a provable guild', async (name, args) => {
+    const policy = new GuildScopePolicy(
+      new Set([ALLOWED]),
+      fakeRest(vi.fn().mockResolvedValue({})),
+    );
+    await expect(policy.authorizeTool(name, args, undefined)).rejects.toBeInstanceOf(
+      GuildScopeUnresolvedError,
+    );
+  });
+
+  it('bounds the webhook cache and evicts its oldest entry', async () => {
+    const get = vi.fn().mockResolvedValue({ guild_id: ALLOWED });
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    for (let index = 0; index <= 1_024; index += 1) {
+      await policy.authorizeTool(
+        'webhooks_modify',
+        { webhook_id: String(200000000000000000n + BigInt(index)) },
+        undefined,
+      );
+    }
+    await policy.authorizeTool('webhooks_modify', { webhook_id: '200000000000000000' }, undefined);
+    expect(get).toHaveBeenCalledTimes(1_026);
+  });
+
   it('is a zero-overhead no-op when unset', async () => {
     const get = vi.fn();
     const policy = new GuildScopePolicy(parseGuildAllowlist(undefined), fakeRest(get));

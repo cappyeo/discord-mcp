@@ -22,6 +22,7 @@ describe('resolvePath', () => {
   });
 
   it('returns undefined for a missing path', () => {
+    expect(resolvePath('counter.value', vars)).toBeUndefined();
     expect(resolvePath('step1.missing', vars)).toBeUndefined();
     expect(resolvePath('absent.path', vars)).toBeUndefined();
   });
@@ -55,6 +56,9 @@ describe('interpolate', () => {
   });
 
   it('preserves the existing support for opening braces inside a path', () => {
+    expect(interpolate('broken {{step1} id}} then {{step1.id}}', vars)).toBe(
+      'broken {{step1} id}} then msg_123',
+    );
     expect(interpolate('{{step{3.id}}', vars)).toBe('brace-compatible');
     expect(interpolate('value={{step{3.id}}', vars)).toBe('value=brace-compatible');
   });

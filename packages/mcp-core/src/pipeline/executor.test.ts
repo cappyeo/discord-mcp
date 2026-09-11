@@ -17,6 +17,28 @@ const err = (code: string, message: string): CallToolResult => ({
 describe('executePipeline', () => {
   const baseCtx: PipelineExecutorCtx = { signal: new AbortController().signal };
 
+  it.each([
+    new Error('Invocation failed'),
+    'Invocation failed',
+  ])('returns a failed step when the tool invocation throws %s', async (failure) => {
+    const invoke = vi.fn().mockRejectedValue(failure);
+    const result = await executePipeline(
+      [
+        { id: 'first', tool: 'messages_send', args: {} },
+        { id: 'second', tool: 'messages_send', args: {} },
+      ],
+      invoke,
+      baseCtx,
+    );
+    expect(result.aborted).toBe(true);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0]).toMatchObject({
+      status: 'error',
+      error: { code: 'PIPELINE_INTERNAL', message: 'Invocation failed', retriable: false },
+    });
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
   it('runs a single step and captures result under step id', async () => {
     const invoke = vi.fn().mockResolvedValue(ok({ message_id: 'm1' }));
     const result = await executePipeline(

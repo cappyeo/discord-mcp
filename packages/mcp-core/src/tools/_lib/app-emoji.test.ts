@@ -28,6 +28,13 @@ describe('application emoji validators', () => {
     expect(AppEmojiImage.safeParse(oversized).success).toBe(false);
   });
 
+  it.each(['AB==', 'AB'])('rejects non-zero base64 pad bits in %s', (payload) => {
+    const parsed = AppEmojiImage.safeParse(`data:image/png;base64,${payload}`);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success)
+      expect(parsed.error.issues[0]?.message).toBe('Image data must be strict base64');
+  });
+
   it('accepts the exact 256 KiB boundary but rejects one byte over it', () => {
     const atLimit = `data:image/png;base64,${Buffer.alloc(256 * 1024).toString('base64')}`;
     const overLimit = `data:image/png;base64,${Buffer.alloc(256 * 1024 + 1).toString('base64')}`;

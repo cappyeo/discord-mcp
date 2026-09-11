@@ -57,6 +57,39 @@ function fixture(overrides: Partial<CatalogSnapshot> = {}): CatalogSnapshot {
 }
 
 describe('template catalog runtime foundation', () => {
+  it.each([
+    ['invalid guild ID', { source_guild_id: 'short' }],
+    ['invalid availability', { availability: 'pending' }],
+    ['invalid code type', { code: 123 }],
+    ['empty name', { name: '' }],
+    ['negative usage', { usage_count: -1 }],
+    ['invalid tags', { tags: 'gaming' }],
+    ['too many tags', { tags: Array.from({ length: 17 }, (_, index) => `tag${index}`) }],
+    ['duplicate tags', { tags: ['Gaming', 'gaming'] }],
+  ])('rejects catalog records with %s', (_label, changes) => {
+    const snapshot = fixture();
+    expect(() =>
+      parseCatalogSnapshot({
+        ...snapshot,
+        records: [{ ...snapshot.records[0], ...changes }, ...snapshot.records.slice(1)],
+      }),
+    ).toThrow(CatalogValidationError);
+  });
+
+  it.each([
+    null,
+    { ...fixture(), schema_version: 2 },
+    { ...fixture(), records: {} },
+    { ...fixture(), counts: { total: 3, active: 1, deleted: 2, unresolved: 0 } },
+    { ...fixture(), snapshot: { ...fixture().snapshot, code_snapshot_at: '' } },
+  ])('rejects malformed catalog envelopes', (value) => {
+    expect(() => parseCatalogSnapshot(value)).toThrow(CatalogValidationError);
+  });
+
+  it.each([-1, 1.5, Number.POSITIVE_INFINITY])('rejects invalid query limit %s', (limit) => {
+    expect(() => createCatalogStore(fixture()).list({ limit })).toThrow(RangeError);
+  });
+
   it('validates once and exposes deterministic read-only queries', () => {
     const store = createCatalogStore(fixture());
 
