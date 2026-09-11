@@ -85,6 +85,108 @@ describe('guild blueprint compiler', () => {
     expect(() => assertBlueprintSafe(value)).toThrow(message);
   });
 
+  it.each([
+    [
+      'incomplete role order',
+      (value: GuildBlueprint) => value.role_order.pop(),
+      'Role order must contain every generated role',
+    ],
+    [
+      'unknown onboarding channel',
+      (value: GuildBlueprint) => {
+        value.onboarding.default_channel_keys[0] = 'missing';
+      },
+      'Onboarding references an unknown default channel',
+    ],
+    [
+      'unmarked onboarding default',
+      (value: GuildBlueprint) => {
+        value.channels.find(
+          (channel) => channel.key === value.onboarding.default_channel_keys[0],
+        )!.default_onboarding = false;
+      },
+      'Every onboarding default must be marked default_onboarding',
+    ],
+    [
+      'wrong preset trigger',
+      (value: GuildBlueprint) => {
+        value.automod.rules[0]!.trigger_type = 3;
+      },
+      'keyword presets for the wrong trigger',
+    ],
+    [
+      'wrong mention trigger',
+      (value: GuildBlueprint) => {
+        value.automod.rules[0]!.mention_total_limit = 1;
+      },
+      'mention limit for the wrong trigger',
+    ],
+    [
+      'unknown alert channel',
+      (value: GuildBlueprint) => {
+        value.automod.rules[0]!.actions[0]!.alert_channel_key = 'missing';
+      },
+      'unknown alert channel',
+    ],
+    [
+      'wrong timeout trigger',
+      (value: GuildBlueprint) => {
+        value.automod.rules[0]!.actions[0] = {
+          type: 3,
+          duration_seconds: 60,
+          alert_channel_key: null,
+          custom_message: null,
+        };
+      },
+      'TIMEOUT with an incompatible trigger',
+    ],
+    [
+      'missing timeout duration',
+      (value: GuildBlueprint) => {
+        value.automod.rules.find((rule) => rule.trigger_type === 5)!.actions[0] = {
+          type: 3,
+          duration_seconds: null,
+          alert_channel_key: null,
+          custom_message: null,
+        };
+      },
+      'TIMEOUT requires a positive duration',
+    ],
+    [
+      'duration on block action',
+      (value: GuildBlueprint) => {
+        value.automod.rules[0]!.actions[0]!.duration_seconds = 60;
+      },
+      'duration on the wrong action',
+    ],
+    [
+      'custom message on alert action',
+      (value: GuildBlueprint) => {
+        value.automod.rules[0]!.actions[0] = {
+          type: 2,
+          duration_seconds: null,
+          alert_channel_key: 'mod_log',
+          custom_message: 'Invalid alert text',
+        };
+      },
+      'custom message on the wrong action',
+    ],
+    [
+      'too many preset rules',
+      (value: GuildBlueprint) => {
+        value.automod.rules.push({
+          ...structuredClone(value.automod.rules[0]!),
+          key: 'extra_preset_rule',
+        });
+      },
+      'exceeds its guild cap',
+    ],
+  ] as const)('rejects unsafe blueprint configuration: %s', (_label, mutate, message) => {
+    const value = gamingBlueprint();
+    mutate(value);
+    expect(() => assertBlueprintSafe(value)).toThrow(message);
+  });
+
   it('compiles a deterministic complete gaming blueprint from symbolic trusted evidence', () => {
     const first = gamingBlueprint();
     const second = gamingBlueprint();
