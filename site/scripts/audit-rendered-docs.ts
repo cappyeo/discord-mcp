@@ -265,12 +265,18 @@ const routes: RouteAudit[] = [
         const menuButton = page.getByRole('button', { name: 'Menu' });
         await requireCount(menuButton, 1, 'mobile navigation menu button');
         await menuButton.click();
-        await page.waitForFunction(() =>
-          document.getElementById('starlight__sidebar')?.matches(':popover-open'),
+        // The popover state changes before Starlight's toggle event applies
+        // focus trapping. Wait for both before testing the next interaction.
+        await page.waitForFunction(
+          () =>
+            document.getElementById('starlight__sidebar')?.matches(':popover-open') &&
+            document.querySelector('.main-frame')?.hasAttribute('inert'),
         );
         await menuButton.press('Escape');
         await page.waitForFunction(
-          () => !document.getElementById('starlight__sidebar')?.matches(':popover-open'),
+          () =>
+            !document.getElementById('starlight__sidebar')?.matches(':popover-open') &&
+            !document.querySelector('.main-frame')?.hasAttribute('inert'),
         );
         if (!(await menuButton.evaluate((element) => element === document.activeElement))) {
           throw new Error('closing mobile navigation did not restore menu-button focus');
