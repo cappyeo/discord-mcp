@@ -13,10 +13,8 @@
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// Resolve Zod through mcp-core so the generator inspects the same schemas it
-// renders. mcp-core intentionally pins its dev copy to 4.4.3: Zod 4.5 changes
-// the internal representation used here and drops structured examples, while
-// the published dependency range remains compatible with supported Zod 4.x.
+// Resolve Zod through mcp-core so the generator uses the same version as the
+// schemas it renders.
 import { z } from '../../packages/mcp-core/node_modules/zod/index.js';
 import { getToolAccessRequirement } from '../../packages/mcp-core/src/access/requirements.js';
 
@@ -351,6 +349,12 @@ export function renderJsonSchema(
 function jsonSchemaExample(name: string, schema: JsonSchema): unknown {
   if ('const' in schema) return schema.const;
   if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0];
+
+  // Zod 4.5 emits nullable primitives as a type array instead of anyOf.
+  if (Array.isArray(schema.type)) {
+    const type = schema.type.find((candidate) => candidate !== 'null') ?? 'null';
+    return jsonSchemaExample(name, { ...schema, type });
+  }
 
   for (const key of ['anyOf', 'oneOf'] as const) {
     const variants = schema[key];

@@ -291,6 +291,25 @@ describe('buildSchemaExample', () => {
     ).toEqual({ guild_id: '123456789012345678', name: 'Example name' });
   });
 
+  it('generates valid examples for nullable primitives and nested values', () => {
+    const fields = {
+      allowed: z.boolean().nullable(),
+      count: z.number().min(2).max(4).nullable(),
+      flags: z.array(z.boolean().nullable()),
+      nested: z.object({ allowed: z.boolean().nullable() }),
+      absent: z.null(),
+    };
+    const example = buildSchemaExample(fields, { io: 'output' });
+    expect(example).toEqual({
+      allowed: true,
+      count: 2,
+      flags: [true],
+      nested: { allowed: true },
+      absent: null,
+    });
+    expect(z.object(fields).safeParse(example).success).toBe(true);
+  });
+
   it('uses the preferred local plan reference for blueprint apply examples', () => {
     const example = buildSchemaExample(
       {

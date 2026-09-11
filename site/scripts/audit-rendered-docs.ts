@@ -265,13 +265,13 @@ const routes: RouteAudit[] = [
         const menuButton = page.getByRole('button', { name: 'Menu' });
         await requireCount(menuButton, 1, 'mobile navigation menu button');
         await menuButton.click();
-        if ((await menuButton.getAttribute('aria-expanded')) !== 'true') {
-          throw new Error('mobile navigation menu did not open');
-        }
+        await page.waitForFunction(() =>
+          document.getElementById('starlight__sidebar')?.matches(':popover-open'),
+        );
         await menuButton.press('Escape');
-        if ((await menuButton.getAttribute('aria-expanded')) !== 'false') {
-          throw new Error('mobile navigation menu did not close with Escape');
-        }
+        await page.waitForFunction(
+          () => !document.getElementById('starlight__sidebar')?.matches(':popover-open'),
+        );
         if (!(await menuButton.evaluate((element) => element === document.activeElement))) {
           throw new Error('closing mobile navigation did not restore menu-button focus');
         }
