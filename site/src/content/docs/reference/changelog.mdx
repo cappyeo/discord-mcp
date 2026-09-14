@@ -13,6 +13,22 @@ commit history and downloadable artifacts, see
 
 - No unreleased changes.
 
+## v0.27.1 - rich message reads
+
+- Fixed [#61](https://github.com/cappyeo/discord-mcp/issues/61): `messages_get`
+  and `messages_read` now preserve the full Components V2 tree, legacy embeds,
+  attachment metadata, and flags supplied by Discord. Nested properties and
+  unknown component types remain available in structured results and pipelines.
+- Human-readable results include nested Text Display and legacy embed text
+  inside the existing untrusted-content fence. Original structured `content`
+  stays unchanged, including empty component-only or upstream-redacted bodies.
+- Rich fields are returned without truncation. Use a smaller history `limit`
+  with `before`/`after`, or `messages_get` for one complete message, when a
+  client's response budget is tight. Attachment and media URLs are not fetched.
+- Added protocol regression coverage for rich reads, output schemas, pipelines,
+  pagination, empty fields, and malicious tag-like text. These checks use
+  synthetic REST fixtures and do not establish live Discord activation.
+
 ## v0.27.0 - DeepSeek Harness client support
 
 - Added `--client deepseek-harness` to `init` and guided `setup`. Generated

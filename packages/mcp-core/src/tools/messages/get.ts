@@ -3,19 +3,14 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
-import { ChannelId, MessageId, UserId } from '../_lib/snowflake.js';
+import { ChannelId, MessageId } from '../_lib/snowflake.js';
 import { wrapMessages } from '../_lib/untrusted.js';
-
-interface RawMessage {
-  id: string;
-  channel_id: string;
-  content: string;
-  author: { id: string; username: string; global_name?: string | null; bot?: boolean };
-  timestamp: string;
-  edited_timestamp: string | null;
-  pinned?: boolean;
-  type?: number;
-}
+import {
+  messageFields,
+  projectMessage,
+  type RawMessage,
+  readableMessageContent,
+} from './_lib/message.js';
 
 export default defineTool({
   name: 'messages_get',
@@ -32,7 +27,9 @@ export default defineTool({
     '',
     '**Example**: `{channel_id:"112233445566778899", message_id:"999000999000999000"}`',
     '',
-    '**Returns**: `{message_id, channel_id, author_id, author_name, content, timestamp, edited, pinned}`. Structured message fields remain raw Discord data; the human-readable MCP `content` response fences the message text.',
+    '**Returns**: `{message_id, channel_id, author_id, author_name, content, components?, embeds?, attachments?, flags?, timestamp, edited, pinned}`. This is a selected message projection, not the entire Discord message. `content` is unchanged; rich fields are preserved in full when supplied by Discord, including unknown component types. Empty or absent upstream fields stay empty or absent.',
+    '',
+    '**Readable text**: The human-readable MCP response derives text from original content, nested Text Display components in order, then embed author/title/description/fields/footer. All derived text is fenced as untrusted Discord data; raw structured fields are also untrusted. Attachment and media URLs are metadata only and are not fetched.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the message'),
@@ -41,11 +38,7 @@ export default defineTool({
   outputSchema: {
     message_id: MessageId,
     channel_id: ChannelId,
-    author_id: UserId,
-    author_name: z.string(),
-    content: z.string(),
-    timestamp: z.string(),
-    edited: z.boolean(),
+    ...messageFields,
     pinned: z.boolean(),
   },
   annotations: {
@@ -64,7 +57,7 @@ export default defineTool({
         {
           id: m.id,
           author: m.author.global_name ?? m.author.username,
-          content: m.content,
+          content: readableMessageContent(m),
         },
       ],
       m.channel_id,
@@ -74,11 +67,7 @@ export default defineTool({
       data: {
         message_id: m.id,
         channel_id: m.channel_id,
-        author_id: m.author.id,
-        author_name: m.author.global_name ?? m.author.username,
-        content: m.content,
-        timestamp: m.timestamp,
-        edited: m.edited_timestamp !== null,
+        ...projectMessage(m),
         pinned: m.pinned ?? false,
       },
     });

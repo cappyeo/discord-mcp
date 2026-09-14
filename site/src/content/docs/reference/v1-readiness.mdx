@@ -5,13 +5,18 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.27.0 and contains 209 tools.
+The current source tree targets discord-mcp v0.27.1 and contains 209 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.27.0)
+## Current source evidence (v0.27.1)
+
+- v0.27.1 preserves rich message fields and fenced readable card/embed text in
+  `messages_get` and `messages_read`. Protocol tests cover schema preservation,
+  pipelines, pagination, and untrusted text using synthetic Discord responses;
+  they do not establish live Discord activation.
 
 - v0.27.0 adds DeepSeek Harness YAML configuration and guided profile setup.
   Local generator and profile tests do not establish live Harness activation;
