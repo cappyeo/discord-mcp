@@ -229,6 +229,36 @@ describe('guided caller-owned bot setup', () => {
     );
   });
 
+  it('saves a DeepSeek Harness profile and forwards its token without persisting the value', async () => {
+    const output = join(directory, 'discord-mcp.cordis.yml');
+    await setupAction({
+      profile: 'devbot',
+      client: 'deepseek-harness',
+      json: true,
+      output,
+      profileDirectory: directory,
+    });
+
+    const parsed = result();
+    expect(parsed.ok).toBe(true);
+    const content = readFileSync(output, 'utf8');
+    expect(content).toBe(parsed.data?.content);
+    expect(content).toContain('command: "npx"');
+    expect(content).toContain(`"@discord-mcp/cli@${packageJson.version}"`);
+    expect(content).toContain('"serve","--profile","devbot"');
+    expect(content).toContain('DISCORD_TOKEN: !!js process.env.DISCORD_TOKEN');
+    expect(content).not.toContain(TOKEN);
+    expect(loadProfile('devbot', { directory })).toMatchObject({
+      client: 'deepseek-harness',
+      bot: { id: BOT.id },
+      allowedGuilds: [GUILD.id],
+      toolSurface: 'progressive',
+      writeMode: 'preview',
+    });
+    expect(readFileSync(parsed.data?.profile?.path ?? '', 'utf8')).not.toContain(TOKEN);
+    expect(parsed.details).toContain('Verify: discord-mcp doctor --profile devbot --online');
+  });
+
   it('does not let --force reassign an existing profile to another bot', async () => {
     await setupAction({
       profile: 'devbot',

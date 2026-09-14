@@ -1,6 +1,6 @@
 {
   "name": "@discord-mcp/cli",
-  "version": "0.26.1",
+  "version": "0.27.0",
   "private": false,
   "type": "module",
   "mcpName": "io.github.cappyeo/discord-mcp",
@@ -79,6 +79,7 @@
     "@types/node": "^22.20.1",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yaml": "^2.8.3"
   }
 }

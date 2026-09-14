@@ -44,8 +44,7 @@ export interface SnippetConfig {
 /**
  * The rendered output of a generator.
  *
- * `format` distinguishes JSON client snippets from Codex's TOML configuration
- * fragment.
+ * `format` distinguishes JSON, TOML, and DeepSeek Harness YAML fragments.
  *
  * `content` is the literal text the user pastes / the file `init`
  * writes. Always ends with a newline so editors don't whine.
@@ -55,7 +54,7 @@ export interface SnippetConfig {
  * `details` material - printed under the summary in pretty mode.
  */
 export interface Snippet {
-  readonly format: 'json' | 'toml';
+  readonly format: 'json' | 'toml' | 'yaml';
   readonly content: string;
   readonly configFilePath: string;
   readonly instructions: string;

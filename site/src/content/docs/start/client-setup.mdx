@@ -1,6 +1,6 @@
 ---
 title: Client setup
-description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Antigravity CLI, Cursor Agent CLI, Grok Build CLI, legacy Gemini CLI, the Cursor editor, or any generic MCP client.
+description: Wire up discord-mcp with Claude Desktop, Claude Code, Codex, Antigravity CLI, Cursor Agent CLI, Grok Build CLI, DeepSeek Harness, legacy Gemini CLI, the Cursor editor, or any generic MCP client.
 type: tutorial
 sidebar:
   order: 22
@@ -21,7 +21,7 @@ import TutorialPreCheck from '../../../components/docs/TutorialPreCheck.astro';
 This lesson covers the default **local stdio MCP** setup for clients that can spawn an MCP
 server as a subprocess. The recommended `setup` command verifies one caller-owned bot,
 saves a non-secret local profile, and generates a client-specific configuration fragment.
-Codex receives TOML and the other first-class clients receive JSON. It prints the fragment
+Codex and Grok Build receive TOML, DeepSeek Harness receives a YAML patch, and the other clients receive JSON. It prints the fragment
 by default, so you stay in control of the file you merge it into.
 
 If you need remote HTTP, the full direct-tool catalog, or live Gateway notifications, first
@@ -214,6 +214,37 @@ $env:DISCORD_TOKEN = Read-Host 'Discord bot token' -MaskInput
 
   This tab configures the Cursor editor rather than Cursor Agent CLI. Merge the output into `~/.cursor/mcp.json` for global access or
   `<project>/.cursor/mcp.json` for one project. Restart Cursor after changing it.
+
+  </div>
+  <div slot="deepseek-harness">
+
+  ```bash
+  discord-mcp setup --profile devbot --client deepseek-harness --output discord-mcp.cordis.yml
+  dsh web --patch ./discord-mcp.cordis.yml
+  ```
+
+  Install and configure [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+  first. Run both commands from an environment containing `DISCORD_TOKEN`. The generated
+  YAML patch inserts the official `@deepseek-ai/dsh-mcp-client` plugin with a pinned
+  discord-mcp launcher, a 180-second tool-call timeout, and startup failure reporting.
+  Keep `DISCORD_TOKEN: !!js process.env.DISCORD_TOKEN` as written: Harness removes
+  ambient token variables before spawning MCP servers, so this explicit reference
+  forwards the value without saving it in YAML.
+
+  For persistent configuration, merge the insert entry into
+  `$DSH_HOME/profiles/<name>/cordis.patch.yml` for one Harness profile, or
+  `$DSH_HOME/cordis.patch.yml` for all profiles. Preserve other patches and enable this
+  entry in only one active layer. A Harness profile is separate from discord-mcp's
+  `devbot` profile. See the [official patch configuration guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/mcp-memory.md).
+
+  Verify the bot and profile with `discord-mcp doctor --profile devbot --online`,
+  then confirm Harness lists tools such as `mcp__discord-mcp__mcp_tools_search`.
+  The [MCP plugin](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md)
+  currently bridges tools; MCP Resources and Prompts are not bridged. Keep Gateway
+  disabled unless a future host version adds the required subscription support.
+  `doctor --client deepseek-harness` is not supported; the profile check does not
+  inspect or evaluate Harness YAML. Local config generation is separate from live
+  model-to-Discord verification.
 
   </div>
   <div slot="generic">

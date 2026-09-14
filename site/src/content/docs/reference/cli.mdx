@@ -335,7 +335,7 @@ execution explicitly.
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--profile <name>` | string | prompt if TTY; required otherwise | Stable lowercase profile name. Allows letters, digits, dots, underscores, and hyphens. |
-| `--client <id>` | string | prompt if TTY, else `generic` | One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `cursor-cli`, `gemini-cli` (enterprise/API-key compatibility), `cursor`, `generic`. |
+| `--client <id>` | string | prompt if TTY, else `generic` | One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `cursor-cli`, `gemini-cli` (enterprise/API-key compatibility), `cursor`, `deepseek-harness`, `generic`. |
 | `--tool-surface <mode>` | string | `progressive` | Store `full` or `progressive` as the runtime presentation layer. |
 | `--allowed-guilds <ids>` | string | sole guild or interactive choice | Verify and store an explicit comma-separated guild allowlist. Ambiguous non-interactive selection fails closed. |
 | `--categories <names>` | string | all categories | Store comma-separated lowercase category names such as `messages,guild`; the running server validates names against its installed tool registry. |
@@ -497,11 +497,11 @@ discord-mcp init [--client <id>] [--token <token>] [--gateway]
 
 Generate a stateless MCP client config snippet for a supported client. Either
 prints to stdout or writes to `--output <path>`. Prefer `setup` when you want a
-reusable bot profile and safer credential lifecycle.
+reusable bot profile and safer credential lifecycle. `deepseek-harness` emits a Cordis YAML patch for the official MCP client plugin, including an explicit `!!js process.env.DISCORD_TOKEN` reference when no token is supplied. See [DeepSeek Harness client setup](/discord-mcp/start/client-setup/) for loading the patch.
 
 | Flag             | Type    | Default                                              | Description                                                                                                                                                                                                          |
 | ---------------- | ------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `cursor-cli`, `gemini-cli` (enterprise/API-key compatibility), `cursor`, `generic`.                                                                       |
+| `--client <id>`  | string  | prompt if TTY, else `generic`                        | Target client id. One of `claude-desktop`, `claude-code`, `codex`, `antigravity-cli`, `cursor-cli`, `gemini-cli` (enterprise/API-key compatibility), `cursor`, `deepseek-harness`, `generic`.                                                                       |
 | `--token <token>`| string  | `${env:DISCORD_TOKEN}` placeholder                   | Legacy explicit Discord bot token. **Warning**: clients without inherited secret forwarding write it unredacted. Antigravity CLI and Cursor Agent CLI deliberately omit it and inherit the launch environment instead. Prefer `setup`, which has no token flag.                         |
 | `--gateway`      | boolean | `false`                                              | Append `--gateway` to the generated snippet so the server enables Gateway subscriptions on boot.                                                                                                                     |
 | `--tool-surface <mode>` | string | `full`                                        | Set `progressive` to add `MCP_TOOL_SURFACE=progressive` to the generated client snippet; useful for hosts without native deferred MCP loading.                                                                        |

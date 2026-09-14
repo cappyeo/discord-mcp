@@ -32,6 +32,7 @@ const CLIENT_IDS = [
   'grok-cli',
   'gemini-cli',
   'cursor',
+  'deepseek-harness',
   'generic',
 ] as const;
 const TOOL_SURFACES = ['full', 'progressive'] as const;

@@ -231,6 +231,31 @@ describe('initAction - explicit flags', () => {
     expect(snippet.mcpServers['discord-mcp'].env.DISCORD_TOKEN).toBe('${DISCORD_TOKEN}');
   });
 
+  it('writes a DeepSeek Harness YAML patch with stateless policy and token forwarding', async () => {
+    let written = '';
+    writeImpl = (_path, content) => {
+      written = content;
+    };
+    await initAction({
+      json: true,
+      client: 'deepseek-harness',
+      output: 'discord-mcp.cordis.yml',
+      toolSurface: 'progressive',
+      writeMode: 'preview',
+      allowedGuilds: '111122223333444455',
+    });
+    const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data?.client).toBe('deepseek-harness');
+    expect(parsed.data?.configFilePath).toContain('cordis.patch.yml');
+    expect(written).toBe(parsed.data?.content);
+    expect(written).toContain('- insert:');
+    expect(written).toContain('DISCORD_TOKEN: !!js process.env.DISCORD_TOKEN');
+    expect(written).toContain('"MCP_TOOL_SURFACE": "progressive"');
+    expect(written).toContain('"MCP_WRITE_MODE": "preview"');
+    expect(written).toContain('"ALLOWED_GUILDS": "111122223333444455"');
+  });
+
   it('with --client antigravity-cli inherits the token without persisting a reference', async () => {
     await initAction({ json: true, client: 'antigravity-cli', token: 'Bot should-not-persist' });
     const parsed = JSON.parse(stdoutOutput()) as InitJsonResult;

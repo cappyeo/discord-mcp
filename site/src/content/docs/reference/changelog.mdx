@@ -13,6 +13,23 @@ commit history and downloadable artifacts, see
 
 - No unreleased changes.
 
+## v0.27.0 - DeepSeek Harness client support
+
+- Added `--client deepseek-harness` to `init` and guided `setup`. Generated
+  Cordis YAML patches register the official `@deepseek-ai/dsh-mcp-client`
+  plugin over stdio with a 180-second tool-call timeout and startup failure
+  reporting.
+- Guided setup forwards `DISCORD_TOKEN` through a YAML environment reference
+  without persisting the token value, keeps the bot and guild scope in a local
+  profile, and defaults to progressive discovery and preview mode. Stateless
+  `init --token` retains its explicit legacy token behavior.
+- Added client setup documentation and coverage for YAML parsing, Windows
+  paths, quoted values, token forwarding, and profile persistence. Harness
+  config inspection through `doctor --client` and live DeepSeek-to-Discord
+  activation evidence are not included in this release.
+- Includes the runtime/documentation dependency and Vitest 4 coverage-tooling
+  updates merged since v0.26.1.
+
 ## v0.26.1 - stdio lifecycle cleanup
 
 - Closed stdio clients now trigger one deduplicated cleanup path so Gateway,
