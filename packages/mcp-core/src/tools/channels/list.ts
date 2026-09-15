@@ -2,10 +2,11 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
+import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId } from '../_lib/snowflake.js';
 
-interface RawChannel {
+interface RawChannel extends ChannelTags {
   id: string;
   name: string;
   type: number;
@@ -19,13 +20,14 @@ export default defineTool({
   name: 'channels_list',
   category: 'channels',
   description:
-    '**Purpose**: List all channels in a Discord guild.\n\n**When to use**: discover channel IDs by name; audit channel layout.\n\n**Example**: `{guild_id:"999000999000999000"}`\n\n**Returns**: `{channels:[{id,name,type,position,parent_id,nsfw}], count}`.',
+    '**Purpose**: List all channels in a Discord guild.\n\n**When to use**: discover channel IDs by name; audit channel layout and forum tags.\n\n**Example**: `{guild_id:"999000999000999000"}`\n\n**Returns**: `{channels:[{id,name,type,position,parent_id,nsfw,available_tags?,applied_tags?}], count}`. Forum/media tags include `{id,name,moderated,emoji_id,emoji_name}` when returned by Discord.',
   inputSchema: {
     guild_id: GuildId.describe('Guild to list channels for'),
   },
   outputSchema: {
     channels: z.array(
       z.object({
+        ...ChannelTagOutput,
         id: ChannelId,
         name: z.string(),
         type: z.number().int(),
@@ -46,6 +48,7 @@ export default defineTool({
   handler: async (args) => {
     const raw = (await container.rest.get(Routes.guildChannels(args.guild_id))) as RawChannel[];
     const channels = raw.map((c) => ({
+      ...channelTags(c),
       id: c.id,
       name: c.name,
       type: c.type,

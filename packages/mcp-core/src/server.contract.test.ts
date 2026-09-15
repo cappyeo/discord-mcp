@@ -102,6 +102,113 @@ describe('MCP protocol contract', () => {
     expect(text).toMatch(/channel_id/);
   });
 
+  it('preserves forum tags and post assignments through MCP serialization and published schemas', async () => {
+    const api = 'https://discord.com/api/v10';
+    const guild = '999000999000999000';
+    const forumId = '111122223333444481';
+    const postId = '111122223333444482';
+    const available_tags = [
+      {
+        id: '111122223333444483',
+        name: 'Support',
+        moderated: true,
+        emoji_id: '111122223333444484',
+        emoji_name: null,
+      },
+      {
+        id: '111122223333444485',
+        name: 'Done',
+        moderated: false,
+        emoji_id: null,
+        emoji_name: '✅',
+      },
+    ];
+    const forum = {
+      id: forumId,
+      name: 'forum',
+      type: 15,
+      guild_id: guild,
+      position: 0,
+      available_tags,
+    };
+    const applied_tags = available_tags.map((tag) => tag.id);
+    const post = {
+      id: postId,
+      name: 'old-post',
+      type: 11,
+      guild_id: guild,
+      parent_id: forumId,
+      applied_tags,
+    };
+    server.use(
+      http.get(`${api}/channels/${forumId}`, () => HttpResponse.json(forum)),
+      http.get(`${api}/channels/${postId}`, () => HttpResponse.json(post)),
+      http.get(`${api}/guilds/${guild}/channels`, () => HttpResponse.json([forum])),
+      http.get(`${api}/guilds/${guild}/threads/active`, () =>
+        HttpResponse.json({ threads: [post] }),
+      ),
+      http.get(`${api}/channels/${forumId}/threads/archived/public`, () =>
+        HttpResponse.json({ threads: [post], has_more: false }),
+      ),
+    );
+    for (const channel_id of [forumId, postId]) {
+      const result = await client.callTool({ name: 'channels_get', arguments: { channel_id } });
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent).toMatchObject(
+        channel_id === forumId ? { available_tags } : { applied_tags },
+      );
+    }
+    const listed = await client.callTool({ name: 'channels_list', arguments: { guild_id: guild } });
+    expect(listed.isError).toBe(false);
+    expect(listed.structuredContent).toMatchObject({ channels: [{ available_tags }] });
+    for (const name of [
+      'channels_list_active_threads_guild',
+      'channels_list_public_archived_threads',
+    ]) {
+      const result = await client.callTool({
+        name,
+        arguments: { guild_id: guild, channel_id: forumId },
+      });
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent).toMatchObject({ threads: [{ applied_tags }] });
+    }
+  });
+
+  it('accepts the tag verification error envelope after a successful PATCH', async () => {
+    const channel_id = '111122223333444486';
+    const tagId = '111122223333444487';
+    const channel = {
+      id: channel_id,
+      name: 'forum',
+      type: 15,
+      guild_id: '999000999000999000',
+      available_tags: [
+        { id: tagId, name: 'Old', moderated: false, emoji_id: null, emoji_name: null },
+      ],
+    };
+    let patches = 0;
+    server.use(
+      http.get(`https://discord.com/api/v10/channels/${channel_id}`, () =>
+        HttpResponse.json(channel),
+      ),
+      http.patch(`https://discord.com/api/v10/channels/${channel_id}`, () => {
+        patches++;
+        return HttpResponse.json(channel);
+      }),
+    );
+    const result = await client.callTool({
+      name: 'channels_modify',
+      arguments: { channel_id, available_tags: [{ id: tagId, name: 'Updated' }] },
+    });
+    expect(patches).toBe(1);
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      code: 'TAG_VERIFICATION_FAILED',
+      patch_succeeded: true,
+      retriable: false,
+    });
+  });
+
   it('rejects an invalid application emoji upload before Discord', async () => {
     const r = await client.callTool({
       name: 'app_emojis_create',

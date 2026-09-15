@@ -13,6 +13,29 @@ commit history and downloadable artifacts, see
 
 - No unreleased changes.
 
+## v0.28.0 - forum tag preservation and safe edits
+
+- Channel reads and creation results now preserve forum/media `available_tags`
+  with `id`, `name`, `moderated`, `emoji_id`, and `emoji_name`. Post reads,
+  creation results, and all thread lists preserve `applied_tags`. Missing
+  fields remain absent; empty arrays remain empty.
+- `channels_modify` reads the current tag set before PATCH, keeps existing tag
+  IDs and omitted emoji/moderation fields, and verifies the changed channel
+  after PATCH. It now accepts `applied_tags` for existing forum/media posts.
+- **Migration:** `available_tags` remains the complete desired list. Keep IDs
+  when editing existing tags and omit IDs for additions. Every existing tag
+  omitted from that list must now be explicitly named in
+  `remove_available_tag_ids`; an unreadable current state blocks replacement.
+- `tags_verified: true` confirms the changed channel's tag readback. If PATCH
+  succeeds but verification fails, the tool returns `TAG_VERIFICATION_FAILED`
+  with `patch_succeeded: true` and `retriable: false`. Read the current state
+  before retrying, and read old posts to verify their retained tag IDs.
+- Forum tag `emoji_id` refers to a guild emoji. Application emoji support is
+  not implied; reuse the artwork by uploading a guild emoji when needed.
+- Regression tests cover output schemas, MCP serialization, safe replacements,
+  emoji changes, and post tag preservation using synthetic Discord responses.
+  They do not establish live Discord verification.
+
 ## v0.27.1 - rich message reads
 
 - Fixed [#61](https://github.com/cappyeo/discord-mcp/issues/61): `messages_get`

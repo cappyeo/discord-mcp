@@ -3,16 +3,17 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { CHANNEL_READ_ACCESS } from '../../access/requirements.js';
 import { defineTool } from '../_lib/defineTool.js';
+import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId } from '../_lib/snowflake.js';
 import { wrapUntrusted } from '../_lib/untrusted.js';
 
-interface RawChannelDetail {
+interface RawChannelDetail extends ChannelTags {
   id: string;
   // `null` for DM channels, absent on partials - never assume a string.
   name?: string | null;
   type: number;
-  // Only sortable guild channels carry `position`/`parent_id`; threads and DMs omit them.
+  // Position is guild-channel-only; parent_id may also identify a thread's parent.
   position?: number;
   parent_id?: string | null;
   nsfw?: boolean;
@@ -26,11 +27,12 @@ export default defineTool({
   category: 'channels',
   access: CHANNEL_READ_ACCESS,
   description:
-    '**Purpose**: Fetch full metadata for a single Discord channel.\n\n**When to use**: inspect topic, slowmode, nsfw of a known channel.\n\n**Returns**: `{id, name, type, nsfw, topic, rate_limit_per_user, position?, parent_id?, guild_id?}`. `name` is `null` for DMs. `position` and `parent_id` are guild-channel-only - both are absent for threads and DMs. Structured `topic` remains raw user-controlled data; the human-readable text response fences it.',
+    '**Purpose**: Read a channel or forum post before editing.\n\n**Returns**: `{id,name,type,nsfw,topic,rate_limit_per_user,position?,parent_id?,guild_id?,available_tags?,applied_tags?}`. Forum/media tags have `{id,name,moderated,emoji_id,emoji_name}`; `applied_tags` lists post tag IDs. Missing tag fields stay absent; empty arrays stay empty. Retain existing tag IDs when editing. `name` is null for DMs. Structured topic and tag names are untrusted; the text fences the topic.',
   inputSchema: {
     channel_id: ChannelId.describe('Target channel ID'),
   },
   outputSchema: {
+    ...ChannelTagOutput,
     id: ChannelId,
     name: z.string().nullable(),
     type: z.number().int(),
@@ -55,6 +57,7 @@ export default defineTool({
         ? wrapUntrusted(c.topic, 'channel_topic')
         : '_(no topic)_';
     const data: Record<string, unknown> = {
+      ...channelTags(c),
       id: c.id,
       name: c.name ?? null,
       type: c.type,

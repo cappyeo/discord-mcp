@@ -5,13 +5,20 @@ sidebar:
   order: 5
 ---
 
-The current source tree targets discord-mcp v0.27.1 and contains 209 tools.
+The current source tree targets discord-mcp v0.28.0 and contains 209 tools.
 Confirm the latest public version from npm or GitHub Releases. v1.0.0 commits to
 API stability for 6+ months. Tagging v1.0.0 from `main` happens **only** when every
 required box below is ticked. Re-evaluate the evidence before each release;
 unchecked items are real gates, not aspirational release notes.
 
-## Current source evidence (v0.27.1)
+## Current source evidence (v0.28.0)
+
+- v0.28.0 preserves forum/media tag metadata and post tag IDs across channel
+  reads, thread listings and creation results. Tag edits read current state,
+  preserve existing IDs and omitted emoji/moderation fields, require explicit
+  deletion IDs, and verify the changed channel after PATCH. Synthetic REST and
+  MCP protocol tests cover these contracts; they do not establish live Discord
+  post preservation or application emoji compatibility with forum tags.
 
 - v0.27.1 preserves rich message fields and fenced readable card/embed text in
   `messages_get` and `messages_read`. Protocol tests cover schema preservation,

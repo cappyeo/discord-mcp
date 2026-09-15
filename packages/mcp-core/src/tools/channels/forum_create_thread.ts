@@ -3,10 +3,11 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
 import { THREAD_AUTO_ARCHIVE_DURATION } from '../_lib/discord-enums.js';
+import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 
-interface RawForumThread {
+interface RawForumThread extends ChannelTags {
   id: string;
   parent_id?: string | null;
   message?: { id: string };
@@ -27,7 +28,7 @@ export default defineTool({
     '',
     '**Body shape**: requires nested `message` (the initial post). At least one of `message.content`, `message.embeds`, or `message.components` must be present.',
     '',
-    '**Returns**: `{thread_id, parent_id, message_id}`.',
+    '**Returns**: `{thread_id, parent_id, message_id, applied_tags?}`. Post tag IDs are preserved when returned by Discord.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Parent forum/media channel'),
@@ -60,6 +61,7 @@ export default defineTool({
       .describe('Reason recorded in audit log (X-Audit-Log-Reason header)'),
   },
   outputSchema: {
+    applied_tags: ChannelTagOutput.applied_tags,
     thread_id: ChannelId,
     parent_id: ChannelId.nullable(),
     message_id: MessageId.nullable(),
@@ -83,6 +85,7 @@ export default defineTool({
     return dualResult({
       text: `Created forum thread \`${t.id}\` under <#${args.channel_id}>.`,
       data: {
+        ...channelTags(t),
         thread_id: t.id,
         parent_id: t.parent_id ?? null,
         message_id: t.message?.id ?? null,

@@ -2,11 +2,12 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
+import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, UserId } from '../_lib/snowflake.js';
 import { wrapUntrusted } from '../_lib/untrusted.js';
 
-interface RawThread {
+interface RawThread extends ChannelTags {
   id: string;
   name: string;
   type: number;
@@ -32,7 +33,7 @@ export default defineTool({
     '**When NOT to use**:',
     "- Threads the bot didn't join - use `channels_list_private_archived_threads` (requires MANAGE_THREADS).",
     '',
-    '**Returns**: `{threads, has_more, count, channel_id}`. Structured names remain raw Discord data; the human-readable text response fences them.',
+    '**Returns**: `{threads, has_more, count, channel_id}`. Thread entries preserve `applied_tags` if returned by Discord. Structured names remain raw Discord data; the human-readable text response fences them.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Parent channel'),
@@ -45,6 +46,7 @@ export default defineTool({
   outputSchema: {
     threads: z.array(
       z.object({
+        applied_tags: ChannelTagOutput.applied_tags,
         id: ChannelId,
         name: z.string(),
         type: z.number().int(),
@@ -73,6 +75,7 @@ export default defineTool({
       query.size > 0 ? { query } : undefined,
     )) as RawArchivedList;
     const threads = raw.threads.map((t) => ({
+      ...channelTags(t),
       id: t.id,
       name: t.name,
       type: t.type,

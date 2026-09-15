@@ -3,10 +3,11 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
 import { CHANNEL_TYPE_VALUES } from '../_lib/discord-enums.js';
+import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId } from '../_lib/snowflake.js';
 
-interface RawChannel {
+interface RawChannel extends ChannelTags {
   id: string;
   name: string;
   type: number;
@@ -30,7 +31,7 @@ export default defineTool({
     '',
     '**Example**: `{guild_id:"…", name:"announcements", type:5, parent_id:"…"}`',
     '',
-    '**Returns**: `{id, name, type, parent_id}`.',
+    '**Returns**: `{id, name, type, parent_id, available_tags?, applied_tags?}`. Forum/media tags include their Discord-assigned IDs, names, moderation and emoji fields.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Target guild'),
@@ -122,6 +123,7 @@ export default defineTool({
       .describe('Reason recorded in audit log (X-Audit-Log-Reason header)'),
   },
   outputSchema: {
+    ...ChannelTagOutput,
     id: ChannelId,
     name: z.string(),
     type: z.number().int(),
@@ -164,6 +166,7 @@ export default defineTool({
     return dualResult({
       text: `Created channel **#${c.name}** (\`channel:${c.id}\`, type ${c.type}).`,
       data: {
+        ...channelTags(c),
         id: c.id,
         name: c.name,
         type: c.type,
