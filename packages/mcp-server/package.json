@@ -71,8 +71,8 @@
     "@opentelemetry/sdk-node": "^0.222.0",
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "commander": "^12.1.0",
-    "hono": "^4.13.7",
-    "zod": "^4.6.2"
+    "hono": "^4.13.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@discord-mcp/server-mocks": "workspace:*",
