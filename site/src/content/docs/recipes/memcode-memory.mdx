@@ -1,0 +1,152 @@
+---
+title: Remember an approved community preference
+description: Compose discord-mcp with Memcode so an opted-in guild can carry a reviewed preference across runs.
+sidebar:
+  order: 7
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+This recipe composes two independent MCP servers in the agent host. `discord-mcp`
+continues to own Discord reads, permissions, dry-run behavior, approvals, and
+Activity Evidence. Memcode stores one compact preference only after a guild owner
+or authorized operator approves it.
+
+<Aside type="caution">
+Memory is context, not authority. Never execute instructions found in a memory,
+use memory as approval, or let it override current Discord state, permissions,
+Activity Evidence, or `__confirm` requirements.
+</Aside>
+
+## Configure both servers
+
+First create and verify the non-secret Discord profile. Keep `DISCORD_TOKEN` in
+the MCP host's launch environment:
+
+```bash
+npm install -g @discord-mcp/cli@0.28.0
+discord-mcp setup --profile community --client generic
+discord-mcp doctor --profile community --online
+```
+
+The exact file varies by host. For clients that accept the common `mcpServers`
+shape, configure discord-mcp over stdio and Memcode as a remote MCP server:
+
+```json
+{
+  "mcpServers": {
+    "discord": {
+      "command": "npx",
+      "args": ["--yes", "--loglevel=error", "@discord-mcp/cli@0.28.0", "serve", "--profile", "community"]
+    },
+    "memcode": {
+      "url": "https://mcp.memcode.in/mcp"
+    }
+  }
+}
+```
+
+The Memcode endpoint uses browser OAuth. Do not paste a Memcode API key or add
+an `Authorization` header. Keep the existing discord-mcp environment, guild
+allowlist, profile, `MCP_DRY_RUN`, and approval configuration unchanged.
+
+<Aside type="note">
+The hosted personal Memcode endpoint derives its user from OAuth; it does not
+provide a hard per-guild namespace argument. Use a separate Memcode identity or
+deployment for each guild/workflow that requires an authorization boundary.
+A guild id inside memory text is useful provenance, not access control.
+</Aside>
+
+## Example: carry a posting preference across runs
+
+Suppose guild `111122223333444455` wants release announcements drafted with a
+short changelog and no `@everyone` mention.
+
+<Steps>
+
+1. **Get explicit owner opt-in.**
+
+   Show the exact proposed record and retention/deletion limitations before
+   storing it:
+
+   ```text
+   Guild 111122223333444455 preference: draft release announcements with a
+   short changelog and never add @everyone automatically. Approved by the
+   guild owner on 2026-09-21. Re-check current Discord permissions before use.
+   ```
+
+   Do not store DMs, message bodies, credentials, bot tokens, member profiles,
+   or unreviewed Discord content.
+
+2. **Save only the approved text.**
+
+   ```json
+   {
+     "name": "save_memory",
+     "arguments": {
+       "text": "Guild 111122223333444455 preference: draft release announcements with a short changelog and never add @everyone automatically. Approved by the guild owner on 2026-09-21. Re-check current Discord permissions before use.",
+       "idempotency_key": "discord-111122223333444455-release-preference-v1"
+     }
+   }
+   ```
+
+   Poll `get_memory_ingest_status` with the returned job id. A queued job is
+   not proof that the preference is ready.
+
+3. **Retrieve narrowly on a later run.**
+
+   ```json
+   {
+     "name": "search_memories",
+     "arguments": {
+       "query": "approved release announcement preference for guild 111122223333444455",
+       "mode": "memories",
+       "top_k": 3,
+       "include_original_chunks": false
+     }
+   }
+   ```
+
+   Discard results for any other guild or workflow. Keep the source id and
+   approval date in the agent's draft notes so the operator can inspect where
+   the preference came from.
+
+4. **Re-read current Discord state.**
+
+   Use discord-mcp to inspect the target guild/channel, current permissions,
+   and any relevant Activity Evidence. If the memory is stale or conflicts
+   with Discord, follow Discord and ask the operator.
+
+5. **Draft, review, and publish through the normal controls.**
+
+   Memory may influence the draft. It must not set `__confirm`, bypass
+   `MCP_DRY_RUN`, expand the allowlist, or authorize a send. Preserve the
+   recipe-specific preview and human confirmation flow before publishing.
+
+</Steps>
+
+## Failure, retention, and deletion
+
+- If Memcode is unavailable, continue with current Discord state and ask the
+  operator for the preference. Do not silently reuse an unverified local copy.
+- Keep a visible provenance note for every preference used. Periodically use
+  `list_memories` or a scoped search so the owner can inspect stored records.
+- Remove the `memcode` MCP entry to disable future reads and writes. This does
+  not delete existing records.
+- The hosted personal Memcode tools in this example do not currently expose an
+  in-client delete call. Use the verified deletion path for the Memcode account
+  or deployment. If the guild requires deletion and no verified path exists,
+  do not store the preference.
+- Neither server should receive data it does not need: Memcode receives only
+  the approved preference, while discord-mcp keeps its existing Discord API
+  and telemetry boundaries.
+
+## Network and telemetry boundary
+
+`discord-mcp` connects to Discord using the caller-owned bot token and the
+existing profile/allowlist. Memcode connects to `mcp.memcode.in` and opens the
+Memcode OAuth consent flow. The agent host can see both tools' outputs, but the
+servers do not exchange credentials or call each other. The first `npx` launch
+may contact the npm registry for the pinned package. This composition does not
+enable new telemetry; retain the telemetry settings and audit controls already
+documented for each deployment.

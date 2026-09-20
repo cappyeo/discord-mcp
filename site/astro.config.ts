@@ -66,6 +66,7 @@ export default defineConfig({
                 'recipes/intelligence-summarize',
                 'recipes/webhook-execute',
                 'recipes/gateway-subscribe',
+                'recipes/memcode-memory',
               ],
             },
             { label: 'Live demo', slug: 'showcase/live-gaming-server' },
