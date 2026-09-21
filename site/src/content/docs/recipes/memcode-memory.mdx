@@ -49,12 +49,27 @@ shape, configure discord-mcp over stdio and Memcode as a remote MCP server:
 The Memcode endpoint uses browser OAuth. Do not paste a Memcode API key or add
 an `Authorization` header. Keep the existing discord-mcp environment, guild
 allowlist, profile, `MCP_DRY_RUN`, and approval configuration unchanged.
+See Memcode's official [hosted endpoint and OAuth setup](https://memcode.in/docs?product=mcp#mcp-remote-oauth)
+and [tool reference](https://memcode.in/docs?product=mcp#mcp-tools). The schemas
+returned by `tools/list` from the configured endpoint are authoritative for the
+deployed server.
 
 <Aside type="note">
 The hosted personal Memcode endpoint derives its user from OAuth; it does not
 provide a hard per-guild namespace argument. Use a separate Memcode identity or
 deployment for each guild/workflow that requires an authorization boundary.
 A guild id inside memory text is useful provenance, not access control.
+</Aside>
+
+<Aside type="caution">
+These servers have independent write boundaries. `MCP_DRY_RUN`, `__confirm`,
+and the guild allowlist constrain discord-mcp operations only; they do not
+preview, approve, or block a call to the separate Memcode server. Before every
+`save_memory` call, the host or operator must independently approve both the
+exact payload and the remote destination
+`https://mcp.memcode.in/i/discord-mcp/mcp`. The rules in this recipe are agent
+instructions, not controls enforced by either server, and Discord dry-run mode
+must never be described as a dry run of the memory write.
 </Aside>
 
 ## Example: carry a posting preference across runs
@@ -67,7 +82,15 @@ short changelog and no `@everyone` mention.
 1. **Get explicit owner opt-in.**
 
    Show the exact proposed record and retention/deletion limitations before
-   storing it:
+   storing it. Memcode documents its general
+   [memory lifecycle](https://memcode.in/docs?product=memory#memory-lifecycle),
+   but, as verified on 2026-09-21, the hosted personal tools publish neither a
+   fixed retention duration nor a self-service deletion procedure. Setting
+   `forget: true` only applies the account's configured expiration policy; it
+   is not a deletion guarantee. Removing the MCP configuration also does not
+   delete stored data. If a guaranteed expiry or deletion path is required, do
+   not write the record. [Contact the provider](https://memcode.in/contact) and
+   obtain a confirmed procedure before storing it:
 
    ```text
    Guild 111122223333444455 preference: draft release announcements with a
@@ -91,7 +114,11 @@ short changelog and no `@everyone` mention.
    ```
 
    Poll `get_memory_ingest_status` with the returned job id. A queued job is
-   not proof that the preference is ready.
+   not proof that the preference is ready. Treat only `succeeded`, `ready`, or
+   `partial` as usable completion states. On `failed` or `cancelled`, do not
+   search for or use the record; surface the returned error to the operator. If
+   polling times out, retain the job id and resume polling later. Do not issue a
+   replacement write unless it reuses the same `idempotency_key`.
 
 3. **Retrieve narrowly on a later run.**
 
@@ -125,6 +152,46 @@ short changelog and no `@everyone` mention.
 
 </Steps>
 
+## Reproducible verification
+
+The configuration shape above was checked with **Claude Code 2.1.236** on
+macOS: it accepted the discord-mcp stdio entry alongside the remote Memcode
+entry, completed Memcode's browser OAuth flow, and reported the remote server
+as connected. The Discord server was not invoked during the memory sequence
+because no Discord bot token was supplied. The MCP sequence itself was replayed
+with the MCP Python SDK 1.29.0 using synthetic data only. The first run created
+the record through the canonical hosted resource. On 2026-09-21, the exact
+attributed endpoint in this recipe initialized successfully and replayed the
+same sequence with the same idempotency key; `save_memory` returned
+`status=succeeded` and `created=false`, and search returned the same record.
+
+Redacted output from `save_memory` → `get_memory_ingest_status` →
+`search_memories`:
+
+```text
+save_memory:
+  job_id=memory_free_ingest:...70971
+  status=queued
+  created=true
+
+get_memory_ingest_status:
+  job_id=memory_free_ingest:...70971
+  status=succeeded
+  progress.step=weaving
+  parent_job_id=memory_free_batch:...1d11
+
+search_memories:
+  summary="User prefers cobalt tea; this was identified as synthetic test data only."
+  summary_score=0.58
+  original_chunk="Synthetic Discord MCP documentation verification 2026-09-21: the example user prefers cobalt tea. This is synthetic test data only."
+  original_score=0.69
+```
+
+Scores are run-dependent; verify the returned text, job id, and terminal status
+rather than expecting those exact numbers. The test used idempotency key
+`discord-mcp-docs-verification-20260921-cobalt-tea`; replaying the same write
+returned `created=false` and did not create a duplicate record.
+
 ## Failure, retention, and deletion
 
 - If Memcode is unavailable, continue with current Discord state and ask the
@@ -134,9 +201,11 @@ short changelog and no `@everyone` mention.
 - Remove the `memcode` MCP entry to disable future reads and writes. This does
   not delete existing records.
 - The hosted personal Memcode tools in this example do not currently expose an
-  in-client delete call. Use the verified deletion path for the Memcode account
-  or deployment. If the guild requires deletion and no verified path exists,
-  do not store the preference.
+  in-client delete call. No fixed hosted retention guarantee or verified
+  self-service deletion procedure was published as of 2026-09-21. If the guild
+  requires guaranteed expiry or deletion, do not store the preference;
+  [contact the provider](https://memcode.in/contact) first and obtain a
+  confirmed procedure for that account or deployment.
 - Neither server should receive data it does not need: Memcode receives only
   the approved preference, while discord-mcp keeps its existing Discord API
   and telemetry boundaries.
@@ -147,6 +216,7 @@ short changelog and no `@everyone` mention.
 existing profile/allowlist. Memcode connects to `mcp.memcode.in` and opens the
 Memcode OAuth consent flow. The agent host can see both tools' outputs, but the
 servers do not exchange credentials or call each other. The first `npx` launch
-may contact the npm registry for the pinned package. This composition does not
-enable new telemetry; retain the telemetry settings and audit controls already
-documented for each deployment.
+may contact the npm registry for the pinned package. This recipe does not
+change discord-mcp's own telemetry settings or behavior. It makes no claim
+about Memcode's provider-side logging or telemetry; review the provider's
+current documentation and terms before any write.
