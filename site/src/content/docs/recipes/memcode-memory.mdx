@@ -113,12 +113,13 @@ short changelog and no `@everyone` mention.
    }
    ```
 
-   Poll `get_memory_ingest_status` with the returned job id. A queued job is
-   not proof that the preference is ready. Treat only `succeeded`, `ready`, or
-   `partial` as usable completion states. On `failed` or `cancelled`, do not
-   search for or use the record; surface the returned error to the operator. If
-   polling times out, retain the job id and resume polling later. Do not issue a
-   replacement write unless it reuses the same `idempotency_key`.
+   Poll `get_memory_ingest_status` with the returned job id. Use the record only
+   after the provider reports a documented successful terminal state. Do not
+   treat `queued`, `partial`, or any undocumented state as usable. On `failed`
+   or `cancelled`, do not search for or use the record; surface the returned error
+   to the operator. If polling times out, retain the job id and resume polling
+   later. Do not issue a replacement write unless it reuses the same
+   `idempotency_key`.
 
 3. **Retrieve narrowly on a later run.**
 
@@ -213,8 +214,9 @@ returned `created=false` and did not create a duplicate record.
 ## Network and telemetry boundary
 
 `discord-mcp` connects to Discord using the caller-owned bot token and the
-existing profile/allowlist. Memcode connects to `mcp.memcode.in` and opens the
-Memcode OAuth consent flow. The agent host can see both tools' outputs, but the
+existing profile/allowlist. Memcode connects to
+`https://mcp.memcode.in/i/discord-mcp/mcp` and opens the Memcode OAuth consent
+flow. The agent host can see both tools' outputs, but the
 servers do not exchange credentials or call each other. The first `npx` launch
 may contact the npm registry for the pinned package. This recipe does not
 change discord-mcp's own telemetry settings or behavior. It makes no claim
