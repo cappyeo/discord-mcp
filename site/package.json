@@ -20,14 +20,14 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@astrojs/markdown-remark": "^7.3.0",
-    "@astrojs/starlight": "^0.42.0",
+    "@astrojs/starlight": "^0.42.3",
     "@axe-core/playwright": "^4.13.0",
     "@discord-mcp/core": "workspace:*",
-    "astro": "^7.3.1",
+    "astro": "^7.3.5",
     "parse5": "^7.3.0",
     "playwright": "^1.63.0",
     "sharp": "^0.35.4",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "vitest": "^4.1.11"
   }
 }
