@@ -1,4 +1,4 @@
-import { metrics } from '@opentelemetry/api';
+import { type Meter, metrics } from '@opentelemetry/api';
 import {
   ATTR_CACHE_OUTCOME,
   ATTR_DISCOVERY_CONTRACT_MODE,
@@ -21,6 +21,28 @@ interface ProgressiveDiscoveryResponse {
 
 type CacheOutcome = 'hit' | 'miss';
 type CacheStatus = 'ok' | 'error';
+
+interface PerformanceInstruments {
+  readonly discoverySearches: ReturnType<Meter['createCounter']>;
+  readonly discoveryResponseBytes: ReturnType<Meter['createHistogram']>;
+  readonly cacheLookups: ReturnType<Meter['createCounter']>;
+  readonly cacheDuration: ReturnType<Meter['createHistogram']>;
+}
+
+const instrumentsByMeter = new WeakMap<Meter, PerformanceInstruments>();
+
+function getInstruments(meter: Meter): PerformanceInstruments {
+  const existing = instrumentsByMeter.get(meter);
+  if (existing !== undefined) return existing;
+  const instruments = {
+    discoverySearches: meter.createCounter(METRIC_DISCOVERY_SEARCHES),
+    discoveryResponseBytes: meter.createHistogram(METRIC_DISCOVERY_RESPONSE_BYTES, { unit: 'By' }),
+    cacheLookups: meter.createCounter(METRIC_CHANNEL_GUILD_CACHE_LOOKUPS),
+    cacheDuration: meter.createHistogram(METRIC_CHANNEL_GUILD_CACHE_DURATION, { unit: 'ms' }),
+  };
+  instrumentsByMeter.set(meter, instruments);
+  return instruments;
+}
 
 function matchBucket(total: number): '0' | '1' | '2-4' | '5-8' | '9+' {
   if (total === 0) return '0';
@@ -49,14 +71,14 @@ export function recordProgressiveDiscoveryEvidence(response: ProgressiveDiscover
       [ATTR_DISCOVERY_CONTRACT_MODE]: contractMode(response.matches),
       [ATTR_DISCOVERY_MATCH_BUCKET]: matchBucket(response.total_matches),
     };
-    const meter = metrics.getMeter(
-      TELEMETRY_INSTRUMENTATION_NAME,
-      TELEMETRY_INSTRUMENTATION_VERSION,
+    const instruments = getInstruments(
+      metrics.getMeter(TELEMETRY_INSTRUMENTATION_NAME, TELEMETRY_INSTRUMENTATION_VERSION),
     );
-    meter.createCounter(METRIC_DISCOVERY_SEARCHES).add(1, attributes);
-    meter
-      .createHistogram(METRIC_DISCOVERY_RESPONSE_BYTES, { unit: 'By' })
-      .record(Buffer.byteLength(JSON.stringify(response)), attributes);
+    instruments.discoverySearches.add(1, attributes);
+    instruments.discoveryResponseBytes.record(
+      Buffer.byteLength(JSON.stringify(response)),
+      attributes,
+    );
   } catch {
     // Telemetry is strictly observational and must never affect an MCP response.
   }
@@ -73,14 +95,11 @@ export function recordChannelGuildCacheLookup(
       [ATTR_CACHE_OUTCOME]: outcome,
       [ATTR_MCP_TOOL_STATUS]: status,
     };
-    const meter = metrics.getMeter(
-      TELEMETRY_INSTRUMENTATION_NAME,
-      TELEMETRY_INSTRUMENTATION_VERSION,
+    const instruments = getInstruments(
+      metrics.getMeter(TELEMETRY_INSTRUMENTATION_NAME, TELEMETRY_INSTRUMENTATION_VERSION),
     );
-    meter.createCounter(METRIC_CHANNEL_GUILD_CACHE_LOOKUPS).add(1, attributes);
-    meter
-      .createHistogram(METRIC_CHANNEL_GUILD_CACHE_DURATION, { unit: 'ms' })
-      .record(Math.max(0, durationMs), attributes);
+    instruments.cacheLookups.add(1, attributes);
+    instruments.cacheDuration.record(Math.max(0, durationMs), attributes);
   } catch {
     // Telemetry is strictly observational and must never affect authorization.
   }

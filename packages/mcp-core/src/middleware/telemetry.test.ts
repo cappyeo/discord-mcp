@@ -198,6 +198,54 @@ describe('telemetryMiddleware', () => {
     expect(redactedJson).toContain('"channel_id":"111"');
   });
 
+  it('does not inspect args when the span is non-recording', async () => {
+    trace.disable();
+    const args = Object.defineProperty({}, 'content', {
+      get: () => {
+        throw new Error('non-recording spans must skip redaction');
+      },
+      enumerable: true,
+    });
+    const mw = telemetryMiddleware();
+
+    await expect(
+      mw.onCallTool!({ ...makeCtx(), args }, async () => ({ isError: false, content: [] })),
+    ).resolves.toMatchObject({ isError: false });
+    await metricReader.forceFlush();
+    const all = metricExporter
+      .getMetrics()
+      .flatMap((resource) => resource.scopeMetrics.flatMap((scope) => scope.metrics));
+    const calls = all.find((metric) => metric.descriptor.name === 'mcp.tool.calls');
+    expect(calls?.dataPoints[0]?.value).toBe(1);
+  });
+
+  it('keeps metrics live when a middleware instance outlives a provider replacement', async () => {
+    const mw = telemetryMiddleware();
+    await mw.onCallTool!(makeCtx(), async () => ({ isError: false, content: [] }));
+    metrics.disable();
+    await mw.onCallTool!(makeCtx(), async () => ({ isError: false, content: [] }));
+
+    const replacementExporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE);
+    const replacementReader = new PeriodicExportingMetricReader({
+      exporter: replacementExporter,
+      exportIntervalMillis: 60_000,
+    });
+    const replacementProvider = new MeterProvider({ readers: [replacementReader] });
+    metrics.setGlobalMeterProvider(replacementProvider);
+    try {
+      await mw.onCallTool!(makeCtx(), async () => ({ isError: false, content: [] }));
+      await replacementReader.forceFlush();
+      const all = replacementExporter
+        .getMetrics()
+        .flatMap((resource) => resource.scopeMetrics.flatMap((scope) => scope.metrics));
+      const calls = all.find((metric) => metric.descriptor.name === 'mcp.tool.calls');
+      expect(calls?.dataPoints[0]?.value).toBe(1);
+    } finally {
+      metrics.disable();
+      await replacementProvider.shutdown();
+    }
+  });
+
   it('does NOT include mcp.request_id as a metric label (cardinality guard)', async () => {
     // Even when the middleware is called from a request context that
     // would set request_id on the span, the metric labels must not

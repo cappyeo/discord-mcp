@@ -579,7 +579,7 @@ export async function recommendTemplates(
   args: { readonly request: string; readonly preferred_primary_code?: string | undefined },
   signal: AbortSignal,
 ) {
-  const catalog = getBundledTemplateCatalog();
+  const catalog = await getBundledTemplateCatalog();
   const retrieval = retrieveMetadataCandidates(catalog.snapshot.records, args.request, {
     limit: METADATA_CANDIDATE_LIMIT + 1,
   });

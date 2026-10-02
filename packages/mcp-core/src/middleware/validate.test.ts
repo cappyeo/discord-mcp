@@ -65,4 +65,44 @@ describe('validateMiddleware', () => {
       expect(paths).toContain('content');
     }
   });
+
+  it('validates fresh input on repeated calls and preserves defaults and stripping', async () => {
+    const piece = {
+      inputSchema: { content: z.string().min(1), tts: z.boolean().default(false) },
+    };
+    const dispatch = compose([validateMiddleware()], async (c) => c.args);
+    const base = {
+      tool: { name: 'messages_send', category: 'messages', idempotent: false },
+      meta: new Map<string, unknown>([['toolPiece', piece]]),
+    };
+    const args = { content: 'first', extra: 'strip me' };
+    await expect(dispatch({ ...base, args })).resolves.toEqual({ content: 'first', tts: false });
+    expect(args).toEqual({ content: 'first', extra: 'strip me' });
+    await expect(dispatch({ ...base, args: { content: 'second', tts: true } })).resolves.toEqual({
+      content: 'second',
+      tts: true,
+    });
+    await expect(dispatch({ ...base, args: { content: '' } })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('uses each tool shape even when tool names match or the shape is replaced', async () => {
+    const piece = { inputSchema: { value: z.string() } as Record<string, z.ZodTypeAny> };
+    const middlewareCtx = {
+      tool: { name: 'same_name', category: 'test', idempotent: true },
+      args: { value: 'text' } as unknown,
+      meta: new Map<string, unknown>([['toolPiece', piece]]),
+    };
+    const dispatch = compose([validateMiddleware()], async (c) => c.args);
+    await expect(dispatch(middlewareCtx)).resolves.toEqual({ value: 'text' });
+    piece.inputSchema = { value: z.number() };
+    middlewareCtx.args = { value: 'text' };
+    await expect(dispatch(middlewareCtx)).rejects.toBeInstanceOf(ValidationError);
+    middlewareCtx.args = { value: 2 };
+    await expect(dispatch(middlewareCtx)).resolves.toEqual({ value: 2 });
+    middlewareCtx.meta.set('toolPiece', { inputSchema: { value: z.boolean() } });
+    middlewareCtx.args = { value: 2 };
+    await expect(dispatch(middlewareCtx)).rejects.toBeInstanceOf(ValidationError);
+  });
 });

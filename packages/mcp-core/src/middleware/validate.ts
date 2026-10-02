@@ -6,6 +6,9 @@ interface SchemaCarrier {
   readonly inputSchema: Record<string, z.ZodTypeAny>;
 }
 
+// Tool shapes are process-scoped and immutable; parsed caller input is never cached.
+const schemas = new WeakMap<SchemaCarrier['inputSchema'], z.ZodObject>();
+
 export function validateMiddleware(): ToolMiddleware {
   return {
     async onCallTool(ctx, next) {
@@ -13,7 +16,11 @@ export function validateMiddleware(): ToolMiddleware {
       if (piece === undefined) {
         return next();
       }
-      const schema = z.object(piece.inputSchema);
+      let schema = schemas.get(piece.inputSchema);
+      if (schema === undefined) {
+        schema = z.object(piece.inputSchema);
+        schemas.set(piece.inputSchema, schema);
+      }
       const parsed = schema.safeParse(ctx.args);
       if (!parsed.success) {
         throw new ValidationError(

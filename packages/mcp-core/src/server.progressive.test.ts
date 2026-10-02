@@ -241,6 +241,7 @@ describe('progressive tool surface', () => {
       }),
       annotations: expect.objectContaining({ openWorldHint: true }),
     });
+    expect(result.structuredContent).not.toHaveProperty('categories');
 
     const exact = await progressiveClient.callTool({
       name: 'mcp_tools_search',
@@ -261,6 +262,7 @@ describe('progressive tool surface', () => {
       }),
       annotations: expect.objectContaining({ openWorldHint: true }),
     });
+    expect(exact.structuredContent).not.toHaveProperty('categories');
 
     const permission = await progressiveClient.callTool({
       name: 'mcp_tools_search',
@@ -380,6 +382,9 @@ describe('progressive tool surface', () => {
     expect(exact.isError).toBe(false);
     expect(compact.structuredContent).toMatchObject({ detail: 'compact' });
     expect(full.structuredContent).toMatchObject({ detail: 'full' });
+    expect(compact.structuredContent).not.toHaveProperty('categories');
+    expect(full.structuredContent).not.toHaveProperty('categories');
+    expect(exact.structuredContent).not.toHaveProperty('categories');
     const compactBytes = Buffer.byteLength(JSON.stringify(compact.structuredContent));
     const fullBytes = Buffer.byteLength(JSON.stringify(full.structuredContent));
     expect(compactBytes).toBeLessThan(fullBytes * 0.2);
@@ -421,7 +426,6 @@ describe('progressive tool surface', () => {
           dispatcher: 'mcp_tools_read',
         }),
       ]),
-      categories: expect.arrayContaining([{ name: 'templates', tool_count: 9 }]),
     });
 
     const read = await progressiveClient.callTool({
@@ -446,7 +450,6 @@ describe('progressive tool surface', () => {
           dispatcher: 'mcp_tools_read',
         }),
       ]),
-      categories: expect.arrayContaining([{ name: 'guild', tool_count: 23 }]),
     });
 
     const read = await progressiveClient.callTool({
@@ -471,7 +474,6 @@ describe('progressive tool surface', () => {
           dispatcher: 'mcp_tools_read',
         }),
       ]),
-      categories: expect.arrayContaining([{ name: 'guild', tool_count: 23 }]),
     });
 
     const read = await progressiveClient.callTool({

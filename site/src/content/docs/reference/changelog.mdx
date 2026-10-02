@@ -9,6 +9,22 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.31.1 - Faster discovery and lower startup overhead
+
+Released 2026-10-03.
+
+- Reduced repeated input validation and tool discovery work by reusing compiled
+  schemas and normalized tool metadata.
+- Deferred the bundled public template catalog until a recommendation is
+  requested, with validated concurrent loading and retry after a failed load.
+- Search responses include the category list when browsing categories. Query
+  and category-filtered searches omit that repeated list; exact and full
+  searches continue to include complete tool contracts.
+- Reduced telemetry work for traces that are not recorded while retaining
+  metrics across provider replacement.
+- Added runtime and clean-package checks for the first template recommendation,
+  plus reproducible local startup and discovery payload probes.
+
 ## v0.31.0 - Guild changes, sourced context, workflows, and rich messages
 
 Released 2026-10-01.

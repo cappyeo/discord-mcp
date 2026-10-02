@@ -277,6 +277,14 @@ try {
     MCP_AUDIT_ENABLED: 'false',
     OTEL_ENABLED: 'false',
   });
+  run(
+    process.execPath,
+    [
+      join(repoRoot, 'packages/mcp-server/test-fixtures/template-catalog-package-probe.mjs'),
+      installRoot,
+    ],
+    { cwd: installRoot, env: commonEnvironment },
+  );
   const cliCommand = usesCommandShim ? process.execPath : cliBin;
   const cliArguments = usesCommandShim ? [cliEntry] : [];
   const runCli = (args, options = {}) =>

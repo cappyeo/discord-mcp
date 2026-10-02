@@ -2,6 +2,7 @@ import {
   type Counter,
   context,
   type Histogram,
+  type Meter,
   metrics,
   SpanKind,
   SpanStatusCode,
@@ -39,18 +40,29 @@ function lookupTracerAndMeter(): {
   // OTEL_ENABLED is false.
   const tracer = trace.getTracer(TELEMETRY_INSTRUMENTATION_NAME, TELEMETRY_INSTRUMENTATION_VERSION);
   const meter = metrics.getMeter(TELEMETRY_INSTRUMENTATION_NAME, TELEMETRY_INSTRUMENTATION_VERSION);
-  const duration = meter.createHistogram(METRIC_TOOL_DURATION, {
-    description: 'Wall-clock duration of MCP tool calls in milliseconds',
-    unit: 'ms',
-  });
-  const calls = meter.createCounter(METRIC_TOOL_CALLS, {
-    description: 'Total MCP tool calls, labelled by status (ok | error | tool_error)',
-  });
-  const errors = meter.createCounter(METRIC_TOOL_ERRORS, {
-    description: 'MCP tool calls that ended in error, labelled by status',
-  });
-  return { tracer, duration, calls, errors };
+  let instruments = instrumentsByMeter.get(meter);
+  if (instruments === undefined) {
+    instruments = {
+      duration: meter.createHistogram(METRIC_TOOL_DURATION, {
+        description: 'Wall-clock duration of MCP tool calls in milliseconds',
+        unit: 'ms',
+      }),
+      calls: meter.createCounter(METRIC_TOOL_CALLS, {
+        description: 'Total MCP tool calls, labelled by status (ok | error | tool_error)',
+      }),
+      errors: meter.createCounter(METRIC_TOOL_ERRORS, {
+        description: 'MCP tool calls that ended in error, labelled by status',
+      }),
+    };
+    instrumentsByMeter.set(meter, instruments);
+  }
+  return { tracer, ...instruments };
 }
+
+const instrumentsByMeter = new WeakMap<
+  Meter,
+  Omit<ReturnType<typeof lookupTracerAndMeter>, 'tracer'>
+>();
 
 /**
  * Outermost middleware: wraps every CallToolRequest in an OpenTelemetry
@@ -106,9 +118,11 @@ export function telemetryMiddleware(): ToolMiddleware {
       // redactArgs(args, toolName) - it applies the per-tool sensitive
       // key map + global keys + length truncation. Span redaction
       // happens at the middleware boundary; tools never see telemetry.
-      span.addEvent('mcp.tool.args', {
-        'mcp.args.redacted': JSON.stringify(redactArgs(ctx.args, ctx.tool.name)),
-      });
+      if (span.isRecording()) {
+        span.addEvent('mcp.tool.args', {
+          'mcp.args.redacted': JSON.stringify(redactArgs(ctx.args, ctx.tool.name)),
+        });
+      }
 
       const start = performance.now();
       const otelCtx = trace.setSpan(context.active(), span);

@@ -141,7 +141,7 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
             },
           },
         },
-        required: ['query', 'category', 'detail', 'total_matches', 'matches', 'categories'],
+        required: ['query', 'category', 'detail', 'total_matches', 'matches'],
       },
       ERROR_ENVELOPE_SCHEMA,
     ],
@@ -224,9 +224,24 @@ interface SearchableTool {
   tool: McpTool;
   category: string;
   normalizedName: string;
+  normalizedNameTerms: readonly string[];
   normalizedCategory: string;
   normalizedDescription: string;
+  summary: string;
 }
+
+interface CachedToolMetadata {
+  name: string;
+  description: string;
+  category: string;
+  normalizedName: string;
+  normalizedNameTerms: readonly string[];
+  normalizedCategory: string;
+  normalizedDescription: string;
+  summary: string;
+}
+
+const cachedToolMetadata = new WeakMap<McpTool, CachedToolMetadata>();
 
 const SERVER_ARCHITECTURE_SIGNALS = new Set([
   'automod',
@@ -254,22 +269,16 @@ const SCOPED_RESOURCE_TOOL_HINTS = [
   { pattern: /\b(?:role|roles|vai tro)\b/, toolName: 'roles_create' },
 ] as const;
 
-function scopedResourceToolBoost(tool: SearchableTool, query: string): number {
-  if (!SCOPED_RESOURCE_INTENT.test(query)) return 0;
-  return SCOPED_RESOURCE_TOOL_HINTS.some(
-    ({ pattern, toolName }) => pattern.test(query) && tool.tool.name === toolName,
-  )
-    ? 220
-    : 0;
-}
-
-function isServerArchitectureIntent(query: string, terms: readonly string[]): boolean {
-  const termSet = new Set(terms);
+function isServerArchitectureIntent(
+  query: string,
+  termSet: ReadonlySet<string>,
+  scopedResourceIntent: boolean,
+): boolean {
   const hasScope = ['server', 'community', 'guild'].some((term) => termSet.has(term));
   if (!hasScope) return false;
   // Keep a resource-level request inside an existing guild on its narrow tool.
   // "Create a gaming event in my server" is not permission to redesign the server.
-  if (SCOPED_RESOURCE_INTENT.test(query)) return false;
+  if (scopedResourceIntent) return false;
   const hasStrongVerb =
     ['architect', 'build', 'design', 'dung', 'make', 'redesign', 'setup', 'tao'].some((term) =>
       termSet.has(term),
@@ -288,25 +297,26 @@ export interface ProgressiveToolCatalog {
   byName: ReadonlyMap<string, McpTool>;
 }
 
-function scoreTool(tool: SearchableTool, query: string, terms: readonly string[]): number {
+interface SearchQuery {
+  query: string;
+  terms: readonly string[];
+  scopedResourceToolNames: ReadonlySet<string>;
+  hasCreateIntent: boolean;
+  serverArchitectureIntent: boolean;
+}
+
+function scoreTool(tool: SearchableTool, search: SearchQuery): number {
+  const { query, terms } = search;
   if (query === '') return 1;
 
   let score = 0;
-  const termSet = new Set(terms);
 
   if (tool.normalizedName === query) score += 200;
-  if (tool.tool.name === 'guild_blueprint_plan' && isServerArchitectureIntent(query, terms)) {
+  if (tool.tool.name === 'guild_blueprint_plan' && search.serverArchitectureIntent) {
     score += 300;
   }
-  score += scopedResourceToolBoost(tool, query);
-  const hasDeleteIntent = ['cancel', 'delete', 'remove'].some((term) => termSet.has(term));
-  const hasCreateIntent =
-    !hasDeleteIntent &&
-    (query.includes('set up') ||
-      ['add', 'build', 'create', 'dung', 'make', 'schedule', 'setup', 'tao'].some((term) =>
-        termSet.has(term),
-      ));
-  if (hasCreateIntent && tool.normalizedName.split(' ').includes('create')) score += 60;
+  if (search.scopedResourceToolNames.has(tool.tool.name)) score += 220;
+  if (search.hasCreateIntent && tool.normalizedNameTerms.includes('create')) score += 60;
   if (tool.normalizedName.startsWith(query)) score += 80;
   if (tool.normalizedCategory === query) score += 40;
   let descriptionMatches = 0;
@@ -367,12 +377,35 @@ export function createProgressiveToolCatalog(
     .filter((tool) => tool.name !== 'mcp_pipeline' && tool.name !== PROGRESSIVE_SEARCH_TOOL_NAME)
     .map((tool) => {
       const category = categoriesByName.get(tool.name) ?? 'unknown';
+      const description = tool.description ?? '';
+      let metadata = cachedToolMetadata.get(tool);
+      if (
+        metadata === undefined ||
+        metadata.name !== tool.name ||
+        metadata.description !== description ||
+        metadata.category !== category
+      ) {
+        const normalizedName = normalize(tool.name);
+        metadata = {
+          name: tool.name,
+          description,
+          category,
+          normalizedName,
+          normalizedNameTerms: normalizedName.split(' '),
+          normalizedCategory: normalize(category),
+          normalizedDescription: normalize(description),
+          summary: compactSummary(description),
+        };
+        cachedToolMetadata.set(tool, metadata);
+      }
       return {
         tool,
         category,
-        normalizedName: normalize(tool.name),
-        normalizedCategory: normalize(category),
-        normalizedDescription: normalize(tool.description ?? ''),
+        normalizedName: metadata.normalizedName,
+        normalizedNameTerms: metadata.normalizedNameTerms,
+        normalizedCategory: metadata.normalizedCategory,
+        normalizedDescription: metadata.normalizedDescription,
+        summary: metadata.summary,
       };
     });
 
@@ -416,6 +449,7 @@ export function searchProgressiveTools(
     parsed.data.category === undefined ? undefined : normalizeCategory(parsed.data.category);
 
   const shouldListMatches = query !== '' || categoryFilter !== undefined;
+  const isCategoryBrowse = query === '' && categoryFilter === undefined;
   const exact = query === '' ? undefined : catalog.byExactQuery.get(query);
   const exactInScope =
     exact !== undefined && (categoryFilter === undefined || exact.category === categoryFilter)
@@ -424,6 +458,29 @@ export function searchProgressiveTools(
   const terms = [
     ...new Set(query.split(' ').filter((term) => term !== '' && !SEARCH_STOP_WORDS.has(term))),
   ];
+  const termSet = new Set(terms);
+  const scopedResourceIntent = SCOPED_RESOURCE_INTENT.test(query);
+  const scopedResourceToolNames = new Set(
+    scopedResourceIntent
+      ? SCOPED_RESOURCE_TOOL_HINTS.filter(({ pattern }) => pattern.test(query)).map(
+          ({ toolName }) => toolName,
+        )
+      : [],
+  );
+  const hasDeleteIntent = ['cancel', 'delete', 'remove'].some((term) => termSet.has(term));
+  const hasCreateIntent =
+    !hasDeleteIntent &&
+    (query.includes('set up') ||
+      ['add', 'build', 'create', 'dung', 'make', 'schedule', 'setup', 'tao'].some((term) =>
+        termSet.has(term),
+      ));
+  const search: SearchQuery = {
+    query,
+    terms,
+    scopedResourceToolNames,
+    hasCreateIntent,
+    serverArchitectureIntent: isServerArchitectureIntent(query, termSet, scopedResourceIntent),
+  };
   const candidates =
     categoryFilter === undefined
       ? catalog.searchable
@@ -433,7 +490,7 @@ export function searchProgressiveTools(
     : exactInScope !== undefined
       ? [{ entry: exactInScope, score: 200 }]
       : candidates
-          .map((entry) => ({ entry, score: scoreTool(entry, query, terms) }))
+          .map((entry) => ({ entry, score: scoreTool(entry, search) }))
           .filter(({ score }) => score > 0)
           .sort(
             (left, right) =>
@@ -449,7 +506,7 @@ export function searchProgressiveTools(
       name: tool.name,
       category,
       dispatcher: dispatcherFor(tool),
-      summary: compactSummary(tool.description),
+      summary: entry.summary,
       ...(includeContract
         ? {
             description: tool.description ?? '',
@@ -466,7 +523,7 @@ export function searchProgressiveTools(
     detail: parsed.data.detail,
     total_matches: ranked.length,
     matches,
-    categories: catalog.categories,
+    ...(isCategoryBrowse ? { categories: catalog.categories } : {}),
   };
   recordProgressiveDiscoveryEvidence(structuredContent);
 

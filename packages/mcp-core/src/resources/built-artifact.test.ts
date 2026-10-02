@@ -2,8 +2,8 @@
  * Exercise the BUILT artifact, not the source tree.
  *
  * Every other test in this package imports from `src/`, where a path computed
- * from `import.meta.url` resolves correctly. The published package is a single
- * bundled `dist/index.js` with `files: ["dist"]`, so anything read from disk at
+ * from `import.meta.url` resolves correctly. The published package ships its
+ * entrypoint and lazy chunks with `files: ["dist"]`, so anything read from disk at
  * runtime relative to the module has a different - usually nonexistent - path
  * there.
  *
@@ -15,10 +15,13 @@
  * `components_v2_send_from_template` failed for every template - for every
  * consumer - while all 1000+ tests passed.
  *
- * `vitest.global-setup.ts` guarantees `dist/` exists before this runs.
+ * Build the core package before running this suite.
  */
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { REST } from '@discordjs/rest';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { describe, expect, it } from 'vitest';
 
 const DIST = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
@@ -74,15 +77,48 @@ describe('built artifact', () => {
     }
   });
 
-  it('inlines the bundled template catalog into the package artifact', async () => {
-    // The catalog is imported by templates_recommend and the published package
-    // ships only dist/. Keep these checks on the built file so a source-only
-    // catalog test cannot pass when the JSON is accidentally left outside the
-    // package artifact or omitted by the bundler.
+  it('loads the packaged template catalog lazily on first use', async () => {
     const { readFileSync } = await import('node:fs');
     const bundle = readFileSync(DIST, 'utf8');
-    expect(bundle).toContain('d48cec3acf16c56138b7c303d711717aabc11b0e5813865b8926c2d6952212fe');
-    expect(bundle).toContain('WNSCpfHWnqXr');
+    expect(bundle).not.toContain('WNSCpfHWnqXr');
+    const { buildServer, createLogger, loadConfig } =
+      (await importDist()) as typeof import('../index.js');
+    const config = loadConfig({
+      DISCORD_TOKEN: `Bot ${'a'.repeat(60)}`,
+      LOG_LEVEL: 'fatal',
+      MCP_AUDIT_ENABLED: 'false',
+      MCP_TOOL_SURFACE: 'progressive',
+      MCP_CATEGORIES: 'templates',
+    });
+    let restRequests = 0;
+    const rest = new REST({
+      version: '10',
+      makeRequest: async () => {
+        restRequests += 1;
+        throw new Error('built catalog check must not contact Discord');
+      },
+    }).setToken('fake-token');
+    const built = await buildServer({ rest, logger: createLogger(config), config });
+    const client = new Client({ name: 'built-catalog-test', version: '0.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    try {
+      await Promise.all([built.server.connect(serverTransport), client.connect(clientTransport)]);
+      await client.listTools();
+      const result = await client.callTool({
+        name: 'mcp_tools_read',
+        arguments: { tool: 'templates_recommend', args: { request: 'zzzxxyyqq' } },
+      });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        status: 'no_match',
+        catalog_version: 'd48cec3acf16c56138b7c303d711717aabc11b0e5813865b8926c2d6952212fe',
+        verification: { catalog_records: 4_970, rest_requests: 0 },
+      });
+      expect(restRequests).toBe(0);
+    } finally {
+      await client.close();
+      await built.server.close();
+    }
   });
 
   it('reports the real version from the built package', async () => {
