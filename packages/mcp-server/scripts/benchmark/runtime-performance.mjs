@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -67,8 +66,7 @@ if (process.argv[2] === '--sample') {
     })}\n`,
   );
 } else {
-  const outputPath = process.argv[2];
-  assert.ok(outputPath, 'Usage: node runtime-performance.mjs <output.json>');
+  assert.equal(process.argv.length, 2, 'Usage: node runtime-performance.mjs > output.json');
   const samples = [];
   for (const mode of modes) {
     for (let run = 0; run < 9; run += 1) {
@@ -102,8 +100,7 @@ if (process.argv[2] === '--sample') {
       median_heap_delta_bytes: median(rows.map((row) => row.heap_delta_bytes)),
     };
   });
-  writeFileSync(
-    outputPath,
+  process.stdout.write(
     `${JSON.stringify(
       {
         schema_version: 'discord-mcp.runtime-performance.v1',
@@ -118,5 +115,4 @@ if (process.argv[2] === '--sample') {
       2,
     )}\n`,
   );
-  process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
 }
