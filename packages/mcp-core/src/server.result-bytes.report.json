@@ -12,8 +12,8 @@
       "inputShape": "maximum",
       "itemCount": 1000,
       "contentBytes": 78,
-      "structuredContentBytes": 640582,
-      "totalSerializedBytes": 640709,
+      "structuredContentBytes": 652524,
+      "totalSerializedBytes": 652651,
       "duplicatedFieldBytes": 0,
       "classBudgetBytes": 768000,
       "budgetBytes": 768000
@@ -116,8 +116,8 @@
       "inputShape": "representative",
       "itemCount": 100,
       "contentBytes": 77,
-      "structuredContentBytes": 63675,
-      "totalSerializedBytes": 63801,
+      "structuredContentBytes": 64870,
+      "totalSerializedBytes": 64996,
       "duplicatedFieldBytes": 0,
       "classBudgetBytes": 768000,
       "budgetBytes": 768000
@@ -168,8 +168,8 @@
       "inputShape": "default",
       "itemCount": 1,
       "contentBytes": 75,
-      "structuredContentBytes": 850,
-      "totalSerializedBytes": 974,
+      "structuredContentBytes": 862,
+      "totalSerializedBytes": 986,
       "duplicatedFieldBytes": 0,
       "classBudgetBytes": 768000,
       "budgetBytes": 768000

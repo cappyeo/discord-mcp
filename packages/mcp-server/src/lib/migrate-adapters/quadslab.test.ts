@@ -174,6 +174,33 @@ describe('quadslabAdapter - migrate()', () => {
     expect(byOriginal.get('create_text_channel')?.notes).toContain('type=0');
   });
 
+  it('maps bulk_assign_role directly to the bounded bulk role tool', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'quadslab-bulk-role-'));
+    try {
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ name: '@quadslab.io/discord-mcp', version: '0.0.0' }),
+        'utf8',
+      );
+      const tools = join(dir, 'src', 'tools');
+      mkdirSync(tools, { recursive: true });
+      writeFileSync(
+        join(tools, 'members.ts'),
+        "export const memberTools = [{ name: 'bulk_assign_role' }];\nexport function executeMemberTool() {}\n",
+        'utf8',
+      );
+
+      const result = await quadslabAdapter.migrate(dir);
+      expect(result.mappedTools).toContainEqual({
+        original: 'bulk_assign_role',
+        mapped: 'members_bulk_add_role',
+        confidence: 'high',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('emits no warnings against a valid fixture', async () => {
     const result = await quadslabAdapter.migrate(FIXTURE_ROOT);
     expect(result.warnings).toEqual([]);

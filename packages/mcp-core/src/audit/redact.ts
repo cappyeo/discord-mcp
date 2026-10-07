@@ -69,6 +69,7 @@ const SENSITIVE_KEYS_BY_TOOL: Record<string, ReadonlySet<string>> = {
   // length only, no IDs leaked - the redactor will replace the array
   // with `[REDACTED:${arr.length}ch]`-style marker via the value path.
   messages_bulk_delete: new Set(['message_ids']),
+  members_bulk_add_role: new Set(['user_ids']),
   // `payload_json` carries the same body as `content`/`embeds`/… as an opaque
   // JSON string. Redacted wholesale rather than parsed: parsing an attacker-
   // shaped blob to redact its fields would be more code and more failure modes

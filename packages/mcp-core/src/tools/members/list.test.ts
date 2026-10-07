@@ -17,7 +17,12 @@ describe('members_list', () => {
         expect(url.searchParams.get('limit')).toBe('2');
         return HttpResponse.json([
           {
-            user: { id: '111122223333444401', username: 'alice', global_name: 'Alice' },
+            user: {
+              id: '111122223333444401',
+              username: 'alice',
+              global_name: 'Alice',
+              bot: true,
+            },
             nick: 'al',
             roles: ['204183353402423336'],
             joined_at: '2026-01-15T10:00:00.000+00:00',
@@ -45,10 +50,18 @@ describe('members_list', () => {
       { signal: new AbortController().signal },
     )) as {
       isError: boolean;
-      structuredContent: { count: number; untrusted_names: string };
+      structuredContent: {
+        count: number;
+        members: Array<{ user_id: string; bot: boolean }>;
+        untrusted_names: string;
+      };
     };
     expect(r.isError).toBe(false);
     expect(r.structuredContent.count).toBe(2);
+    expect(r.structuredContent.members).toEqual([
+      expect.objectContaining({ user_id: '111122223333444401', bot: true }),
+      expect.objectContaining({ user_id: '111122223333444402', bot: false }),
+    ]);
     expect(r.structuredContent.untrusted_names).toContain('untrusted_discord_channel_topic');
     expect(r.structuredContent.untrusted_names).toContain('alice');
   });

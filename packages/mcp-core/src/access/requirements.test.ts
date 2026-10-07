@@ -157,6 +157,9 @@ describe('tool access requirements', () => {
       'BAN_MEMBERS',
       'MANAGE_GUILD',
     ]);
+    expect(getToolAccessRequirement('members_bulk_add_role').requirement).toEqual(
+      getToolAccessRequirement('members_add_role').requirement,
+    );
   });
 
   it('tracks Discord 2026 split permissions and channel-specific media requirements', () => {

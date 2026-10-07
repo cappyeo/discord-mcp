@@ -175,6 +175,7 @@ import InvitesGet from './tools/invites/get.js';
 import InvitesListChannel from './tools/invites/list_channel.js';
 import MembersAddRole from './tools/members/add_role.js';
 import MembersBan from './tools/members/ban.js';
+import MembersBulkAddRole from './tools/members/bulk_add_role.js';
 import MembersBulkBan from './tools/members/bulk_ban.js';
 import MembersGet from './tools/members/get.js';
 import MembersGetBan from './tools/members/get_ban.js';
@@ -514,7 +515,7 @@ function getToolCategories(toolStore: ToolStore): ReadonlyMap<string, string> {
   return categories;
 }
 
-/** Compile one tool contract on first use instead of all 221 at HTTP startup. */
+/** Compile one tool contract on first use instead of all 222 at HTTP startup. */
 function compileToolContracts(tool: Tool): ToolContractVariants {
   const cached = compiledToolContracts.get(tool);
   if (cached !== undefined) return cached;
@@ -1068,6 +1069,10 @@ async function createSharedToolStore(): Promise<ToolStore> {
   await toolStore.loadPiece({
     name: 'members_add_role',
     piece: MembersAddRole as unknown as ConcreteTool,
+  });
+  await toolStore.loadPiece({
+    name: 'members_bulk_add_role',
+    piece: MembersBulkAddRole as unknown as ConcreteTool,
   });
   await toolStore.loadPiece({
     name: 'members_remove_role',
@@ -1879,7 +1884,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
           'MCP_CATEGORIES; every dispatched call still passes all normal policy gates.',
         ]
       : [
-          'Discord MCP server: 221 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
+          'Discord MCP server: 222 tools for Discord operations, Guild Templates, and explicit external inspiration discovery (messages, channels,',
           'threads, members, roles, guild, webhooks, invites, events, commands, reactions,',
           'emojis, stickers, automod, polls, stages, soundboard, voice, onboarding,',
           'monetization, components-v2, intelligence) plus mcp_pipeline for chaining calls and discord_intent_plan for bounded read-only planning.',

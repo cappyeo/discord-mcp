@@ -519,6 +519,7 @@ const TOOL_REQUIREMENTS: Readonly<Record<string, DiscordAccessRequirement>> = {
   onboarding_modify: guild(['MANAGE_GUILD', 'MANAGE_ROLES']),
   commands_edit_command_permissions: guild(['MANAGE_GUILD'], [], 'not_applicable', 'bearer'),
   members_add_role: roleManage,
+  members_bulk_add_role: roleManage,
   members_ban: guild(['BAN_MEMBERS'], [], 'required'),
   members_bulk_ban: guild(['BAN_MEMBERS', 'MANAGE_GUILD'], [], 'required'),
   members_kick: guild(['KICK_MEMBERS'], [], 'required'),

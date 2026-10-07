@@ -1,6 +1,6 @@
 ---
 title: From quadslab
-description: Migrate from @quadslab.io/discord-mcp's ~138-tool surface onto discord-mcp's 221-tool catalog.
+description: Migrate from @quadslab.io/discord-mcp's ~138-tool surface onto discord-mcp's 222-tool catalog.
 sidebar:
   order: 2
 ---
@@ -142,6 +142,7 @@ maintained mapping table.
 | `list_members`            | `members_list`                     | high       | -                                                                    |
 | `ban_member`              | `members_ban`                      | high       | -                                                                    |
 | `bulk_ban`                | `members_bulk_ban`                 | high       | -                                                                    |
+| `bulk_assign_role`        | `members_bulk_add_role`            | high       | -                                                                    |
 | `assign_role`             | `members_add_role`                 | high       | -                                                                    |
 | `list_roles`              | `roles_list`                       | high       | -                                                                    |
 | `get_audit_log`           | `audit_log_get`                    | high       | -                                                                    |
@@ -159,7 +160,6 @@ Notable low-confidence entries (always re-read the per-entry `notes`):
 
 | quadslab tool          | discord-mcp tool          | Confidence | Notes                                                                                  |
 | ---------------------- | ------------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| `bulk_assign_role`     | `members_add_role`        | low        | Iterate per user; discord-mcp has no bulk variant.                                     |
 | `bulk_remove_role`     | `members_remove_role`     | low        | Iterate per user.                                                                      |
 | `purge_user_messages`  | `messages_bulk_delete`    | low        | Compose: `messages_search_recent` + filter by author, then `messages_bulk_delete`.    |
 | `send_poll`            | `messages_send`           | low        | discord-mcp creates polls inline via the `poll: {...}` field on the send payload.     |
@@ -186,7 +186,7 @@ report's `unmapped` list. Reasons grouped by category:
 ## See also
 
 - [Adapter authoring guide](/discord-mcp/migrate/authoring/)
-- [discord-mcp tools (221)](/discord-mcp/tools/)
+- [discord-mcp tools (222)](/discord-mcp/tools/)
 - [CLI reference: `migrate`](/discord-mcp/reference/cli/#migrate)
 - [Architecture: gateway](/discord-mcp/architecture/gateway/) - for the
   resource subscription overlap.

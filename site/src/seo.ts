@@ -28,7 +28,7 @@ const structuredData = {
       alternateName: ['Discord MCP', 'Discord MCP Server by cappyeo'],
       url: docsUrl,
       description:
-        'An open-source Model Context Protocol (MCP) server for Discord, with 221 typed tools, caller-owned bots, safety controls, and verifiable guild builds.',
+        'An open-source Model Context Protocol (MCP) server for Discord, with 222 typed tools, caller-owned bots, safety controls, and verifiable guild builds.',
       author: {
         '@type': 'Person',
         name: 'cappyeo',
@@ -39,7 +39,7 @@ const structuredData = {
       license: 'https://github.com/cappyeo/discord-mcp/blob/main/LICENSE',
       downloadUrl: 'https://www.npmjs.com/package/@discord-mcp/cli',
       featureList: [
-        '221 typed Discord operations',
+        '222 typed Discord operations',
         'Caller-owned bot over local stdio or authenticated HTTP',
         'Guild and category scope plus confirmation safety controls',
         'Resumable guild builds with Activity Evidence',

@@ -110,7 +110,7 @@ discord-mcp catalog --check [--json]
 ```
 
 Start a credential-free stdio MCP server for schema discovery. It exposes the
-same 221 tool contracts and six static resources as an unrestricted full
+same 222 tool contracts and six static resources as an unrestricted full
 server, but every `tools/call`—including an unknown name—fails closed with
 `CATALOG_ONLY` before validation or dispatch.
 
@@ -125,7 +125,7 @@ If you build that image from source for operational use, explicitly override
 the command with `serve` and provide the caller-owned token and safety settings.
 
 `--check` runs a bounded in-process MCP handshake and exits. It requires the
-packaged catalog to expose exactly 221 tools and six static resources, reads the
+packaged catalog to expose exactly 222 tools and six static resources, reads the
 six Components V2 JSON resources, and proves both a listed and unknown tool call
 fail with `CATALOG_ONLY`. It does not read `DISCORD_TOKEN`, contact Discord or
 another network service, write a profile or activity journal, prove AI-host
@@ -249,7 +249,7 @@ discord-mcp smoke --confirm-write [--profile <name>] [--guild-id <id>] [--json]
 discord-mcp smoke --confirm-write --confirm-template-lifecycle [--profile <name>] [--guild-id <id>] [--json]
 ```
 
-Verify the real MCP-to-Discord path without loading all 221 tool schemas into an
+Verify the real MCP-to-Discord path without loading all 222 tool schemas into an
 AI model. The default run is read-only: it starts an in-memory MCP client/server
 pair, validates the bot identity, and lists the guilds visible to the bot.
 

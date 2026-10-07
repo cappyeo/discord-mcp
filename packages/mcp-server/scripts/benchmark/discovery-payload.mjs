@@ -80,7 +80,7 @@ const useful = {
   }),
 };
 
-assert.equal(built.registeredTools.length, 221);
+assert.equal(built.registeredTools.length, 222);
 assert.equal(legacy.advertised.tools.length, 7);
 assert.equal(legacy.browse.structuredContent.categories.length, 31);
 assert.equal(Object.hasOwn(legacy.fuzzy.structuredContent, 'categories'), false);

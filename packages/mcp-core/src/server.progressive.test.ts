@@ -71,9 +71,9 @@ describe('progressive tool surface', () => {
     ]);
   });
 
-  it('keeps the full 221-tool surface as the compatibility default', async () => {
+  it('keeps the full 222-tool surface as the compatibility default', async () => {
     const { tools } = await fullClient.listTools();
-    expect(tools).toHaveLength(221);
+    expect(tools).toHaveLength(222);
     expect(tools.map((tool) => tool.name)).not.toContain('mcp_tools_search');
   });
 

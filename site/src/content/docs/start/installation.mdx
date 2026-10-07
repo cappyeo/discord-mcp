@@ -81,7 +81,7 @@ This command requires no Discord token and performs no Discord request or write.
 catalog validation only; it does not count as Activity Evidence. Continue to
 [guided setup](/discord-mcp/start/) when you are ready to connect a caller-owned bot.
 
-The JSON result uses schema `discord-mcp.catalog-check.v1` and reports 221 tools,
+The JSON result uses schema `discord-mcp.catalog-check.v1` and reports 222 tools,
 6 static resources, a `CATALOG_ONLY` execution guard, `discord_execution: "disabled"`,
 and `activity_evidence_created: false`. It validates the installed catalog contract;
 it does not prove AI-host connectivity or a live Discord connection.
@@ -91,7 +91,7 @@ it does not prove AI-host connectivity or a live Discord connection.
 | Subcommand | What it does |
 | ---------- | ------------ |
 | `serve` | Start the local stdio MCP server. **Default** - a bare `discord-mcp` runs this. Use `serve --http` for a bearer-protected remote endpoint. |
-| `catalog` | Expose all 221 real tool schemas without credentials or Discord access; execution always returns `CATALOG_ONLY`. |
+| `catalog` | Expose all 222 real tool schemas without credentials or Discord access; execution always returns `CATALOG_ONLY`. |
 | `setup` | Verify one caller-owned bot, save non-secret profile metadata, and generate its client config. |
 | `activity` | Show the local, privacy-safe journal for setup, doctor, smoke, and blueprint lifecycle outcomes; `--report` prints the optional manual outcome-form URL. |
 | `update` | Check a generated Codex launcher for a new release; `--apply` is always explicit. |

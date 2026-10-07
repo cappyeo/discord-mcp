@@ -36,7 +36,7 @@ describe('MCP Apps blueprint preview', () => {
     const { client, makeRequest } = await connect(surface);
     try {
       const { tools } = await client.listTools();
-      expect(tools).toHaveLength(surface === 'full' ? 221 : 7);
+      expect(tools).toHaveLength(surface === 'full' ? 222 : 7);
       const name = surface === 'full' ? 'guild_blueprint_plan' : 'build_discord_server';
       expect(tools.find((tool) => tool.name === name)?._meta).toMatchObject({
         ui: { resourceUri: BLUEPRINT_PREVIEW_RESOURCE_URI },
@@ -121,7 +121,7 @@ describe('MCP Apps blueprint preview', () => {
       }
       const [textList, uiList] = await Promise.all(clients.map((client) => client.listTools()));
       expect(textList).toEqual(uiList);
-      expect(uiList!.tools).toHaveLength(221);
+      expect(uiList!.tools).toHaveLength(222);
       const read = await clients[1]!.readResource({ uri: BLUEPRINT_PREVIEW_RESOURCE_URI });
       expect(read.contents[0]!.text).toContain('<!doctype html>');
       const result = await clients[1]!.callTool({ name: 'guild_blueprint_plan', arguments: {} });

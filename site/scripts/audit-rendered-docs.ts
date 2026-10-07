@@ -74,7 +74,7 @@ const routes: RouteAudit[] = [
   {
     name: 'homepage',
     path: '/',
-    expectedText: ['Discord MCP Server', 'Get a verified result', '221 tools'],
+    expectedText: ['Discord MCP Server', 'Get a verified result', '222 tools'],
     verify: async (page) => {
       await requireCount(
         page.getByRole('heading', { level: 1, name: 'Discord MCP Server', exact: true }),

@@ -23,7 +23,7 @@ describe('rich message composer catalog contract', () => {
   it('registers all composer tools while retaining the plain message tool', async () => {
     const names = tools.map((tool) => tool.name);
 
-    expect(tools).toHaveLength(221);
+    expect(tools).toHaveLength(222);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toEqual(expect.arrayContaining([...COMPOSER_TOOLS, 'messages_send']));
 

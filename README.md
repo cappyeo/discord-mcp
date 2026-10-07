@@ -4,7 +4,7 @@
 
 <h1 align="center">Discord MCP</h1>
 
-**An open-source Model Context Protocol (MCP) server for Discord.** Connect Claude, Codex, Cursor, and other MCP-compatible AI clients to your own Discord bot. Manage messages, channels, roles, moderation, and server setup through 221 typed tools.
+**An open-source Model Context Protocol (MCP) server for Discord.** Connect Claude, Codex, Cursor, and other MCP-compatible AI clients to your own Discord bot. Manage messages, channels, roles, moderation, and server setup through 222 typed tools.
 
 [![CI status](https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cappyeo/discord-mcp/actions/workflows/ci.yml) [![npm version](https://img.shields.io/npm/v/%40discord-mcp%2Fcli?label=npm)](https://www.npmjs.com/package/@discord-mcp/cli) [![Required Node.js version](https://img.shields.io/node/v/%40discord-mcp%2Fcli)](https://www.npmjs.com/package/@discord-mcp/cli) [![Apache-2.0 license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 

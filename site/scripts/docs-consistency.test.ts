@@ -615,7 +615,7 @@ describe('handwritten docs do not regress to known stale contracts', () => {
       expect(source, `${name} must document the catalog-check schema`).toContain(
         'discord-mcp.catalog-check.v1',
       );
-      expect(source, `${name} must document the catalog-check counts`).toContain('221 tools');
+      expect(source, `${name} must document the catalog-check counts`).toContain('222 tools');
       expect(source, `${name} must document the resource count`).toContain('6 static resources');
       expect(source, `${name} must document the execution guard`).toContain('CATALOG_ONLY');
       expect(source, `${name} must document disabled Discord execution`).toContain(

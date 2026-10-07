@@ -107,7 +107,7 @@ describe('cli binary smoke (post-build)', () => {
         ok: true,
         data: {
           schema_version: 'discord-mcp.catalog-check.v1',
-          tool_count: 221,
+          tool_count: 222,
           resource_count: 7,
           execution_guard: 'CATALOG_ONLY',
           credentials_required: false,

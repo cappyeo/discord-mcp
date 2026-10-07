@@ -138,6 +138,20 @@ describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
       expect(out.message_ids).toBe('[REDACTED:value]');
     });
 
+    it('members_bulk_add_role redacts user_ids without hiding the target role', () => {
+      const out = redactArgs(
+        {
+          guild_id: '999000999000999000',
+          role_id: '222233334444555566',
+          user_ids: ['111122223333444401', '111122223333444402'],
+        },
+        'members_bulk_add_role',
+      );
+      expect(out.guild_id).toBe('999000999000999000');
+      expect(out.role_id).toBe('222233334444555566');
+      expect(out.user_ids).toBe('[REDACTED:value]');
+    });
+
     it('webhooks_execute redacts content / embeds / components / attachments', () => {
       const out = redactArgs(
         {
@@ -312,6 +326,7 @@ describe('redactArgs (Plan 8 Phase F - per-tool + recursive)', () => {
         'messages_publish',
         'messages_update',
         'messages_bulk_delete',
+        'members_bulk_add_role',
         'webhooks_execute',
         'webhooks_edit_message',
         'components_v2_send',

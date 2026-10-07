@@ -103,10 +103,9 @@
  *     - quadslab's `set_slowmode`, `set_channel_topic`, `set_voice_status`
  *       are all PATCH-channel helpers - map to `channels_modify`.
  *       Confidence: medium (caller picks the field).
- *     - quadslab's `bulk_assign_role` / `bulk_remove_role` have no
- *       discord-mcp equivalent (caller iterates `members_add_role`
- *       per member). Map to `members_add_role` /
- *       `members_remove_role` with confidence: low and a note.
+ *     - quadslab's `bulk_assign_role` maps directly to
+ *       `members_bulk_add_role`. `bulk_remove_role` has no bulk
+ *       discord-mcp equivalent, so callers iterate `members_remove_role`.
  *     - quadslab's `purge_user_messages` is a higher-level helper
  *       (search + bulk_delete). Map to `messages_bulk_delete` with
  *       confidence: low (caller composes the search step).
@@ -285,9 +284,8 @@ const NAME_MAP: Record<
     notes: 'use guild_get_prune_count first to preview',
   },
   bulk_assign_role: {
-    mapped: 'members_add_role',
-    confidence: 'low',
-    notes: 'iterate members_add_role per user; discord-mcp has no bulk variant',
+    mapped: 'members_bulk_add_role',
+    confidence: 'high',
   },
   bulk_remove_role: {
     mapped: 'members_remove_role',
