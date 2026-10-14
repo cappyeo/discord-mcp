@@ -389,6 +389,7 @@ describe('WorkflowEngine', () => {
           interval: 10,
         },
       );
+      await waitForLockRelease(f.store, started.id);
       const resumed = await engine.resume(started.id, target, context(invoke));
       expect(resumed.status).toBe('needs_review');
       expect(invoke).toHaveBeenCalledOnce();
