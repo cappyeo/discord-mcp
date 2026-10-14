@@ -318,7 +318,7 @@ try {
   assert.equal(catalogCheck.ok, true);
   assert.deepEqual(catalogCheck.data, {
     schema_version: 'discord-mcp.catalog-check.v1',
-    tool_count: 221,
+    tool_count: 222,
     resource_count: 7,
     execution_guard: 'CATALOG_ONLY',
     credentials_required: false,
@@ -379,7 +379,7 @@ try {
     await catalogClient.connect(catalogTransport);
     assert.equal(catalogClient.getServerCapabilities()?.resources?.subscribe, true);
     const { tools } = await catalogClient.listTools();
-    assert.equal(tools.length, 221);
+    assert.equal(tools.length, 222);
     for (const request of [
       { name: 'guild_get', arguments: { guild_id: '111122223333444455' } },
       {
@@ -496,7 +496,7 @@ try {
     assert.equal(modernCatalogClient.getNegotiatedProtocolVersion(), '2026-07-28');
     assert.equal(modernCatalogClient.getServerCapabilities()?.resources?.subscribe, undefined);
     const { tools: modernCatalogTools } = await modernCatalogClient.listTools();
-    assert.equal(modernCatalogTools.length, 221);
+    assert.equal(modernCatalogTools.length, 222);
     const modernResources = await modernCatalogClient.listResources();
     assert.equal(modernResources.resources.length, 7);
     const previewUri = 'ui://discord-mcp/blueprint-preview.html';

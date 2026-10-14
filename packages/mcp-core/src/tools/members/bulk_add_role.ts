@@ -1,3 +1,4 @@
+import { DiscordAPIError } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
@@ -27,6 +28,7 @@ export default defineTool({
     '- Discovering or filtering members -> use `members_list` first.',
     '',
     '**Returns**: `{role_id, succeeded_user_ids, failed_user_ids, succeeded_count, failed_count}`. Each successful PUT includes an idempotent no-op when the member already has the role.',
+    'An unknown member is reported as a per-member failure. Permission, rate-limit, upstream, and other infrastructure errors stop the batch; prior successful writes remain, and retrying the same request is safe because each PUT is idempotent.',
   ].join('\n'),
   inputSchema: {
     guild_id: GuildId.describe('Guild containing the members'),
@@ -52,6 +54,7 @@ export default defineTool({
     idempotentHint: true,
     openWorldHint: true,
   },
+  idempotent: true,
   handler: async (args, ctx) => {
     const succeededUserIds: string[] = [];
     const failedUserIds: string[] = [];
@@ -67,6 +70,8 @@ export default defineTool({
         succeededUserIds.push(userId);
       } catch (error) {
         if (ctx.signal.aborted) throw error;
+        if (!(error instanceof DiscordAPIError) || error.status !== 404 || error.code !== 10007)
+          throw error;
         failedUserIds.push(userId);
       }
     }

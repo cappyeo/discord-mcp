@@ -1,6 +1,9 @@
+import { DiscordAPIError, RateLimitError } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { describe, expect, it, vi } from 'vitest';
 import { ValidationError } from '../../errors/client.js';
+import { formatErrorForUser } from '../../errors/format.js';
+import { BulkheadFullError, CircuitOpenError } from '../../errors/server.js';
 import { compose } from '../../middleware/compose.js';
 import { validateMiddleware } from '../../middleware/validate.js';
 import membersBulkAddRole from './bulk_add_role.js';
@@ -11,6 +14,17 @@ function tool() {
   return new T(
     { name: 'members_bulk_add_role', path: 'inline', root: 'inline', store: null as never },
     { name: 'members_bulk_add_role', enabled: true },
+  );
+}
+
+function apiError(status: number, code = 0): DiscordAPIError {
+  return new DiscordAPIError(
+    { code, message: `status ${status}` },
+    code,
+    status,
+    'PUT',
+    'https://discord.com/api/v10/guilds/999000999000999000/members/111122223333444401/roles/222233334444555566',
+    { files: undefined, json: undefined },
   );
 }
 
@@ -29,7 +43,7 @@ describe('members_bulk_add_role', () => {
       if (options.signal !== undefined) signals.push(options.signal);
       await Promise.resolve();
       active -= 1;
-      if (route.includes('111122223333444402')) throw new Error('Missing Permissions');
+      if (route.includes('111122223333444402')) throw apiError(404, 10007);
     });
     container.rest = { put } as never;
     const controller = new AbortController();
@@ -71,6 +85,60 @@ describe('members_bulk_add_role', () => {
       failed_count: 1,
     });
     expect(result.content[0]?.text).toContain('including idempotent no-ops');
+  });
+
+  it.each([
+    [
+      'rate limit',
+      new RateLimitError({
+        timeToReset: 1000,
+        limit: 5,
+        method: 'PUT',
+        hash: 'hash',
+        url: 'https://discord.com/api/v10/test',
+        route: '/test',
+        majorParameter: 'guild:999000999000999000',
+        global: false,
+        retryAfter: 1500,
+        sublimitTimeout: 0,
+      }),
+    ],
+    ['server error', apiError(503)],
+    ['permission error', apiError(403, 50013)],
+    ['unknown role', apiError(404, 10011)],
+    ['unknown guild', apiError(404, 10004)],
+    ['network error', Object.assign(new Error('connection reset'), { code: 'ECONNRESET' })],
+    ['circuit open', new CircuitOpenError(1000)],
+    ['bulkhead full', new BulkheadFullError()],
+  ] as const)('%s stops the batch and rethrows the original error', async (_label, error) => {
+    const put = vi.fn(async () => {
+      throw error;
+    });
+    container.rest = { put } as never;
+
+    await expect(
+      tool().run(
+        {
+          guild_id: '999000999000999000',
+          role_id: '222233334444555566',
+          user_ids: ['111122223333444401', '111122223333444402'],
+        },
+        { signal: new AbortController().signal },
+      ),
+    ).rejects.toBe(error);
+    expect(put).toHaveBeenCalledTimes(1);
+    if (error instanceof RateLimitError) {
+      expect(
+        formatErrorForUser(error, {
+          toolName: 'members_bulk_add_role',
+          transport: 'stdio',
+        }).structuredContent,
+      ).toMatchObject({
+        code: 'DISCORD_RATE_LIMITED',
+        retriable: true,
+        retry_after_ms: 1500,
+      });
+    }
   });
 
   it('honors an already-aborted caller before making a Discord request', async () => {
@@ -153,6 +221,7 @@ describe('members_bulk_add_role', () => {
     ).toBe(false);
     expect(t.annotations.destructiveHint).toBe(false);
     expect(t.annotations.idempotentHint).toBe(true);
+    expect(t.idempotent).toBe(true);
     expect(t.preconditions).not.toContain('confirm_required');
   });
 });
