@@ -143,7 +143,7 @@ the medium-confidence collapses you should re-read before swapping:
 | `discord_send_multiple_embeds`     | `messages_send`                   | medium     | Pass the full `embeds[]` array directly.                       |
 | `discord_reply_message`            | `messages_send`                   | medium     | Set `message_reference.message_id` in the send payload.        |
 | `discord_timeout_member`           | `members_modify`                  | medium     | Pass `communication_disabled_until` (ISO-8601 timestamp).      |
-| `discord_lock_channel_permissions` | `channels_modify_permissions`     | medium     | Lock = explicit deny SEND_MESSAGES on `@everyone`.             |
+| `discord_lock_channel_permissions` | `channels_modify`                 | medium     | Pass `lock_permissions:true` and an explicit category `parent_id`; copy and verify the category's `permission_overwrites`. |
 
 ## Gap analysis
 

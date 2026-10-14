@@ -44,6 +44,31 @@ describe('channels_get', () => {
     expect(r.structuredContent.topic).toBe('Main discussion');
   });
 
+  it('projects role and member permission overwrites with string bitfields', async () => {
+    container.rest = new REST({ version: '10', makeRequest: fetch }).setToken(
+      'fake-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+    server.use(
+      http.get(`${DISCORD_API}/channels/:channelId`, ({ params }) =>
+        HttpResponse.json({
+          id: params.channelId,
+          type: 0,
+          guild_id: '999000999000999000',
+          name: 'private',
+          permission_overwrites: [
+            { id: '999000999000999000', type: 0, allow: '1024', deny: '2048' },
+            { id: '111122223333444401', type: 1, allow: '274877906944', deny: '0' },
+          ],
+        }),
+      ),
+    );
+    const r = await runGet('111122223333444466');
+    expect(r.structuredContent.permission_overwrites).toEqual([
+      { id: '999000999000999000', type: 0, allow: '1024', deny: '2048' },
+      { id: '111122223333444401', type: 1, allow: '274877906944', deny: '0' },
+    ]);
+  });
+
   // MCP SDK >= 1.20 clients validate structuredContent against the published
   // outputSchema, so a schema stricter than Discord's real payload throws
   // client-side on a call that succeeded.
@@ -68,6 +93,7 @@ describe('channels_get', () => {
     expect(r.isError).toBe(false);
     expect(r.structuredContent.position).toBeUndefined();
     expect(r.structuredContent.parent_id).toBeUndefined();
+    expect(r.structuredContent).not.toHaveProperty('permission_overwrites');
     expect(() => z.object(outputShape()).parse(r.structuredContent)).not.toThrow();
   });
 
@@ -91,6 +117,7 @@ describe('channels_get', () => {
     expect(r.isError).toBe(false);
     expect(r.structuredContent.name).toBeNull();
     expect(r.content[0].text).not.toContain('#null');
+    expect(r.structuredContent).not.toHaveProperty('permission_overwrites');
     expect(() => z.object(outputShape()).parse(r.structuredContent)).not.toThrow();
   });
 });

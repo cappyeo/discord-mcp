@@ -35,6 +35,30 @@ describe('tool access requirements', () => {
     });
   });
 
+  it('requires MANAGE_ROLES only for channel overwrite and permission sync fields', () => {
+    expect(
+      resolveToolAccessRequirement('channels_modify', { channel_id: '1', name: 'renamed' }),
+    ).toMatchObject({ permissions: ['VIEW_CHANNEL', 'MANAGE_CHANNELS'] });
+    expect(
+      resolveToolAccessRequirement('channels_modify', {
+        channel_id: '1',
+        permission_overwrites: [],
+      }),
+    ).toMatchObject({ permissions: ['VIEW_CHANNEL', 'MANAGE_CHANNELS', 'MANAGE_ROLES'] });
+    expect(
+      resolveToolAccessRequirement('channels_modify', {
+        channel_id: '1',
+        lock_permissions: true,
+      }),
+    ).toMatchObject({ permissions: ['VIEW_CHANNEL', 'MANAGE_CHANNELS', 'MANAGE_ROLES'] });
+    expect(
+      resolveToolAccessRequirement('channels_modify', {
+        channel_id: '1',
+        lock_permissions: false,
+      }),
+    ).toMatchObject({ permissions: ['VIEW_CHANNEL', 'MANAGE_CHANNELS'] });
+  });
+
   it('marks message-content readers as requiring the privileged MESSAGE_CONTENT intent', () => {
     for (const toolName of [
       'messages_get',

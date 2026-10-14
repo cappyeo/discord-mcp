@@ -9,6 +9,13 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## Unreleased
+
+- Added channel permission-overwrite readback and category sync through
+  `channels_modify`; sync requires an explicit category `parent_id`, rejects a
+  simultaneous overwrite payload, and reports verification failures after a
+  successful patch.
+
 ## v0.31.1 - Faster discovery and lower startup overhead
 
 Released 2026-10-03.

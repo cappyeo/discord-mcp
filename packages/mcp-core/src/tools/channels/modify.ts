@@ -12,8 +12,9 @@ import {
   forumTagsMatch,
   prepareForumTags,
 } from '../_lib/forum-tags.js';
+import { PermissionOverwrite } from '../_lib/permissions.js';
 import { dualResult } from '../_lib/response.js';
-import { ChannelId, Snowflake } from '../_lib/snowflake.js';
+import { ChannelId, GuildId, Snowflake } from '../_lib/snowflake.js';
 
 interface RawChannel extends ChannelTags {
   id: string;
@@ -21,6 +22,31 @@ interface RawChannel extends ChannelTags {
   name?: string | null;
   type: number;
   parent_id?: string | null;
+  guild_id?: string;
+  permission_overwrites?: z.infer<typeof PermissionOverwrite>[];
+}
+
+const CategoryPermissions = z.object({
+  id: ChannelId,
+  guild_id: GuildId,
+  type: z.literal(4),
+  flags: z.number().int().optional(),
+  permission_overwrites: z.array(PermissionOverwrite),
+});
+
+function overwritesMatch(
+  expected: z.infer<typeof PermissionOverwrite>[],
+  actual: unknown,
+): boolean {
+  const parsed = z.array(PermissionOverwrite).safeParse(actual);
+  if (!parsed.success) return false;
+  const canonical = (entries: z.infer<typeof PermissionOverwrite>[]) =>
+    entries
+      .map(({ id, type, allow, deny }) =>
+        JSON.stringify([id, type, BigInt(allow).toString(), BigInt(deny).toString()]),
+      )
+      .sort();
+  return JSON.stringify(canonical(expected)) === JSON.stringify(canonical(parsed.data));
 }
 
 export default defineTool({
@@ -38,13 +64,17 @@ export default defineTool({
     '',
     '**Field applicability** mirrors `channels_create_guild_channel`. Discord ignores fields that do not apply to the channel type.',
     '',
+    '**Permission sync**: Set `lock_permissions:true` with an explicit category `parent_id` (the current parent for Sync Now, or a new parent to move and sync). This replaces every channel overwrite with the category set, including an empty set, using one PATCH as discord.js does. Requires VIEW_CHANNEL, MANAGE_CHANNELS and MANAGE_ROLES; the conservative preflight checks these on both channel and category. Do not also pass permission_overwrites. A false or omitted flag preserves ordinary modification behavior.',
+    '',
+    '**Permission verification**: Sync reads both channel and category after PATCH. `permissions_verified:true` means their parent and complete overwrite sets matched the copied category snapshot. A concurrent category change or unavailable readback returns a non-retriable verification error with `patch_succeeded:true`; read both channels before retrying.',
+    '',
     '**Forum tags**: Read `channels_get` first. `available_tags` is the complete desired set: keep IDs for existing tags; omit id only for additions. Every omitted existing ID must be listed in `remove_available_tag_ids`. Omitted emoji/moderated fields are preserved for existing IDs. The tool reads the current set before PATCH and refuses an incomplete state.',
     '',
     '**Emoji**: `emoji_id` is a guild emoji ID; application emoji compatibility is not guaranteed. To reuse application emoji artwork, upload it with `emojis_create` and use the resulting guild emoji ID. Set either emoji_id or emoji_name; set both to null to clear.',
     '',
     '**Verification**: Tag changes are read back after PATCH. After editing forum tags, read existing posts with `channels_get` or the active/archived thread lists to confirm their `applied_tags` still reference the retained IDs. Verification failure means PATCH succeeded: read current state before retrying.',
     '',
-    "**Returns**: `{id, name, type, parent_id, available_tags?, applied_tags?, tags_verified?}`. `tags_verified:true` confirms this channel's tag readback only. `name` is `null` for DM / unnamed group DM channels.",
+    "**Returns**: `{id, name, type, parent_id, permission_overwrites?, permissions_verified?, available_tags?, applied_tags?, tags_verified?}`. `tags_verified:true` confirms this channel's tag readback only. `name` is `null` for DM / unnamed group DM channels.",
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel to modify'),
@@ -76,6 +106,12 @@ export default defineTool({
       )
       .optional(),
     parent_id: ChannelId.nullable().optional(),
+    lock_permissions: z
+      .boolean()
+      .optional()
+      .describe(
+        'Copy the complete category overwrite set and verify it. True requires explicit non-null parent_id and excludes permission_overwrites.',
+      ),
     rtc_region: z.string().nullable().optional(),
     video_quality_mode: z.union([z.literal(1), z.literal(2)]).optional(),
     default_auto_archive_duration: z
@@ -126,6 +162,8 @@ export default defineTool({
   outputSchema: {
     ...ChannelTagOutput,
     tags_verified: z.literal(true).optional(),
+    permission_overwrites: z.array(PermissionOverwrite).optional(),
+    permissions_verified: z.literal(true).optional(),
     id: ChannelId,
     name: z.string().nullable(),
     type: z.number().int(),
@@ -138,6 +176,17 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args, ctx) => {
+    const syncingPermissions = args.lock_permissions === true;
+    if (syncingPermissions && (!args.parent_id || args.permission_overwrites !== undefined)) {
+      throw new ValidationError([
+        {
+          path: 'lock_permissions',
+          message:
+            'Requires an explicit category parent_id and cannot be combined with permission_overwrites.',
+          code: 'custom',
+        },
+      ]);
+    }
     const body: Record<string, unknown> = {};
     const passthrough = [
       'name',
@@ -185,18 +234,46 @@ export default defineTool({
     const changingTags = args.available_tags !== undefined || args.applied_tags !== undefined;
     let current: RawChannel | undefined;
     let expectedTags: ReturnType<typeof prepareForumTags> | undefined;
-    if (changingTags) {
+    let expectedPermissions: z.infer<typeof PermissionOverwrite>[] | undefined;
+    if (changingTags || syncingPermissions) {
       current = (await container.rest.get(route, { signal: ctx.signal })) as RawChannel;
+    }
+    if (syncingPermissions) {
+      const parent = CategoryPermissions.safeParse(
+        await container.rest.get(Routes.channel(args.parent_id!), { signal: ctx.signal }),
+      );
+      if (
+        !current ||
+        current.id !== args.channel_id ||
+        ![0, 2, 5, 13, 15, 16].includes(current.type) ||
+        !parent.success ||
+        parent.data.id !== args.parent_id ||
+        parent.data.guild_id !== current.guild_id ||
+        ((parent.data.flags ?? 0) & (1 << 17)) !== 0
+      ) {
+        throw new ValidationError([
+          {
+            path: 'parent_id',
+            message:
+              'Cannot read a complete, visible category overwrite set in the target channel guild; no changes were made.',
+            code: 'custom',
+          },
+        ]);
+      }
+      expectedPermissions = parent.data.permission_overwrites;
+      body.permission_overwrites = expectedPermissions;
+    }
+    if (changingTags) {
       if (args.available_tags !== undefined) {
         const requested = z.array(ForumTagInput).max(20).parse(args.available_tags);
         expectedTags = prepareForumTags(
-          current.available_tags,
+          current!.available_tags,
           requested,
           args.remove_available_tag_ids ?? [],
         );
         body.available_tags = expectedTags;
       } else {
-        if (!z.array(Snowflake).safeParse(current.applied_tags).success) {
+        if (!z.array(Snowflake).safeParse(current!.applied_tags).success) {
           throw new ValidationError([
             {
               path: 'applied_tags',
@@ -213,18 +290,51 @@ export default defineTool({
       reason: args.audit_reason,
       signal: ctx.signal,
     })) as RawChannel;
-    if (changingTags) {
+    if (changingTags || syncingPermissions) {
       let verified = false;
+      let permissionsVerified = false;
       try {
         c = (await container.rest.get(route, { signal: ctx.signal })) as RawChannel;
         verified =
-          expectedTags !== undefined
+          !changingTags ||
+          (expectedTags !== undefined
             ? forumTagsMatch(current!.available_tags!, expectedTags, c.available_tags)
             : Array.isArray(c.applied_tags) &&
               JSON.stringify([...c.applied_tags].sort()) ===
-                JSON.stringify([...args.applied_tags!].sort());
+                JSON.stringify([...args.applied_tags!].sort()));
+        if (syncingPermissions) {
+          const parent = CategoryPermissions.safeParse(
+            await container.rest.get(Routes.channel(args.parent_id!), { signal: ctx.signal }),
+          );
+          permissionsVerified =
+            c.id === args.channel_id &&
+            c.guild_id === current!.guild_id &&
+            c.parent_id === args.parent_id &&
+            parent.success &&
+            parent.data.id === args.parent_id &&
+            parent.data.guild_id === current!.guild_id &&
+            ((parent.data.flags ?? 0) & (1 << 17)) === 0 &&
+            overwritesMatch(expectedPermissions!, c.permission_overwrites) &&
+            overwritesMatch(expectedPermissions!, parent.data.permission_overwrites);
+        }
       } catch {
-        // PATCH already succeeded. Never invite a blind retry (especially for additions).
+        // PATCH already succeeded. Never invite a blind retry.
+      }
+      if (syncingPermissions && !permissionsVerified) {
+        const recovery = `PATCH succeeded, but permission readback failed or differed. Read channels_get for ${args.channel_id} and category ${args.parent_id} before making another change.`;
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: recovery }],
+          structuredContent: {
+            code: 'PERMISSION_VERIFICATION_FAILED',
+            category: 'server',
+            retriable: false,
+            recovery_hint: recovery,
+            channel_id: args.channel_id,
+            parent_id: args.parent_id,
+            patch_succeeded: true,
+          },
+        };
       }
       if (!verified) {
         const recovery = `PATCH succeeded, but tag readback failed or differed. Read channels_get for ${args.channel_id} before making another change.`;
@@ -251,6 +361,10 @@ export default defineTool({
         name: c.name ?? null,
         type: c.type,
         parent_id: c.parent_id ?? null,
+        ...(c.permission_overwrites === undefined
+          ? {}
+          : { permission_overwrites: c.permission_overwrites }),
+        ...(syncingPermissions ? { permissions_verified: true } : {}),
         ...channelTags(c),
         ...(changingTags ? { tags_verified: true } : {}),
       },

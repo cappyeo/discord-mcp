@@ -834,6 +834,74 @@ describe('createRuntimeAccessResolver', () => {
     });
   });
 
+  it('intersects conditional channel permissions across an explicit move destination', async () => {
+    const rolePermissions =
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.ManageChannels |
+      PermissionFlagsBits.ManageRoles;
+    const requirement = resolveToolAccessRequirement('channels_modify', {
+      channel_id: CHANNEL_ID,
+      parent_id: SECOND_CHANNEL_ID,
+      lock_permissions: true,
+    });
+    if (requirement === null) throw new Error('channel modify requirement should resolve');
+    const destinationChecks = [
+      [PermissionFlagsBits.ViewChannel, 'VIEW_CHANNEL'],
+      [PermissionFlagsBits.ManageChannels, 'MANAGE_CHANNELS'],
+      [PermissionFlagsBits.ManageRoles, 'MANAGE_ROLES'],
+    ] as const;
+    for (const [deniedPermission, missingPermission] of destinationChecks) {
+      const routes = guildRoutes({
+        [Routes.guildRoles(GUILD_ID)]: [
+          {
+            id: GUILD_ID,
+            name: '@everyone',
+            position: 0,
+            permissions: '0',
+            managed: false,
+          },
+          {
+            id: ROLE_ID,
+            name: 'Bot',
+            position: 5,
+            permissions: String(rolePermissions),
+            managed: false,
+          },
+        ],
+        [Routes.channel(CHANNEL_ID)]: {
+          id: CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 0,
+          parent_id: null,
+          permission_overwrites: [],
+        },
+        [Routes.channel(SECOND_CHANNEL_ID)]: {
+          id: SECOND_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          type: 4,
+          parent_id: null,
+          permission_overwrites: [
+            { id: BOT_ID, type: 1, allow: '0', deny: String(deniedPermission) },
+          ],
+        },
+      });
+      const { rest } = restFor(routes);
+      const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+      const request = {
+        toolName: 'channels_modify',
+        args: { channel_id: CHANNEL_ID, parent_id: SECOND_CHANNEL_ID, lock_permissions: true },
+        requirement,
+        expectedBotId: BOT_ID,
+      } satisfies RuntimeAccessRequest;
+      const evidence = await resolver(request);
+      expect(evidence.status).toBe('complete');
+      expect(evaluateRuntimeAccess(request, evidence)).toMatchObject({
+        status: 'denied',
+        missingPermissions: [missingPermission],
+      });
+    }
+  });
+
   it('does not issue mutation methods', async () => {
     const { rest } = restFor(guildRoutes());
     const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });

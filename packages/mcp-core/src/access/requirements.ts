@@ -309,6 +309,20 @@ const channelRead = channel(['VIEW_CHANNEL']);
 const messageWrite = channel(['VIEW_CHANNEL', 'SEND_MESSAGES']);
 const messageModerate = channel(['VIEW_CHANNEL', 'MANAGE_MESSAGES']);
 const channelManage = channel(['VIEW_CHANNEL', 'MANAGE_CHANNELS']);
+// The resolver intersects one requirement across every declared channel
+// target, so these conditional role-management checks are intentionally
+// conservative when a move/sync also names a destination parent.
+const channelModify = {
+  ...channelManage,
+  conditions: [
+    { fields: ['permission_overwrites'], permissions: ['MANAGE_ROLES'] as const },
+    {
+      fields: ['lock_permissions'],
+      permissions: ['MANAGE_ROLES'] as const,
+      when: { lock_permissions: true },
+    },
+  ],
+} as const satisfies DiscordAccessRequirement;
 const guildManage = guild(['MANAGE_GUILD']);
 const roleManage = guild(['MANAGE_ROLES'], [], 'required');
 const expressionManage = guild(['MANAGE_GUILD_EXPRESSIONS']);
@@ -467,7 +481,7 @@ const TOOL_REQUIREMENTS: Readonly<Record<string, DiscordAccessRequirement>> = {
   channels_create_guild_channel: guild(['MANAGE_CHANNELS']),
   channels_get: CHANNEL_READ_ACCESS,
   channels_delete: channelManage,
-  channels_modify: channelManage,
+  channels_modify: channelModify,
   channels_forum_create_thread: channel(['VIEW_CHANNEL', 'SEND_MESSAGES']),
   channels_list_joined_private_archived_threads: historyRead,
   channels_list_private_archived_threads: channel([

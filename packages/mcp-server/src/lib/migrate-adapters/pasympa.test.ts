@@ -14,7 +14,7 @@
  * explicit "PaSympa-specific, no equivalent" synthetic and falls into
  * `unmappedTools`.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -133,6 +133,33 @@ describe('pasympaAdapter - migrate()', () => {
     // The five tools we DID map should all carry confidence levels.
     for (const tool of result.mappedTools) {
       expect(['high', 'medium', 'low']).toContain(tool.confidence);
+    }
+  });
+
+  it('maps channel permission locking to verified category sync', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pasympa-lock-migrate-'));
+    try {
+      const tools = join(dir, 'src', 'tools');
+      const packageJson = join(dir, 'package.json');
+      mkdirSync(tools, { recursive: true });
+      writeFileSync(packageJson, '{"name":"@pasympa/discord-mcp"}', 'utf8');
+      writeFileSync(
+        join(tools, 'channels.ts'),
+        "export const definitions = [{ name: 'discord_lock_channel_permissions' }];",
+        'utf8',
+      );
+
+      const result = await pasympaAdapter.migrate(dir);
+      expect(result.mappedTools).toEqual([
+        expect.objectContaining({
+          original: 'discord_lock_channel_permissions',
+          mapped: 'channels_modify',
+          confidence: 'medium',
+        }),
+      ]);
+      expect(result.mappedTools[0]?.notes).toContain('explicit category parent_id');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

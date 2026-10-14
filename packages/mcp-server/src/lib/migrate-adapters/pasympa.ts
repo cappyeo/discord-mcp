@@ -180,9 +180,10 @@ const NAME_MAP: Record<
     confidence: 'high',
   },
   discord_lock_channel_permissions: {
-    mapped: 'channels_modify_permissions',
+    mapped: 'channels_modify',
     confidence: 'medium',
-    notes: 'lock = explicit deny overwrite for @everyone via channels_modify_permissions',
+    notes:
+      'pass lock_permissions:true and the explicit category parent_id; channels_modify reads and copies the category permission_overwrites and verifies channel/parent readback',
   },
 
   // permissions

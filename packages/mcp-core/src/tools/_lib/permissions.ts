@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Snowflake } from './snowflake.js';
 
 /**
  * Discord permission integer encoded as a base-10 string.
@@ -13,3 +14,12 @@ export const PermissionString = z
   .describe('Discord permission bitfield as a base-10 string (e.g. "8" = ADMINISTRATOR).');
 
 export type PermissionString = z.infer<typeof PermissionString>;
+
+export const PermissionOverwrite = z.object({
+  id: Snowflake,
+  type: z.union([z.literal(0), z.literal(1)]),
+  allow: PermissionString,
+  deny: PermissionString,
+});
+
+export type PermissionOverwrite = z.infer<typeof PermissionOverwrite>;
