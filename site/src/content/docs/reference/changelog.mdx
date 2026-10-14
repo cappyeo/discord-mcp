@@ -9,12 +9,25 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
-## Unreleased
+## v0.32.0 - Bulk role assignment and verified permission sync
+
+Released 2026-10-15.
+
+- Added `members_bulk_add_role` for 1-100 unique member IDs, sequential requests,
+  cancellation, and idempotent role assignment. Unknown members are reported
+  individually; permission, rate-limit, network, and upstream failures stop the
+  batch while retaining the original error. Earlier successful assignments remain.
+- Added the `bot` flag to `members_list` so callers can identify bot accounts
+  before selecting a batch.
 
 - Added channel permission-overwrite readback and category sync through
   `channels_modify`; sync requires an explicit category `parent_id`, rejects a
   simultaneous overwrite payload, and reports verification failures after a
   successful patch.
+- Added conditional `MANAGE_ROLES` preflight for overwrite changes and category
+  sync. Corrected the PaSympa migration mapping to preserve parent-sync semantics.
+- Updated runtime and development dependencies and package/container catalog
+  checks for the 222-tool catalog.
 
 ## v0.31.1 - Faster discovery and lower startup overhead
 
