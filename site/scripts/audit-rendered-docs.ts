@@ -144,7 +144,7 @@ const routes: RouteAudit[] = [
               path: '/operations/clients/',
             };
 
-      const searchButton = page.getByRole('button', { name: 'Search', exact: true });
+      const searchButton = page.getByRole('button', { name: /^Search/ });
       await requireCount(searchButton, 1, 'site search button');
       await searchButton.click();
 

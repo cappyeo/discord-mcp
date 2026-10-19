@@ -46,10 +46,11 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 </div>
 
 <script>
-  // The search shortcut is already exposed by aria-keyshortcuts.
-  document
-    .querySelector('site-search button[data-open-modal] > kbd')
-    ?.setAttribute('aria-hidden', 'true');
+  // Include the visible shortcut hint in the search button's accessible name.
+  const searchButton = document.querySelector<HTMLButtonElement>('site-search button[data-open-modal]');
+  if (searchButton) {
+    searchButton.setAttribute('aria-label', searchButton.textContent!.replace(/\s+/g, ' ').trim());
+  }
 
   const menu = document.querySelector<HTMLDetailsElement>('.home-menu');
   menu?.querySelectorAll('a').forEach((link) => {
