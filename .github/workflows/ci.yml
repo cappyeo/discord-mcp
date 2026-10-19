@@ -39,6 +39,9 @@ jobs:
         run: node packages/mcp-core/scripts/verify-workflows.mjs
       - run: pnpm test
       - run: pnpm --filter @discord-mcp/core exec vitest run --coverage
+        if: matrix.os != 'ubuntu-24.04' || matrix.node != '22.12'
+      - run: pnpm --filter @discord-mcp/core exec vitest run --coverage --no-file-parallelism
+        if: matrix.os == 'ubuntu-24.04' && matrix.node == '22.12'
       - run: pnpm exec publint --strict packages/mcp-core
       - run: pnpm exec publint --strict packages/mcp-server
   pack:
