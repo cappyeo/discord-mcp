@@ -38,13 +38,7 @@ jobs:
       - name: Verify durable workflow integration
         run: node packages/mcp-core/scripts/verify-workflows.mjs
       - run: pnpm test
-      - name: Coverage diagnostics (Ubuntu Node 22)
-        if: matrix.os == 'ubuntu-24.04' && matrix.node == '22.12'
-        env:
-          NODE_OPTIONS: --require=${{ github.workspace }}/.github/scripts/coverage-resource-heartbeat.cjs
-        run: pnpm --filter @discord-mcp/core exec vitest run --coverage --reporter=default --reporter=hanging-process
       - run: pnpm --filter @discord-mcp/core exec vitest run --coverage
-        if: matrix.os != 'ubuntu-24.04' || matrix.node != '22.12'
       - run: pnpm exec publint --strict packages/mcp-core
       - run: pnpm exec publint --strict packages/mcp-server
   pack:
