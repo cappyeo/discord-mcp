@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DiscordOAuthBroker, OAuthBrokerError } from './oauth-broker.js';
 import type { DiscordHttp } from './oauth2.js';
 
-const CLIENT_ID = '1566823844801548490';
+const CLIENT_ID = '1566823844801548491';
 const CLIENT_SECRET = 'client-secret-value-with-enough-length';
 const USER_ID = '111122223333444455';
 const PUBLIC_URL = new URL('https://mcp.example.test');
