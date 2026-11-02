@@ -15,14 +15,16 @@ concurrency:
   cancel-in-progress: true
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+# Every job runs on the org's self-hosted ARC pool (Linux/X64). There are no
+# Windows or macOS runners in the pool, so the former Windows matrix leg is
+# gone; the platform matrix is now Node versions only.
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
         node: ['22.12', '24.x']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,13 +41,13 @@ jobs:
         run: node packages/mcp-core/scripts/verify-workflows.mjs
       - run: pnpm test
       - run: pnpm --filter @discord-mcp/core exec vitest run --coverage
-        if: matrix.os != 'ubuntu-24.04' || matrix.node != '22.12'
+        if: matrix.node != '22.12'
       - run: pnpm --filter @discord-mcp/core exec vitest run --coverage --no-file-parallelism
-        if: matrix.os == 'ubuntu-24.04' && matrix.node == '22.12'
+        if: matrix.node == '22.12'
       - run: pnpm exec publint --strict packages/mcp-core
       - run: pnpm exec publint --strict packages/mcp-server
   pack:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,7 +62,7 @@ jobs:
       - name: Verify clean-install packaged transports
         run: node .github/scripts/assert-packaged-cli.mjs
   catalog-container:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -74,7 +76,7 @@ jobs:
       - name: Verify credential-free catalog container
         run: node .github/scripts/assert-catalog-container.mjs
   audit:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
