@@ -162,4 +162,10 @@ describe('runtime access evaluation', () => {
       ),
     ).toMatchObject({ status: 'denied', missingIntents: ['MESSAGE_CONTENT'] });
   });
+
+  it('reports unknown when identity was not verified', () => {
+    expect(
+      evaluateRuntimeAccess(request, { status: 'complete', identityVerified: false }),
+    ).toMatchObject({ status: 'unknown', reason: /identity was not verified/ });
+  });
 });
