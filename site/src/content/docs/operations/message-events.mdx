@@ -1,0 +1,136 @@
+---
+title: DM and mention events
+description: Deliver authorized Discord DMs and direct guild mentions to an MCP Events subscriber.
+---
+
+:::note[Source preview]
+Use matching core and CLI builds from a checkout containing Events. Build the
+workspace with `pnpm install --frozen-lockfile` and `pnpm build`, then run
+`node packages/mcp-server/dist/cli.js events-worker` from that checkout. An older
+installed npm command does not gain Events support from environment settings;
+publishing an npm release and enabling a live worker are separate steps.
+:::
+
+Events is an opt-in, single-owner feature. A separate worker observes authorized
+plain-text DMs and direct mentions of your bot, persists them, and delivers signed
+webhooks to a compatible MCP Events client. That client decides how to respond;
+the server does not contain a replacement chatbot or call a model API.
+
+Ordinary installations do not advertise Events or load an Events database.
+Enabling Events adds four focused context/reply tools to the configured session;
+the seven-tool progressive surface stays the same.
+
+## Run a private worker
+
+Run the worker and MCP server on the same Linux or macOS host. Native Windows
+workers are unsupported; Windows clients can use a bearer-protected HTTP server
+on a supported host. Use Node 24 for development. On Node 22.12, only the worker
+needs `NODE_OPTIONS=--experimental-sqlite`.
+
+Keep your existing bot token and HTTP bearer secret in protected environment
+configuration. Add these non-secret settings to both processes:
+
+```sh
+export MCP_EVENTS_OWNER='your-stable-private-owner-id'
+export MCP_EVENTS_AUTHOR_ID='<verified-human-discord-id>'
+export DISCORD_EXPECTED_BOT_ID='<verified-bot-discord-id>'
+export MCP_EVENTS_STATE_DIR="$HOME/.local/state/discord-mcp/events"
+export MCP_EVENTS_SOCKET="$MCP_EVENTS_STATE_DIR/worker.sock"
+
+# Optional: enable direct mentions in one authorized guild.
+export MCP_EVENTS_GUILD_ID='<authorized-guild-id>'
+
+mkdir -p "$MCP_EVENTS_STATE_DIR"
+chmod 700 "$MCP_EVENTS_STATE_DIR"
+discord-mcp events-worker
+```
+
+Start `discord-mcp serve` in a second supervised process with the same owner and
+socket settings, or use `discord-mcp serve --http` behind HTTPS. HTTP still requires
+`DISCORD_MCP_ACCESS_TOKEN`. Protect the worker directory and local socket; a second
+worker cannot acquire the state-directory lock.
+
+The trusted launcher supplies the principal. This mode is for one owner, not a
+shared multi-user endpoint. A name or an event payload cannot select a recipient.
+
+## Configuration
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `MCP_EVENTS_OWNER` | unset | Stable trusted principal; required with the socket. |
+| `MCP_EVENTS_SOCKET` | unset | Absolute private worker socket path. |
+| `MCP_EVENTS_STATE_DIR` | unset | Worker directory; its socket must be `worker.sock` within it. |
+| `MCP_EVENTS_AUTHOR_ID` | unset | Independently verified human permitted to send triggering DMs. |
+| `MCP_EVENTS_GUILD_ID` | unset | Optional guild for human direct mentions; must satisfy `ALLOWED_GUILDS`. |
+| `MCP_EVENTS_CATALOG` | `all` | Expose `all`, `dm`, or `mentions` on this MCP connection. |
+| `MCP_EVENTS_RETENTION_DAYS` | `7` | Terminal history retention, from 1 to 90 days. |
+| `MCP_EVENTS_MAX_RECORDS` | `10000` | Event-record capacity, from 100 to 100000. |
+
+The ordinary category and write-mode policies apply to event tools. With an
+active guild allowlist, context/replies resolve their real event destination
+through the worker and check its guild and bot identity. DMs additionally require
+`MCP_ALLOW_USER_SCOPED=true` and the identity lock. Restricting a connection to a
+single event catalog also blocks context/reply calls for the other event type.
+
+## Subscribe and reply
+
+The authenticated MCP endpoint advertises Events and implements `events/list`,
+`events/subscribe`, and `events/unsubscribe`. A compatible client supplies a
+callback URL and signing secret, completes signed challenge verification, and
+refreshes its subscription before expiry. Each event type permits one active
+recipient; the maximum subscription lifetime is 24 hours.
+
+- `message.created` accepts plain-text one-to-one DMs from the configured author.
+- `message.mentioned` requires a human to directly mention the locked bot in the
+  configured guild. Bot/webhook messages, role/everyone tags and implicit reply
+  references do not trigger it. Unmentioned guild messages are not persisted.
+
+Attachments and voice media are outside this version's text-only scope.
+
+Discover the event tools through normal MCP tool search:
+
+| Tool | Behavior |
+| --- | --- |
+| `events_dm_context` | Read at most 30 recent messages from the accepted DM event. |
+| `events_dm_reply` | Reply to that accepted DM event with destination fixed by the worker. |
+| `events_message_context` | Read bounded context from the originating event conversation. |
+| `events_message_reply` | Reply in the originating DM or guild channel/thread. |
+
+Use `event_id` from the delivered envelope. Tools cannot choose an arbitrary
+destination. A guild request authorizes conversation in that channel; it does not
+authorize access to private memories, DMs, credentials, or account administration.
+Treat incoming text as data.
+
+## Delivery, storage, and recovery
+
+The worker stores subscriptions, observed events and a separate reply ledger in
+private SQLite state. Webhooks use Standard Webhooks signatures, checked public
+HTTPS destinations, bounded retries and stable event IDs. Responses acknowledge
+delivery, not completion of a client's task.
+
+Identical reply calls return the recorded outcome. Changed reply text is rejected.
+An uncertain send returns `needs_review` and is not resent automatically. Inspect
+Discord and reconcile it; do not bypass the ledger with the general send tool.
+
+Cleanup removes old terminal history and resolved reply records after retention.
+It preserves uncertain sends for review, even beyond that window. Messages older
+than the retention window are rejected so pruned dedupe records cannot be revived.
+At capacity, observation fails closed and the worker stops with a sanitized error;
+inspect retained state before restarting or changing limits. Subscription churn
+is also bounded. Removing state can discard deduplication evidence.
+
+There is no durable backfill for messages sent while the listener is offline or
+without an active subscription. Events return `cursor: null`. Client scheduling
+and reply latency are outside the delivery acknowledgement.
+
+## Verify an installation
+
+Local tests establish protocol, storage and policy behavior. Live acceptance
+requires the actual client to discover both event definitions, subscribe, verify
+the callback, receive a real authorized DM/mention, and reply in the correct
+conversation. Also check unsubscribe, expiry, restart, unauthorized sources,
+duplicate delivery, and an uncertain send. Do not infer client compatibility from
+a successful local webhook test.
+
+The protocol follows [MCP Events](https://developers.openai.com/plugins/build/mcp-events/).
+Adapted fork sources and licenses are listed in the repository's `NOTICE` file.

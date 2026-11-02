@@ -139,6 +139,7 @@ describe('MCP protocol contract', () => {
       guild_id: guild,
       parent_id: forumId,
       applied_tags,
+      thread_metadata: { archive_timestamp: '2026-01-01T00:00:00Z' },
     };
     server.use(
       http.get(`${api}/channels/${forumId}`, () => HttpResponse.json(forum)),

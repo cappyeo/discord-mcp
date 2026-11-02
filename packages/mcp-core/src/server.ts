@@ -17,6 +17,8 @@ import { type AuditSink, createAuditSink, NoopAuditSink } from './audit/sink.js'
 import type { Config } from './config.js';
 import { type DiscordRuntime, runWithDiscordRuntime } from './container.js';
 import { formatErrorForUser } from './errors/format.js';
+import type { EventBridge } from './events/contract.js';
+import { DmContext, DmReply, MessageContext, MessageReply } from './events/tools.js';
 import { SubscriptionRegistry } from './gateway/subscription_registry.js';
 import { verifyExpectedBotIdentity } from './identity-lock.js';
 import { auditMiddleware } from './middleware/audit.js';
@@ -295,6 +297,7 @@ import { WorkflowStore } from './workflows/store.js';
 import type { WorkflowTarget } from './workflows/types.js';
 
 export interface BuildServerDeps {
+  eventBridge?: EventBridge;
   rest: REST;
   logger: Logger;
   config: Config;
@@ -1683,11 +1686,30 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     rest: deps.rest,
     logger: deps.logger,
     config: deps.config,
+    ...(deps.eventBridge ? { eventBridge: deps.eventBridge } : {}),
   };
 
   // Tool definitions are immutable and process-scoped. Runtime-bearing
   // preconditions and resources remain per server instance.
-  const toolStore = await getSharedToolStore();
+  const sharedTools = await getSharedToolStore();
+  const toolStore = deps.eventBridge ? new ToolStore() : sharedTools;
+  if (deps.eventBridge) {
+    for (const [name, tool] of sharedTools) toolStore.set(name, tool);
+    for (const [name, piece] of [
+      ['events_dm_context', DmContext],
+      ['events_dm_reply', DmReply],
+      ['events_message_context', MessageContext],
+      ['events_message_reply', MessageReply],
+    ] as const) {
+      const EventTool = piece as unknown as new (
+        ...args: ConstructorParameters<typeof Tool>
+      ) => Tool;
+      toolStore.set(
+        name,
+        new EventTool({ name, path: 'inline', root: 'inline', store: toolStore }, { name }),
+      );
+    }
+  }
   const workflowSecret = blueprintSigningSecret(
     deps.config,
     transport === 'http' ? 'http_access_token' : 'stdio_profile',
@@ -1755,6 +1777,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     deps.rest,
     deps.config.DISCORD_EXPECTED_BOT_ID,
     deps.config.MCP_ALLOW_USER_SCOPED,
+    deps.eventBridge,
   );
   const dynamicGuildIds =
     deps.config.ALLOWED_GUILDS?.split(',').map((guildId) => guildId.trim()) ??
@@ -1896,6 +1919,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     {
       capabilities: {
         tools: {},
+        ...(deps.eventBridge ? { events: {} } : {}),
         resources: enableResourceSubscriptions ? { subscribe: true } : {},
         ...(hasPreviewTools ? { extensions: { 'io.modelcontextprotocol/ui': {} } } : {}),
       },
@@ -1931,6 +1955,16 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       ].join(' '),
     },
   );
+
+  if (deps.eventBridge) {
+    for (const method of ['events/list', 'events/subscribe', 'events/unsubscribe']) {
+      server.setRequestHandler(
+        method,
+        { params: z.record(z.string(), z.unknown()).default({}) },
+        async (params) => deps.eventBridge!.call(method, params),
+      );
+    }
+  }
 
   server.setRequestHandler('tools/list', async () => {
     // Hide what the caller cannot invoke. Both layers are required: hiding

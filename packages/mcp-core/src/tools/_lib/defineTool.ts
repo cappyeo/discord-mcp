@@ -92,6 +92,66 @@ function assertMatchesOutputSchema(
   );
 }
 
+/**
+ * Collapse a section body (or a heading-less description) into one line per
+ * authored paragraph. Paragraph breaks survive because `compactSummary()`
+ * (`tool-discovery.ts`) feeds the first paragraph to `mcp_tools_search` results;
+ * merging paragraphs would push a URL or a second sentence into that summary.
+ */
+function compactText(text: string): string {
+  const paragraphs: string[] = [];
+  let paragraph: string[] = [];
+  const flush = () => {
+    if (paragraph.length > 0) paragraphs.push(paragraph.join(' '));
+    paragraph = [];
+  };
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '') flush();
+    else paragraph.push(trimmed.replace(/\s+/g, ' '));
+  }
+  flush();
+  return paragraphs.join('\n\n');
+}
+
+/**
+ * Compact the authored NLT description for the MCP wire.
+ *
+ * Keep every section, including Returns: its prose can carry semantics that
+ * an output schema does not express. Full authored text stays in metadata for
+ * docs. Fenced examples retain their exact formatting on the wire as well.
+ */
+function compactDescription(description: string): string {
+  const lines = description.split('\n');
+  if (
+    lines.some((line) => line.trimStart().startsWith('```') || line.trimStart().startsWith('~~~'))
+  )
+    return description.trim();
+  const parts: string[] = [];
+  let heading: string | undefined;
+  let body: string[] = [];
+  const flush = () => {
+    const text = compactText(body.join('\n'));
+    if (heading !== undefined) parts.push(text === '' ? `${heading}:` : `${heading}: ${text}`);
+    else if (text !== '') parts.push(text);
+    body = [];
+  };
+  // Fixed delimiter searches avoid backtracking on malformed Markdown or long
+  // whitespace runs supplied by library consumers.
+  for (const line of lines) {
+    const text = line.trimStart();
+    const end = text.startsWith('**') ? text.indexOf('**:', 2) : -1;
+    const candidate = end > 2 ? text.slice(2, end) : '';
+    if (candidate.trim() !== '' && !candidate.includes('*')) {
+      flush();
+      heading = candidate.trim();
+      body.push(text.slice(end + 3));
+    } else body.push(line);
+  }
+  flush();
+  return parts.join('\n\n');
+}
+
 export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
   def: ToolDefinition<I, O>,
 ): typeof Tool {
@@ -102,7 +162,7 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
   }
 
   class GeneratedTool extends Tool {
-    public override readonly description = def.description;
+    public override readonly description = compactDescription(def.description);
     public override readonly inputSchema = def.inputSchema;
     // outputSchema is optional on the base class; only set when provided to
     // avoid overriding the base undefined with an explicit undefined.

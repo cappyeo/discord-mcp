@@ -3,6 +3,7 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { ValidationError } from '../../errors/client.js';
 import { defineTool } from '../_lib/defineTool.js';
+import { compareIds, validatePage } from '../_lib/page.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 import { wrapMessages } from '../_lib/untrusted.js';
@@ -57,6 +58,10 @@ export default defineTool({
       }),
     ),
     count: z.number(),
+    order: z.literal('newest_first'),
+    next_after: MessageId.optional(),
+    next_before: MessageId.optional(),
+    may_have_more: z.boolean(),
     channel_id: ChannelId,
     oldest_id: MessageId.optional(),
     newest_id: MessageId.optional(),
@@ -81,6 +86,20 @@ export default defineTool({
       query,
     })) as RawMessage[];
 
+    if (
+      !Array.isArray(raw) ||
+      raw.some(
+        (m) => m.channel_id !== args.channel_id || !m.author || !/^\d{17,20}$/.test(m.author.id),
+      )
+    )
+      throw new Error('Discord message page has invalid channel or author identity');
+    validatePage(
+      raw.map((m) => m.id),
+      args.limit ?? 50,
+      args.before,
+      args.after,
+    );
+    raw.sort((a, b) => compareIds(b.id, a.id));
     const messages = raw.map((m) => ({
       id: m.id,
       ...projectMessage(m),
@@ -98,11 +117,15 @@ export default defineTool({
     const data: Record<string, unknown> = {
       messages,
       count: messages.length,
+      order: 'newest_first',
+      may_have_more: messages.length === (args.limit ?? 50),
       channel_id: args.channel_id,
     };
     if (messages.length > 0) {
       data.oldest_id = messages[messages.length - 1]!.id;
       data.newest_id = messages[0]!.id;
+      data.next_after = data.newest_id;
+      data.next_before = data.oldest_id;
     }
 
     return dualResult({ text: wrappedText, data });

@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
+import { ReactionEmoji } from '../_lib/reaction-emoji.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 
@@ -27,12 +28,9 @@ export default defineTool({
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the message'),
     message_id: MessageId.describe('Message to clear reactions on'),
-    emoji: z
-      .string()
-      .min(1)
-      .max(128)
-      .optional()
-      .describe('If provided, clear only this emoji; else clear all reactions'),
+    emoji: ReactionEmoji.optional().describe(
+      'If provided, clear only this emoji; else clear all reactions',
+    ),
     audit_reason: z
       .string()
       .min(1)

@@ -32,13 +32,14 @@ export const SoundboardSoundId = Snowflake.brand<'SoundboardSoundId'>().describe
 );
 export const InteractionId = Snowflake.brand<'InteractionId'>().describe('Discord interaction ID');
 
-// Invite codes are short base62-style strings, NOT snowflakes.
+// Invite codes are short URL-safe identifiers, NOT snowflakes.
 export const InviteCode = z
   .string()
   .min(1)
   .max(32)
+  .regex(/^[A-Za-z0-9_-]+$/, 'Invite code must contain only ASCII letters, digits, _ or -')
   .brand<'InviteCode'>()
-  .describe('Discord invite code (base62, NOT a snowflake)');
+  .describe('Discord invite code (ASCII letters, digits, _ or -; NOT a snowflake)');
 
 // Webhook tokens are long opaque secrets, NOT snowflakes. They live here in the
 // brand registry alongside other Discord identifiers for ergonomic imports.

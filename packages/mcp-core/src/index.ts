@@ -239,3 +239,7 @@ export {
  * (comparison appears unintentional) instead of a boolean.
  */
 export const VERSION: string = packageJson.version;
+
+export { createEventBridge, eventBridgeFromConfig } from './events/bridge.js';
+export type { EventBridge } from './events/contract.js';
+export { DmEventRuntime, type IncomingDm } from './events/runtime.js';

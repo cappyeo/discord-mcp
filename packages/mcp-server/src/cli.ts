@@ -64,6 +64,14 @@ export function buildProgram(): Command {
     );
 
   program
+    .command('events-worker')
+    .description('Run the single supervised DM Events listener and delivery worker')
+    .action(async () => {
+      const { eventsWorkerAction } = await import('./commands/events-worker.js');
+      await eventsWorkerAction();
+    });
+
+  program
     .command('catalog')
     .description('Discover the MCP tool schema (Discord execution disabled)')
     .option('--check', 'Validate the credential-free catalog contract and exit')

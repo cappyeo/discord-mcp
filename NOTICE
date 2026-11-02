@@ -1,0 +1,22 @@
+Discord MCP
+Copyright contributors to Discord MCP. Licensed under Apache-2.0.
+
+This distribution includes adapted Apache-2.0 source from these forks:
+
+- alexzhues/discord-mcp, commit 3b1f882eebd1a49632b6941d4c68130332cc3d51:
+  opt-in DM/mention Events protocol, callback verification, durable worker,
+  event-bound context/replies, and associated tests.
+- argos-repos/discord-mcp, commit fcd3382330f31f37251a703c3d2af6dd1697b8a8:
+  invite/reaction input validation and REST-boundary regression tests.
+- thesammykins/discord-mcp-typescript, commit 5dce0692def01e795ac29ea76a937f9838986827:
+  archive/message pagination contracts, reply identity projection, and tests.
+- The1Studio/discord-mcp, commits 760be1f3f313784cc0b5a03acbff58c137011df4
+  and 7914251ea000d1686d5ef9ff1ea9fe2c7317b3f1:
+  known-permission evidence handling and tool-description compaction.
+
+Integration and additional storage, scope, and description safeguards were
+developed with AI assistance. Upstream descriptions retain all semantic
+sections, including Returns; personal deployment configuration is not included.
+
+Runtime libraries added for Events: ipaddr.js and standardwebhooks (MIT),
+and discord.js (Apache-2.0). Their own license notices accompany those packages.

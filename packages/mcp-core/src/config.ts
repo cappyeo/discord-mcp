@@ -10,6 +10,21 @@ const boolish = (def = false) =>
     .default(def);
 
 const ConfigSchema = z.object({
+  // Optional single-account MCP Events deployment; omitted by existing installs.
+  MCP_EVENTS_CATALOG: z.enum(['all', 'dm', 'mentions']).default('all'),
+  MCP_EVENTS_SOCKET: z.string().min(1).optional(),
+  MCP_EVENTS_OWNER: z.string().min(1).max(256).optional(),
+  MCP_EVENTS_STATE_DIR: z.string().min(1).optional(),
+  MCP_EVENTS_RETENTION_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  MCP_EVENTS_MAX_RECORDS: z.coerce.number().int().min(100).max(100_000).default(10_000),
+  MCP_EVENTS_GUILD_ID: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
+  MCP_EVENTS_AUTHOR_ID: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
   DISCORD_TOKEN: z.string().min(50, 'DISCORD_TOKEN appears too short to be a valid bot token'),
   DISCORD_EXPECTED_BOT_ID: z
     .string()

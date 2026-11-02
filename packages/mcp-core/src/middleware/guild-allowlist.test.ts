@@ -19,6 +19,44 @@ const ALLOWED = '111122223333444455';
 const DENIED = '999000999000999000';
 const BOT_ID = '987654321098765432';
 
+describe('accepted-event guild scope', () => {
+  const event = { event_id: 'discord_mention_111122223333444481' };
+  it('uses the worker destination and bot identity rather than caller-provided channel fields', async () => {
+    const call = vi.fn(async () => ({ guild_id: ALLOWED, bot_id: BOT_ID }));
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(vi.fn()), BOT_ID, false, {
+      call,
+    });
+    await expect(
+      policy.authorizeTool('events_message_reply', event, undefined),
+    ).resolves.toBeUndefined();
+    expect(call).toHaveBeenCalledWith('message/scope', event);
+    call.mockResolvedValueOnce({ guild_id: DENIED, bot_id: BOT_ID });
+    await expect(
+      policy.authorizeTool('events_message_reply', event, undefined),
+    ).rejects.toBeInstanceOf(GuildNotAllowedError);
+    call.mockResolvedValueOnce({ guild_id: ALLOWED, bot_id: DENIED });
+    await expect(
+      policy.authorizeTool('events_message_context', event, undefined),
+    ).rejects.toBeInstanceOf(BotScopeUnresolvedError);
+  });
+  it('requires an explicit user-scope opt-in for DMs and fails closed without a bridge or identity lock', async () => {
+    const call = vi.fn(async () => ({ bot_id: BOT_ID }));
+    const rest = fakeRest(vi.fn());
+    for (const policy of [
+      new GuildScopePolicy(new Set([ALLOWED]), rest, BOT_ID, false, { call }),
+      new GuildScopePolicy(new Set([ALLOWED]), rest, undefined, true, { call }),
+      new GuildScopePolicy(new Set([ALLOWED]), rest, BOT_ID, true),
+    ])
+      await expect(
+        policy.authorizeTool('events_dm_reply', event, undefined),
+      ).rejects.toBeInstanceOf(GuildScopeUnresolvedError);
+    const enabled = new GuildScopePolicy(new Set([ALLOWED]), rest, BOT_ID, true, { call });
+    await expect(
+      enabled.authorizeTool('events_dm_reply', event, undefined),
+    ).resolves.toBeUndefined();
+  });
+});
+
 function fakeRest(get: ReturnType<typeof vi.fn>): REST {
   return { get } as unknown as REST;
 }
@@ -264,6 +302,19 @@ describe('guild allowlist policy', () => {
     await expect(
       policy.authorizeTool('stickers_get', { sticker_id: '333344445555666677' }, schema),
     ).rejects.toBeInstanceOf(GuildNotAllowedError);
+  });
+
+  it.each([
+    '..',
+    '%2e%2e',
+    '../channels/123456789012345678',
+  ])('rejects malformed invite scope before fetching: %j', async (code) => {
+    const get = vi.fn();
+    const policy = new GuildScopePolicy(new Set([ALLOWED]), fakeRest(get));
+    await expect(
+      policy.authorizeTool('invites_delete', { code }, { inputSchema: { code: z.string() } }),
+    ).rejects.toBeInstanceOf(z.ZodError);
+    expect(get).not.toHaveBeenCalled();
   });
 
   it('hides and blocks every unprovable global write and interaction route', async () => {

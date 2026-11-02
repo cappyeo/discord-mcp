@@ -110,6 +110,30 @@ describe('evaluateBotPermissions', () => {
     });
 
     expect(result.administrator).toBe(true);
+    // Still reported for upgrade diagnostics, but no longer degrades evidence.
+    expect(result.unknownPermissionBits).toBe(1n << 47n);
+    expect(result.confidence).toBe('complete');
+  });
+
+  it('treats an unrecognized future permission bit as complete evidence', () => {
+    // An unrelated future bit must not invalidate evidence for named
+    // permissions when every required role and overwrite is available.
+    const result = evaluateBotPermissions({
+      guildId: GUILD_ID,
+      roles: [
+        everyone,
+        {
+          ...everyone,
+          id: ROLE_ID,
+          name: 'Caller',
+          position: 4,
+          permissions: String(1024n | (1n << 47n)),
+        },
+      ],
+      member: { id: BOT_ID, roles: [ROLE_ID] },
+    });
+
+    expect(result.administrator).toBe(false);
     expect(result.unknownPermissionBits).toBe(1n << 47n);
     expect(result.confidence).toBe('complete');
   });

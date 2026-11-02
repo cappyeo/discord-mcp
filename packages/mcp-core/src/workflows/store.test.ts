@@ -305,7 +305,8 @@ describe('WorkflowStore', () => {
       const store = new WorkflowStore(dir, 'workflow-test-integrity-key-01234567890123456789');
       await store.init();
       await writeFile(join(dir, `${record.id}.lock`), '99999999\n');
-      const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const kill = vi.spyOn(process, 'kill').mockImplementation((pid) => {
+        if (pid === process.pid) return true;
         const error = new Error('dead') as NodeJS.ErrnoException;
         error.code = 'ESRCH';
         throw error;
@@ -314,21 +315,28 @@ describe('WorkflowStore', () => {
       const gate = new Promise<void>((resolve) => {
         release = resolve;
       });
-      const first = store.withLock(record.id, () => gate);
+      let entered!: () => void;
+      const acquired = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const first = store.withLock(record.id, () => {
+        entered();
+        return gate;
+      });
       try {
-        for (
-          let i = 0;
-          i < 100 && !(await readFile(join(dir, `${record.id}.lock`), 'utf8').catch(() => ''));
-          i += 1
-        )
-          await new Promise((resolve) => setTimeout(resolve, 5));
+        // Wait for the first executor, not the pre-existing stale PID file.
+        // Its real PID must remain alive in the probe used by the contender.
+        await Promise.race([acquired, first]);
         await expect(store.withLock(record.id, async () => undefined)).rejects.toThrow(
           /already being executed/,
         );
-        release();
-        await first;
       } finally {
-        kill.mockRestore();
+        release();
+        try {
+          await first;
+        } finally {
+          kill.mockRestore();
+        }
       }
     } finally {
       await rm(dir, { recursive: true, force: true });

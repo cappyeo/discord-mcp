@@ -6,7 +6,9 @@ import {
   GuildNotAllowedError,
   GuildScopeUnresolvedError,
 } from '../errors/client.js';
+import { EVENT_TOOL_NAMES, type EventBridge } from '../events/contract.js';
 import { resolveChannelGuildId } from '../rest/channel-guild-cache.js';
+import { InviteCode } from '../tools/_lib/snowflake.js';
 import type { ToolMiddleware } from './compose.js';
 
 interface SchemaCarrier {
@@ -151,6 +153,7 @@ export function hasVerifiableGuildScope(
   toolName: string,
   inputSchema: Readonly<Record<string, unknown>>,
 ): boolean {
+  if (EVENT_TOOL_NAMES.has(toolName)) return true;
   if (
     toolName === 'mcp_pipeline' ||
     toolName.startsWith('workflow_') ||
@@ -185,6 +188,7 @@ export class GuildScopePolicy {
     private readonly rest: REST,
     private readonly expectedBotId?: string,
     private readonly allowUserScoped = false,
+    private readonly eventBridge?: EventBridge,
   ) {}
 
   public get enabled(): boolean {
@@ -202,6 +206,22 @@ export class GuildScopePolicy {
     argsValue: unknown,
     schema: SchemaCarrier | undefined,
   ): Promise<void> {
+    if (this.allowed !== null && EVENT_TOOL_NAMES.has(toolName)) {
+      if (!this.eventBridge || !this.expectedBotId)
+        throw new GuildScopeUnresolvedError(`event tool ${toolName}`);
+      if (!isRecord(argsValue)) throw new GuildScopeUnresolvedError(`event tool ${toolName}`);
+      const event_id = stringField(argsValue, 'event_id');
+      if (!event_id) throw new GuildScopeUnresolvedError(`event tool ${toolName}`);
+      const scope = await this.eventBridge.call('message/scope', { event_id });
+      if (scope.bot_id !== this.expectedBotId)
+        throw new BotScopeUnresolvedError(`event tool ${toolName}`);
+      if (typeof scope.guild_id === 'string') this.assertGuild(scope.guild_id);
+      else if (!this.allowUserScoped)
+        throw new GuildScopeUnresolvedError(
+          `event DM ${toolName} requires MCP_ALLOW_USER_SCOPED=true`,
+        );
+      return;
+    }
     if (USER_SCOPED_TOOLS.has(toolName)) {
       if (this.allowed === null) return;
       if (!this.allowUserScoped || this.expectedBotId === undefined) {
@@ -374,8 +394,9 @@ export class GuildScopePolicy {
   }
 
   private resolveInviteGuild(code: string): Promise<string> {
-    return this.cached(this.inviteGuilds, code, async () => {
-      const invite = (await this.rest.get(Routes.invite(code))) as GuildInvite;
+    const inviteCode = InviteCode.parse(code);
+    return this.cached(this.inviteGuilds, inviteCode, async () => {
+      const invite = (await this.rest.get(Routes.invite(inviteCode))) as GuildInvite;
       if (invite.guild?.id === undefined) {
         throw new GuildScopeUnresolvedError(`invite ${code}`);
       }

@@ -102,6 +102,18 @@ Every other sub-command sets
 - [OpenAI remote MCP](/discord-mcp/operations/openai/) - HTTPS deployment, Responses API, and Codex setup.
 - [Architecture](/discord-mcp/architecture/) - what `serve` actually wires up.
 
+## `events-worker`
+
+```sh
+discord-mcp events-worker
+```
+
+Run the single supervised listener for authorized DMs and direct guild mentions.
+Requires a private owner/socket/state configuration and a verified bot identity.
+The worker supports Linux/macOS; Node 22.12 additionally needs the experimental
+SQLite flag. Start MCP `serve` separately with the same owner/socket settings.
+See [DM and mention events](/discord-mcp/operations/message-events/).
+
 ## `catalog`
 
 ```bash

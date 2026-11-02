@@ -3,6 +3,7 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
 import { REACTION_TYPE } from '../_lib/discord-enums.js';
+import { ReactionEmoji } from '../_lib/reaction-emoji.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId, UserId } from '../_lib/snowflake.js';
 
@@ -32,7 +33,7 @@ export default defineTool({
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the message'),
     message_id: MessageId.describe('Message to inspect'),
-    emoji: z.string().min(1).max(128).describe('Unicode emoji or `name:id` for custom emoji'),
+    emoji: ReactionEmoji.describe('Raw Unicode emoji or `name:id` for custom emoji'),
     type: z
       .union([z.literal(REACTION_TYPE[0]), z.literal(REACTION_TYPE[1])])
       .optional()

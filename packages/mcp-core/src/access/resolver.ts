@@ -1,5 +1,6 @@
 import type { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
+import { InviteCode } from '../tools/_lib/snowflake.js';
 import {
   type BotChannelSnapshot,
   type BotMemberSnapshot,
@@ -393,8 +394,9 @@ export function createRuntimeAccessResolver(
     signal?: AbortSignal,
   ): Promise<string | undefined> => {
     const input = asRecord(args);
-    if (typeof input.code !== 'string' || input.code.length === 0) return undefined;
-    const raw = await get<RawInvite>(Routes.invite(input.code), signal);
+    const code = InviteCode.safeParse(input.code);
+    if (!code.success) return undefined;
+    const raw = await get<RawInvite>(Routes.invite(code.data), signal);
     if (!isRecord(raw.guild)) return undefined;
     return optionalId(raw.guild.id, 'invite guild ID');
   };

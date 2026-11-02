@@ -2,6 +2,7 @@ import type { REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { loadConfig } from '../config.js';
 import type { Tool } from '../pieces/Tool.js';
 import AutoModCreate from './automod/create_rule.js';
 import ForumCreate from './channels/forum_create_thread.js';
@@ -120,7 +121,7 @@ const queryCases: QueryCase[] = [
     args: { channel_id: CHANNEL, before: CURSOR, limit: 2 },
     route: `/channels/${CHANNEL}/users/@me/threads/archived/private`,
     query: { before: CURSOR, limit: '2' },
-    response: { threads: [] },
+    response: { threads: [], has_more: false },
   },
   ...(
     [
@@ -131,8 +132,8 @@ const queryCases: QueryCase[] = [
     Tool,
     args: { channel_id: CHANNEL, before: DATE, limit: 2 },
     route: `/channels/${CHANNEL}/threads/archived/${kind}`,
-    query: { before: DATE, limit: '2' },
-    response: { threads: [] },
+    query: { before: DATE, limit: '3' },
+    response: { threads: [], has_more: false },
   })),
   {
     Tool: PollVoters,
@@ -172,6 +173,7 @@ const queryCases: QueryCase[] = [
 describe('Discord query option contracts', () => {
   it.each(queryCases)('$Tool.name forwards supplied filters and pagination', async (testCase) => {
     const get = vi.fn().mockResolvedValue(testCase.response);
+    container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
     container.rest = { get } as unknown as REST;
     const tool = instance(testCase.Tool);
     const result = await tool.run(z.object(tool.inputSchema).parse(testCase.args), {
@@ -422,6 +424,7 @@ describe('Discord optional request body contracts', () => {
     bodyCases,
   )('$Tool.name preserves explicit false, zero, null, and optional fields', async (testCase) => {
     const request = vi.fn().mockResolvedValue(testCase.response);
+    container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
     container.rest = { [testCase.method]: request } as unknown as REST;
     const tool = instance(testCase.Tool);
     const result = await tool.run(z.object(tool.inputSchema).parse(testCase.args), {

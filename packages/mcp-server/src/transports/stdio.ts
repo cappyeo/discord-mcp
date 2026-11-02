@@ -7,6 +7,7 @@ import {
   createGatewayClient,
   createLogger,
   createRuntimeAccessResolver,
+  eventBridgeFromConfig,
   FilePayloadApprovalLedger,
   type GatewayClient,
   loadConfig,
@@ -29,6 +30,7 @@ export async function startStdio(
   opts: { transport?: Transport; registerSignalHandlers?: boolean } = {},
 ): Promise<void> {
   const config = loadConfig();
+  const eventBridge = eventBridgeFromConfig(config);
   const logger = createLogger(config);
   const ownsProcess = opts.transport === undefined && opts.registerSignalHandlers !== false;
   let stdioHandle: StdioServerHandle | undefined;
@@ -157,6 +159,7 @@ export async function startStdio(
     rest,
     logger,
     config,
+    ...(eventBridge ? { eventBridge } : {}),
     enableResourceSubscriptions: true,
     auditSink: configuredAuditSink,
     ...(runtimeAccessResolver === undefined ? {} : { runtimeAccessResolver }),
