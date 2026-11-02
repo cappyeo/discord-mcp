@@ -11,7 +11,7 @@ const NOW = Date.parse('2026-11-02T00:00:00.000Z');
 function verifier(
   authorization: unknown,
   options: {
-    expectedBotId?: string;
+    applicationId?: string;
     now?: () => number;
     rejects?: boolean;
   } = {},
@@ -21,7 +21,7 @@ function verifier(
     return authorization;
   });
   const verify = createOAuthCallerVerifier({
-    ...(options.expectedBotId === undefined ? {} : { expectedBotId: options.expectedBotId }),
+    applicationId: options.applicationId ?? BOT_ID,
     restForToken: () => ({ get }) as unknown as REST,
     now: options.now ?? (() => NOW),
   });
@@ -70,13 +70,11 @@ describe('OAuth2 caller verification', () => {
     await expect(unparseable.verify(TOKEN)).rejects.toMatchObject({ status: 401 });
   });
 
-  it('binds the token to the locked bot application', async () => {
-    const { verify } = verifier(authorization(), { expectedBotId: BOT_ID });
+  it('rejects a token issued to a different application', async () => {
+    const { verify } = verifier(authorization());
     await expect(verify(TOKEN)).resolves.toMatchObject({ id: USER_ID });
 
-    const foreign = verifier(authorization({ application: { id: OTHER_USER_ID } }), {
-      expectedBotId: BOT_ID,
-    });
+    const foreign = verifier(authorization({ application: { id: OTHER_USER_ID } }));
     await expect(foreign.verify(TOKEN)).rejects.toMatchObject({ status: 403 });
   });
 

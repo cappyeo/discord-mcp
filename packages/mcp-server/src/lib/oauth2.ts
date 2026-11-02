@@ -45,9 +45,9 @@ export interface OAuthCallerVerifierOptions {
   /**
    * This deployment's application ID. `/oauth2/@me` reports the application a
    * token was issued to, and accepting any application's token would let an
-   * unrelated app's consent drive this bot.
+   * unrelated app's consent drive this bot, so this is required.
    */
-  readonly expectedBotId?: string;
+  readonly applicationId: string;
   /**
    * HTTP implementation used for verification. Real deployments use the
    * default; suites point it at a loopback Discord stub.
@@ -107,10 +107,7 @@ export function createOAuthCallerVerifier(
     if (!authorization.scopes.includes('identify')) {
       throw new OAuthCallerRejected(403, 'The OAuth2 token is missing the identify scope');
     }
-    if (
-      options.expectedBotId !== undefined &&
-      authorization.application.id !== options.expectedBotId
-    ) {
+    if (authorization.application.id !== options.applicationId) {
       throw new OAuthCallerRejected(403, 'The OAuth2 token belongs to a different application');
     }
     if (authorization.user === undefined) {

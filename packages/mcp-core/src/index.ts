@@ -122,6 +122,7 @@ export {
 export { SubscriptionRegistry } from './gateway/subscription_registry.js';
 export {
   type DiscordBotIdentity,
+  readBotIdentity,
   verifyExpectedBotIdentity,
 } from './identity-lock.js';
 export { createLogger } from './logger.js';

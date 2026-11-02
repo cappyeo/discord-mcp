@@ -10,6 +10,7 @@ import {
   FilePayloadApprovalLedger,
   loadConfig,
   PayloadApprovalLedger,
+  readBotIdentity,
   verifyExpectedBotIdentity,
   wrapRestWithResilience,
 } from '@discord-mcp/core';
@@ -149,14 +150,6 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   // deployment secret. Every authorizeable Discord account is accepted; that
   // user's own Discord permissions bound what they can do.
   const oauth2Mode = config.MCP_AUTH_MODE === 'oauth2';
-  const verifyOAuthCaller = oauth2Mode
-    ? createOAuthCallerVerifier({
-        ...(config.DISCORD_EXPECTED_BOT_ID === undefined
-          ? {}
-          : { expectedBotId: config.DISCORD_EXPECTED_BOT_ID }),
-        ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
-      })
-    : undefined;
   const logger = createLogger(config);
 
   // Keep Cockatiel as the single retry owner. Reject queued/pre-emptive 429s
@@ -174,6 +167,15 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     circuitHalfOpenAfterMs: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
   });
   await verifyExpectedBotIdentity(rest, config.DISCORD_EXPECTED_BOT_ID);
+  // A bot user's ID is its application ID. Read it once at boot so OAuth2 mode
+  // can reject user tokens issued to a different application even when the
+  // operator has not set DISCORD_EXPECTED_BOT_ID.
+  const verifyOAuthCaller = oauth2Mode
+    ? createOAuthCallerVerifier({
+        applicationId: (await readBotIdentity(rest)).id,
+        ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
+      })
+    : undefined;
   // OAuth2 mode exists to bound callers by their own Discord permissions, so it
   // always enforces regardless of MCP_ACCESS_MODE; `advisory` would execute the
   // very calls the evidence cannot prove.

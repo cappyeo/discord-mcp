@@ -74,9 +74,10 @@ part in that decision: Discord's REST API already filters what the authorized
 user can see, so a call is never blocked for missing `GUILD_MEMBERS` or
 `MESSAGE_CONTENT`.
 
-`DISCORD_EXPECTED_BOT_ID` is strongly recommended alongside this mode. Setting
-it locks the bot credential, and the token-exchange check additionally rejects
-user tokens issued to a different application.
+The application ID is read from the bot credential at startup (a bot user's ID
+is its application ID), so user tokens issued to any other application are
+rejected without extra configuration. `DISCORD_EXPECTED_BOT_ID` remains useful
+for locking which bot credential the deployment accepts at all.
 
 `/healthz` stays unauthenticated in OAuth2 mode so infrastructure probes keep
 working; `/mcp` always requires a Discord user token. Client-side, obtain the
