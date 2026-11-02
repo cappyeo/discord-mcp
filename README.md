@@ -79,7 +79,7 @@ See [client setup](https://cappyeo.github.io/discord-mcp/start/client-setup/) fo
 - **Your bot, your permissions.** Guild and tool-category allowlists constrain access. Keep bot tokens out of client config files and source control.
 - **Preview first.** Guided `setup` defaults to `MCP_WRITE_MODE=preview`, which blocks all mutations. Direct `serve` defaults to allowing ordinary writes; `MCP_DRY_RUN` covers only confirmation-gated destructive tools. See [safety controls](https://cappyeo.github.io/discord-mcp/reference/config/safety/) before enabling writes.
 - **Local by default.** Run over stdio, or self-host a bearer-protected Streamable HTTP endpoint behind HTTPS. See [remote MCP setup](https://cappyeo.github.io/discord-mcp/operations/openai/).
-- **DM and mention events (source preview).** Deliver authorized text messages to an MCP Events subscriber, with durable delivery and event-bound replies. Build matching core/CLI packages; the separate worker supports Linux/macOS. See [message Events](https://cappyeo.github.io/discord-mcp/operations/message-events/).
+- **Optional DM and mention events.** From v0.33.0, deliver authorized text messages to an MCP Events subscriber, with durable delivery and event-bound replies. The separate worker supports Linux/macOS. See [message Events](https://cappyeo.github.io/discord-mcp/operations/message-events/).
 
 <h2 align="center"><img src="https://raw.githubusercontent.com/cappyeo/discord-mcp/main/.github/assets/readme/section-docs.svg" alt="Documentation" width="720" /></h2>
 
