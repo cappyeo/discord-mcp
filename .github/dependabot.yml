@@ -22,6 +22,18 @@ updates:
         versions: ['>=2.5.0']
       - dependency-name: tsdown
         versions: ['>=0.22.0']
+      # SDK 3 / experimental 0.300 need Node >=22.15 and a coordinated Logs
+      # API migration. Keep routine updates compatible with Node 22.12.
+      - dependency-name: '@opentelemetry/api'
+        versions: ['>=1.10.0']
+      - dependency-name: '@opentelemetry/exporter-*-otlp-http'
+        versions: ['>=0.300.0']
+      - dependency-name: '@opentelemetry/sdk-node'
+        versions: ['>=0.300.0']
+      - dependency-name: '@opentelemetry/instrumentation-pino'
+        versions: ['>=0.70.0']
+      - dependency-name: '@opentelemetry/instrumentation-undici'
+        versions: ['>=0.34.0']
     groups:
       production-dependencies:
         dependency-type: production

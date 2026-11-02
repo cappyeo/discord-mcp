@@ -1,7 +1,13 @@
 # Contributing
 
 Contributions that improve safe, reliable, caller-owned Discord operations are
-welcome. Before opening a pull request:
+welcome.
+
+Use Node.js 24 and pnpm 9.15.0 for full workspace development, including the
+documentation site. The published core and CLI still support Node.js 22.12;
+CI checks them on both Node.js 22.12 and 24.
+
+Before opening a pull request:
 
 1. Keep the change focused and explain the behavior it changes.
 2. Add or update tests for externally observable behavior.

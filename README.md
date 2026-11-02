@@ -109,6 +109,6 @@ Validates the real local MCP catalog with no token, no Discord or other network 
 
 Ask questions in [Discussions](https://github.com/cappyeo/discord-mcp/discussions), share a voluntary [outcome report](https://github.com/cappyeo/discord-mcp/issues/new?template=verified-outcome.yml), or follow the [external documentation review](https://cappyeo.github.io/discord-mcp/reference/external-documentation-review/) and [submit feedback](https://github.com/cappyeo/discord-mcp/issues/new?template=documentation-review.yml). Never include a bot token, client configuration, private Discord data, or unredacted logs. Report vulnerabilities [privately](https://github.com/cappyeo/discord-mcp/security/advisories/new).
 
-To develop locally, run `pnpm install`, `pnpm build`, then `pnpm test`. See [Contributing](CONTRIBUTING.md); use [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to inspect tool discovery.
+To develop the full workspace locally, use Node.js 24 and run `pnpm install`, `pnpm build`, then `pnpm test`. See [Contributing](CONTRIBUTING.md); use [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to inspect tool discovery.
 
 Licensed under [Apache-2.0](LICENSE). Earlier releases retain their included licenses. The [Acceptable Use Policy](ACCEPTABLE-USE.md) governs community participation and support without changing the software license.
