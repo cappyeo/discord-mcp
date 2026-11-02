@@ -25,7 +25,7 @@ env:
 
 jobs:
   preflight:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     permissions:
       actions: read
@@ -78,7 +78,7 @@ jobs:
   publish:
     needs: preflight
     if: ${{ !inputs.registry_only }}
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     environment: npm-publish
     permissions:
@@ -107,7 +107,7 @@ jobs:
   registry:
     needs: [preflight, publish]
     if: ${{ always() && needs.preflight.result == 'success' && (inputs.registry_only || needs.publish.result == 'success') }}
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     permissions:
       contents: read

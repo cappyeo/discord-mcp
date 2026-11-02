@@ -48,6 +48,7 @@ jobs:
         # hand-maintained on the box.
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
         run: |
           set -euo pipefail
@@ -55,8 +56,12 @@ jobs:
             echo "::error::org secret DISCORD_TOKEN is unset or not visible to this repository"
             exit 1
           fi
+          if [ -z "${DISCORD_CLIENT_ID:-}" ]; then
+            echo "::error::repo secret DISCORD_CLIENT_ID is unset"
+            exit 1
+          fi
           if [ -z "${DISCORD_CLIENT_SECRET:-}" ]; then
-            echo "::error::org secret DISCORD_CLIENT_SECRET is unset or not visible to this repository"
+            echo "::error::repo secret DISCORD_CLIENT_SECRET is unset"
             exit 1
           fi
           umask 077
@@ -70,9 +75,10 @@ jobs:
                 # call is authorized by that user's guild/channel/role permissions.
                 MCP_AUTH_MODE: "oauth2"
                 MCP_PUBLIC_URL: "https://discord-mcp.the1studio.org"
-                # The broker's own application identity. Discord's token endpoint
-                # needs the secret, which never reaches a client.
-                DISCORD_CLIENT_ID: "1566823844801548490"
+                # The broker's own application identity, supplied from the
+                # repository secret store. Discord's token endpoint needs the
+                # secret, which never reaches a client.
+                DISCORD_CLIENT_ID: "$DISCORD_CLIENT_ID"
                 DISCORD_CLIENT_SECRET: "$DISCORD_CLIENT_SECRET"
                 # Destructive tools and Components V2 sends execute only when a call ALSO
                 # passes __confirm:true (V2: plus the one-time payload hash + approval id).

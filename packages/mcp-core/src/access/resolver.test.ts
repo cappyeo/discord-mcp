@@ -710,6 +710,49 @@ describe('createRuntimeAccessResolver', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('does not issue permission lookups when the signal is already aborted', async () => {
+    // Identity is read first (it always is), but once the caller has gone the
+    // resolver must stop before it spends guild/channel requests.
+    const { rest, get } = restFor(guildRoutes());
+    const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+    const controller = new AbortController();
+    controller.abort(new DOMException('aborted', 'AbortError'));
+
+    await expect(
+      resolver({
+        toolName: 'messages_send',
+        args: { channel_id: CHANNEL_ID },
+        requirement: CHANNEL_WRITE_ACCESS,
+        expectedBotId: BOT_ID,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(get.mock.calls.map(([route]) => route)).not.toContain(Routes.channel(CHANNEL_ID));
+  });
+
+  it('reports unknown (not an abort) when a load fails with a live signal', async () => {
+    // Covers withAbort's rejection path: the promise rejects while the caller
+    // is still connected, so the error is surfaced through the resolver's
+    // unknown-evidence fallback rather than escaping as an abort.
+    const controller = new AbortController();
+    const get = vi.fn(async () => {
+      throw new Error('discord unavailable');
+    });
+    const resolver = createRuntimeAccessResolver({
+      rest: { get } as unknown as REST,
+      expectedBotId: BOT_ID,
+    });
+    await expect(
+      resolver({
+        toolName: 'messages_send',
+        args: { channel_id: CHANNEL_ID },
+        requirement: CHANNEL_WRITE_ACCESS,
+        expectedBotId: BOT_ID,
+        signal: controller.signal,
+      }),
+    ).resolves.toMatchObject({ status: 'unknown', identityVerified: false });
+  });
+
   it('keeps incomplete channel overwrite evidence unknown', async () => {
     const { rest } = restFor(
       guildRoutes({

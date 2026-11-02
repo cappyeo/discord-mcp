@@ -135,13 +135,13 @@ describe('loadConfig', () => {
       DISCORD_TOKEN: VALID_TOKEN,
       MCP_AUTH_MODE: 'oauth2',
       MCP_PUBLIC_URL: 'https://mcp.example.test',
-      DISCORD_CLIENT_ID: '1566823844801548490',
+      DISCORD_CLIENT_ID: '1566823844801548491',
       DISCORD_CLIENT_SECRET: 'c'.repeat(32),
     } as NodeJS.ProcessEnv;
     expect(loadConfig(oauth)).toMatchObject({
       MCP_AUTH_MODE: 'oauth2',
       MCP_PUBLIC_URL: 'https://mcp.example.test',
-      DISCORD_CLIENT_ID: '1566823844801548490',
+      DISCORD_CLIENT_ID: '1566823844801548491',
     });
 
     // Each is load-bearing: without them the broker cannot register a client,
