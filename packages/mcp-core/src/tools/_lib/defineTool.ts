@@ -92,8 +92,6 @@ function assertMatchesOutputSchema(
   );
 }
 
-const DESCRIPTION_SECTION_RE = /\*\*([^*\n]+)\*\*:[ \t]*\n?([\s\S]*?)(?=\n\s*\*\*[^*\n]+\*\*:|$)/g;
-
 /**
  * Collapse a section body (or a heading-less description) into one line per
  * authored paragraph. Paragraph breaks survive because `compactSummary()`
@@ -101,19 +99,19 @@ const DESCRIPTION_SECTION_RE = /\*\*([^*\n]+)\*\*:[ \t]*\n?([\s\S]*?)(?=\n\s*\*\
  * merging paragraphs would push a URL or a second sentence into that summary.
  */
 function compactText(text: string): string {
-  return text
-    .split(/\n[ \t]*\n/)
-    .map((paragraph) =>
-      paragraph
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line !== '')
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    )
-    .filter((paragraph) => paragraph !== '')
-    .join('\n\n');
+  const paragraphs: string[] = [];
+  let paragraph: string[] = [];
+  const flush = () => {
+    if (paragraph.length > 0) paragraphs.push(paragraph.join(' '));
+    paragraph = [];
+  };
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '') flush();
+    else paragraph.push(trimmed.replace(/\s+/g, ' '));
+  }
+  flush();
+  return paragraphs.join('\n\n');
 }
 
 /**
@@ -124,32 +122,34 @@ function compactText(text: string): string {
  * docs. Fenced examples retain their exact formatting on the wire as well.
  */
 function compactDescription(description: string): string {
-  if (/^\s*```/m.test(description)) return description.trim();
+  const lines = description.split('\n');
+  if (
+    lines.some((line) => line.trimStart().startsWith('```') || line.trimStart().startsWith('~~~'))
+  )
+    return description.trim();
   const parts: string[] = [];
-  let lastIndex = 0;
-  let matched = false;
-
-  for (const section of description.matchAll(DESCRIPTION_SECTION_RE)) {
-    matched = true;
-    const index = section.index ?? 0;
-    if (index > lastIndex) {
-      const leading = compactText(description.slice(lastIndex, index));
-      if (leading !== '') parts.push(leading);
-    }
-    lastIndex = index + section[0].length;
-    const heading = section[1]!.trim();
-    const body = compactText(section[2]!);
-    parts.push(body === '' ? `${heading}:` : `${heading}: ${body}`);
+  let heading: string | undefined;
+  let body: string[] = [];
+  const flush = () => {
+    const text = compactText(body.join('\n'));
+    if (heading !== undefined) parts.push(text === '' ? `${heading}:` : `${heading}: ${text}`);
+    else if (text !== '') parts.push(text);
+    body = [];
+  };
+  // Fixed delimiter searches avoid backtracking on malformed Markdown or long
+  // whitespace runs supplied by library consumers.
+  for (const line of lines) {
+    const text = line.trimStart();
+    const end = text.startsWith('**') ? text.indexOf('**:', 2) : -1;
+    const candidate = end > 2 ? text.slice(2, end) : '';
+    if (candidate.trim() !== '' && !candidate.includes('*')) {
+      flush();
+      heading = candidate.trim();
+      body.push(text.slice(end + 3));
+    } else body.push(line);
   }
-
-  // 19 descriptions carry no `**Heading**:` marker at all.
-  if (!matched) return compactText(description);
-
-  const tail = compactText(description.slice(lastIndex));
-  if (tail !== '') parts.push(tail);
-
-  // `catalog --check` rejects an empty description; never produce one.
-  return parts.length === 0 ? description.trim() : parts.join('\n\n');
+  flush();
+  return parts.join('\n\n');
 }
 
 export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(

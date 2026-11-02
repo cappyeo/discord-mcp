@@ -85,6 +85,30 @@ function setup(overrides: Partial<DmEventRuntime['options']> = {}) {
   };
 }
 describePosix('bounded Events history', () => {
+  it('resolves scope from a delivered event and rechecks the live DM recipient', async () => {
+    const s = setup();
+    await s.runtime.call('operator', 'events/subscribe', args);
+    await s.runtime.observe(message);
+    await s.runtime.deliver();
+    const target = { event_id: `discord_dm_${message.id}` };
+    expect(await s.runtime.call('operator', 'message/scope', target)).toEqual({
+      channel_id: channel,
+      bot_id: bot,
+    });
+    expect(s.rest.get).toHaveBeenLastCalledWith(`/channels/${channel}`);
+    s.rest.get.mockResolvedValueOnce({ id: channel, type: 1, recipients: [{ id: bot }] });
+    await expect(s.runtime.call('operator', 'message/scope', target)).rejects.toThrow(
+      'no longer authorized',
+    );
+  });
+
+  it('rolls back failed housekeeping instead of leaving the state transaction open', async () => {
+    const s = setup();
+    s.runtime.db.exec('DROP TABLE replies');
+    await expect(s.runtime.call('operator', 'events/list', {})).rejects.toThrow();
+    expect(() => s.runtime.db.exec('BEGIN IMMEDIATE; ROLLBACK')).not.toThrow();
+  });
+
   it('bounds pending operations and drains already accepted work', async () => {
     const s = setup();
     let unblock!: () => void;

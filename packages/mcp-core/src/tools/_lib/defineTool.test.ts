@@ -176,6 +176,29 @@ describe('defineTool', () => {
     expect(instance.description).toContain('Returns: `{ok}`.');
   });
 
+  it('handles long malformed Markdown while preserving leading text and safety semantics', () => {
+    const description = `Keep inline \`**word**:\` literal.\n\n**)**:${'\t'.repeat(50_000)}\n\n**Security**: Require approval.\n\n**Returns**: Empty means unknown.`;
+    const Probe = defineTool({
+      name: 'large_description',
+      description,
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      handler: async () => ({}),
+    });
+    const tool = new Probe(
+      { name: 'large_description', path: 'inline', root: 'inline', store: null as never },
+      { name: 'large_description' },
+    );
+    expect(tool.description).toBe(
+      'Keep inline `**word**:` literal.\n\n):\n\nSecurity: Require approval.\n\nReturns: Empty means unknown.',
+    );
+  });
+
   it('preserves fenced examples and descriptions containing only Returns', () => {
     for (const description of [
       '**Returns**: Empty means unknown, not absent.',
