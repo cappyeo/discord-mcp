@@ -9,6 +9,28 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.33.0 - DM and mention Events, safer Discord reads
+
+Released 2026-11-03.
+
+- Added opt-in MCP Events for authorized plain-text DMs and direct human bot
+  mentions. A supervised Linux/macOS worker owns the Gateway connection, signed
+  callbacks, private durable storage, and four event-bound context/reply tools.
+- Bounded history, subscription churn and pending work. Preserve uncertain-send
+  evidence, prevent duplicate replies, isolate event catalogs and verify the
+  event's real guild/bot destination before allowlisted operations.
+- Hardened invite/reaction inputs and verified raw emoji encoding at the REST
+  boundary. Archive/message reads preserve timestamp precision, reply identity
+  and truthful continuation instead of silently treating missing data as complete.
+- Keep diagnostics for future permission bits while evaluating known permissions
+  from complete evidence. Compact wire descriptions with a linear parser while
+  retaining Returns, security semantics, fenced examples and full documentation.
+- Updated compatible runtime/development dependencies and patched transport
+  advisories. Published core/CLI retain Node >=22.12; the worker needs the SQLite
+  flag on Node 22.12. Full workspace/docs development uses Node 24.
+- See [DM and mention events](/discord-mcp/operations/message-events/) for setup,
+  platform limits, retention, and the live client/Discord acceptance checklist.
+
 ## v0.32.1 - Maintenance updates and accessible search
 
 Released 2026-10-20.

@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+// Validate the checked-out release tag before npm or Registry publication.
+// Private test and documentation packages follow the public CLI version too.
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 const cli = readJson('packages/mcp-server/package.json');

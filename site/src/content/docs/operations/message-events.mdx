@@ -3,12 +3,11 @@ title: DM and mention events
 description: Deliver authorized Discord DMs and direct guild mentions to an MCP Events subscriber.
 ---
 
-:::note[Source preview]
-Use matching core and CLI builds from a checkout containing Events. Build the
-workspace with `pnpm install --frozen-lockfile` and `pnpm build`, then run
-`node packages/mcp-server/dist/cli.js events-worker` from that checkout. An older
-installed npm command does not gain Events support from environment settings;
-publishing an npm release and enabling a live worker are separate steps.
+:::note[Version requirement]
+Events requires v0.33.0 or later. Installing the CLI installs its matching core;
+source checkouts should build both workspace packages together. Installation does
+not start the listener: run the worker separately and configure a compatible
+client's subscription before expecting incoming DM or mention delivery.
 :::
 
 Events is an opt-in, single-owner feature. A separate worker observes authorized
