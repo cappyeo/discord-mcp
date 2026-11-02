@@ -79,6 +79,7 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 export class DmEventRuntime {
   readonly db: DatabaseSync;
   private serial: Promise<unknown> = Promise.resolve();
+  private pendingOperations = 0;
   constructor(
     readonly options: {
       directory: string;
@@ -179,9 +180,29 @@ export class DmEventRuntime {
   }
   /** Serializes async verification, delivery and writes as well as SQLite transactions. */
   exclusive<T>(fn: () => Promise<T>): Promise<T> {
-    const result = this.serial.then(fn);
-    this.serial = result.catch(() => {});
+    if (this.pendingOperations >= 256) {
+      return Promise.reject(new ProtocolError(-32000, 'Events worker is busy'));
+    }
+    this.pendingOperations++;
+    const deadline = Date.now() + 30_000;
+    const result = this.serial.then(() => {
+      if (Date.now() > deadline)
+        throw new ProtocolError(-32000, 'Events operation expired in queue');
+      return fn();
+    });
+    this.serial = result.then(
+      () => {
+        this.pendingOperations--;
+      },
+      () => {
+        this.pendingOperations--;
+      },
+    );
     return result;
+  }
+  async closeWhenIdle(): Promise<void> {
+    await this.serial;
+    this.close();
   }
   private authorized(owner: string, author = this.options.authorId) {
     if (owner !== this.options.owner || author !== this.options.authorId)

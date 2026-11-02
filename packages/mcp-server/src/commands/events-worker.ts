@@ -202,9 +202,7 @@ export async function eventsWorkerAction(): Promise<void> {
     clearInterval(timer);
     await client.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await runtime?.exclusive(async () => {
-      runtime?.close();
-    });
+    await runtime?.closeWhenIdle();
     if (existsSync(socket)) unlinkSync(socket);
     release();
   };
@@ -225,6 +223,7 @@ export async function eventsWorkerAction(): Promise<void> {
       maxRecords: config.MCP_EVENTS_MAX_RECORDS,
     });
     client.on('messageCreate', (message) => {
+      if (stopping || fatal) return;
       const dm: IncomingDm = {
         id: message.id,
         channel_id: message.channelId,

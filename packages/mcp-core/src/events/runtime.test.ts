@@ -85,6 +85,54 @@ function setup(overrides: Partial<DmEventRuntime['options']> = {}) {
   };
 }
 describePosix('bounded Events history', () => {
+  it('bounds pending operations and drains already accepted work', async () => {
+    const s = setup();
+    let unblock!: () => void;
+    const held = s.runtime.exclusive(
+      () =>
+        new Promise<void>((resolve) => {
+          unblock = resolve;
+        }),
+    );
+    await Promise.resolve();
+    let finished = 0;
+    const queued = Array.from({ length: 255 }, () =>
+      s.runtime.exclusive(async () => {
+        finished++;
+      }),
+    );
+    await expect(s.runtime.call('operator', 'events/list', {})).rejects.toThrow('busy');
+    const closing = s.runtime.closeWhenIdle();
+    unblock();
+    await Promise.all([held, ...queued, closing]);
+    expect(finished).toBe(255);
+    expect(() => s.runtime.status()).toThrow();
+  });
+
+  it('expires queued work before starting a late side effect', async () => {
+    const s = setup();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(0);
+    let unblock!: () => void;
+    const effect = vi.fn(async () => {});
+    try {
+      const held = s.runtime.exclusive(
+        () =>
+          new Promise<void>((resolve) => {
+            unblock = resolve;
+          }),
+      );
+      await Promise.resolve();
+      const queued = s.runtime.exclusive(effect);
+      clock.mockReturnValue(30_001);
+      unblock();
+      await held;
+      await expect(queued).rejects.toThrow('expired in queue');
+      expect(effect).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('rejects new observations at capacity without discarding accepted or deduplicated events', async () => {
     const s = setup({ maxRecords: 1 });
     await s.runtime.call('operator', 'events/subscribe', args);
@@ -142,14 +190,20 @@ describePosix('bounded Events history', () => {
         timestamp: new Date(Date.now() + 600_000).toISOString(),
       }),
     ).toBe(false);
-    await s.runtime.call('operator', 'events/unsubscribe', args);
+    await s.runtime.call('operator', 'events/unsubscribe', {
+      ...args,
+      delivery: { mode: 'webhook', url: args.delivery.url },
+    });
     for (let n = 1; n < 100; n++) {
       const next = {
         ...args,
         delivery: { ...args.delivery, url: `https://callback.example.test/${n}` },
       };
       await s.runtime.call('operator', 'events/subscribe', next);
-      await s.runtime.call('operator', 'events/unsubscribe', next);
+      await s.runtime.call('operator', 'events/unsubscribe', {
+        ...next,
+        delivery: { mode: 'webhook', url: next.delivery.url },
+      });
     }
     await expect(
       s.runtime.call('operator', 'events/subscribe', {

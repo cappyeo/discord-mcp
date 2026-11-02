@@ -116,9 +116,8 @@ describe('evaluateBotPermissions', () => {
   });
 
   it('treats an unrecognized future permission bit as complete evidence', () => {
-    // Regression: Discord sets bit 47 on roles today and this build's
-    // permission table does not name it. A non-administrator must still be
-    // admitted, or every OAuth2 caller fails closed with "evidence is partial".
+    // An unrelated future bit must not invalidate evidence for named
+    // permissions when every required role and overwrite is available.
     const result = evaluateBotPermissions({
       guildId: GUILD_ID,
       roles: [
