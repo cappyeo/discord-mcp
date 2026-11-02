@@ -153,12 +153,12 @@ function bitfield(value: unknown, label: string): string {
 
 function parseMember(value: unknown, expectedId: string): BotMemberSnapshot {
   if (!isRecord(value) || !Array.isArray(value.roles)) {
-    throw new Error('Discord returned a malformed guild bot member');
+    throw new Error('Discord returned a malformed guild member');
   }
   const user = isRecord(value.user) ? value.user : value;
-  const memberId = id(user.id, 'guild bot member ID');
+  const memberId = id(user.id, 'guild member ID');
   if (memberId !== expectedId) {
-    throw new Error('Discord returned a different guild member than the bot');
+    throw new Error('Discord returned a different guild member than requested');
   }
   return {
     id: memberId,
@@ -336,21 +336,21 @@ export function createRuntimeAccessResolver(
 
   const readGuild = async (
     guildId: string,
-    botId: string,
+    userId: string,
     signal?: AbortSignal,
   ): Promise<GuildSnapshot> =>
     cached(
-      `guild:${guildId}:${botId}`,
+      `guild:${guildId}:${userId}`,
       async () => {
         const [guildRaw, memberRaw, rolesRaw] = await Promise.all([
           get<unknown>(Routes.guild(guildId), signal),
-          get<unknown>(Routes.guildMember(guildId, botId), signal),
+          get<unknown>(Routes.guildMember(guildId, userId), signal),
           get<unknown>(Routes.guildRoles(guildId), signal),
         ]);
         const guild = parseGuild(guildRaw, guildId);
         return {
           ...guild,
-          member: parseMember(memberRaw, botId),
+          member: parseMember(memberRaw, userId),
           roles: parseRoles(rolesRaw),
         };
       },
@@ -487,19 +487,19 @@ export function createRuntimeAccessResolver(
     signal?: AbortSignal,
   ): Promise<HierarchyEvidenceStatus> => {
     if (request.requirement.hierarchy !== 'required') return 'satisfied';
-    // Discord creates a new role below the bot's current top role; there is no
-    // caller-selected target whose hierarchy must be compared.
+    // Discord creates a new role below the acting account's top role; there is
+    // no caller-selected target whose hierarchy must be compared.
     if (request.toolName === 'roles_create') return 'satisfied';
     const args = asRecord(request.args);
     const roles = [...guild.roles];
     const roleById = new Map(roles.map((role) => [role.id, role]));
     const everyone = roleById.get(guild.id);
     if (everyone === undefined) return 'unknown';
-    const botRoles = guild.member.roles
+    const principalRoles = guild.member.roles
       .map((roleId) => roleById.get(roleId))
       .filter((role): role is BotRoleSnapshot => role !== undefined);
-    if (botRoles.length !== guild.member.roles.length) return 'unknown';
-    const botTop = botRoles.reduce(
+    if (principalRoles.length !== guild.member.roles.length) return 'unknown';
+    const principalTop = principalRoles.reduce(
       (top, role) => (role.position > top.position ? role : top),
       everyone,
     );
@@ -528,7 +528,9 @@ export function createRuntimeAccessResolver(
       return targetRoleIds.every((roleId) => {
         const targetRole = roleById.get(roleId);
         return (
-          targetRole !== undefined && !targetRole.managed && botTop.position > targetRole.position
+          targetRole !== undefined &&
+          !targetRole.managed &&
+          principalTop.position > targetRole.position
         );
       })
         ? 'satisfied'
@@ -551,7 +553,7 @@ export function createRuntimeAccessResolver(
       (top, role) => (role.position > top.position ? role : top),
       everyone,
     );
-    return botTop.position > targetTop.position ? 'satisfied' : 'not_satisfied';
+    return principalTop.position > targetTop.position ? 'satisfied' : 'not_satisfied';
   };
 
   const resolve = async (request: RuntimeAccessRequest): Promise<RuntimeAccessEvidence> => {
@@ -564,6 +566,8 @@ export function createRuntimeAccessResolver(
     if (expectedBotId !== undefined && identity.id !== expectedBotId) {
       return unknownEvidence(context, identity.id);
     }
+    // Without an OAuth2 caller, the bot credential is the permission subject.
+    const principalId = request.principalId ?? identity.id;
     if (request.requirement.scope === 'user') {
       const recipientId = stringArg(request.args, 'recipient_id');
       // Identity is verified above, but recipient consent is deliberately not
@@ -684,7 +688,7 @@ export function createRuntimeAccessResolver(
       ...new Set(resolvedChannels?.map((channel) => channel.target.guildId) ?? [guildId]),
     ];
     const guildEntries = await Promise.all(
-      guildIds.map(async (id) => [id, await readGuild(id, identity.id, request.signal)] as const),
+      guildIds.map(async (id) => [id, await readGuild(id, principalId, request.signal)] as const),
     );
     const guilds = new Map(guildEntries);
     const primaryGuild = guilds.get(guildId);

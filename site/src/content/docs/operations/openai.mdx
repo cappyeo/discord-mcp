@@ -20,13 +20,20 @@ bearer token:
 
 - `DISCORD_TOKEN` authorizes calls to Discord.
 - `DISCORD_MCP_ACCESS_TOKEN` authenticates a remote MCP client to this server.
-- Every authenticated caller acts with the same Discord bot permissions. Use
-  Discord roles, channel overrides, `MCP_CATEGORIES`, and confirmation controls
-  to keep that bot's scope small.
+- By default every authenticated caller acts with the same Discord bot
+  permissions. Use Discord roles, channel overrides, `MCP_CATEGORIES`, and
+  confirmation controls to keep that bot's scope small.
 
-It is not a per-user Discord identity system and does not expose OAuth metadata
-or a ChatGPT connector flow. Do not distribute a shared bearer token to people
-who should have different Discord access.
+`MCP_AUTH_MODE=oauth2` replaces that shared secret with Discord user OAuth2
+tokens: each caller authenticates as their own Discord account and can only act
+where their own guild, channel, and role permissions allow. Any Discord user who
+authorizes the application is accepted; there is no per-user allowlist. See
+[Access and scope](/discord-mcp/reference/config/access/#mcp_auth_mode). That
+mode is still not a ChatGPT connector: this server does not implement
+[RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) protected-resource metadata
+or an authorization-server discovery document, so the ChatGPT OAuth/connector
+flow remains unavailable. Do not distribute a shared bearer token to people who
+should have different Discord access; use OAuth2 mode for that instead.
 
 <Aside type="caution">
 Put this endpoint behind HTTPS before making it reachable outside the host.

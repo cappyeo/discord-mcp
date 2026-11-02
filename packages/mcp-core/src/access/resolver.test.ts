@@ -97,6 +97,72 @@ describe('createRuntimeAccessResolver', () => {
     ).resolves.toMatchObject({ status: 'unknown' });
   });
 
+  it('evaluates permissions for the OAuth2 caller instead of the bot', async () => {
+    const callerId = '888899990000111122';
+    const callerRoleId = '999900001111222233';
+    const routes = guildRoutes({
+      [Routes.channel(CHANNEL_ID)]: {
+        id: CHANNEL_ID,
+        guild_id: GUILD_ID,
+        type: 0,
+        permission_overwrites: [],
+      },
+      // The bot keeps SEND_MESSAGES; the caller only has VIEW_CHANNEL.
+      [Routes.guildMember(GUILD_ID, callerId)]: { user: { id: callerId }, roles: [callerRoleId] },
+      [Routes.guildRoles(GUILD_ID)]: [
+        {
+          id: GUILD_ID,
+          name: '@everyone',
+          position: 0,
+          permissions: String(PermissionFlagsBits.ViewChannel),
+          managed: false,
+        },
+        {
+          id: ROLE_ID,
+          name: 'Bot',
+          position: 5,
+          permissions: String(PermissionFlagsBits.SendMessages),
+          managed: false,
+        },
+        {
+          id: callerRoleId,
+          name: 'Caller',
+          position: 1,
+          permissions: '0',
+          managed: false,
+        },
+      ],
+    });
+    const { rest, get } = restFor(routes);
+    const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+
+    const botEvidence = await resolver({
+      toolName: 'messages_send',
+      args: { channel_id: CHANNEL_ID },
+      requirement: CHANNEL_WRITE_ACCESS,
+      expectedBotId: BOT_ID,
+    });
+    expect(botEvidence).toMatchObject({ status: 'complete' });
+    expect(botEvidence.effectivePermissions).toBe(
+      PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages,
+    );
+
+    get.mockClear();
+    const callerEvidence = await resolver({
+      toolName: 'messages_send',
+      args: { channel_id: CHANNEL_ID },
+      requirement: CHANNEL_WRITE_ACCESS,
+      expectedBotId: BOT_ID,
+      principalId: callerId,
+    });
+    expect(callerEvidence).toMatchObject({ status: 'complete', identityVerified: true });
+    expect(callerEvidence.effectivePermissions).toBe(PermissionFlagsBits.ViewChannel);
+    // The bot's own membership is never consulted for a caller-scoped call.
+    expect(get.mock.calls.map(([route]) => route)).not.toContain(
+      Routes.guildMember(GUILD_ID, BOT_ID),
+    );
+  });
+
   it('keeps a malformed application and missing invite code unresolved', async () => {
     const resolver = createRuntimeAccessResolver({
       rest: restFor({ ...identityRoutes(), [Routes.currentApplication()]: null }).rest,

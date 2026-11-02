@@ -124,6 +124,24 @@ describe('loadConfig', () => {
     }
   });
 
+  it('defaults to the shared-token HTTP auth mode', () => {
+    expect(loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv).MCP_AUTH_MODE).toBe(
+      'token',
+    );
+  });
+
+  it('accepts OAuth2 mode without extra prerequisites', () => {
+    // OAuth2 is an authentication mode, not an authorization allowlist: any
+    // Discord user token is accepted and bounded by that user's permissions.
+    const oauth = {
+      DISCORD_TOKEN: VALID_TOKEN,
+      MCP_AUTH_MODE: 'oauth2',
+    } as NodeJS.ProcessEnv;
+    expect(loadConfig(oauth).MCP_AUTH_MODE).toBe('oauth2');
+    // MCP_ACCESS_MODE stays a separate knob; OAuth2 forces enforcement itself.
+    expect(loadConfig(oauth).MCP_ACCESS_MODE).toBe('advisory');
+  });
+
   it('validates HTTP resource limits and their defaults', () => {
     const defaults = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
     expect(defaults.MCP_HTTP_MAX_BODY_BYTES).toBe(4 * 1024 * 1024);
