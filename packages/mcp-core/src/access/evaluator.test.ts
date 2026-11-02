@@ -110,6 +110,31 @@ describe('evaluateBotPermissions', () => {
     });
 
     expect(result.administrator).toBe(true);
+    // Still reported for upgrade diagnostics, but no longer degrades evidence.
+    expect(result.unknownPermissionBits).toBe(1n << 47n);
+    expect(result.confidence).toBe('complete');
+  });
+
+  it('treats an unrecognized future permission bit as complete evidence', () => {
+    // Regression: Discord sets bit 47 on roles today and this build's
+    // permission table does not name it. A non-administrator must still be
+    // admitted, or every OAuth2 caller fails closed with "evidence is partial".
+    const result = evaluateBotPermissions({
+      guildId: GUILD_ID,
+      roles: [
+        everyone,
+        {
+          ...everyone,
+          id: ROLE_ID,
+          name: 'Caller',
+          position: 4,
+          permissions: String(1024n | (1n << 47n)),
+        },
+      ],
+      member: { id: BOT_ID, roles: [ROLE_ID] },
+    });
+
+    expect(result.administrator).toBe(false);
     expect(result.unknownPermissionBits).toBe(1n << 47n);
     expect(result.confidence).toBe('complete');
   });

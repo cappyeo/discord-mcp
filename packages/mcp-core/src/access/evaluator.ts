@@ -122,13 +122,11 @@ export function evaluateBotPermissions(options: {
     administrator,
     guildOwner,
     topRoleId: topRole.id,
-    // Administrator and guild ownership grant every known permission and
-    // bypass channel overwrites. Keep reporting unknown future bits for
-    // observability, but do not turn a provably broad grant into partial
-    // evidence for today's declared access contracts.
-    confidence:
-      complete && (unknownPermissionBits === 0n || guildOwner || administrator)
-        ? 'complete'
-        : 'partial',
+    // Permission bits are independent: a bit this build does not name cannot
+    // grant or withhold any permission the access contracts declare, so an
+    // unknown future bit alone must not degrade evidence. Missing role entries
+    // and absent channel overwrites still do - those hide bits we do check.
+    // Administrator and guild ownership are broad grants and bypass overwrites.
+    confidence: complete ? 'complete' : 'partial',
   };
 }
