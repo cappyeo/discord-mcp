@@ -33,11 +33,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm build
+      # Core/CLI keep the Node 22.12 floor. Astro requires a newer Node, so
+      # site checks run on both Node 24 jobs and in the dedicated docs gate.
+      - run: pnpm exec turbo run typecheck ${{ matrix.node == '22.12' && '--filter=!site' || '' }}
+      - run: pnpm exec turbo run build ${{ matrix.node == '22.12' && '--filter=!site' || '' }}
       - name: Verify durable workflow integration
         run: node packages/mcp-core/scripts/verify-workflows.mjs
-      - run: pnpm test
+      - run: pnpm exec turbo run test ${{ matrix.node == '22.12' && '--filter=!site' || '' }}
       - run: pnpm --filter @discord-mcp/core exec vitest run --coverage
         if: matrix.os != 'ubuntu-24.04' || matrix.node != '22.12'
       - run: pnpm --filter @discord-mcp/core exec vitest run --coverage --no-file-parallelism

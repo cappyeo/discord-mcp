@@ -4,6 +4,8 @@ Astro Starlight site published at <https://cappyeo.github.io/discord-mcp/>.
 
 ## Local development
 
+Use Node.js 24 and pnpm 9.15.0. The Astro toolchain requires Node.js 22.23.4 or newer.
+
 ```bash
 pnpm --filter site dev
 ```
