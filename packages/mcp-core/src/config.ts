@@ -38,6 +38,21 @@ const ConfigSchema = z.object({
   // against /oauth2/@me, and always enforces that user's guild/channel
   // permissions on every tool call. Ignored by the stdio transport.
   MCP_AUTH_MODE: z.enum(['token', 'oauth2']).default('token'),
+  // Public origin of this deployment. Required by `oauth2` mode: the MCP
+  // client's redirect URI and this broker's Discord callback both resolve
+  // against it, and Discord rejects the exchange if it does not match exactly.
+  MCP_PUBLIC_URL: z.url().optional(),
+  // Discord application credentials for the OAuth2 broker. The bot credential
+  // (`DISCORD_TOKEN`) cannot perform a code exchange, so `oauth2` mode needs
+  // the application's own client pair.
+  DISCORD_CLIENT_ID: z
+    .string()
+    .regex(/^\d{17,20}$/, 'DISCORD_CLIENT_ID must be a 17-20 digit Discord snowflake')
+    .optional(),
+  DISCORD_CLIENT_SECRET: z
+    .string()
+    .min(32, 'DISCORD_CLIENT_SECRET appears too short to be a valid client secret')
+    .optional(),
   // Bound authenticated HTTP work before the SDK buffers or builds a full MCP
   // server. Defaults accommodate base64 Discord assets while keeping one bot
   // process from accepting an unbounded amount of caller-controlled memory.
@@ -198,6 +213,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(
       'Invalid configuration:\n  - MCP_APPROVAL_STATE_DIR and MCP_APPROVAL_HMAC_KEY must be configured together',
     );
+  }
+  if (parsed.data.MCP_AUTH_MODE === 'oauth2') {
+    const problems = [
+      ...(parsed.data.MCP_PUBLIC_URL === undefined
+        ? ['MCP_PUBLIC_URL is required for the OAuth2 redirect and callback URLs']
+        : []),
+      ...(parsed.data.DISCORD_CLIENT_ID === undefined
+        ? ['DISCORD_CLIENT_ID is required to register and authorize MCP clients']
+        : []),
+      ...(parsed.data.DISCORD_CLIENT_SECRET === undefined
+        ? ['DISCORD_CLIENT_SECRET is required for the authorization-code exchange']
+        : []),
+    ];
+    if (problems.length > 0) {
+      throw new Error(
+        `Invalid configuration:\n${problems.map((problem) => `  - MCP_AUTH_MODE=oauth2: ${problem}`).join('\n')}`,
+      );
+    }
   }
   return parsed.data;
 }
