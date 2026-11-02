@@ -125,4 +125,41 @@ describe('runtime access evaluation', () => {
       hierarchy: 'required',
     });
   });
+
+  it('ignores privileged-intent requirements for an OAuth2 caller', () => {
+    // A user principal is bounded by Discord's REST filtering; the bot's
+    // Gateway intents say nothing about what that user may read.
+    const messageRead = {
+      ...request,
+      toolName: 'messages_read',
+      requirement: {
+        ...request.requirement,
+        permissions: [],
+        intents: ['MESSAGE_CONTENT'] as const,
+      },
+      principalId: '111122223333444455',
+    };
+    expect(
+      evaluateRuntimeAccess(messageRead, {
+        status: 'complete',
+        identityVerified: true,
+        botId: request.expectedBotId,
+        effectivePermissions: 0n,
+        intents: { MESSAGE_CONTENT: 'missing' },
+      }).status,
+    ).toBe('allowed');
+    // The same evidence still blocks the bot principal, which needs the intent.
+    expect(
+      evaluateRuntimeAccess(
+        { ...messageRead, principalId: undefined },
+        {
+          status: 'complete',
+          identityVerified: true,
+          botId: request.expectedBotId,
+          effectivePermissions: 0n,
+          intents: { MESSAGE_CONTENT: 'missing' },
+        },
+      ),
+    ).toMatchObject({ status: 'denied', missingIntents: ['MESSAGE_CONTENT'] });
+  });
 });

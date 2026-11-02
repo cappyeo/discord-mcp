@@ -1,6 +1,6 @@
 import type { REST } from '@discordjs/rest';
 import { describe, expect, it, vi } from 'vitest';
-import { verifyExpectedBotIdentity } from './identity-lock.js';
+import { readBotIdentity, verifyExpectedBotIdentity } from './identity-lock.js';
 
 const BOT_ID = '987654321098765432';
 
@@ -70,5 +70,13 @@ describe('verifyExpectedBotIdentity', () => {
 
     expect(get).toHaveBeenCalledTimes(2);
     expect(get.mock.calls[0]![1]).toEqual({ signal: controller.signal });
+  });
+
+  it('reads the bot identity without an expected-ID lock', async () => {
+    // OAuth2 mode relies on this to learn the application ID from the bot
+    // credential, so it must work when no lock is configured.
+    const get = vi.fn().mockResolvedValue({ id: BOT_ID, username: 'bot', bot: true });
+    const rest = { get } as unknown as REST;
+    await expect(readBotIdentity(rest)).resolves.toEqual({ id: BOT_ID, username: 'bot' });
   });
 });
