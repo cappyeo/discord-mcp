@@ -23,7 +23,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
     "@astrojs/markdown-remark": "^7.3.5",
-    "@astrojs/starlight": "^0.42.7",
+    "@astrojs/starlight": "^0.42.8",
     "@axe-core/playwright": "^4.14.0",
     "@discord-mcp/core": "workspace:*",
     "astro": "^7.4.4",
