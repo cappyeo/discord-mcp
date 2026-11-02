@@ -48,10 +48,15 @@ jobs:
         # hand-maintained on the box.
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           if [ -z "${DISCORD_TOKEN:-}" ]; then
             echo "::error::org secret DISCORD_TOKEN is unset or not visible to this repository"
+            exit 1
+          fi
+          if [ -z "${DISCORD_CLIENT_SECRET:-}" ]; then
+            echo "::error::org secret DISCORD_CLIENT_SECRET is unset or not visible to this repository"
             exit 1
           fi
           umask 077
@@ -64,6 +69,11 @@ jobs:
                 # shared DISCORD_MCP_ACCESS_TOKEN secret is not used in this mode. Each
                 # call is authorized by that user's guild/channel/role permissions.
                 MCP_AUTH_MODE: "oauth2"
+                MCP_PUBLIC_URL: "https://discord-mcp.the1studio.org"
+                # The broker's own application identity. Discord's token endpoint
+                # needs the secret, which never reaches a client.
+                DISCORD_CLIENT_ID: "1566823844801548490"
+                DISCORD_CLIENT_SECRET: "$DISCORD_CLIENT_SECRET"
                 # Destructive tools and Components V2 sends execute only when a call ALSO
                 # passes __confirm:true (V2: plus the one-time payload hash + approval id).
                 # With the default (true) every such call returns DRY_RUN_PREVIEW, so V2
@@ -129,6 +139,22 @@ jobs:
             exit 1
           fi
           echo " ✓ OAuth2 gate refuses unauthenticated callers"
+
+      - name: Smoke test - OAuth discovery is published
+        # A client that cannot discover the authorization server can never
+        # obtain a credential, so both documents must be reachable and name
+        # this deployment as the issuer.
+        run: |
+          set -euo pipefail
+          curl_args=(-sS)
+          [ -n "${SMOKE_RESOLVE:-}" ] && curl_args+=(--resolve "$SMOKE_RESOLVE")
+          curl "${curl_args[@]}" "${SMOKE_BASE}/.well-known/oauth-protected-resource/mcp" \
+            -o /tmp/discord-mcp-prm.json
+          curl "${curl_args[@]}" "${SMOKE_BASE}/.well-known/oauth-authorization-server" \
+            -o /tmp/discord-mcp-as.json
+          grep -q '"resource"' /tmp/discord-mcp-prm.json
+          grep -q '"registration_endpoint"' /tmp/discord-mcp-as.json
+          echo " ✓ OAuth discovery documents served"
 
       - name: Smoke test - the bot secret authenticates against Discord
         # Readiness only proves the container is up with *some* long-enough token; a

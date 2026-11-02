@@ -1,7 +1,7 @@
 /**
- * OAuth2 end-to-end: a Discord user access token authenticates the HTTP
- * endpoint, and that user's guild permissions — not the bot's — gate each tool
- * call.
+ * OAuth2 end-to-end: an MCP client completes the broker login (register →
+ * authorize → Discord consent → callback → token), and the resulting Discord
+ * user's guild permissions — not the bot's — gate each tool call.
  *
  * Discord is replaced with a loopback server and global `fetch` is redirected
  * only for the fixed Discord origin (the same seam `doctor.integration.test`
@@ -9,6 +9,7 @@
  * `fetch` is the one interception point that does not fight the transport.
  */
 
+import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -21,7 +22,9 @@ const BOT_ID = '987654321098765432';
 const CALLER_ID = '111122223333444455';
 const GUILD_ID = '333344445555666677';
 const CHANNEL_ID = '444455556666777788';
-const USER_TOKEN = 'discord-user-access-token';
+const CLIENT_ID = '1566823844801548490';
+const CLIENT_SECRET = 'client-secret-value-with-enough-length';
+const DISCORD_USER_TOKEN = 'discord-user-access-token';
 const BOT_TOKEN = `Bot ${'a'.repeat(60)}`;
 
 const VIEW_CHANNEL = 1n << 10n;
@@ -50,9 +53,15 @@ function json(res: import('node:http').ServerResponse, body: unknown): void {
 function startDiscordStub(): void {
   discord = createServer((req, res) => {
     const url = decodeURIComponent(req.url ?? '');
+    if (url === '/api/v10/oauth2/token' || url === '/oauth2/token') {
+      json(res, { access_token: DISCORD_USER_TOKEN, token_type: 'Bearer', expires_in: 604800 });
+      return;
+    }
     if (url === '/api/v10/oauth2/@me') {
       json(res, {
-        application: { id: BOT_ID },
+        // The token must belong to the application the broker is configured
+        // with, which is not necessarily the bot user's own ID in a stub.
+        application: { id: CLIENT_ID },
         scopes: ['identify', 'guilds', 'guilds.members.read'],
         expires: new Date(Date.now() + 3_600_000).toISOString(),
         user: { id: CALLER_ID, username: 'caller' },
@@ -114,12 +123,13 @@ function startDiscordStub(): void {
 /** Loopback-substituting HTTP client handed to the transport. */
 const stubFetch: DiscordHttp = ((input: string, init: RequestInit) => {
   const url = String(input);
-  if (url.startsWith('https://discord.com/api/v10/')) {
-    return realFetch(
-      `${discordBase}/api/v10/${url.slice('https://discord.com/api/v10/'.length)}`,
-      init,
-    );
+  const prefix = 'https://discord.com/api/v10/';
+  const legacyOauth = 'https://discord.com/api/oauth2/token';
+  if (url.startsWith(prefix)) {
+    return realFetch(`${discordBase}/api/v10/${url.slice(prefix.length)}`, init);
   }
+  // Discord's documented token URL omits the API version segment.
+  if (url === legacyOauth) return realFetch(`${discordBase}/oauth2/token`, init);
   return realFetch(input, init);
 }) as unknown as DiscordHttp;
 
@@ -134,6 +144,9 @@ function configureEnv(): void {
   process.env.DISCORD_TOKEN = BOT_TOKEN;
   process.env.DISCORD_EXPECTED_BOT_ID = BOT_ID;
   process.env.MCP_AUTH_MODE = 'oauth2';
+  process.env.MCP_PUBLIC_URL = 'https://mcp.example.test';
+  process.env.DISCORD_CLIENT_ID = CLIENT_ID;
+  process.env.DISCORD_CLIENT_SECRET = CLIENT_SECRET;
   // Deliberately left at its advisory default: OAuth2 mode must enforce on its
   // own, since its whole purpose is bounding callers by their permissions.
   process.env.MCP_ACCESS_MODE = 'advisory';
@@ -144,7 +157,7 @@ function configureEnv(): void {
   delete process.env.MCP_HTTP_MAX_IN_FLIGHT;
 }
 
-async function connect(token = USER_TOKEN): Promise<Client> {
+async function connect(token: string): Promise<Client> {
   const address = server?.address() as AddressInfo | null;
   if (address === null || address === undefined) throw new Error('HTTP server is not listening');
   const transport = new StreamableHTTPClientTransport(
@@ -154,6 +167,52 @@ async function connect(token = USER_TOKEN): Promise<Client> {
   const client = new Client({ name: 'oauth2-it', version: '0.0.0' });
   await client.connect(transport as never);
   return client;
+}
+
+/** Complete the broker login over HTTP and return the issued access token. */
+async function brokerLogin(): Promise<string> {
+  const base = `http://127.0.0.1:${(server?.address() as AddressInfo).port}`;
+  const verifier = 'integration-verifier-0123456789abcdefghijkl';
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+
+  const registration = (await (
+    await realFetch(`${base}/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ redirect_uris: ['https://client.example.test/cb'] }),
+    })
+  ).json()) as { client_id: string };
+
+  const authorizeUrl = new URL(`${base}/authorize`);
+  authorizeUrl.searchParams.set('response_type', 'code');
+  authorizeUrl.searchParams.set('client_id', registration.client_id);
+  authorizeUrl.searchParams.set('redirect_uri', 'https://client.example.test/cb');
+  authorizeUrl.searchParams.set('state', 'st');
+  authorizeUrl.searchParams.set('code_challenge', challenge);
+  authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+  authorizeUrl.searchParams.set('scope', 'identify');
+  const authorize = await realFetch(authorizeUrl, { redirect: 'manual' });
+  expect(authorize.status).toBe(302);
+  const loginId = new URL(authorize.headers.get('location')!).searchParams.get('state')!;
+
+  const callback = await realFetch(`${base}/oauth/callback?state=${loginId}&code=dc`, {
+    redirect: 'manual',
+  });
+  expect(callback.status).toBe(302);
+  const code = new URL(callback.headers.get('location')!).searchParams.get('code')!;
+
+  const tokens = (await (
+    await realFetch(`${base}/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+      }),
+    })
+  ).json()) as { access_token: string };
+  return tokens.access_token;
 }
 
 function httpStatus(token: string): Promise<number> {
@@ -194,6 +253,46 @@ afterAll(async () => {
 });
 
 describe('OAuth2 HTTP authentication', () => {
+  it('advertises protected-resource metadata and an authorization server', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+    const address = server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${address.port}`;
+
+    const prm = (await (
+      await realFetch(`${base}/.well-known/oauth-protected-resource/mcp`)
+    ).json()) as {
+      resource: string;
+      authorization_servers: string[];
+    };
+    expect(prm.resource).toBe('https://mcp.example.test/mcp');
+    expect(prm.authorization_servers).toEqual(['https://mcp.example.test']);
+
+    const as = (await (
+      await realFetch(`${base}/.well-known/oauth-authorization-server`)
+    ).json()) as {
+      issuer: string;
+      registration_endpoint: string;
+      code_challenge_methods_supported: string[];
+    };
+    expect(as.issuer).toBe('https://mcp.example.test');
+    expect(as.registration_endpoint).toBe('https://mcp.example.test/register');
+    expect(as.code_challenge_methods_supported).toEqual(['S256']);
+  });
+
+  it('points an unauthenticated caller at the metadata document', async () => {
+    server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+    const address = server.address() as AddressInfo;
+    const response = await realFetch(`http://127.0.0.1:${address.port}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toContain(
+      'resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource/mcp"',
+    );
+  });
+
   it('rejects requests without a bearer token', async () => {
     server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
     expect(await httpStatus('')).toBe(401);
@@ -206,9 +305,9 @@ describe('OAuth2 HTTP authentication', () => {
     expect(response.status).toBe(200);
   });
 
-  it('serves tools to an allowlisted caller', async () => {
+  it('serves tools to a caller who completed the broker login', async () => {
     server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
-    const client = await connect();
+    const client = await connect(await brokerLogin());
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name)).toContain('messages_send');
@@ -221,7 +320,7 @@ describe('OAuth2 HTTP authentication', () => {
     // Bot keeps every permission; the caller only sees the channel.
     fixture = { callerRoles: [], callerPermissions: VIEW_CHANNEL };
     server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
-    const client = await connect();
+    const client = await connect(await brokerLogin());
     try {
       const result = await client.callTool({
         name: 'messages_send',
@@ -240,7 +339,7 @@ describe('OAuth2 HTTP authentication', () => {
   it('allows the call once the caller holds the permission', async () => {
     fixture = { callerRoles: [], callerPermissions: VIEW_CHANNEL | SEND_MESSAGES };
     server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
-    const client = await connect();
+    const client = await connect(await brokerLogin());
     try {
       const result = await client.callTool({
         name: 'messages_send',

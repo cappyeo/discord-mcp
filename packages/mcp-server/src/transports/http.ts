@@ -22,6 +22,7 @@ import {
 } from '@modelcontextprotocol/node';
 import { type AuthInfo, createMcpHandler } from '@modelcontextprotocol/server';
 import { recordBlueprintActivity } from '../lib/activity.js';
+import { DiscordOAuthBroker, OAuthBrokerError } from '../lib/oauth-broker.js';
 import { createOAuthCallerVerifier, type DiscordHttp, OAuthCallerRejected } from '../lib/oauth2.js';
 import type { OtelHandle } from '../otel.js';
 
@@ -106,6 +107,124 @@ async function readRequestBody(
   return Buffer.concat(chunks, totalBytes);
 }
 
+/**
+ * Serve one OAuth discovery or authorization endpoint.
+ *
+ * Every route here is reachable without a credential by design: a client that
+ * cannot discover the authorization server can never obtain one.
+ */
+async function serveOAuthEndpoint(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestUrl: URL,
+  broker: DiscordOAuthBroker,
+  publicUrl: URL,
+): Promise<void> {
+  const method = req.method?.toUpperCase() ?? 'GET';
+  const sendJson = (status: number, body: unknown): void => {
+    res.writeHead(status, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify(body));
+  };
+  const redirect = (location: URL, status = 302): void => {
+    res.writeHead(status, { Location: location.toString(), 'Cache-Control': 'no-store' });
+    res.end();
+  };
+  const fail = (error: unknown): void => {
+    if (error instanceof OAuthBrokerError) {
+      sendJson(error.status, { error: error.error, error_description: error.message });
+      return;
+    }
+    if (error instanceof OAuthCallerRejected) {
+      sendJson(error.status, { error: 'access_denied', error_description: error.message });
+      return;
+    }
+    sendJson(500, { error: 'server_error', error_description: 'OAuth request failed' });
+  };
+  const readForm = async (): Promise<URLSearchParams> => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+      total += buffer.byteLength;
+      if (total > 64 * 1024) throw new OAuthBrokerError(400, 'invalid_request', 'body too large');
+      chunks.push(buffer);
+    }
+    const raw = Buffer.concat(chunks, total).toString('utf8');
+    const contentType = req.headers['content-type'] ?? '';
+    if (contentType.includes('application/json')) {
+      const parsed = JSON.parse(raw || '{}') as Record<string, unknown>;
+      const form = new URLSearchParams();
+      for (const [key, value] of Object.entries(parsed)) form.set(key, String(value));
+      return form;
+    }
+    return new URLSearchParams(raw);
+  };
+
+  try {
+    switch (requestUrl.pathname) {
+      case '/.well-known/oauth-protected-resource':
+      case '/.well-known/oauth-protected-resource/mcp': {
+        if (method !== 'GET') return sendJson(405, { error: 'method_not_allowed' });
+        // RFC 9728: the resource is this MCP endpoint; the authorization
+        // server is this same origin, which fronts Discord.
+        return sendJson(200, {
+          resource: new URL('/mcp', publicUrl).toString(),
+          authorization_servers: [publicUrl.origin],
+          scopes_supported: ['identify'],
+          bearer_methods_supported: ['header'],
+          resource_name: 'discord-mcp',
+        });
+      }
+      case '/.well-known/oauth-authorization-server': {
+        if (method !== 'GET') return sendJson(405, { error: 'method_not_allowed' });
+        return sendJson(200, {
+          issuer: publicUrl.origin,
+          authorization_endpoint: new URL('/authorize', publicUrl).toString(),
+          token_endpoint: new URL('/token', publicUrl).toString(),
+          registration_endpoint: new URL('/register', publicUrl).toString(),
+          response_types_supported: ['code'],
+          grant_types_supported: ['authorization_code'],
+          code_challenge_methods_supported: ['S256'],
+          token_endpoint_auth_methods_supported: ['none'],
+          scopes_supported: ['identify'],
+        });
+      }
+      case '/register': {
+        if (method !== 'POST') return sendJson(405, { error: 'method_not_allowed' });
+        return sendJson(201, broker.register(JSON.parse((await rawBody(req)) || '{}')));
+      }
+      case '/authorize': {
+        if (method !== 'GET') return sendJson(405, { error: 'method_not_allowed' });
+        return redirect(broker.authorizeUrl(requestUrl.searchParams));
+      }
+      case '/oauth/callback': {
+        if (method !== 'GET') return sendJson(405, { error: 'method_not_allowed' });
+        return redirect(await broker.callback(requestUrl.searchParams));
+      }
+      case '/token': {
+        if (method !== 'POST') return sendJson(405, { error: 'method_not_allowed' });
+        return sendJson(200, await broker.token(await readForm()));
+      }
+      default:
+        return sendJson(404, { error: 'not_found' });
+    }
+  } catch (error) {
+    fail(error);
+  }
+}
+
+async function rawBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 function rejectAndClose(
   req: IncomingMessage,
   res: ServerResponse,
@@ -151,6 +270,21 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   // user's own Discord permissions bound what they can do.
   const oauth2Mode = config.MCP_AUTH_MODE === 'oauth2';
   const logger = createLogger(config);
+  // OAuth2 mode fronts Discord with a local authorization server: MCP clients
+  // cannot register against Discord directly, and its token endpoint needs the
+  // application secret, so the broker owns both legs and issues its own token.
+  const broker =
+    oauth2Mode &&
+    config.MCP_PUBLIC_URL !== undefined &&
+    config.DISCORD_CLIENT_ID !== undefined &&
+    config.DISCORD_CLIENT_SECRET !== undefined
+      ? new DiscordOAuthBroker({
+          clientId: config.DISCORD_CLIENT_ID,
+          clientSecret: config.DISCORD_CLIENT_SECRET,
+          publicUrl: new URL(config.MCP_PUBLIC_URL),
+          ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
+        })
+      : undefined;
 
   // Keep Cockatiel as the single retry owner. Reject queued/pre-emptive 429s
   // so the SDK cannot wait past our 30s operation timeout before Retry-After
@@ -267,9 +401,32 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   const validateOrigin = isLoopbackHost ? localhostOriginValidation() : undefined;
   let inFlight = 0;
 
+  const resourceMetadataUrl =
+    config.MCP_PUBLIC_URL === undefined
+      ? undefined
+      : new URL('/.well-known/oauth-protected-resource/mcp', config.MCP_PUBLIC_URL).toString();
+
   const server = createServer(async (req, res) => {
-    const pathname =
-      req.url === undefined ? undefined : new URL(req.url, 'http://localhost').pathname;
+    const requestUrl = req.url === undefined ? undefined : new URL(req.url, 'http://localhost');
+    const pathname = requestUrl?.pathname;
+    // OAuth2 mode exposes the discovery and authorization endpoints an MCP
+    // client needs before it holds any credential.
+    if (
+      pathname === '/.well-known/oauth-protected-resource' ||
+      pathname === '/.well-known/oauth-protected-resource/mcp' ||
+      pathname === '/.well-known/oauth-authorization-server' ||
+      pathname === '/register' ||
+      pathname === '/authorize' ||
+      pathname === '/oauth/callback' ||
+      pathname === '/token'
+    ) {
+      if (broker === undefined || config.MCP_PUBLIC_URL === undefined) {
+        res.writeHead(404).end();
+        return;
+      }
+      await serveOAuthEndpoint(req, res, requestUrl!, broker, new URL(config.MCP_PUBLIC_URL));
+      return;
+    }
     if (pathname !== '/mcp' && pathname !== '/healthz') {
       res.writeHead(404).end();
       return;
@@ -279,7 +436,26 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     // account, so OAuth2 mode leaves it unauthenticated (as the default token
     // mode does when no token is configured). /mcp always needs a caller.
     let callerId: string | undefined;
-    if (verifyOAuthCaller !== undefined) {
+    if (broker !== undefined) {
+      if (pathname !== '/healthz') {
+        const token = bearerToken(req.headers.authorization);
+        const caller = token === undefined ? undefined : broker.principalFor(token);
+        if (caller === undefined) {
+          // RFC 9728 §5.1: point the client at the metadata document so it can
+          // discover our authorization server instead of guessing.
+          res
+            .writeHead(401, {
+              'WWW-Authenticate':
+                resourceMetadataUrl === undefined
+                  ? 'Bearer'
+                  : `Bearer resource_metadata="${resourceMetadataUrl}"`,
+            })
+            .end();
+          return;
+        }
+        callerId = caller;
+      }
+    } else if (verifyOAuthCaller !== undefined) {
       if (pathname !== '/healthz') {
         const token = bearerToken(req.headers.authorization);
         if (token === undefined) {

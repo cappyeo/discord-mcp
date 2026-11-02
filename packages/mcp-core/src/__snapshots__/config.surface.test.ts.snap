@@ -3,6 +3,8 @@
 exports[`config surface > declares the frozen set of schema keys, optional ones included 1`] = `
 [
   "ALLOWED_GUILDS",
+  "DISCORD_CLIENT_ID",
+  "DISCORD_CLIENT_SECRET",
   "DISCORD_DEFAULT_GUILD_ID",
   "DISCORD_EXPECTED_BOT_ID",
   "DISCORD_MCP_ACCESS_TOKEN",
@@ -26,6 +28,7 @@ exports[`config surface > declares the frozen set of schema keys, optional ones 
   "MCP_DM_CONSENT_MODE",
   "MCP_HTTP_MAX_BODY_BYTES",
   "MCP_HTTP_MAX_IN_FLIGHT",
+  "MCP_PUBLIC_URL",
   "MCP_RETRY_BASE_DELAY_MS",
   "MCP_RETRY_ENABLED",
   "MCP_RETRY_JITTER",

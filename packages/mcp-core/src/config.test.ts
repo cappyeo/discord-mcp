@@ -130,16 +130,37 @@ describe('loadConfig', () => {
     );
   });
 
-  it('accepts OAuth2 mode without extra prerequisites', () => {
-    // OAuth2 is an authentication mode, not an authorization allowlist: any
-    // Discord user token is accepted and bounded by that user's permissions.
+  it('requires the broker credentials and public URL for OAuth2 mode', () => {
     const oauth = {
       DISCORD_TOKEN: VALID_TOKEN,
       MCP_AUTH_MODE: 'oauth2',
+      MCP_PUBLIC_URL: 'https://mcp.example.test',
+      DISCORD_CLIENT_ID: '1566823844801548490',
+      DISCORD_CLIENT_SECRET: 'c'.repeat(32),
     } as NodeJS.ProcessEnv;
-    expect(loadConfig(oauth).MCP_AUTH_MODE).toBe('oauth2');
-    // MCP_ACCESS_MODE stays a separate knob; OAuth2 forces enforcement itself.
-    expect(loadConfig(oauth).MCP_ACCESS_MODE).toBe('advisory');
+    expect(loadConfig(oauth)).toMatchObject({
+      MCP_AUTH_MODE: 'oauth2',
+      MCP_PUBLIC_URL: 'https://mcp.example.test',
+      DISCORD_CLIENT_ID: '1566823844801548490',
+    });
+
+    // Each is load-bearing: without them the broker cannot register a client,
+    // redirect to Discord, or complete the code exchange.
+    for (const key of ['MCP_PUBLIC_URL', 'DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET']) {
+      expect(() => loadConfig({ ...oauth, [key]: undefined } as NodeJS.ProcessEnv)).toThrow(
+        new RegExp(`MCP_AUTH_MODE=oauth2: ${key}`),
+      );
+    }
+    expect(() =>
+      loadConfig({ ...oauth, DISCORD_CLIENT_ID: 'not-a-snowflake' } as NodeJS.ProcessEnv),
+    ).toThrow(/DISCORD_CLIENT_ID/);
+    expect(() =>
+      loadConfig({ ...oauth, DISCORD_CLIENT_SECRET: 'short' } as NodeJS.ProcessEnv),
+    ).toThrow(/DISCORD_CLIENT_SECRET/);
+    // The default token mode does not consult any of them.
+    expect(loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv).MCP_AUTH_MODE).toBe(
+      'token',
+    );
   });
 
   it('validates HTTP resource limits and their defaults', () => {
