@@ -163,6 +163,23 @@ describe('loadConfig', () => {
     );
   });
 
+  it('accepts an OAuth2 state directory without changing other defaults', () => {
+    const configured = loadConfig({
+      DISCORD_TOKEN: VALID_TOKEN,
+      MCP_AUTH_MODE: 'oauth2',
+      MCP_PUBLIC_URL: 'https://mcp.example.test',
+      DISCORD_CLIENT_ID: '1566823844801548491',
+      DISCORD_CLIENT_SECRET: 'c'.repeat(32),
+      MCP_OAUTH_STATE_DIR: '/var/lib/discord-mcp/oauth',
+    } as NodeJS.ProcessEnv);
+    expect(configured.MCP_OAUTH_STATE_DIR).toBe('/var/lib/discord-mcp/oauth');
+
+    // Optional: unset means tokens live in process memory only.
+    expect(
+      loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv).MCP_OAUTH_STATE_DIR,
+    ).toBeUndefined();
+  });
+
   it('validates HTTP resource limits and their defaults', () => {
     const defaults = loadConfig({ DISCORD_TOKEN: VALID_TOKEN } as NodeJS.ProcessEnv);
     expect(defaults.MCP_HTTP_MAX_BODY_BYTES).toBe(4 * 1024 * 1024);

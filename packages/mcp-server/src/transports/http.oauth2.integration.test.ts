@@ -10,9 +10,12 @@
  */
 
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DiscordHttp } from '../lib/oauth2.js';
@@ -303,6 +306,47 @@ describe('OAuth2 HTTP authentication', () => {
     const address = server.address() as AddressInfo;
     const response = await realFetch(`http://127.0.0.1:${address.port}/healthz`);
     expect(response.status).toBe(200);
+  });
+
+  it('honours a token across a server restart when a state directory is set', async () => {
+    // The deploy regression: restarting the container logged every client out.
+    const stateDirectory = mkdtempSync(join(tmpdir(), 'discord-mcp-oauth-state-'));
+    process.env.MCP_OAUTH_STATE_DIR = stateDirectory;
+    try {
+      server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+      const token = await brokerLogin();
+      await new Promise<void>((resolve, reject) =>
+        server?.close((error) => (error ? reject(error) : resolve())),
+      );
+      server = undefined;
+
+      // A second process: same directory, new in-memory state.
+      server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+      expect(await httpStatus(token)).not.toBe(401);
+    } finally {
+      if (server !== undefined) {
+        await new Promise<void>((resolve, reject) =>
+          server?.close((error) => (error ? reject(error) : resolve())),
+        );
+        server = undefined;
+      }
+      delete process.env.MCP_OAUTH_STATE_DIR;
+      rmSync(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('does not honour a token after a restart without a state directory', async () => {
+    // Documents the default rather than asserting a desirable behaviour.
+    delete process.env.MCP_OAUTH_STATE_DIR;
+    server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+    const token = await brokerLogin();
+    await new Promise<void>((resolve, reject) =>
+      server?.close((error) => (error ? reject(error) : resolve())),
+    );
+    server = undefined;
+
+    server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+    expect(await httpStatus(token)).toBe(401);
   });
 
   it('serves tools to a caller who completed the broker login', async () => {

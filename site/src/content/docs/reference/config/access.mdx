@@ -118,6 +118,24 @@ Register the callback in the Developer Portal → your application → **OAuth2 
 Redirects**: `$MCP_PUBLIC_URL/oauth/callback`. Discord rejects an unregistered
 redirect during the exchange.
 
+### `MCP_OAUTH_STATE_DIR`
+
+- **Type:** non-empty directory path
+- **Default:** unset, keeping issued tokens in process memory
+- **Use:** Persists issued OAuth2 access tokens so a restart or redeploy does not log every connected client out.
+- **Example:** `MCP_OAUTH_STATE_DIR=/var/lib/discord-mcp/oauth`
+
+The broker issues its own one-hour tokens, so their lifetime is this process's
+choice rather than Discord's. Without this directory they live only in memory:
+every restart invalidates them and each client must redo the OAuth round trip.
+With it, each update is written to a temporary file and renamed into place, so
+a crash mid-write leaves the previous file intact; the file is created
+owner-only because it holds bearer material. In-flight logins are never
+persisted.
+
+The directory is per container: two replicas do not share it, so scaling out
+needs shared storage instead.
+
 ### `MCP_HTTP_MAX_BODY_BYTES`
 
 - **Type:** integer from 1,024 through 67,108,864

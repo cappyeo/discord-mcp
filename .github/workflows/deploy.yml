@@ -80,11 +80,18 @@ jobs:
                 # secret, which never reaches a client.
                 DISCORD_CLIENT_ID: "$DISCORD_CLIENT_ID"
                 DISCORD_CLIENT_SECRET: "$DISCORD_CLIENT_SECRET"
+                # Issued OAuth2 tokens persist here, so a redeploy no longer logs
+                # every connected client out.
+                MCP_OAUTH_STATE_DIR: "/var/lib/discord-mcp/oauth"
                 # Destructive tools and Components V2 sends execute only when a call ALSO
                 # passes __confirm:true (V2: plus the one-time payload hash + approval id).
                 # With the default (true) every such call returns DRY_RUN_PREVIEW, so V2
                 # cards could never be sent from this deployment.
                 MCP_DRY_RUN: "false"
+              volumes:
+                - discord-mcp-oauth:/var/lib/discord-mcp/oauth
+          volumes:
+            discord-mcp-oauth:
           EOF
           # tee keeps an existing file's mode, so an override left at 644 by an
           # earlier hand-written version would stay world-readable.
