@@ -10,6 +10,7 @@ import {
   FilePayloadApprovalLedger,
   loadConfig,
   PayloadApprovalLedger,
+  readBotIdentity,
   verifyExpectedBotIdentity,
   wrapRestWithResilience,
 } from '@discord-mcp/core';
@@ -19,8 +20,9 @@ import {
   localhostOriginValidation,
   toNodeHandler,
 } from '@modelcontextprotocol/node';
-import { createMcpHandler } from '@modelcontextprotocol/server';
+import { type AuthInfo, createMcpHandler } from '@modelcontextprotocol/server';
 import { recordBlueprintActivity } from '../lib/activity.js';
+import { createOAuthCallerVerifier, type DiscordHttp, OAuthCallerRejected } from '../lib/oauth2.js';
 import type { OtelHandle } from '../otel.js';
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -28,26 +30,53 @@ const DEFAULT_PORT = 3000;
 
 class RequestBodyTooLarge extends Error {}
 
+/** `toNodeHandler` reads `req.auth`; Node's own request type does not declare it. */
+type AuthenticatedRequest = IncomingMessage & { auth?: AuthInfo };
+
+/** Replay of a request whose body was already read and bounded. */
+function replayRequest(req: AuthenticatedRequest, body: Buffer): IncomingMessage {
+  const replay = Readable.from(body.byteLength === 0 ? [] : [body]);
+  return Object.assign(replay, {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    auth: req.auth,
+  }) as unknown as IncomingMessage;
+}
+
 export interface StartHttpOptions {
   host?: string;
   port?: number;
   registerSignalHandlers?: boolean;
+  /**
+   * HTTP implementation for every Discord request this transport makes
+   * (bot REST, identity/access evidence, OAuth2 verification). Real
+   * deployments use the default; suites point it at a loopback stub.
+   */
+  makeRequest?: DiscordHttp;
+}
+
+/** The bearer credential from an `Authorization` header, if it is well formed. */
+export function bearerToken(authorization: string | undefined): string | undefined {
+  if (authorization === undefined) return undefined;
+  const separator = authorization.indexOf(' ');
+  if (separator < 1 || authorization.slice(0, separator).toLowerCase() !== 'bearer')
+    return undefined;
+  let tokenStart = separator + 1;
+  while (authorization[tokenStart] === ' ') tokenStart += 1;
+  if (tokenStart >= authorization.length) return undefined;
+  return authorization.slice(tokenStart);
 }
 
 export function hasValidBearerToken(
   authorization: string | undefined,
   expectedToken: string,
 ): boolean {
-  if (authorization === undefined) return false;
-  const separator = authorization.indexOf(' ');
-  if (separator < 1 || authorization.slice(0, separator).toLowerCase() !== 'bearer') return false;
-  let tokenStart = separator + 1;
-  while (authorization[tokenStart] === ' ') tokenStart += 1;
-  if (tokenStart >= authorization.length) return false;
-
-  const suppliedToken = Buffer.from(authorization.slice(tokenStart));
+  const suppliedToken = bearerToken(authorization);
+  if (suppliedToken === undefined) return false;
+  const supplied = Buffer.from(suppliedToken);
   const expected = Buffer.from(expectedToken);
-  return suppliedToken.length === expected.length && timingSafeEqual(suppliedToken, expected);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
 async function readRequestBody(
@@ -75,16 +104,6 @@ async function readRequestBody(
     chunks.push(buffer);
   }
   return Buffer.concat(chunks, totalBytes);
-}
-
-/** Replay a bounded body through the SDK's structural Node request adapter. */
-function replayRequest(req: IncomingMessage, body: Buffer): IncomingMessage {
-  const replay = Readable.from(body.byteLength === 0 ? [] : [body]);
-  return Object.assign(replay, {
-    method: req.method,
-    url: req.url,
-    headers: req.headers,
-  }) as IncomingMessage;
 }
 
 function rejectAndClose(
@@ -127,20 +146,42 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
   // endpoint is open and must be gated at the networking layer (reverse proxy,
   // VPN, or Docker publish rule) when exposing the server directly.
   const accessToken = config.DISCORD_MCP_ACCESS_TOKEN;
+  // In `oauth2` mode the bearer is a Discord user token instead of the shared
+  // deployment secret. Every authorizeable Discord account is accepted; that
+  // user's own Discord permissions bound what they can do.
+  const oauth2Mode = config.MCP_AUTH_MODE === 'oauth2';
   const logger = createLogger(config);
 
   // Keep Cockatiel as the single retry owner. Reject queued/pre-emptive 429s
   // so the SDK cannot wait past our 30s operation timeout before Retry-After
   // reaches Cockatiel; `retries: 0` prevents a second retry loop.
-  const baseRest = new REST({ version: '10', retries: 0, rejectOnRateLimit: () => true }).setToken(
+  const baseRest = new REST({
+    version: '10',
+    retries: 0,
+    rejectOnRateLimit: () => true,
+    ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
+  }).setToken(
     config.DISCORD_TOKEN.startsWith('Bot ') ? config.DISCORD_TOKEN.slice(4) : config.DISCORD_TOKEN,
   );
   const rest = wrapRestWithResilience(baseRest, buildPolicy(config, logger), {
     circuitHalfOpenAfterMs: config.MCP_CIRCUIT_HALF_OPEN_AFTER_MS,
   });
   await verifyExpectedBotIdentity(rest, config.DISCORD_EXPECTED_BOT_ID);
+  // A bot user's ID is its application ID. Read it once at boot so OAuth2 mode
+  // can reject user tokens issued to a different application even when the
+  // operator has not set DISCORD_EXPECTED_BOT_ID.
+  const verifyOAuthCaller = oauth2Mode
+    ? createOAuthCallerVerifier({
+        applicationId: (await readBotIdentity(rest)).id,
+        ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
+      })
+    : undefined;
+  // OAuth2 mode exists to bound callers by their own Discord permissions, so it
+  // always enforces regardless of MCP_ACCESS_MODE; `advisory` would execute the
+  // very calls the evidence cannot prove.
+  const accessMode = oauth2Mode ? 'enforce' : config.MCP_ACCESS_MODE;
   const runtimeAccessResolver =
-    config.MCP_ACCESS_MODE === 'advisory'
+    accessMode === 'advisory'
       ? undefined
       : createRuntimeAccessResolver({
           rest,
@@ -178,18 +219,28 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     logger.error({ err: error }, 'MCP HTTP request failed');
   };
   const mcpHandler = createMcpHandler(
-    async () =>
-      (
+    async (context) => {
+      // `authInfo.token` is the verified credential the caller passed; in
+      // OAuth2 mode its identity is already resolved and re-verified per
+      // request by the gate above, so the build only needs the Discord user.
+      const callerPrincipalId = context.authInfo?.extra?.principalId;
+      return (
         await buildServer({
           rest,
           logger,
-          config,
+          // The gate below may force enforcement; build with that effective
+          // mode so the middleware chain matches the transport's policy.
+          config:
+            accessMode === config.MCP_ACCESS_MODE
+              ? config
+              : { ...config, MCP_ACCESS_MODE: accessMode },
           transport: 'http',
           // This stateless transport has no Gateway resource-update publisher.
           enableResourceSubscriptions: false,
           auditSink,
           payloadApprovalLedger,
           ...(runtimeAccessResolver === undefined ? {} : { runtimeAccessResolver }),
+          ...(typeof callerPrincipalId === 'string' ? { callerPrincipalId } : {}),
           ...(runtimeAccessResolver === undefined
             ? {}
             : {
@@ -198,7 +249,8 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
               }),
           onBlueprintLifecycle: recordBlueprintActivity,
         })
-      ).server,
+      ).server;
+    },
     {
       // OpenAI and existing MCP clients still use 2025-era Streamable HTTP.
       // The same endpoint also serves the stateless MCP 2026 protocol.
@@ -223,7 +275,39 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
       return;
     }
 
-    if (accessToken !== undefined && !hasValidBearerToken(req.headers.authorization, accessToken)) {
+    // Readiness carries no data and infrastructure probes have no Discord
+    // account, so OAuth2 mode leaves it unauthenticated (as the default token
+    // mode does when no token is configured). /mcp always needs a caller.
+    let callerId: string | undefined;
+    if (verifyOAuthCaller !== undefined) {
+      if (pathname !== '/healthz') {
+        const token = bearerToken(req.headers.authorization);
+        if (token === undefined) {
+          res.writeHead(401, { 'WWW-Authenticate': 'Bearer' }).end();
+          return;
+        }
+        try {
+          callerId = (await verifyOAuthCaller(token)).id;
+        } catch (error) {
+          const status = error instanceof OAuthCallerRejected ? error.status : 401;
+          res
+            .writeHead(status, {
+              'WWW-Authenticate': 'Bearer',
+              'Content-Type': 'application/json; charset=utf-8',
+            })
+            .end(
+              JSON.stringify({
+                error: status === 401 ? 'invalid_token' : 'access_denied',
+                error_description: error instanceof Error ? error.message : 'Unauthorized',
+              }),
+            );
+          return;
+        }
+      }
+    } else if (
+      accessToken !== undefined &&
+      !hasValidBearerToken(req.headers.authorization, accessToken)
+    ) {
       res.writeHead(401, { 'WWW-Authenticate': 'Bearer' }).end();
       return;
     }
@@ -269,10 +353,26 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
         return;
       }
 
+      // The SDK forwards `req.auth` to the factory as `authInfo`; carry the
+      // already-verified Discord user there so each per-request server knows
+      // whose permissions authorize its tool calls. The body was read above,
+      // so only the replay copy reaches the adapter.
+      const authenticatedReq = req as AuthenticatedRequest; // adapter reads req.auth
+      if (callerId !== undefined) {
+        authenticatedReq.auth = {
+          token: bearerToken(req.headers.authorization) ?? '',
+          clientId: config.DISCORD_EXPECTED_BOT_ID ?? '',
+          scopes: [],
+          extra: { principalId: callerId },
+        };
+      }
+
       // The SDK adapter currently buffers the incoming stream without a byte
       // ceiling. Replay only the body we have already bounded above.
       await handleMcpRequest(
-        body === undefined ? (req as never) : (replayRequest(req, body) as never),
+        body === undefined
+          ? (authenticatedReq as never)
+          : (replayRequest(authenticatedReq, body) as never),
         res,
       );
     } finally {

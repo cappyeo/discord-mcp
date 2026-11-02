@@ -47,6 +47,10 @@ export function runtimeAccessMiddleware(options: RuntimeAccessMiddlewareOptions)
           next,
         );
       }
+      // An OAuth2-authenticated transport stamps the caller it verified; its
+      // permissions authorize the call instead of the bot's own.
+      const principal = ctx.meta.get('callerPrincipalId');
+      const principalId = typeof principal === 'string' ? principal : undefined;
       let evidence: RuntimeAccessEvidence;
       try {
         evidence = await options.resolve({
@@ -55,6 +59,7 @@ export function runtimeAccessMiddleware(options: RuntimeAccessMiddlewareOptions)
           ...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
           requirement,
           ...(options.expectedBotId === undefined ? {} : { expectedBotId: options.expectedBotId }),
+          ...(principalId === undefined ? {} : { principalId }),
         });
       } catch (error) {
         if (ctx.signal?.aborted) throw error;
@@ -72,6 +77,7 @@ export function runtimeAccessMiddleware(options: RuntimeAccessMiddlewareOptions)
           ...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
           requirement,
           ...(options.expectedBotId === undefined ? {} : { expectedBotId: options.expectedBotId }),
+          ...(principalId === undefined ? {} : { principalId }),
         },
         evidence,
       );

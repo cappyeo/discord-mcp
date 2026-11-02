@@ -9,6 +9,23 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## Unreleased - Discord OAuth2 caller authentication
+
+- Added `MCP_AUTH_MODE=oauth2` for `serve --http`. Callers authenticate with a
+  Discord user access token, verified against `/oauth2/@me` and bound to the
+  locked bot application; the shared `DISCORD_MCP_ACCESS_TOKEN` secret is then
+  not used.
+- All Discord users are accepted once they authorize the application; the
+  caller's own Discord permissions are the boundary. OAuth2 mode always
+  enforces those permissions and ignores `MCP_ACCESS_MODE`.
+- The access gate now evaluates guild, channel, role-hierarchy, and conditional
+  permissions for the authenticated caller instead of the deployment bot, so
+  read and write calls only succeed where that user's own Discord permissions
+  allow them. Privileged-intent requirements are not applied to a user
+  principal, because Discord's REST API already filters by that user.
+- `/healthz` remains unauthenticated in OAuth2 mode for infrastructure probes;
+  `/mcp` always requires a caller token.
+
 ## v0.32.1 - Maintenance updates and accessible search
 
 Released 2026-10-20.

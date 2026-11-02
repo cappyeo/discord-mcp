@@ -60,6 +60,10 @@ jobs:
             discord-mcp:
               environment:
                 DISCORD_TOKEN: "$DISCORD_TOKEN"
+                # Callers authenticate with their own Discord user OAuth2 token; the
+                # shared DISCORD_MCP_ACCESS_TOKEN secret is not used in this mode. Each
+                # call is authorized by that user's guild/channel/role permissions.
+                MCP_AUTH_MODE: "oauth2"
                 # Destructive tools and Components V2 sends execute only when a call ALSO
                 # passes __confirm:true (V2: plus the one-time payload hash + approval id).
                 # With the default (true) every such call returns DRY_RUN_PREVIEW, so V2
@@ -88,14 +92,16 @@ jobs:
             -f "$DEPLOY_ROOT/docker-compose.netbird.yml" ps
 
       - name: Smoke test - readiness endpoint
+        # /healthz is intentionally unauthenticated (probes carry no Discord
+        # identity); /mcp is not, so readiness must not probe it directly.
         run: |
           set -euo pipefail
           curl_args=(-sS)
           [ -n "${SMOKE_RESOLVE:-}" ] && curl_args+=(--resolve "$SMOKE_RESOLVE")
           for i in $(seq 1 10); do
-            code=$(curl "${curl_args[@]}" -o /dev/null -w '%{http_code}' "${SMOKE_BASE}/mcp" || true)
-            if [ "$code" = "200" ] || [ "$code" = "400" ] || [ "$code" = "405" ]; then
-              echo " ✓ readiness pass (HTTP $code on /mcp)"
+            code=$(curl "${curl_args[@]}" -o /dev/null -w '%{http_code}' "${SMOKE_BASE}/healthz" || true)
+            if [ "$code" = "200" ]; then
+              echo " ✓ readiness pass (HTTP $code on /healthz)"
               exit 0
             fi
             echo "attempt $i: not ready, retry in 3s"
@@ -107,24 +113,34 @@ jobs:
             -f "$DEPLOY_ROOT/docker-compose.netbird.yml" logs --tail 50
           exit 1
 
-      - name: Smoke test - the secret authenticates against Discord
-        # Readiness only proves the container is up with *some* long-enough token; a
-        # wrong or rotated-away secret would deploy green and then 401 every tool
-        # call, so exercise one REST round trip through users_get_current and assert
-        # the bot identity.
+      - name: Smoke test - the OAuth2 gate is active
+        # Unauthenticated /mcp must be refused. This proves the deployment is
+        # running in oauth2 mode rather than the shared-token default, which
+        # would otherwise serve the full tool surface to anyone who reaches it.
         run: |
           set -euo pipefail
           curl_args=(-sS)
           [ -n "${SMOKE_RESOLVE:-}" ] && curl_args+=(--resolve "$SMOKE_RESOLVE")
-          curl "${curl_args[@]}" -X POST "${SMOKE_BASE}/mcp" \
+          code=$(curl "${curl_args[@]}" -o /dev/null -w '%{http_code}' -X POST "${SMOKE_BASE}/mcp" \
             -H 'content-type: application/json' \
-            -H 'accept: application/json, text/event-stream' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"users_get_current","arguments":{}}}' \
-            -o /tmp/discord-mcp-identity.json
-          grep -q '"bot":true' /tmp/discord-mcp-identity.json
-          if grep -q '"isError":true' /tmp/discord-mcp-identity.json; then
-            echo "::error::users_get_current failed against Discord"
-            cat /tmp/discord-mcp-identity.json
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' || true)
+          if [ "$code" != "401" ]; then
+            echo "::error::expected 401 for an unauthenticated /mcp request, got $code"
             exit 1
           fi
+          echo " ✓ OAuth2 gate refuses unauthenticated callers"
+
+      - name: Smoke test - the bot secret authenticates against Discord
+        # Readiness only proves the container is up with *some* long-enough token; a
+        # wrong or rotated-away secret would deploy green and then 401 every tool
+        # call. Ask Discord directly, since /mcp now needs a user OAuth2 token.
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        run: |
+          set -euo pipefail
+          token="${DISCORD_TOKEN#Bot }"
+          curl -sS -H "Authorization: Bot ${token}" \
+            https://discord.com/api/v10/users/@me \
+            -o /tmp/discord-mcp-identity.json
+          grep -q '"bot":true' /tmp/discord-mcp-identity.json
           echo " ✓ bot identity confirmed"

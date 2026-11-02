@@ -30,6 +30,12 @@ export interface RuntimeAccessRequest {
   readonly args: unknown;
   readonly requirement: DiscordAccessRequirement;
   readonly expectedBotId?: string;
+  /**
+   * Discord user whose guild/channel permissions authorize this call. Set by
+   * OAuth2-authenticated HTTP callers; unset means the bot credential itself is
+   * the permission subject (stdio and shared-token deployments).
+   */
+  readonly principalId?: string;
   readonly signal?: AbortSignal;
 }
 
@@ -64,10 +70,16 @@ export function evaluateRuntimeAccess(
     const bits = evidence.effectivePermissions;
     return bits === undefined || (bits & DISCORD_PERMISSION_BITS[permission]) === 0n;
   });
-  const unknownIntents = request.requirement.intents.filter(
+  // Privileged intents gate the bot's own Gateway runtime. An OAuth2 caller is
+  // authorized by the permissions of the Discord user it names, and REST
+  // responses are already filtered by Discord, so intent evidence is neither
+  // available nor meaningful for that principal.
+  const requiredIntents: readonly GatewayIntentName[] =
+    request.principalId === undefined ? request.requirement.intents : [];
+  const unknownIntents = requiredIntents.filter(
     (intent) => evidence.intents?.[intent] === undefined || evidence.intents[intent] === 'unknown',
   );
-  const missingIntents = request.requirement.intents.filter(
+  const missingIntents = requiredIntents.filter(
     (intent) => evidence.intents?.[intent] === 'missing',
   );
   if (unknownIntents.length > 0) {

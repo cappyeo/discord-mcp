@@ -307,6 +307,12 @@ export interface BuildServerDeps {
   payloadApprovalLedger?: PayloadApprovalLedgerLike;
   /** Optional complete access-evidence provider used by MCP_ACCESS_MODE. */
   runtimeAccessResolver?: import('./access/runtime.js').RuntimeAccessResolver;
+  /**
+   * Discord user this MCP server instance acts for. The OAuth2 HTTP transport
+   * sets it per request so tool calls are gated by that user's permissions
+   * rather than the deployment bot's. Unset means the bot is the subject.
+   */
+  callerPrincipalId?: string;
   /** Optional warning sink for advisory/warn runtime access gaps. */
   onRuntimeAccessWarning?: (message: string) => void;
   /** Advertise and serve legacy resource subscriptions (default: true). */
@@ -2052,6 +2058,9 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         // fields. This is the only surviving copy, and it also covers mcp_pipeline (which
         // re-enters invokeTool per step). Read by the approval middleware.
         ['rawArgs', args ?? {}],
+        ...(deps.callerPrincipalId === undefined
+          ? []
+          : [['callerPrincipalId', deps.callerPrincipalId] as const]),
       ]),
     };
     const dispatch = compose(middlewares, async (c) => {

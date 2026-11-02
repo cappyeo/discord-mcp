@@ -33,6 +33,11 @@ const ConfigSchema = z.object({
     .string()
     .min(32, 'DISCORD_MCP_ACCESS_TOKEN must be at least 32 characters')
     .optional(),
+  // How `serve --http` authenticates callers. `token` is the shared deployment
+  // secret above. `oauth2` accepts any Discord user access token, verifies it
+  // against /oauth2/@me, and always enforces that user's guild/channel
+  // permissions on every tool call. Ignored by the stdio transport.
+  MCP_AUTH_MODE: z.enum(['token', 'oauth2']).default('token'),
   // Bound authenticated HTTP work before the SDK buffers or builds a full MCP
   // server. Defaults accommodate base64 Discord assets while keeping one bot
   // process from accepting an unbounded amount of caller-controlled memory.

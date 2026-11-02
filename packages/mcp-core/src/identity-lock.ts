@@ -14,17 +14,17 @@ interface RawDiscordUser {
 
 const verifiedByRest = new WeakMap<REST, Map<string, DiscordBotIdentity>>();
 
-async function fetchExpectedBotIdentity(
+/**
+ * Read the bot account behind the configured credential. A bot user's ID is
+ * also its application ID, which is what OAuth2 token exchange has to match.
+ */
+export async function readBotIdentity(
   rest: REST,
-  expectedBotId: string,
   signal?: AbortSignal,
 ): Promise<DiscordBotIdentity> {
   const raw = (await rest.get(Routes.user('@me'), { signal })) as RawDiscordUser;
   if (typeof raw.id !== 'string' || raw.bot !== true) {
     throw new Error('Discord identity verification did not return a bot account');
-  }
-  if (raw.id !== expectedBotId) {
-    throw new Error(`Discord bot identity mismatch: expected ${expectedBotId}, received ${raw.id}`);
   }
   return {
     id: raw.id,
@@ -55,7 +55,12 @@ export function verifyExpectedBotIdentity(
   const cached = byExpectedId.get(expectedBotId);
   if (cached !== undefined) return Promise.resolve(cached);
 
-  return fetchExpectedBotIdentity(rest, expectedBotId, signal).then((identity) => {
+  return readBotIdentity(rest, signal).then((identity) => {
+    if (identity.id !== expectedBotId) {
+      throw new Error(
+        `Discord bot identity mismatch: expected ${expectedBotId}, received ${identity.id}`,
+      );
+    }
     byExpectedId.set(expectedBotId, identity);
     return identity;
   });

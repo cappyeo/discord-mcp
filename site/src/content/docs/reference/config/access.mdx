@@ -45,6 +45,61 @@ Send it as `Authorization: Bearer <DISCORD_MCP_ACCESS_TOKEN>`. Use a high-entrop
 secret stored in a secret manager. This credential authorizes every client with
 the same Discord bot identity; it is not per-user OAuth.
 
+### `MCP_AUTH_MODE`
+
+- **Values:** `token` (default) or `oauth2`
+- **Use:** Chooses how `discord-mcp serve --http` authenticates callers. Ignored by stdio.
+- **Example:** `MCP_AUTH_MODE=oauth2`
+
+`token` keeps the shared deployment secret described above. `oauth2` accepts a
+**Discord user access token** as the bearer credential instead: the server
+verifies it against Discord's `/oauth2/@me`, requires the `identify` scope, and
+checks that the token was issued to this application before using the user's
+guild, channel, and role permissions as the authorization subject for every
+tool call. The bot token is still used to call Discord; it stops being the
+permission subject, so a caller can only act where their own Discord roles allow
+it.
+
+Any Discord account that authorizes the application is accepted. There is no
+user allowlist: the caller's own Discord permissions are the boundary, and a
+user who cannot see a channel or hold a permission cannot use the tool that
+needs it. If you need a narrower audience, restrict who can authorize the
+application (Discord's team/application access controls) or keep `token` mode
+with a secret you control.
+
+OAuth2 mode always enforces caller permissions; it ignores `MCP_ACCESS_MODE`
+and behaves as `enforce`, because executing a call whose permission evidence is
+incomplete would defeat the mode's purpose. Privileged Gateway intents play no
+part in that decision: Discord's REST API already filters what the authorized
+user can see, so a call is never blocked for missing `GUILD_MEMBERS` or
+`MESSAGE_CONTENT`.
+
+The application ID is read from the bot credential at startup (a bot user's ID
+is its application ID), so user tokens issued to any other application are
+rejected without extra configuration. `DISCORD_EXPECTED_BOT_ID` remains useful
+for locking which bot credential the deployment accepts at all.
+
+`/healthz` stays unauthenticated in OAuth2 mode so infrastructure probes keep
+working; `/mcp` always requires a Discord user token. Client-side, obtain the
+token with the authorization-code grant for your own application and request at
+least `identify guilds guilds.members.read`:
+
+```
+https://discord.com/oauth2/authorize?client_id=<APPLICATION_ID>
+  &response_type=code
+  &redirect_uri=<REGISTERED_REDIRECT>
+  &scope=identify%20guilds%20guilds.members.read
+  &state=<UNGUESSABLE_NONCE>
+```
+
+Exchange the returned `code` at `https://discord.com/api/oauth2/token`
+(`grant_type=authorization_code`, `application/x-www-form-urlencoded`) and send
+the resulting `access_token` as `Authorization: Bearer <token>`. Verified
+tokens are cached until their own expiry; revoking a token in Discord takes
+effect for this server only after that cache entry expires or the process
+restarts. This mode is per-caller authorization, not per-caller Discord
+identity on the wire: tool calls still execute as the deployment's bot.
+
 ### `MCP_HTTP_MAX_BODY_BYTES`
 
 - **Type:** integer from 1,024 through 67,108,864
