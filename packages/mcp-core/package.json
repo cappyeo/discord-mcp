@@ -34,7 +34,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsdown",
@@ -44,8 +45,8 @@
     "test:watch": "vitest",
     "bench": "vitest bench --run",
     "typecheck": "tsc --noEmit",
-    "prepack": "node -e \"require('node:fs').copyFileSync('../../README.md','README.md');require('node:fs').copyFileSync('../../LICENSE','LICENSE');\"",
-    "postpack": "node -e \"try{require('node:fs').unlinkSync('README.md');require('node:fs').unlinkSync('LICENSE');}catch{}\""
+    "prepack": "node -e \"require('node:fs').copyFileSync('../../README.md','README.md');require('node:fs').copyFileSync('../../LICENSE','LICENSE');require('node:fs').copyFileSync('../../NOTICE','NOTICE');\"",
+    "postpack": "node -e \"try{require('node:fs').unlinkSync('README.md');require('node:fs').unlinkSync('LICENSE');require('node:fs').unlinkSync('NOTICE');}catch{}\""
   },
   "engines": {
     "node": ">=22.12"
@@ -56,7 +57,9 @@
     "@opentelemetry/semantic-conventions": "^1.44.0",
     "cockatiel": "^3.2.1",
     "discord-api-types": "^0.38.57",
-    "pino": "^9.5.0"
+    "ipaddr.js": "^2.5.0",
+    "pino": "^9.5.0",
+    "standardwebhooks": "^1.1.1"
   },
   "peerDependencies": {
     "@discordjs/rest": "^2.4.0",

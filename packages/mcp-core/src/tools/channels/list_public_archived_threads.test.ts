@@ -5,11 +5,13 @@ import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import channelsListPublicArchivedThreads from './list_public_archived_threads.js';
 import '../../container.js';
+import { loadConfig } from '../../config.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
 describe('channels_list_public_archived_threads', () => {
   it('GETs archived public threads and reports has_more', async () => {
+    container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     server.use(
       http.get(`${DISCORD_API}/channels/:channelId/threads/archived/public`, async () =>
@@ -22,6 +24,13 @@ describe('channels_list_public_archived_threads', () => {
               parent_id: '111122223333444401',
               owner_id: '537711014240270104',
               thread_metadata: { archived: true, archive_timestamp: '2026-04-01T00:00:00Z' },
+            },
+            {
+              id: '999000999000999400',
+              name: 'older',
+              type: 11,
+              parent_id: '111122223333444401',
+              thread_metadata: { archived: true, archive_timestamp: '2026-03-31T00:00:00Z' },
             },
           ],
           has_more: true,

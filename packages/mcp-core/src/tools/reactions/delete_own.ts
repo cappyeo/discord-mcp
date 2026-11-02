@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
+import { ReactionEmoji } from '../_lib/reaction-emoji.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 
@@ -23,11 +24,7 @@ export default defineTool({
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the message'),
     message_id: MessageId.describe('Message to remove the reaction from'),
-    emoji: z
-      .string()
-      .min(1)
-      .max(128)
-      .describe('Unicode emoji (e.g. "👍") or `name:id` for custom emoji'),
+    emoji: ReactionEmoji.describe('Raw Unicode emoji or `name:id` for custom emoji'),
   },
   outputSchema: {
     deleted: z.literal(true),

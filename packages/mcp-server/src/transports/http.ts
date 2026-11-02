@@ -7,6 +7,7 @@ import {
   createAuditSink,
   createLogger,
   createRuntimeAccessResolver,
+  eventBridgeFromConfig,
   FilePayloadApprovalLedger,
   loadConfig,
   PayloadApprovalLedger,
@@ -123,6 +124,7 @@ function requestDeclaresBody(req: IncomingMessage): boolean {
  */
 export async function startHttp(options: StartHttpOptions = {}): Promise<Server> {
   const config = loadConfig();
+  const eventBridge = eventBridgeFromConfig(config);
   const accessToken = config.DISCORD_MCP_ACCESS_TOKEN;
   if (accessToken === undefined) {
     throw new Error('DISCORD_MCP_ACCESS_TOKEN is required for the HTTP transport.');
@@ -184,6 +186,7 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           rest,
           logger,
           config,
+          ...(eventBridge ? { eventBridge } : {}),
           transport: 'http',
           // This stateless transport has no Gateway resource-update publisher.
           enableResourceSubscriptions: false,

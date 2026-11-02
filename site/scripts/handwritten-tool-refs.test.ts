@@ -20,6 +20,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { EVENT_TOOL_NAMES } from '../../packages/mcp-core/src/events/contract.js';
 import { loadAllTools } from './generate-tool-docs.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -49,6 +50,8 @@ function buildExtras(): Set<string> {
     .map((f) => f.replace(/\.ts$/, ''));
   return new Set<string>([
     ...handlers,
+    // Dynamic tools are registered only for Events-enabled sessions.
+    ...EVENT_TOOL_NAMES,
     // Precondition identifiers, not tools.
     'confirm_required',
     'category_enabled',

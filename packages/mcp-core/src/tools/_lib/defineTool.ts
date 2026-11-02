@@ -92,6 +92,66 @@ function assertMatchesOutputSchema(
   );
 }
 
+const DESCRIPTION_SECTION_RE = /\*\*([^*\n]+)\*\*:[ \t]*\n?([\s\S]*?)(?=\n\s*\*\*[^*\n]+\*\*:|$)/g;
+
+/**
+ * Collapse a section body (or a heading-less description) into one line per
+ * authored paragraph. Paragraph breaks survive because `compactSummary()`
+ * (`tool-discovery.ts`) feeds the first paragraph to `mcp_tools_search` results;
+ * merging paragraphs would push a URL or a second sentence into that summary.
+ */
+function compactText(text: string): string {
+  return text
+    .split(/\n[ \t]*\n/)
+    .map((paragraph) =>
+      paragraph
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter((paragraph) => paragraph !== '')
+    .join('\n\n');
+}
+
+/**
+ * Compact the authored NLT description for the MCP wire.
+ *
+ * Keep every section, including Returns: its prose can carry semantics that
+ * an output schema does not express. Full authored text stays in metadata for
+ * docs. Fenced examples retain their exact formatting on the wire as well.
+ */
+function compactDescription(description: string): string {
+  if (/^\s*```/m.test(description)) return description.trim();
+  const parts: string[] = [];
+  let lastIndex = 0;
+  let matched = false;
+
+  for (const section of description.matchAll(DESCRIPTION_SECTION_RE)) {
+    matched = true;
+    const index = section.index ?? 0;
+    if (index > lastIndex) {
+      const leading = compactText(description.slice(lastIndex, index));
+      if (leading !== '') parts.push(leading);
+    }
+    lastIndex = index + section[0].length;
+    const heading = section[1]!.trim();
+    const body = compactText(section[2]!);
+    parts.push(body === '' ? `${heading}:` : `${heading}: ${body}`);
+  }
+
+  // 19 descriptions carry no `**Heading**:` marker at all.
+  if (!matched) return compactText(description);
+
+  const tail = compactText(description.slice(lastIndex));
+  if (tail !== '') parts.push(tail);
+
+  // `catalog --check` rejects an empty description; never produce one.
+  return parts.length === 0 ? description.trim() : parts.join('\n\n');
+}
+
 export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
   def: ToolDefinition<I, O>,
 ): typeof Tool {
@@ -102,7 +162,7 @@ export function defineTool<I extends Record<string, z.ZodTypeAny>, O>(
   }
 
   class GeneratedTool extends Tool {
-    public override readonly description = def.description;
+    public override readonly description = compactDescription(def.description);
     public override readonly inputSchema = def.inputSchema;
     // outputSchema is optional on the base class; only set when provided to
     // avoid overriding the base undefined with an explicit undefined.

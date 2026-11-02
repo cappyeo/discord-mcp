@@ -63,9 +63,21 @@ describe('Snowflake schemas', () => {
       expect(s.safeParse('not-a-snowflake').success).toBe(false);
     }
   });
-  it('InviteCode brand accepts short base62-style strings, rejects empty and oversize', () => {
+  it('InviteCode accepts URL-safe identifiers and rejects empty and oversize strings', () => {
     expect(InviteCode.safeParse('abc123').success).toBe(true);
+    expect(InviteCode.safeParse('Abc_123-def').success).toBe(true);
     expect(InviteCode.safeParse('').success).toBe(false);
     expect(InviteCode.safeParse('x'.repeat(33)).success).toBe(false);
+  });
+  it.each([
+    '.',
+    '..',
+    '../channels/123456789012345678',
+    '%2e%2e',
+    'code?query#fragment',
+    'code\\suffix',
+    'code\nsuffix',
+  ])('rejects invite route syntax: %j', (code) => {
+    expect(InviteCode.safeParse(code).success).toBe(false);
   });
 });

@@ -59,6 +59,8 @@ const SENSITIVE_KEYS_BY_TOOL: Record<string, ReadonlySet<string>> = {
   // kilobytes; never persist even a prefix in the audit journal.
   app_emojis_create: new Set(['image']),
   messages_send: new Set(['content']),
+  events_dm_reply: new Set(['content']),
+  events_message_reply: new Set(['content']),
   messages_edit: new Set(['content']),
   // Composer payloads may contain base64 data URIs and untrusted rich
   // message content. Drop the whole values from audit records; truncating a

@@ -4,6 +4,7 @@ import { container } from '@sapphire/pieces';
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { loadConfig } from '../../config.js';
 import type { Tool } from '../../pieces/Tool.js';
 import createChannel from './create_guild_channel.js';
 import createThread from './forum_create_thread.js';
@@ -47,6 +48,7 @@ async function run(T: typeof Tool, args: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
   container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');
 });
 
@@ -74,15 +76,23 @@ describe('forum tag output preservation', () => {
   ])('preserves applied_tags $applied_tags on post reads, creates, and every thread list', async ({
     applied_tags,
   }) => {
-    const thread = { id: CHANNEL, name: 'old-post', type: 11, applied_tags };
+    const thread = {
+      id: CHANNEL,
+      name: 'old-post',
+      type: 11,
+      applied_tags,
+      thread_metadata: { archive_timestamp: '2026-01-01T00:00:00Z' },
+    };
     server.use(
       http.get(`${API}/channels/:id`, () => HttpResponse.json(thread)),
-      http.get(`${API}/guilds/:id/threads/active`, () => HttpResponse.json({ threads: [thread] })),
+      http.get(`${API}/guilds/:id/threads/active`, () =>
+        HttpResponse.json({ threads: [thread], has_more: false }),
+      ),
       http.get(`${API}/channels/:id/threads/archived/:kind`, () =>
-        HttpResponse.json({ threads: [thread] }),
+        HttpResponse.json({ threads: [thread], has_more: false }),
       ),
       http.get(`${API}/channels/:id/users/@me/threads/archived/private`, () =>
-        HttpResponse.json({ threads: [thread] }),
+        HttpResponse.json({ threads: [thread], has_more: false }),
       ),
       http.post(`${API}/channels/:id/threads`, () => HttpResponse.json(thread)),
     );

@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { defineTool } from '../_lib/defineTool.js';
+import { ReactionEmoji } from '../_lib/reaction-emoji.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
 
@@ -19,16 +20,12 @@ export default defineTool({
     '',
     '**Example**: `{channel_id:"111122223333444401", message_id:"999000999000999000", emoji:"thumbsup:850000000000000001"}`',
     '',
-    '**Returns**: `{reacted, channel_id, message_id, emoji}`. `emoji` accepts unicode (e.g. `"👍"`) OR `name:id` for custom emojis. URL-encoding is handled by `@discordjs/rest`.',
+    '**Returns**: `{reacted, channel_id, message_id, emoji}`. `emoji` accepts raw unicode (e.g. `"👍"`) OR `name:id` for custom emojis; it is encoded once when constructing the REST route.',
   ].join('\n'),
   inputSchema: {
     channel_id: ChannelId.describe('Channel containing the message'),
     message_id: MessageId.describe('Message to react to'),
-    emoji: z
-      .string()
-      .min(1)
-      .max(128)
-      .describe('Unicode emoji (e.g. "👍") or `name:id` for custom emoji'),
+    emoji: ReactionEmoji.describe('Raw Unicode emoji or `name:id` for custom emoji'),
   },
   outputSchema: {
     reacted: z.literal(true),

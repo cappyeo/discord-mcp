@@ -257,12 +257,15 @@ describe('rich message read protocol', () => {
     'after',
   ])('preserves %s queries, message order, counts and cursors', async (cursor) => {
     messages.push({ ...baseMessage, ...legacy, id: OLDER_ID });
+    const exclusiveCursor = String(
+      cursor === 'before' ? BigInt(MESSAGE_ID) + 1n : BigInt(OLDER_ID) - 1n,
+    );
     const result = await client.callTool({
       name: 'messages_read',
-      arguments: { channel_id: CHANNEL_ID, limit: 2, [cursor]: MESSAGE_ID },
+      arguments: { channel_id: CHANNEL_ID, limit: 2, [cursor]: exclusiveCursor },
     });
     expect(result.isError).toBe(false);
-    expect(query).toEqual({ limit: '2', [cursor]: MESSAGE_ID });
+    expect(query).toEqual({ limit: '2', [cursor]: exclusiveCursor });
     expect(result.structuredContent).toMatchObject({
       messages: [
         { id: MESSAGE_ID, ...card },

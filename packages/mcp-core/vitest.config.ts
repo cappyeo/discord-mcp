@@ -30,6 +30,9 @@ export default defineConfig({
         'src/audit/schema.ts',
         // Browser App entry is exercised by the Playwright mock-host check.
         'src/apps/blueprint-preview-view.ts',
+        // These worker modules require POSIX ownership and Unix sockets.
+        // Their storage/IPC coverage is enforced by both Linux CI jobs.
+        ...(process.platform === 'win32' ? ['src/events/runtime.ts', 'src/events/bridge.ts'] : []),
       ],
       // Keep the long-standing core gate separate from the new, independently
       // exercised blueprint operation graph. A global threshold would include

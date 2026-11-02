@@ -41,12 +41,13 @@ describe('CLI surface', () => {
     expect(describeProgram()).toMatchSnapshot();
   });
 
-  it('ships exactly the ten committed subcommands', () => {
+  it('ships the original commands plus the Events worker', () => {
     const names = describeProgram().commands.map((c) => c.name);
     expect(names).toEqual([
       'activity',
       'catalog',
       'doctor',
+      'events-worker',
       'init',
       'migrate',
       'profile',

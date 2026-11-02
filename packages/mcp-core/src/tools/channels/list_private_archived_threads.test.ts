@@ -5,11 +5,13 @@ import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import channelsListPrivateArchivedThreads from './list_private_archived_threads.js';
 import '../../container.js';
+import { loadConfig } from '../../config.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
 describe('channels_list_private_archived_threads', () => {
   it('GETs archived private threads', async () => {
+    container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     server.use(
       http.get(`${DISCORD_API}/channels/:channelId/threads/archived/private`, async () =>

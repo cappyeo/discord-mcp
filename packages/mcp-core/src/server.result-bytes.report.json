@@ -25,8 +25,8 @@
       "inputShape": "maximum",
       "itemCount": 100,
       "contentBytes": 206816,
-      "structuredContentBytes": 219818,
-      "totalSerializedBytes": 426683,
+      "structuredContentBytes": 224231,
+      "totalSerializedBytes": 431096,
       "duplicatedFieldBytes": 200000,
       "classBudgetBytes": 768000,
       "budgetBytes": 500000
@@ -58,6 +58,19 @@
       "budgetBytes": 256000
     },
     {
+      "tool": "messages_read",
+      "resultClass": "paginated_collection",
+      "budgetClass": "messages",
+      "inputShape": "default",
+      "itemCount": 50,
+      "contentBytes": 103514,
+      "structuredContentBytes": 112229,
+      "totalSerializedBytes": 215792,
+      "duplicatedFieldBytes": 100000,
+      "classBudgetBytes": 768000,
+      "budgetBytes": 500000
+    },
+    {
       "tool": "messages_list_pins",
       "resultClass": "paginated_collection",
       "budgetClass": "messages",
@@ -66,19 +79,6 @@
       "contentBytes": 103573,
       "structuredContentBytes": 110162,
       "totalSerializedBytes": 213784,
-      "duplicatedFieldBytes": 100000,
-      "classBudgetBytes": 768000,
-      "budgetBytes": 500000
-    },
-    {
-      "tool": "messages_read",
-      "resultClass": "paginated_collection",
-      "budgetClass": "messages",
-      "inputShape": "default",
-      "itemCount": 50,
-      "contentBytes": 103514,
-      "structuredContentBytes": 109966,
-      "totalSerializedBytes": 213529,
       "duplicatedFieldBytes": 100000,
       "classBudgetBytes": 768000,
       "budgetBytes": 500000
@@ -123,6 +123,19 @@
       "budgetBytes": 768000
     },
     {
+      "tool": "messages_read",
+      "resultClass": "paginated_collection",
+      "budgetClass": "messages",
+      "inputShape": "small",
+      "itemCount": 1,
+      "contentBytes": 2287,
+      "structuredContentBytes": 2476,
+      "totalSerializedBytes": 4812,
+      "duplicatedFieldBytes": 2000,
+      "classBudgetBytes": 768000,
+      "budgetBytes": 500000
+    },
+    {
       "tool": "messages_search_recent",
       "resultClass": "paginated_collection",
       "budgetClass": "messages",
@@ -131,19 +144,6 @@
       "contentBytes": 2287,
       "structuredContentBytes": 2325,
       "totalSerializedBytes": 4661,
-      "duplicatedFieldBytes": 2000,
-      "classBudgetBytes": 768000,
-      "budgetBytes": 500000
-    },
-    {
-      "tool": "messages_read",
-      "resultClass": "paginated_collection",
-      "budgetClass": "messages",
-      "inputShape": "small",
-      "itemCount": 1,
-      "contentBytes": 2287,
-      "structuredContentBytes": 2320,
-      "totalSerializedBytes": 4656,
       "duplicatedFieldBytes": 2000,
       "classBudgetBytes": 768000,
       "budgetBytes": 500000

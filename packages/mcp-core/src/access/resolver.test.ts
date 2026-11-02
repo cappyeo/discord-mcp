@@ -931,6 +931,26 @@ describe('createRuntimeAccessResolver', () => {
     expect(evidence).toMatchObject({ status: 'complete', target: GUILD_ID });
   });
 
+  it.each([
+    '..',
+    '%2e%2e',
+    '../channels/123456789012345678',
+  ])('does not fetch malformed invite targets: %j', async (code) => {
+    const identity = identityRoutes();
+    const { rest, get } = restFor(identity);
+    const resolver = createRuntimeAccessResolver({ rest, expectedBotId: BOT_ID });
+    const evidence = await resolver({
+      toolName: 'invites_delete',
+      args: { code },
+      requirement: getToolAccessRequirement('invites_delete').requirement!,
+      expectedBotId: BOT_ID,
+    });
+    expect(evidence.status).not.toBe('complete');
+    for (const [route] of get.mock.calls) {
+      expect(Object.hasOwn(identity, route)).toBe(true);
+    }
+  });
+
   it('fails closed for malformed identity, application, guild, role, and channel responses', async () => {
     const cases: Array<{
       readonly routes: Record<string, unknown>;

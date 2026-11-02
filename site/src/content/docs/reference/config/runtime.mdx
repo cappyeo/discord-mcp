@@ -15,6 +15,60 @@ description: Enable Gateway subscriptions and choose the server log level.
 `discord-mcp serve --gateway` is equivalent to `GATEWAY=true`. Use the environment
 variable when the MCP client config can set `env` but not command arguments.
 
+## DM and mention Events
+
+Optional message Events use a separate supervised worker and private storage.
+See [DM and mention events](/discord-mcp/operations/message-events/) for configuration,
+platform limits, subscriptions, and event-bound replies.
+
+### `MCP_EVENTS_OWNER`
+
+- **Type:** non-empty string, up to 256 characters
+- **Default:** unset
+- **Use:** Trusted single-owner principal. Configure together with the socket.
+
+### `MCP_EVENTS_SOCKET`
+
+- **Type:** absolute private Unix socket path
+- **Default:** unset
+- **Use:** Connect MCP sessions to the supervised worker; requires the owner.
+
+### `MCP_EVENTS_STATE_DIR`
+
+- **Type:** absolute private directory path
+- **Default:** unset
+- **Use:** Worker storage and singleton lease. The socket must be `worker.sock` inside this directory.
+
+### `MCP_EVENTS_AUTHOR_ID`
+
+- **Type:** 17-20 digit Discord snowflake
+- **Default:** unset
+- **Use:** Independently verified human authorized to trigger DM events; required by the worker.
+
+### `MCP_EVENTS_GUILD_ID`
+
+- **Type:** 17-20 digit Discord snowflake
+- **Default:** unset
+- **Use:** Enable direct human mentions in one guild, subject to `ALLOWED_GUILDS`.
+
+### `MCP_EVENTS_CATALOG`
+
+- **Type:** `all`, `dm`, or `mentions`
+- **Default:** `all`
+- **Use:** Restrict discovery, subscriptions, and event-bound context/replies on this MCP connection.
+
+### `MCP_EVENTS_RETENTION_DAYS`
+
+- **Type:** integer from 1 to 90
+- **Default:** `7`
+- **Use:** Retain terminal event history for this period. Uncertain sends remain available for review.
+
+### `MCP_EVENTS_MAX_RECORDS`
+
+- **Type:** integer from 100 to 100000
+- **Default:** `10000`
+- **Use:** Bound accepted event records. At capacity, observation fails closed and the worker stops.
+
 ## Logging
 
 ### `LOG_LEVEL`

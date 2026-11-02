@@ -121,6 +121,91 @@ describe('defineTool', () => {
     expect(meta?.preconditions).toEqual([]);
   });
 
+  it('compacts the authored description for the MCP wire', () => {
+    const Probe = defineTool({
+      name: 'compact_probe',
+      description: [
+        '**Purpose**: Probe the compaction.',
+        '',
+        '**When to use**:',
+        '- Always.',
+        '',
+        '**Returns**: `{ok}`.',
+        '',
+        '**Security**: gated by `ConfirmRequired`.',
+      ].join('\n'),
+      inputSchema: {},
+      outputSchema: { ok: z.boolean() },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      handler: async () => ({ ok: true }),
+    });
+    const instance = new Probe(
+      { name: 'compact_probe', path: 'memory', root: 'memory', store: null as never },
+      { name: 'compact_probe', enabled: true },
+    );
+    expect(instance.description).toBe(
+      'Purpose: Probe the compaction.\n\nWhen to use: - Always.\n\nReturns: `{ok}`.\n\nSecurity: gated by `ConfirmRequired`.',
+    );
+    // defineTool hands back `typeof Tool`; the build-time static is attached inside it.
+    const WithMeta = Probe as unknown as { __toolMetadata?: ToolMetadataStatic };
+    expect(WithMeta.__toolMetadata?.description).toContain('**Returns**: `{ok}`.');
+  });
+
+  it('keeps the Returns section when the tool publishes no outputSchema', () => {
+    const Probe = defineTool({
+      name: 'compact_no_output',
+      description: ['**Purpose**: Probe the compaction.', '', '**Returns**: `{ok}`.'].join('\n'),
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      handler: async () => ({ ok: true }),
+    });
+    const instance = new Probe(
+      { name: 'compact_no_output', path: 'memory', root: 'memory', store: null as never },
+      { name: 'compact_no_output', enabled: true },
+    );
+    expect(instance.description).toContain('Returns: `{ok}`.');
+  });
+
+  it('preserves fenced examples and descriptions containing only Returns', () => {
+    for (const description of [
+      '**Returns**: Empty means unknown, not absent.',
+      '**Example**:\n```json\n{\n  "value": 1\n}\n```',
+    ]) {
+      const Probe = defineTool({
+        name: 'format_probe',
+        description,
+        inputSchema: {},
+        outputSchema: { value: z.number() },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+        handler: async () => ({ value: 1 }),
+      });
+      const tool = new Probe(
+        { name: 'format_probe', path: 'inline', root: 'inline', store: null as never },
+        { name: 'format_probe' },
+      );
+      expect(tool.description).toBe(
+        description.startsWith('**Example**')
+          ? description
+          : 'Returns: Empty means unknown, not absent.',
+      );
+    }
+  });
+
   it('passes category, preconditions, and scopes from config to subclass', async () => {
     const Tool = defineTool({
       name: 'with_meta',

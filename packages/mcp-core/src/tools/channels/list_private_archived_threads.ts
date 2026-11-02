@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { archivePage } from '../_lib/archive-page.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
@@ -12,6 +13,7 @@ interface RawThread extends ChannelTags {
   name: string;
   type: number;
   parent_id?: string | null;
+  guild_id?: string;
   owner_id?: string;
   thread_metadata?: { archived?: boolean; archive_timestamp?: string };
 }
@@ -56,6 +58,8 @@ export default defineTool({
       }),
     ),
     has_more: z.boolean(),
+    next_before: z.string().optional(),
+    complete: z.boolean(),
     count: z.number().int(),
     channel_id: ChannelId,
   },
@@ -69,12 +73,13 @@ export default defineTool({
   handler: async (args) => {
     const query = new URLSearchParams();
     if (args.before !== undefined) query.set('before', args.before);
-    if (args.limit !== undefined) query.set('limit', String(args.limit));
+    query.set('limit', String(Math.min((args.limit ?? 100) + 1, 100)));
     const raw = (await container.rest.get(
       Routes.channelThreads(args.channel_id, 'private'),
       query.size > 0 ? { query } : undefined,
     )) as RawArchivedList;
-    const threads = raw.threads.map((t) => ({
+    const page = archivePage(raw, args.channel_id, args.limit ?? 100, args.before, false);
+    const threads = page.threads.map((t) => ({
       ...channelTags(t),
       id: t.id,
       name: t.name,
@@ -91,7 +96,9 @@ export default defineTool({
       text: `**${threads.length} archived private thread(s)** under <#${args.channel_id}>:\n${wrappedNames}`,
       data: {
         threads,
-        has_more: raw.has_more ?? false,
+        has_more: page.has_more,
+        complete: page.complete,
+        ...(page.next_before === undefined ? {} : { next_before: page.next_before }),
         count: threads.length,
         channel_id: args.channel_id,
       },

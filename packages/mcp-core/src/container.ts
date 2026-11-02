@@ -3,6 +3,7 @@ import type { REST } from '@discordjs/rest';
 import { container } from '@sapphire/pieces';
 import type { Logger } from 'pino';
 import type { Config } from './config.js';
+import type { EventBridge } from './events/contract.js';
 
 /**
  * Runtime dependencies consumed by the existing tool pieces through Sapphire's
@@ -13,6 +14,7 @@ export interface DiscordRuntime {
   rest: REST;
   logger: Logger;
   config: Config;
+  eventBridge?: EventBridge;
 }
 
 const runtimeStore = new AsyncLocalStorage<DiscordRuntime>();
@@ -22,7 +24,7 @@ type RuntimeKey = keyof DiscordRuntime;
 
 function readRuntime<Key extends RuntimeKey>(key: Key): DiscordRuntime[Key] {
   const value = runtimeStore.getStore()?.[key] ?? fallbackRuntime[key];
-  if (value === undefined) {
+  if (value === undefined && key !== 'eventBridge') {
     throw new Error(`Discord runtime is not configured (${key}).`);
   }
   return value as DiscordRuntime[Key];
@@ -40,7 +42,7 @@ function writeRuntime<Key extends RuntimeKey>(key: Key, value: DiscordRuntime[Ke
 // Tool modules import Sapphire's singleton `container` directly. Turn its
 // three runtime fields into AsyncLocalStorage-backed accessors once, preserving
 // direct assignment for existing unit tests and local one-process startup.
-for (const key of ['rest', 'logger', 'config'] as const) {
+for (const key of ['rest', 'logger', 'config', 'eventBridge'] as const) {
   Object.defineProperty(container, key, {
     configurable: true,
     enumerable: true,
@@ -62,5 +64,6 @@ declare module '@sapphire/pieces' {
     rest: REST;
     logger: Logger;
     config: Config;
+    eventBridge?: EventBridge;
   }
 }

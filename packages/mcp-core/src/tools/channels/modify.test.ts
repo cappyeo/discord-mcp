@@ -4,6 +4,7 @@ import { container } from '@sapphire/pieces';
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { loadConfig } from '../../config.js';
 import channelsGet from './get.js';
 import activeThreads from './list_active_threads_guild.js';
 import archivedThreads from './list_public_archived_threads.js';
@@ -14,6 +15,7 @@ const DISCORD_API = 'https://discord.com/api/v10';
 
 describe('channels_modify', () => {
   it('PATCHes the channel and returns the updated record', async () => {
+    container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     let receivedBody: unknown = null;
     server.use(
@@ -63,6 +65,7 @@ describe('channels_modify forum tag safety', () => {
   let tool: InstanceType<typeof channelsModify>;
 
   beforeEach(() => {
+    container.config = loadConfig({ DISCORD_TOKEN: 'x'.repeat(60) });
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token');
     state = { id: CHANNEL, name: 'forum', type: 15, available_tags: structuredClone(initialTags) };
     requests = [];
@@ -113,7 +116,10 @@ describe('channels_modify forum tag safety', () => {
         HttpResponse.json({ threads: [post()] }),
       ),
       http.get(`${DISCORD_API}/channels/${CHANNEL}/threads/archived/public`, () =>
-        HttpResponse.json({ threads: [post()], has_more: false }),
+        HttpResponse.json({
+          threads: [{ ...post(), thread_metadata: { archive_timestamp: '2026-01-01T00:00:00Z' } }],
+          has_more: false,
+        }),
       ),
     );
     const result = await run({

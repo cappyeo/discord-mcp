@@ -12,7 +12,7 @@ describe('reactions_create', () => {
   it('PUTs the @me reaction route and returns reacted:true', async () => {
     container.rest = new REST({ version: '10', makeRequest: fetch }).setToken('fake-token-aaaaaa');
     server.use(
-      // Wide wildcard matcher: emoji segment is percent-encoded by @discordjs/rest.
+      // The Discord route helper percent-encodes the emoji segment.
       http.put(
         `${DISCORD_API}/channels/:channelId/messages/:messageId/reactions/*`,
         async () => new HttpResponse(null, { status: 204 }),
