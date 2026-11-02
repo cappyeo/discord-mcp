@@ -61,7 +61,7 @@ jobs:
             exit 1
           fi
           if [ -z "${DISCORD_CLIENT_SECRET:-}" ]; then
-            echo "::error::org secret DISCORD_CLIENT_SECRET is unset or not visible to this repository"
+            echo "::error::repo secret DISCORD_CLIENT_SECRET is unset"
             exit 1
           fi
           umask 077
