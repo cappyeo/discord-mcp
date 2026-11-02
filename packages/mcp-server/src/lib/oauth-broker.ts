@@ -1,4 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import type { GrantStore } from './oauth-grant-store.js';
+import { MemoryGrantStore } from './oauth-grant-store.js';
 import { type DiscordHttp, OAuthCallerRejected } from './oauth2.js';
 
 /**
@@ -21,6 +23,8 @@ export interface BrokerOptions {
   readonly clientSecret: string;
   /** Public origin of this deployment, e.g. https://discord-mcp.example.org */
   readonly publicUrl: URL;
+  /** Where issued tokens live. Defaults to a process-local map. */
+  readonly grantStore?: GrantStore;
   /** HTTP seam for the Discord token exchange; suites point it at a stub. */
   readonly makeRequest?: DiscordHttp;
   /** Test seam for expiring entries. */
@@ -37,13 +41,6 @@ interface PendingLogin {
   readonly expiresAt: number;
   /** Discord user bound to an issued broker code; absent on initial logins. */
   readonly userId?: string;
-}
-
-interface AccessGrant {
-  readonly userId: string;
-  readonly clientId: string;
-  readonly scope: string;
-  readonly expiresAt: number;
 }
 
 interface RawTokenResponse {
@@ -88,11 +85,12 @@ export class OAuthBrokerError extends Error {
  */
 export class DiscordOAuthBroker {
   private readonly pending = new Map<string, PendingLogin>();
-  private readonly grants = new Map<string, AccessGrant>();
+  private readonly grantStore: GrantStore;
   private readonly now: () => number;
 
   public constructor(private readonly options: BrokerOptions) {
     this.now = options.now ?? Date.now;
+    this.grantStore = options.grantStore ?? new MemoryGrantStore(this.now);
   }
 
   /**
@@ -269,7 +267,7 @@ export class DiscordOAuthBroker {
     if (pending.userId === undefined) {
       throw new OAuthBrokerError(400, 'invalid_grant', 'code is not bound to a Discord user');
     }
-    this.grants.set(accessToken, {
+    this.grantStore.set(accessToken, {
       userId: pending.userId,
       clientId: pending.clientId,
       scope,
@@ -285,13 +283,7 @@ export class DiscordOAuthBroker {
 
   /** The Discord user behind an issued access token, or undefined when not valid. */
   public principalFor(token: string): string | undefined {
-    const grant = this.grants.get(token);
-    if (grant === undefined) return undefined;
-    if (grant.expiresAt <= this.now()) {
-      this.grants.delete(token);
-      return undefined;
-    }
-    return grant.userId;
+    return this.grantStore.get(token)?.userId;
   }
 
   private async discordFetch(url: string, init: RequestInit): Promise<Response> {

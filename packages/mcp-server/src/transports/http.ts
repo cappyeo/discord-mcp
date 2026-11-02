@@ -23,6 +23,7 @@ import {
 import { type AuthInfo, createMcpHandler } from '@modelcontextprotocol/server';
 import { recordBlueprintActivity } from '../lib/activity.js';
 import { DiscordOAuthBroker, OAuthBrokerError } from '../lib/oauth-broker.js';
+import { FileGrantStore } from '../lib/oauth-grant-store.js';
 import { createOAuthCallerVerifier, type DiscordHttp, OAuthCallerRejected } from '../lib/oauth2.js';
 import type { OtelHandle } from '../otel.js';
 
@@ -282,6 +283,11 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           clientId: config.DISCORD_CLIENT_ID,
           clientSecret: config.DISCORD_CLIENT_SECRET,
           publicUrl: new URL(config.MCP_PUBLIC_URL),
+          // Issued tokens outlive a restart only when the operator names a
+          // state directory; without one this is a single-process deployment.
+          ...(config.MCP_OAUTH_STATE_DIR === undefined
+            ? {}
+            : { grantStore: new FileGrantStore(config.MCP_OAUTH_STATE_DIR) }),
           ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
         })
       : undefined;

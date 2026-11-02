@@ -42,6 +42,9 @@ const ConfigSchema = z.object({
   // client's redirect URI and this broker's Discord callback both resolve
   // against it, and Discord rejects the exchange if it does not match exactly.
   MCP_PUBLIC_URL: z.url().optional(),
+  // Where issued OAuth2 tokens persist. Unset keeps them in process memory, so
+  // every restart and deploy logs every client out.
+  MCP_OAUTH_STATE_DIR: z.string().trim().min(1).optional(),
   // Discord application credentials for the OAuth2 broker. The bot credential
   // (`DISCORD_TOKEN`) cannot perform a code exchange, so `oauth2` mode needs
   // the application's own client pair.

@@ -28,6 +28,7 @@ exports[`config surface > declares the frozen set of schema keys, optional ones 
   "MCP_DM_CONSENT_MODE",
   "MCP_HTTP_MAX_BODY_BYTES",
   "MCP_HTTP_MAX_IN_FLIGHT",
+  "MCP_OAUTH_STATE_DIR",
   "MCP_PUBLIC_URL",
   "MCP_RETRY_BASE_DELAY_MS",
   "MCP_RETRY_ENABLED",
