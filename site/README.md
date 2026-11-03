@@ -110,16 +110,22 @@ and the shared MDX building blocks in `src/components/docs/`.
   and run `pnpm --filter site test:browser` for any change that can affect rendered content,
   navigation, interaction, or layout.
 
-## GitHub Pages setup (operators)
+## Publishing the docs
 
-After merging Plan 10:
+Automated Pages deployment was removed: the workflow failed on every `main`
+push and the site is published elsewhere. The site is still built and tested by
+the ordinary CI job (`pnpm test` runs the site suites), so a broken build still
+blocks a merge.
 
-1. Repo Settings → Pages → Source: **GitHub Actions**
-2. Push to `main` triggers `.github/workflows/docs.yml`
-3. First successful deploy publishes to <https://cappyeo.github.io/discord-mcp/>
+To publish by hand:
 
-The workflow only runs on push to `main`. PR-mode CI builds the site
-as a smoke test (no deploy).
+```
+pnpm --filter @discord-mcp/core build
+pnpm --filter site build
+pnpm --filter site test:links
+```
+
+The static output is in `site/dist`.
 
 ## Custom domain (optional)
 
