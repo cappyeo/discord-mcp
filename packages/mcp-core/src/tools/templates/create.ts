@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId } from '../_lib/snowflake.js';
@@ -47,9 +48,13 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = { name: args.name };
-    if (args.description !== undefined) body.description = args.description;
+    if (args.description !== undefined)
+      body.description =
+        args.description === null
+          ? null
+          : withAttributionField(args.description, ctx.caller, 'Created', 120);
     const raw = (await container.rest.post(Routes.guildTemplates(args.guild_id), {
       body,
       reason: args.audit_reason,

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttribution } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
@@ -33,9 +34,10 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
+    const content = withAttribution(args.content, ctx.caller, 'Edited') ?? args.content;
     const m = (await container.rest.patch(Routes.channelMessage(args.channel_id, args.message_id), {
-      body: { content: args.content },
+      body: { content },
     })) as EditedMessage;
     return dualResult({
       text: `Edited message ${m.id} in <#${m.channel_id}>.`,

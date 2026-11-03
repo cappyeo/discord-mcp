@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttribution } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ApplicationId, ChannelId, MessageId, WebhookToken } from '../_lib/snowflake.js';
@@ -57,7 +58,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = {};
     const passthrough = [
       'content',
@@ -73,6 +74,10 @@ export default defineTool({
       const v = (args as Record<string, unknown>)[key];
       if (v !== undefined) body[key] = v;
     }
+    // Interaction replies run under the application, so the footer is the
+    // only record of which caller authored the reply.
+    if (typeof body.content === 'string')
+      body.content = withAttribution(body.content, ctx.caller, 'Sent');
     let flags = args.flags;
     if (args.ephemeral === true) flags = (flags ?? 0) | EPHEMERAL_FLAG;
     if (flags !== undefined) body.flags = flags;

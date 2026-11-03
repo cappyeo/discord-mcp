@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import {
   SCHEDULED_EVENT_ENTITY_TYPE,
@@ -91,7 +92,7 @@ export default defineTool({
     idempotentHint: true,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = {};
     const passthrough = [
       'name',
@@ -110,6 +111,8 @@ export default defineTool({
       const v = (args as Record<string, unknown>)[key];
       if (v !== undefined) body[key] = v;
     }
+    if (typeof body.description === 'string')
+      body.description = withAttributionField(body.description, ctx.caller, 'Updated', 1000);
     const ev = (await container.rest.patch(
       Routes.guildScheduledEvent(args.guild_id, args.event_id),
       { body, reason: args.audit_reason },

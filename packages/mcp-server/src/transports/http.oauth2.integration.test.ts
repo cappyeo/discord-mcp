@@ -399,7 +399,9 @@ describe('OAuth2 HTTP authentication', () => {
       });
       // The deployment posts as one bot for everyone, so the footer is the only
       // per-caller record inside Discord.
-      expect(sentBodies.at(-1)?.content).toBe('hello\n-# _Sent by @caller via discord-mcp_');
+      expect(sentBodies.at(-1)?.content).toBe(
+        `hello\n-# _Sent by <@${CALLER_ID}> via discord-mcp_`,
+      );
     } finally {
       await client.close();
     }

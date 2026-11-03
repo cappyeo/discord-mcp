@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import {
   SCHEDULED_EVENT_ENTITY_TYPE,
@@ -93,7 +94,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = {
       name: args.name,
       privacy_level: args.privacy_level ?? SCHEDULED_EVENT_PRIVACY_LEVEL[0],
@@ -103,7 +104,8 @@ export default defineTool({
     if (args.channel_id !== undefined) body.channel_id = args.channel_id;
     if (args.entity_metadata !== undefined) body.entity_metadata = args.entity_metadata;
     if (args.scheduled_end_time !== undefined) body.scheduled_end_time = args.scheduled_end_time;
-    if (args.description !== undefined) body.description = args.description;
+    if (args.description !== undefined)
+      body.description = withAttributionField(args.description, ctx.caller, 'Created', 1000);
     if (args.image !== undefined) body.image = args.image;
     if (args.recurrence_rule !== undefined) body.recurrence_rule = args.recurrence_rule;
     const ev = (await container.rest.post(Routes.guildScheduledEvents(args.guild_id), {

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, GuildId } from '../_lib/snowflake.js';
@@ -67,11 +68,15 @@ export default defineTool({
     idempotentHint: true,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = {};
     if (args.enabled !== undefined) body.enabled = args.enabled;
     if (args.welcome_channels !== undefined) body.welcome_channels = args.welcome_channels;
-    if (args.description !== undefined) body.description = args.description;
+    if (args.description !== undefined)
+      body.description =
+        args.description === null
+          ? null
+          : withAttributionField(args.description, ctx.caller, 'Updated', 140);
     const w = (await container.rest.patch(Routes.guildWelcomeScreen(args.guild_id), {
       body,
       reason: args.audit_reason,

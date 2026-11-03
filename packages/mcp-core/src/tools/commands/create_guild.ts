@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import type { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ApplicationId, GuildId } from '../_lib/snowflake.js';
@@ -36,8 +37,11 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body = pickCommandBody(args as unknown as Record<string, unknown>);
+    // The description is the only free text a command carries.
+    if (typeof body.description === 'string')
+      body.description = withAttributionField(body.description, ctx.caller, 'Created', 100);
     const cmd = (await container.rest.post(
       Routes.applicationGuildCommands(args.application_id, args.guild_id),
       { body },

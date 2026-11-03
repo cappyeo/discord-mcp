@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, StickerId } from '../_lib/snowflake.js';
@@ -55,10 +56,11 @@ export default defineTool({
     idempotentHint: true,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = {};
     if (args.name !== undefined) body.name = args.name;
-    if (args.description !== undefined) body.description = args.description;
+    if (args.description !== undefined)
+      body.description = withAttributionField(args.description, ctx.caller, 'Updated', 100);
     if (args.tags !== undefined) body.tags = args.tags;
     const s = (await container.rest.patch(Routes.guildSticker(args.guild_id, args.sticker_id), {
       body,

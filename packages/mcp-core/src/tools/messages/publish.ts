@@ -1,5 +1,5 @@
 import { COMPOSER_PUBLISH_ACCESS } from '../../access/requirements.js';
-import { withAttribution } from '../_lib/attribution.js';
+import { withAttribution, withAttributionComponents } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId } from '../_lib/snowflake.js';
@@ -26,7 +26,13 @@ export default defineTool({
   },
   handler: async (args, ctx) => {
     const data = await publishMessage(
-      { ...args, content: withAttribution(args.content, ctx.caller, 'Published') },
+      {
+        ...args,
+        content: withAttribution(args.content, ctx.caller, 'Published'),
+        ...(args.components === undefined
+          ? {}
+          : { components: withAttributionComponents(args.components, ctx.caller, 'Published') }),
+      },
       ctx.signal,
     );
     return dualResult({

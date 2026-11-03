@@ -15,9 +15,13 @@ commit history and downloadable artifacts, see
   is still authorized by the Discord user's live permissions, so revoking access
   in Discord takes effect immediately.
 - Published content is attributed to the authenticated Discord user
-  (`-# _Sent by @name via discord-mcp_`), since every call still runs as the
-  deployment's bot. Message bodies, channel topics, thread and forum names, and
-  webhook posts carry it; shared-token deployments add nothing.
+  (`-# _Sent by <@user_id> via discord-mcp_`), since every call still runs as
+  the deployment's bot. The credit is a real mention rather than literal
+  `@name` text. It now covers every human-visible field this server writes -
+  message bodies, edits, interaction replies, Components V2 messages, channel
+  topics, guild/event/stage/template/sticker descriptions, welcome screens, and
+  webhook posts - and an edit replaces the previous credit instead of dropping
+  or stacking it. Shared-token deployments add nothing.
 
 - Added `MCP_AUTH_MODE=oauth2` for `serve --http`. Callers authenticate with a
   Discord user access token, verified against `/oauth2/@me` and bound to the

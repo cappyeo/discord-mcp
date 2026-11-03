@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { STICKER_FORMAT_TYPE } from '../_lib/discord-enums.js';
 import { dualResult } from '../_lib/response.js';
@@ -88,14 +89,15 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const { mime, bytes } = parseDataUri(args.file_data);
     const ext = extensionFor(mime, args.file_format);
     const s = (await container.rest.post(Routes.guildStickers(args.guild_id), {
       appendToFormData: true,
       body: {
         name: args.name,
-        description: args.description,
+        description:
+          withAttributionField(args.description, ctx.caller, 'Created', 100) ?? args.description,
         tags: args.tags,
       },
       files: [

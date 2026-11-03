@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { ValidationError } from '../../errors/client.js';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { CHANNEL_TYPE_VALUES } from '../_lib/discord-enums.js';
 import {
@@ -212,6 +213,9 @@ export default defineTool({
       const v = (args as Record<string, unknown>)[key];
       if (v !== undefined) body[key] = v;
     }
+    // A channel has no message body, so an edited topic carries the credit.
+    if (typeof body.topic === 'string')
+      body.topic = withAttributionField(body.topic, ctx.caller, 'Updated', 1024);
     if (args.remove_available_tag_ids !== undefined && args.available_tags === undefined) {
       throw new ValidationError([
         {

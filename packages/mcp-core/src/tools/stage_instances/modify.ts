@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, StageInstanceId } from '../_lib/snowflake.js';
@@ -50,9 +51,10 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = {};
-    if (args.topic !== undefined) body.topic = args.topic;
+    if (args.topic !== undefined)
+      body.topic = withAttributionField(args.topic, ctx.caller, 'Updated', 120) ?? args.topic;
     if (args.privacy_level !== undefined) body.privacy_level = args.privacy_level;
     const r = (await container.rest.patch(Routes.stageInstance(args.channel_id), {
       body,

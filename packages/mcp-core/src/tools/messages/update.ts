@@ -1,4 +1,5 @@
 import { COMPOSER_UPDATE_ACCESS } from '../../access/requirements.js';
+import { withAttribution, withAttributionComponents } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
@@ -21,7 +22,18 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args, ctx) => {
-    const data = await updateMessage(args, ctx.signal);
+    const data = await updateMessage(
+      {
+        ...args,
+        ...(args.content === undefined
+          ? {}
+          : { content: withAttribution(args.content, ctx.caller, 'Updated') }),
+        ...(args.components === undefined
+          ? {}
+          : { components: withAttributionComponents(args.components, ctx.caller, 'Updated') }),
+      },
+      ctx.signal,
+    );
     return dualResult({ text: `Update ${data.status}. ${data.next_action}`, data });
   },
 });

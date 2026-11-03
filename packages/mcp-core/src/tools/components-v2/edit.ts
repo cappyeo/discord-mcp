@@ -3,6 +3,7 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { CHANNEL_WRITE_ACCESS } from '../../access/requirements.js';
 import { ValidationError } from '../../errors/client.js';
+import { withAttributionComponents } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId } from '../_lib/snowflake.js';
@@ -33,15 +34,16 @@ export default defineTool({
     openWorldHint: true,
   },
   confirmation: 'payload_hash' as const,
-  handler: async (args) => {
-    const validation = validateComponentsV2(args.components);
+  handler: async (args, ctx) => {
+    const components = withAttributionComponents(args.components, ctx.caller, 'Edited');
+    const validation = validateComponentsV2(components);
     if (!validation.valid) {
       throw new ValidationError(
         validation.issues.map((i) => ({ path: i.path, message: i.message, code: i.code })),
       );
     }
     const m = (await container.rest.patch(Routes.channelMessage(args.channel_id, args.message_id), {
-      body: { flags: IS_COMPONENTS_V2, components: args.components },
+      body: { flags: IS_COMPONENTS_V2, components },
     })) as { id: string; channel_id: string; edited_timestamp: string };
     return dualResult({
       text: `Edited V2 message ${m.id} in <#${m.channel_id}>.`,

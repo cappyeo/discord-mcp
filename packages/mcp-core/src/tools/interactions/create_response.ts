@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttribution } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { InteractionId, WebhookToken } from '../_lib/snowflake.js';
@@ -62,9 +63,16 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = { type: args.type };
-    if (args.data !== undefined) body.data = args.data;
+    if (args.data !== undefined) {
+      // Types 4 and 7 carry a message body; the rest are protocol payloads.
+      const data = args.data;
+      body.data =
+        (args.type === 4 || args.type === 7) && typeof data.content === 'string'
+          ? { ...data, content: withAttribution(data.content, ctx.caller, 'Sent') }
+          : data;
+    }
     const query = new URLSearchParams();
     if (args.with_response !== undefined) query.set('with_response', String(args.with_response));
 

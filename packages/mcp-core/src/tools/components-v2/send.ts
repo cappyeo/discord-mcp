@@ -8,6 +8,7 @@ import {
   toMessageAttachments,
   UploadedAttachments,
 } from '../_lib/attachments.js';
+import { withAttributionComponents } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { messageJumpUrl } from '../_lib/message-jump-url.js';
 import { dualResult } from '../_lib/response.js';
@@ -58,8 +59,10 @@ export default defineTool({
     openWorldHint: true,
   },
   confirmation: 'payload_hash' as const,
-  handler: async (args) => {
-    const validation = validateComponentsV2(args.components);
+  handler: async (args, ctx) => {
+    // A V2 message has no content field, so the credit becomes a text block.
+    const components = withAttributionComponents(args.components, ctx.caller, 'Sent');
+    const validation = validateComponentsV2(components);
     if (!validation.valid) {
       throw new ValidationError(
         validation.issues.map((i) => ({ path: i.path, message: i.message, code: i.code })),
@@ -67,7 +70,7 @@ export default defineTool({
     }
     const body: Record<string, unknown> = {
       flags: IS_COMPONENTS_V2,
-      components: args.components,
+      components,
     };
     if (args.allowed_mentions !== undefined) body.allowed_mentions = args.allowed_mentions;
     const hasAttachments = args.attachments !== undefined && args.attachments.length > 0;
@@ -84,12 +87,12 @@ export default defineTool({
       throw error;
     }
     return dualResult({
-      text: `Sent V2 message ${m.id} to <#${m.channel_id}> (${args.components.length} top-level components).`,
+      text: `Sent V2 message ${m.id} to <#${m.channel_id}> (${components.length} top-level components).`,
       data: {
         message_id: m.id,
         channel_id: m.channel_id,
         jump_url: await messageJumpUrl(m),
-        component_count: args.components.length,
+        component_count: components.length,
       },
     });
   },

@@ -3,6 +3,7 @@ import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { CHANNEL_WRITE_ACCESS } from '../../access/requirements.js';
 import { DiscordNotFoundError, ValidationError } from '../../errors/client.js';
+import { withAttributionComponents } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { messageJumpUrl } from '../_lib/message-jump-url.js';
 import { dualResult } from '../_lib/response.js';
@@ -54,14 +55,18 @@ export default defineTool({
     openWorldHint: true,
   },
   confirmation: 'payload_hash' as const,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     // Registry lookup, not a filesystem read: the JSON is bundled into the
     // published artifact, where the old `__dirname`-relative path did not exist.
     if (!Object.hasOwn(TEMPLATES, args.template)) {
       throw new DiscordNotFoundError('template', args.template);
     }
     const parsed = TEMPLATES[args.template] as TemplateFile;
-    const components = interpolateTemplate(parsed.components, args.vars);
+    const components = withAttributionComponents(
+      interpolateTemplate(parsed.components, args.vars),
+      ctx.caller,
+      'Sent',
+    );
     const validation = validateComponentsV2(components);
     if (!validation.valid) {
       throw new ValidationError(

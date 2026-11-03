@@ -89,10 +89,13 @@ describe('attribution through buildServer', () => {
       arguments: { channel_id: '333333333333333333', content: 'hello' },
     });
 
-    expect(bodies.at(-1)?.content).toBe('hello\n-# _Sent by @frostbun via discord-mcp_');
+    expect(bodies.at(-1)?.content).toBe(
+      'hello\n-# _Sent by <@111122223333444455> via discord-mcp_',
+    );
   });
 
-  it('falls back to the account ID when Discord gave no username', async () => {
+  it('credits the same way when Discord gave no username', async () => {
+    // The snowflake is the identity, so a missing username changes nothing.
     const { client, bodies } = await connect({ id: CALLER.id, name: null });
     clients.push(client);
 
@@ -101,7 +104,9 @@ describe('attribution through buildServer', () => {
       arguments: { channel_id: '333333333333333333', content: 'hello' },
     });
 
-    expect(String(bodies.at(-1)?.content)).toContain(`user \`${CALLER.id}\``);
+    expect(bodies.at(-1)?.content).toBe(
+      'hello\n-# _Sent by <@111122223333444455> via discord-mcp_',
+    );
   });
 
   it('adds no credit when the transport has no caller identity', async () => {
