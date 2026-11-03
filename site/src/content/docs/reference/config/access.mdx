@@ -79,10 +79,12 @@ before it holds a credential: `/.well-known/oauth-protected-resource/mcp`,
 with `WWW-Authenticate: Bearer resource_metadata=…`, so a standard MCP client
 can find them. `/healthz` stays unauthenticated for infrastructure probes.
 
-Issued access tokens live seven days, matching Discord's own user-token
-lifetime, and persist across restarts when `MCP_OAUTH_STATE_DIR` is set;
-in-flight logins stay in memory. Run a single instance, or add shared storage,
-when using this mode.
+Issued access tokens live 30 days and persist across restarts when
+`MCP_OAUTH_STATE_DIR` is set; in-flight logins stay in memory. The token itself
+grants nothing: every call is still authorized by that Discord user's live
+guild, channel, and role permissions, so removing their access in Discord takes
+effect immediately rather than at token expiry. Run a single instance, or add
+shared storage, when using this mode.
 
 ### `MCP_PUBLIC_URL`
 
@@ -144,7 +146,7 @@ mode, where no per-caller identity exists.
 - **Use:** Persists issued OAuth2 access tokens so a restart or redeploy does not log every connected client out.
 - **Example:** `MCP_OAUTH_STATE_DIR=/var/lib/discord-mcp/oauth`
 
-The broker issues its own seven-day tokens. Without this directory they live only in memory:
+The broker issues its own 30-day tokens. Without this directory they live only in memory:
 every restart invalidates them and each client must redo the OAuth round trip.
 With it, each update is written to a temporary file and renamed into place, so
 a crash mid-write leaves the previous file intact; the file is created
