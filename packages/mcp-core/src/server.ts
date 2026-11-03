@@ -313,6 +313,8 @@ export interface BuildServerDeps {
    * rather than the deployment bot's. Unset means the bot is the subject.
    */
   callerPrincipalId?: string;
+  /** Display name of that caller, for human-readable attribution. */
+  callerPrincipalName?: string | null;
   /** Optional warning sink for advisory/warn runtime access gaps. */
   onRuntimeAccessWarning?: (message: string) => void;
   /** Advertise and serve legacy resource subscriptions (default: true). */
@@ -2084,6 +2086,14 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
       }
       return tool.run(c.args, {
         signal,
+        ...(deps.callerPrincipalId === undefined
+          ? {}
+          : {
+              caller: {
+                id: deps.callerPrincipalId,
+                username: deps.callerPrincipalName ?? null,
+              },
+            }),
         invoke: (name: string, stepArgs: unknown, stepSignal: AbortSignal) =>
           runWithCtx(
             { requestId: randomUUID(), toolName: name, transport, signal: stepSignal },

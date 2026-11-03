@@ -118,6 +118,24 @@ Register the callback in the Developer Portal → your application → **OAuth2 
 Redirects**: `$MCP_PUBLIC_URL/oauth/callback`. Discord rejects an unregistered
 redirect during the exchange.
 
+#### Attribution in published content
+
+Because every call still executes as the deployment's bot, a channel would
+otherwise read as if the bot acted on its own. Content this server publishes for
+an OAuth2 caller therefore carries a one-line footer:
+
+```
+-# _Sent by @frostbun via discord-mcp_
+```
+
+`Sent` or `Published` for message bodies, `Created` for channels, threads, and
+forum posts. Channels have no message body, so the credit goes into the channel
+topic; threads and forum posts put `Created` in the name and, for forums, `Sent`
+in the post body. Webhook messages carry no Discord author at all, so there the
+footer is the only record. The footer is dropped rather than truncating a
+message that is already at Discord's limit, and it is never added in `token`
+mode, where no per-caller identity exists.
+
 ### `MCP_OAUTH_STATE_DIR`
 
 - **Type:** non-empty directory path

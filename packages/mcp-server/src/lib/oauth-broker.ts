@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import type { GrantStore } from './oauth-grant-store.js';
+import type { Grant, GrantStore } from './oauth-grant-store.js';
 import { MemoryGrantStore } from './oauth-grant-store.js';
 import { type DiscordHttp, OAuthCallerRejected } from './oauth2.js';
 
@@ -33,6 +33,8 @@ export interface BrokerOptions {
 
 interface PendingLogin {
   readonly clientId: string;
+  /** Discord username of the consenting user, for attribution. */
+  readonly username: string | null;
   readonly redirectUri: string;
   readonly state: string;
   /** The MCP client's PKCE challenge, replayed to it at /token. */
@@ -149,6 +151,7 @@ export class DiscordOAuthBroker {
       redirectUri,
       state,
       codeChallenge,
+      username: null,
       scope: params.get('scope') ?? undefined,
       expiresAt: this.now() + PENDING_LOGIN_TTL_SECONDS * 1_000,
     });
@@ -185,11 +188,12 @@ export class DiscordOAuthBroker {
       throw new OAuthBrokerError(400, 'access_denied', 'Discord did not return a code');
     }
 
-    const user = await this.exchangeDiscordCode(discordCode, login);
+    const user = await this.exchangeDiscordCode(discordCode);
     const code = randomBytes(32).toString('base64url');
     this.pending.set(`code:${code}`, {
       ...login,
       userId: user.id,
+      username: user.username,
       expiresAt: this.now() + PENDING_LOGIN_TTL_SECONDS * 1_000,
     });
 
@@ -199,7 +203,9 @@ export class DiscordOAuthBroker {
     return redirect;
   }
 
-  private async exchangeDiscordCode(code: string, login: PendingLogin): Promise<{ id: string }> {
+  private async exchangeDiscordCode(
+    code: string,
+  ): Promise<{ id: string; username: string | null }> {
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -231,7 +237,7 @@ export class DiscordOAuthBroker {
       throw new OAuthCallerRejected(401, 'Discord rejected the user access token');
     }
     const me = (await identity.json()) as {
-      user?: { id?: unknown };
+      user?: { id?: unknown; username?: unknown };
       application?: { id?: unknown };
     };
     if (typeof me.user?.id !== 'string') {
@@ -240,7 +246,10 @@ export class DiscordOAuthBroker {
     if (me.application?.id !== this.options.clientId) {
       throw new OAuthCallerRejected(403, 'The OAuth2 token belongs to a different application');
     }
-    return { id: me.user.id };
+    return {
+      id: me.user.id,
+      username: typeof me.user.username === 'string' ? me.user.username : null,
+    };
   }
 
   /** Exchange a broker code for a broker access token, verifying PKCE. */
@@ -269,6 +278,7 @@ export class DiscordOAuthBroker {
     }
     this.grantStore.set(accessToken, {
       userId: pending.userId,
+      username: pending.username,
       clientId: pending.clientId,
       scope,
       expiresAt: this.now() + ACCESS_TOKEN_TTL_SECONDS * 1_000,
@@ -284,6 +294,11 @@ export class DiscordOAuthBroker {
   /** The Discord user behind an issued access token, or undefined when not valid. */
   public principalFor(token: string): string | undefined {
     return this.grantStore.get(token)?.userId;
+  }
+
+  /** The full grant behind a token, for attribution as well as authorization. */
+  public grantFor(token: string): Grant | undefined {
+    return this.grantStore.get(token);
   }
 
   private async discordFetch(url: string, init: RequestInit): Promise<Response> {

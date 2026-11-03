@@ -8,6 +8,7 @@ const NOW = Date.parse('2026-11-02T00:00:00.000Z');
 
 const granted = (expiresAt = NOW + 3_600_000): Grant => ({
   userId: '111122223333444455',
+  username: 'caller',
   clientId: 'mcp-client',
   scope: 'identify',
   expiresAt,

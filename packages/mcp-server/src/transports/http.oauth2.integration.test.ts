@@ -47,6 +47,8 @@ interface DiscordFixture {
 let fixture: DiscordFixture = { callerRoles: [], callerPermissions: 0n };
 /** Messages the bot actually sent, so a blocked call is observable. */
 const sentMessages: string[] = [];
+/** Raw JSON body of each POST, for asserting what reached Discord. */
+const sentBodies: Record<string, unknown>[] = [];
 
 function json(res: import('node:http').ServerResponse, body: unknown): void {
   res.writeHead(200, { 'content-type': 'application/json' });
@@ -105,6 +107,11 @@ function startDiscordStub(): void {
       return;
     }
     if (req.method === 'POST' && url === `/api/v10/channels/${CHANNEL_ID}/messages`) {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        sentBodies.push(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
+      });
       sentMessages.push('sent');
       json(res, {
         id: '555566667777888899',
@@ -235,6 +242,7 @@ beforeAll(async () => {
 beforeEach(() => {
   fixture = { callerRoles: [], callerPermissions: 0n };
   sentMessages.length = 0;
+  sentBodies.length = 0;
   configureEnv();
 });
 
@@ -375,6 +383,23 @@ describe('OAuth2 HTTP authentication', () => {
         missing_permissions: ['SEND_MESSAGES'],
       });
       expect(sentMessages).toEqual([]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('attributes what it sends to the authenticated caller', async () => {
+    fixture = { callerRoles: [], callerPermissions: VIEW_CHANNEL | SEND_MESSAGES };
+    server = await startHttp({ port: 0, registerSignalHandlers: false, makeRequest: stubFetch });
+    const client = await connect(await brokerLogin());
+    try {
+      await client.callTool({
+        name: 'messages_send',
+        arguments: { channel_id: CHANNEL_ID, content: 'hello' },
+      });
+      // The deployment posts as one bot for everyone, so the footer is the only
+      // per-caller record inside Discord.
+      expect(sentBodies.at(-1)?.content).toBe('hello\n-# _Sent by @caller via discord-mcp_');
     } finally {
       await client.close();
     }

@@ -7,6 +7,7 @@ import {
   toMessageAttachments,
   UploadedAttachments,
 } from '../_lib/attachments.js';
+import { withAttribution } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { messageJumpUrl } from '../_lib/message-jump-url.js';
 import { dualResult } from '../_lib/response.js';
@@ -63,7 +64,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const hasAttachments = args.attachments !== undefined && args.attachments.length > 0;
     if (args.content === undefined && !hasAttachments) {
       throw new ValidationError([
@@ -75,7 +76,8 @@ export default defineTool({
       ]);
     }
     const body: Record<string, unknown> = { tts: args.tts ?? false };
-    if (args.content !== undefined) body.content = args.content;
+    const content = withAttribution(args.content, ctx.caller, 'Sent');
+    if (content !== undefined) body.content = content;
     if (args.attachments !== undefined && hasAttachments) {
       body.attachments = toMessageAttachments(args.attachments);
     }

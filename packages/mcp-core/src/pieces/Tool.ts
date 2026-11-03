@@ -11,8 +11,20 @@ export interface ToolAnnotations {
 
 export type ToolConfirmation = 'payload_hash';
 
+/** Discord account a call was authorized for, when the transport knows one. */
+export interface CallerIdentity {
+  readonly id: string;
+  /** Discord global username, used only for human-readable attribution. */
+  readonly username: string | null;
+}
+
 export interface ToolRunContext {
   readonly signal: AbortSignal;
+  /**
+   * Who authorized this call. Set for OAuth2-authenticated HTTP callers; tools
+   * use it to attribute what they create on the caller's behalf.
+   */
+  readonly caller?: CallerIdentity;
 }
 
 export abstract class Tool extends Piece<Tool.Options, 'tools'> {

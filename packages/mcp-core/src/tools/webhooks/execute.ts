@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttribution } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId, MessageId, WebhookId, WebhookToken } from '../_lib/snowflake.js';
@@ -87,7 +88,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     // Cross-field refinement (mirrors the InputObject .refine - defineTool only knows per-key shapes).
     const hasPayload =
       args.content !== undefined ||
@@ -121,6 +122,10 @@ export default defineTool({
       const v = (args as Record<string, unknown>)[key];
       if (v !== undefined) body[key] = v;
     }
+    // Webhook messages carry no Discord author, so the footer is the only
+    // record of who triggered the post.
+    const attributed = withAttribution(args.content, ctx.caller, 'Sent');
+    if (attributed !== undefined) body.content = attributed;
 
     const query = new URLSearchParams();
     if (args.wait !== undefined) query.set('wait', String(args.wait));

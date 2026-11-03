@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttribution, withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { THREAD_AUTO_ARCHIVE_DURATION } from '../_lib/discord-enums.js';
 import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
@@ -72,8 +73,15 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
-    const body: Record<string, unknown> = { name: args.name, message: args.message };
+  handler: async (args, ctx) => {
+    const attributedContent = withAttribution(args.message.content, ctx.caller, 'Sent');
+    const body: Record<string, unknown> = {
+      name: withAttributionField(args.name, ctx.caller, 'Created', 100) ?? args.name,
+      // A forum post has a real message body, so the credit goes there.
+      ...(attributedContent === undefined
+        ? { message: args.message }
+        : { message: { ...args.message, content: attributedContent } }),
+    };
     if (args.auto_archive_duration !== undefined)
       body.auto_archive_duration = args.auto_archive_duration;
     if (args.rate_limit_per_user !== undefined) body.rate_limit_per_user = args.rate_limit_per_user;
