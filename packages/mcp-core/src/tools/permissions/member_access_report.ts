@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { ChannelType, PermissionFlagsBits, Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { filterCallerVisibleChannels } from '../_lib/caller-visibility.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, UserId } from '../_lib/snowflake.js';
@@ -54,7 +55,7 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const [guild, member, roles, rawChannels] = await Promise.all([
       container.rest.get(Routes.guild(args.guild_id)) as Promise<{
         owner_id: string;
@@ -66,9 +67,18 @@ export default defineTool({
       container.rest.get(Routes.guildRoles(args.guild_id)) as Promise<RawRole[]>,
       container.rest.get(Routes.guildChannels(args.guild_id)) as Promise<RawChannel[]>,
     ]);
+    // The report is scoped to the acting caller: channels it cannot view must
+    // not be inventoried (names, types, or access outcomes) on its behalf.
+    const visibleChannels = await filterCallerVisibleChannels(
+      container.rest,
+      args.guild_id,
+      rawChannels,
+      ctx?.caller?.id,
+      ctx?.signal,
+    );
     const channels = args.channel_ids
-      ? rawChannels.filter((c) => args.channel_ids!.includes(String(c.id)))
-      : rawChannels.slice(0, 100);
+      ? visibleChannels.filter((c) => args.channel_ids!.includes(String(c.id)))
+      : visibleChannels.slice(0, 100);
     const rolesById = new Map(roles.map((role) => [role.id, role]));
     const everyone = rolesById.get(args.guild_id);
     const warnings: string[] = [];
@@ -90,17 +100,19 @@ export default defineTool({
       complete = false;
       warnings.push(`Missing role IDs: ${missing.join(', ')}`);
     }
-    if (!args.channel_ids && rawChannels.length > channels.length) {
+    if (!args.channel_ids && visibleChannels.length > channels.length) {
       complete = false;
       warnings.push(
         `Channel report truncated to ${channels.length} channels; provide channel_ids for a bounded selection.`,
       );
     }
     if (args.channel_ids) {
-      const returned = new Set(rawChannels.map((channel) => String(channel.id)));
+      const returned = new Set(visibleChannels.map((channel) => String(channel.id)));
       const absent = args.channel_ids.filter((id) => !returned.has(id));
       if (absent.length) {
         complete = false;
+        // IDs the caller cannot view are reported by ID only; Discord hides the
+        // distinction from a guild listing, so the name is never guessed.
         warnings.push(`Requested channel IDs were not returned: ${absent.join(', ')}`);
       }
     }

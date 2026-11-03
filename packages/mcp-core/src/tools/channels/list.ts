@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { filterCallerVisibleChannels } from '../_lib/caller-visibility.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import {
@@ -51,9 +52,18 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const raw = (await container.rest.get(Routes.guildChannels(args.guild_id))) as RawChannel[];
-    const channels = raw.map((c) => ({
+    // `GET /guilds/{id}/channels` is authorized by the bot credential, so an
+    // OAuth2 caller would otherwise learn the names of channels it cannot view.
+    const visible = await filterCallerVisibleChannels(
+      container.rest,
+      args.guild_id,
+      raw,
+      ctx?.caller?.id,
+      ctx?.signal,
+    );
+    const channels = visible.map((c) => ({
       ...channelTags(c),
       id: c.id,
       name: c.name,

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { filterCallerVisibleThreads } from '../_lib/caller-visibility.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
 import { dualResult } from '../_lib/response.js';
@@ -61,11 +62,17 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const raw = (await container.rest.get(
       Routes.guildActiveThreads(args.guild_id),
     )) as RawActiveThreads;
-    const threads = raw.threads.map((t) => ({
+    const visible = await filterCallerVisibleThreads(
+      container.rest,
+      raw.threads,
+      ctx?.caller?.id,
+      ctx?.signal,
+    );
+    const threads = visible.map((t) => ({
       ...channelTags(t),
       id: t.id,
       name: t.name,

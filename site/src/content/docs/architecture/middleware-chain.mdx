@@ -128,6 +128,16 @@ complete evidence and fails closed for unknown or partial results. The resolver
 never infers access from a tool name and never performs a mutation. Permission
 snapshots are short-lived and invalid evidence is not cached.
 
+This layer gates *the call*. Guild-scoped routes Discord authorizes with the bot
+credential - `GET /guilds/{id}/channels`, `GET /guilds/{id}/threads/active` -
+return every channel regardless of an OAuth2 caller's own view, so a tool that
+enumerates them must additionally project its result through
+[`tools/_lib/caller-visibility.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/tools/_lib/caller-visibility.ts).
+`channels_list`, `channels_list_active_threads_guild`,
+`permissions_member_access_report`, `templates_diff`, and `guild_change_plan` do
+this; when the caller cannot be resolved, or a channel payload omits the
+overwrites needed to prove visibility, the channel is hidden rather than shown.
+
 ## Layer 8: write mode
 
 Source: [`middleware/write-preview.ts`](https://github.com/cappyeo/discord-mcp/blob/main/packages/mcp-core/src/middleware/write-preview.ts)

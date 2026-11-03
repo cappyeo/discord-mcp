@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { filterCallerVisibleChannels, type VisibilityChannel } from '../_lib/caller-visibility.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId } from '../_lib/snowflake.js';
@@ -43,7 +44,7 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const raw = (await container.rest.get(Routes.template(args.template_code))) as RawGuildTemplate;
     const template = summarizeTemplate(raw);
     const sourceGuildMatches = template.source_guild_id === args.guild_id;
@@ -61,10 +62,19 @@ export default defineTool({
       });
     }
 
-    const [currentChannels, currentRoles] = (await Promise.all([
+    const [guildChannels, currentRoles] = (await Promise.all([
       container.rest.get(Routes.guildChannels(args.guild_id)),
       container.rest.get(Routes.guildRoles(args.guild_id)),
     ])) as [RawGuildRecord[], RawGuildRecord[]];
+    // Drift names channels of the source guild, so it is computed over the
+    // caller's own view; a channel it cannot see must not appear in details.
+    const currentChannels = (await filterCallerVisibleChannels(
+      container.rest,
+      args.guild_id,
+      guildChannels as unknown as ReadonlyArray<VisibilityChannel & RawGuildRecord>,
+      ctx?.caller?.id,
+      ctx?.signal,
+    )) as RawGuildRecord[];
     const { drift, details } = templateDrift(raw, currentChannels, currentRoles);
     const structuralDifferenceCount =
       drift.channels_added_since_snapshot_count +

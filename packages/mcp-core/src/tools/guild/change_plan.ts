@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { verifyExpectedBotIdentity } from '../../identity-lock.js';
+import { filterCallerVisibleChannels } from '../_lib/caller-visibility.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { GuildId, UserId } from '../_lib/snowflake.js';
@@ -78,7 +79,7 @@ export default defineTool({
     openWorldHint: true,
   },
   idempotent: true,
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     await verifyExpectedBotIdentity(container.rest, args.expected_bot_id);
     const [guild, bot, roles, channels] = await Promise.all([
       container.rest.get(Routes.guild(args.guild_id)) as Promise<Record<string, unknown>>,
@@ -92,6 +93,16 @@ export default defineTool({
         Array<Record<string, unknown>>
       >,
     ]);
+    // The plan echoes live channel objects; keep them to the caller's own view
+    // so an OAuth2 caller never receives names/overwrites it cannot see.
+    const callerChannels = await filterCallerVisibleChannels(
+      container.rest,
+      args.guild_id,
+      channels as unknown as Array<{ id: string; type: number; parent_id?: string | null }>,
+      ctx?.caller?.id,
+      ctx?.signal,
+    );
+    const visibleChannelIds = new Set(callerChannels.map((channel) => String(channel.id)));
     const before: GuildChangeSnapshot = {
       guild,
       bot_roles: Array.isArray(bot.roles) ? (bot.roles as string[]) : [],
@@ -233,7 +244,7 @@ export default defineTool({
     }
     for (const item of changes.channels) {
       const channel = channelById.get(item.id);
-      if (!channel) {
+      if (!channel || !visibleChannelIds.has(item.id)) {
         blockers.push({
           code: 'CHANNEL_NOT_FOUND',
           message: `Channel ${item.id} was not found.`,
@@ -266,7 +277,7 @@ export default defineTool({
     }
     for (const item of changes.permission_overwrites) {
       const channel = channelById.get(item.channel_id);
-      if (!channel) {
+      if (!channel || !visibleChannelIds.has(item.channel_id)) {
         blockers.push({
           code: 'CHANNEL_NOT_FOUND',
           message: `Permission channel ${item.channel_id} was not found.`,

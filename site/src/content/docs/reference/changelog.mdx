@@ -37,6 +37,13 @@ commit history and downloadable artifacts, see
   principal, because Discord's REST API already filters by that user.
 - `/healthz` remains unauthenticated in OAuth2 mode for infrastructure probes;
   `/mcp` always requires a caller token.
+- Channel enumeration now honors the caller's view. `channels_list`,
+  `channels_list_active_threads_guild`, `permissions_member_access_report`,
+  `templates_diff`, and `guild_change_plan` previously relayed
+  `GET /guilds/{id}/channels`, which Discord authorizes with the bot credential
+  and therefore returns in full. Those results are now projected to the channels
+  the authenticated caller can view; unresolvable membership or omitted
+  overwrites hide a channel instead of disclosing it.
 
 ## v0.32.1 - Maintenance updates and accessible search
 
