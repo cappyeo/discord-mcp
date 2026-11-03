@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -23,6 +23,12 @@ function temporaryDirectory(): string {
 
 afterEach(() => {
   for (const directory of directories.splice(0)) {
+    // Restore permissions so cleanup can remove read-only fixtures.
+    try {
+      chmodSync(directory, 0o700);
+    } catch {
+      // ignore
+    }
     rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -61,6 +67,25 @@ describe('grant stores', () => {
     new FileGrantStore(directory, () => NOW).set('token-a', granted());
 
     expect(new FileGrantStore(directory, () => NOW + 3_600_001).get('token-a')).toBeUndefined();
+  });
+
+  it('keeps working when the state directory is not writable', () => {
+    // The deploy regression: the named volume mounted root-owned, the container
+    // runs as uid 1000, and a failed write surfaced as HTTP 500 on /token.
+    const parent = temporaryDirectory();
+    const readOnly = join(parent, 'readonly');
+    mkdirSync(readOnly, { mode: 0o500 });
+    const warnings: string[] = [];
+    const store = new FileGrantStore(
+      readOnly,
+      () => NOW,
+      (message) => warnings.push(message),
+    );
+
+    // The grant is still usable for this process; only persistence failed.
+    expect(() => store.set('token-a', granted())).not.toThrow();
+    expect(store.get('token-a')?.userId).toBe('111122223333444455');
+    expect(warnings.join(' ')).toMatch(/will not survive a restart|will not persist/u);
   });
 
   it('starts empty when the file is corrupt instead of refusing to boot', () => {
