@@ -194,9 +194,21 @@ describe('Discord OAuth2 broker', () => {
     );
     const token = String(tokens.access_token);
     expect(instance.principalFor(token)).toBe(USER_ID);
+    // Still valid just under Discord's own 7-day token window.
+    now = NOW + 7 * 24 * 3_600_000 - 1_000;
+    expect(instance.principalFor(token)).toBe(USER_ID);
 
-    now = NOW + 3_601_000;
+    now = NOW + 7 * 24 * 3_600_000 + 1_000;
     expect(instance.principalFor(token)).toBeUndefined();
+  });
+
+  it('advertises the same lifetime it enforces', async () => {
+    const { broker: instance } = broker();
+    const code = await login(instance);
+    const tokens = await instance.token(
+      new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier }),
+    );
+    expect(tokens.expires_in).toBe(7 * 24 * 3_600);
   });
 
   it('does not expose expired pending logins', async () => {

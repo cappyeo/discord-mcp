@@ -13,8 +13,15 @@ const DISCORD_TOKEN_URL = 'https://discord.com/api/oauth2/token';
 const DISCORD_AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
 const DISCORD_SCOPES = ['identify', 'guilds', 'guilds.members.read'] as const;
 
-/** Access token lifetime handed to MCP clients. */
-const ACCESS_TOKEN_TTL_SECONDS = 3_600;
+/**
+ * Access token lifetime handed to MCP clients.
+ *
+ * Discord's own user tokens last 7 days. A shorter broker token only forces
+ * every client to redo the full consent round trip, and the grant is bound to
+ * the Discord user whose permissions gate every call, so it adds no safety.
+ * The state file is what keeps it alive across restarts.
+ */
+const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 3_600;
 const PENDING_LOGIN_TTL_SECONDS = 600;
 const MAX_PENDING_LOGINS = 1_024;
 
