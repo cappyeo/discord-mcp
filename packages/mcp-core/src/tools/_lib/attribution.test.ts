@@ -32,18 +32,23 @@ describe('attribution', () => {
     expect(result).toBe('-# _Sent by @frostbun via discord-mcp_');
   });
 
-  it('never exceeds Discord content limits', () => {
+  it('truncates nothing: an over-limit message is sent unattributed', () => {
+    // The caller's text is theirs. Losing characters to make room for a credit
+    // line would be a worse outcome than the missing credit.
     const long = 'x'.repeat(2_000);
-    const result = withAttribution(long, CALLER, 'Sent') ?? '';
-    expect(result.length).toBe(2_000);
-    expect(result.endsWith('via discord-mcp_')).toBe(true);
+    expect(withAttribution(long, CALLER, 'Sent')).toBe(long);
+
+    // Room to spare: the footer is appended without touching the text.
+    const roomy = 'y'.repeat(1_500);
+    expect(withAttribution(roomy, CALLER, 'Sent')).toBe(
+      `${roomy}\n-# _Sent by @frostbun via discord-mcp_`,
+    );
   });
 
-  it('drops the footer rather than truncating an over-limit message', () => {
-    // Without the footer the content is already valid; losing it to attribute
-    // it would be a worse outcome than an unattributed message.
-    const long = 'x'.repeat(2_000);
-    expect(withAttribution(long, CALLER, 'Sent')).toHaveLength(2_000);
+  it('never exceeds Discord content limits when it does append', () => {
+    const result = withAttribution('x'.repeat(1_000), CALLER, 'Sent') ?? '';
+    expect(result.length).toBeLessThanOrEqual(2_000);
+    expect(result.endsWith('via discord-mcp_')).toBe(true);
   });
 
   it('respects field limits for names and topics', () => {
@@ -52,8 +57,14 @@ describe('attribution', () => {
     expect(result.startsWith('general ')).toBe(true);
     expect(result.endsWith('via discord-mcp_')).toBe(true);
 
+    // A full-length name keeps its characters; the credit is dropped.
     const long = withAttributionField('n'.repeat(100), CALLER, 'Created', 100) ?? '';
-    expect(long.length).toBeLessThanOrEqual(100);
+    expect(long).toBe('n'.repeat(100));
+  });
+
+  it('leaves an empty topic alone when there is no room for the credit', () => {
+    // A tiny limit leaves no space for the footer, so nothing is added.
+    expect(withAttributionField(undefined, CALLER, 'Created', 10)).toBeUndefined();
   });
 
   it('leaves a field alone when there is no caller', () => {

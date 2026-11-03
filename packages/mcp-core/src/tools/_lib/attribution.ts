@@ -24,11 +24,11 @@ export function attributionFooter(caller: CallerIdentity | undefined, verb: stri
 }
 
 /**
- * Append a footer to content, keeping the result inside Discord's limit.
+ * Append a footer to content when it fits, otherwise leave content alone.
  *
- * Returns `content` untouched when there is no caller or no room for the
- * footer: an oversized message would be rejected outright, so attributing it
- * is not worth losing the message.
+ * Truncating the caller's text to make room would silently lose their message,
+ * so an over-limit message is sent unattributed instead. Discord rejects
+ * content past its limit, so there is no third option.
  */
 export function withAttribution(
   content: string | undefined,
@@ -39,12 +39,14 @@ export function withAttribution(
   if (footer === '') return content;
 
   const separator = content === undefined || content.length === 0 ? '' : '\n';
-  const budget = DISCORD_CONTENT_LIMIT - footer.length - separator.length;
-  if (budget < 0) return content;
-  return `${content === undefined ? '' : content.slice(0, budget)}${separator}${footer}`;
+  const attributed = `${content ?? ''}${separator}${footer}`;
+  return attributed.length <= DISCORD_CONTENT_LIMIT ? attributed : content;
 }
 
-/** Attribution for a resource whose only text field is a short name or topic. */
+/**
+ * Attribution for a resource whose only text field is a short name or topic.
+ * Same rule as `withAttribution`: credit yields to the caller's own text.
+ */
 export function withAttributionField(
   value: string | undefined,
   caller: CallerIdentity | undefined,
@@ -54,7 +56,6 @@ export function withAttributionField(
   const footer = attributionFooter(caller, verb);
   if (footer === '') return value;
   const separator = value === undefined || value.length === 0 ? '' : ' ';
-  const budget = limit - footer.length - separator.length;
-  if (budget < 0) return value;
-  return `${value === undefined ? '' : value.slice(0, budget)}${separator}${footer}`;
+  const attributed = `${value ?? ''}${separator}${footer}`;
+  return attributed.length <= limit ? attributed : value;
 }
