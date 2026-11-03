@@ -39,6 +39,12 @@ LABEL org.opencontainers.image.title="Discord MCP catalog" \
 COPY --from=build --chown=node:node /runtime/ ./
 COPY --from=build --chown=node:node /workspace/LICENSE /licenses/discord-mcp/LICENSE
 
+# OAuth2 token persistence (MCP_OAUTH_STATE_DIR) defaults to this path when a
+# volume is mounted here. Docker seeds a fresh named volume from the image, so
+# creating it with node's ownership is what makes the mount writable for the
+# unprivileged user.
+RUN mkdir -p /var/lib/discord-mcp/oauth && chown -R node:node /var/lib/discord-mcp
+
 USER node
 
 ENTRYPOINT ["node", "dist/cli.js"]

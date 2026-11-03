@@ -67,10 +67,24 @@ export class FileGrantStore implements GrantStore {
   private loaded = false;
   private grants = new Map<string, Grant>();
 
-  public constructor(directory: string, now: () => number = Date.now) {
+  private readonly warn: (message: string) => void;
+
+  public constructor(
+    directory: string,
+    now: () => number = Date.now,
+    warn: (message: string) => void = () => undefined,
+  ) {
     this.path = join(directory, 'oauth-grants.json');
     this.now = now;
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    this.warn = warn;
+    // A read-only or wrongly owned directory must not take the broker down:
+    // tokens then fall back to this process only, which is the behaviour
+    // without the setting at all.
+    try {
+      mkdirSync(directory, { recursive: true, mode: 0o700 });
+    } catch {
+      this.warn(`OAuth state directory ${directory} is not writable; tokens will not persist`);
+    }
   }
 
   public get(token: string): Grant | undefined {
@@ -121,8 +135,15 @@ export class FileGrantStore implements GrantStore {
     const now = this.now();
     const live = Object.fromEntries([...this.grants].filter(([, grant]) => grant.expiresAt > now));
     const temporaryPath = `${this.path}.${process.pid}.tmp`;
-    writeFileSync(temporaryPath, JSON.stringify(live), { mode: 0o600 });
-    chmodSync(temporaryPath, 0o600);
-    renameSync(temporaryPath, this.path);
+    try {
+      writeFileSync(temporaryPath, JSON.stringify(live), { mode: 0o600 });
+      chmodSync(temporaryPath, 0o600);
+      renameSync(temporaryPath, this.path);
+    } catch {
+      // Persistence is best-effort: the in-memory map already holds the grant,
+      // so an unwritable state directory must not fail the request. Without
+      // this, a root-owned volume returned HTTP 500 on /token.
+      this.warn('OAuth token persistence failed; tokens will not survive a restart');
+    }
   }
 }

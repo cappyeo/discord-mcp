@@ -287,7 +287,11 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           // state directory; without one this is a single-process deployment.
           ...(config.MCP_OAUTH_STATE_DIR === undefined
             ? {}
-            : { grantStore: new FileGrantStore(config.MCP_OAUTH_STATE_DIR) }),
+            : {
+                grantStore: new FileGrantStore(config.MCP_OAUTH_STATE_DIR, Date.now, (message) =>
+                  logger.warn({ oauth: 'state' }, message),
+                ),
+              }),
           ...(options.makeRequest === undefined ? {} : { makeRequest: options.makeRequest }),
         })
       : undefined;
