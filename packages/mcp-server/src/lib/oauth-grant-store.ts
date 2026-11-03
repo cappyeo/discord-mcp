@@ -5,6 +5,7 @@ import { z } from 'zod';
 /** One issued access token, keyed by the token value the client holds. */
 const GrantSchema = z.object({
   userId: z.string(),
+  username: z.string().nullable().optional(),
   clientId: z.string(),
   scope: z.string(),
   expiresAt: z.number(),
@@ -12,6 +13,8 @@ const GrantSchema = z.object({
 
 export interface Grant {
   readonly userId: string;
+  /** Discord username, for human-readable attribution of created resources. */
+  readonly username: string | null;
   readonly clientId: string;
   readonly scope: string;
   readonly expiresAt: number;
@@ -127,7 +130,9 @@ export class FileGrantStore implements GrantStore {
     const record = z.record(z.string(), GrantSchema).safeParse(parsed);
     if (!record.success) return;
     for (const [token, grant] of Object.entries(record.data)) {
-      if (grant.expiresAt > now) this.grants.set(token, grant);
+      if (grant.expiresAt > now) {
+        this.grants.set(token, { ...grant, username: grant.username ?? null });
+      }
     }
   }
 

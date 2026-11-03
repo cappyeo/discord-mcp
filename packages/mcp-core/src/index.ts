@@ -156,6 +156,7 @@ export { validateMiddleware } from './middleware/validate.js';
 export { Precondition } from './pieces/Precondition.js';
 // Pieces
 export {
+  type CallerIdentity,
   Tool,
   type ToolAnnotations,
   type ToolConfirmation,

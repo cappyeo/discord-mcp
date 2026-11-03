@@ -11,6 +11,11 @@ commit history and downloadable artifacts, see
 
 ## Unreleased - Discord OAuth2 caller authentication
 
+- Published content is attributed to the authenticated Discord user
+  (`-# _Sent by @name via discord-mcp_`), since every call still runs as the
+  deployment's bot. Message bodies, channel topics, thread and forum names, and
+  webhook posts carry it; shared-token deployments add nothing.
+
 - Added `MCP_AUTH_MODE=oauth2` for `serve --http`. Callers authenticate with a
   Discord user access token, verified against `/oauth2/@me` and bound to the
   locked bot application; the shared `DISCORD_MCP_ACCESS_TOKEN` secret is then

@@ -1,6 +1,7 @@
 import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { CHANNEL_TYPE_VALUES } from '../_lib/discord-enums.js';
 import { ChannelTagOutput, type ChannelTags, channelTags } from '../_lib/forum-tags.js';
@@ -135,7 +136,7 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const body: Record<string, unknown> = { name: args.name };
     const passthrough = [
       'type',
@@ -158,6 +159,16 @@ export default defineTool({
     for (const key of passthrough) {
       const v = (args as Record<string, unknown>)[key];
       if (v !== undefined) body[key] = v;
+    }
+    // No message body exists for a channel, so the topic carries the credit.
+    if (body.topic !== undefined || ctx.caller !== undefined) {
+      const topic = withAttributionField(
+        typeof body.topic === 'string' ? body.topic : undefined,
+        ctx.caller,
+        'Created',
+        1024,
+      );
+      if (topic !== undefined) body.topic = topic;
     }
     const c = (await container.rest.post(Routes.guildChannels(args.guild_id), {
       body,

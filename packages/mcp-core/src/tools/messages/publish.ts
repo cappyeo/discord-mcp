@@ -1,4 +1,5 @@
 import { COMPOSER_PUBLISH_ACCESS } from '../../access/requirements.js';
+import { withAttribution } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { dualResult } from '../_lib/response.js';
 import { ChannelId } from '../_lib/snowflake.js';
@@ -24,7 +25,10 @@ export default defineTool({
     openWorldHint: true,
   },
   handler: async (args, ctx) => {
-    const data = await publishMessage(args, ctx.signal);
+    const data = await publishMessage(
+      { ...args, content: withAttribution(args.content, ctx.caller, 'Published') },
+      ctx.signal,
+    );
     return dualResult({
       text: `Publication ${data.status}: ${data.sent_count}/${data.requested_count} message part(s) sent. ${data.next_action}`,
       data,

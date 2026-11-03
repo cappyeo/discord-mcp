@@ -367,7 +367,9 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
       // `authInfo.token` is the verified credential the caller passed; in
       // OAuth2 mode its identity is already resolved and re-verified per
       // request by the gate above, so the build only needs the Discord user.
-      const callerPrincipalId = context.authInfo?.extra?.principalId;
+      const principalId = context.authInfo?.extra?.principalId;
+      const principalName = context.authInfo?.extra?.principalName;
+      const callerPrincipalId = typeof principalId === 'string' ? principalId : undefined;
       return (
         await buildServer({
           rest,
@@ -384,7 +386,14 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           auditSink,
           payloadApprovalLedger,
           ...(runtimeAccessResolver === undefined ? {} : { runtimeAccessResolver }),
-          ...(typeof callerPrincipalId === 'string' ? { callerPrincipalId } : {}),
+          ...(callerPrincipalId === undefined
+            ? {}
+            : {
+                callerPrincipalId,
+                ...(typeof principalName === 'string'
+                  ? { callerPrincipalName: principalName }
+                  : {}),
+              }),
           ...(runtimeAccessResolver === undefined
             ? {}
             : {
@@ -446,10 +455,11 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     // account, so OAuth2 mode leaves it unauthenticated (as the default token
     // mode does when no token is configured). /mcp always needs a caller.
     let callerId: string | undefined;
+    let callerName: string | null = null;
     if (broker !== undefined) {
       if (pathname !== '/healthz') {
         const token = bearerToken(req.headers.authorization);
-        const caller = token === undefined ? undefined : broker.principalFor(token);
+        const caller = token === undefined ? undefined : broker.grantFor(token);
         if (caller === undefined) {
           // RFC 9728 §5.1: point the client at the metadata document so it can
           // discover our authorization server instead of guessing.
@@ -463,7 +473,8 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
             .end();
           return;
         }
-        callerId = caller;
+        callerId = caller.userId;
+        callerName = caller.username;
       }
     } else if (verifyOAuthCaller !== undefined) {
       if (pathname !== '/healthz') {
@@ -549,7 +560,10 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           token: bearerToken(req.headers.authorization) ?? '',
           clientId: config.DISCORD_EXPECTED_BOT_ID ?? '',
           scopes: [],
-          extra: { principalId: callerId },
+          extra: {
+            principalId: callerId,
+            ...(callerName === null ? {} : { principalName: callerName }),
+          },
         };
       }
 

@@ -2,6 +2,7 @@ import { container } from '@sapphire/pieces';
 import { Routes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { ValidationError } from '../../errors/client.js';
+import { withAttributionField } from '../_lib/attribution.js';
 import { defineTool } from '../_lib/defineTool.js';
 import { THREAD_AUTO_ARCHIVE_DURATION } from '../_lib/discord-enums.js';
 import { dualResult } from '../_lib/response.js';
@@ -81,8 +82,11 @@ export default defineTool({
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args) => {
-    const body: Record<string, unknown> = { name: args.name };
+  handler: async (args, ctx) => {
+    const body: Record<string, unknown> = {
+      // A thread's name is its only free text; Discord has no topic field here.
+      name: withAttributionField(args.name, ctx.caller, 'Created', 100) ?? args.name,
+    };
     if (args.auto_archive_duration !== undefined)
       body.auto_archive_duration = args.auto_archive_duration;
     if (args.rate_limit_per_user !== undefined) body.rate_limit_per_user = args.rate_limit_per_user;
