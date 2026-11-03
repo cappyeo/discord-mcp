@@ -16,12 +16,13 @@ const DISCORD_SCOPES = ['identify', 'guilds', 'guilds.members.read'] as const;
 /**
  * Access token lifetime handed to MCP clients.
  *
- * Discord's own user tokens last 7 days. A shorter broker token only forces
- * every client to redo the full consent round trip, and the grant is bound to
- * the Discord user whose permissions gate every call, so it adds no safety.
- * The state file is what keeps it alive across restarts.
+ * Longer than Discord's own 7-day user token: the broker token grants nothing
+ * by itself, because every call is still authorized by the Discord user's live
+ * guild/channel permissions. Revoking access is done by removing that user's
+ * permissions in Discord, which takes effect immediately, not by waiting for
+ * this token to expire.
  */
-const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 3_600;
+const ACCESS_TOKEN_TTL_SECONDS = 30 * 24 * 3_600;
 const PENDING_LOGIN_TTL_SECONDS = 600;
 const MAX_PENDING_LOGINS = 1_024;
 

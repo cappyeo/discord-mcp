@@ -11,8 +11,9 @@ commit history and downloadable artifacts, see
 
 ## Unreleased - Discord OAuth2 caller authentication
 
-- Broker tokens now last seven days (Discord's own user-token lifetime) instead
-  of one hour, which forced every client to redo consent hourly.
+- Broker tokens now last 30 days. The token grants nothing on its own: each call
+  is still authorized by the Discord user's live permissions, so revoking access
+  in Discord takes effect immediately.
 - Published content is attributed to the authenticated Discord user
   (`-# _Sent by @name via discord-mcp_`), since every call still runs as the
   deployment's bot. Message bodies, channel topics, thread and forum names, and
