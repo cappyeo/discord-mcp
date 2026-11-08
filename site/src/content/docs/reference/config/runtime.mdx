@@ -1,6 +1,6 @@
 ---
 title: Runtime behavior
-description: Enable Gateway subscriptions and choose the server log level.
+description: Configure Gateway subscriptions, workflow tasks, events, and logging.
 ---
 
 ## Discord Gateway
@@ -68,6 +68,14 @@ platform limits, subscriptions, and event-bound replies.
 - **Type:** integer from 100 to 100000
 - **Default:** `10000`
 - **Use:** Bound accepted event records. At capacity, observation fails closed and the worker stops.
+
+## Durable workflow tasks
+
+### `MCP_WORKFLOW_TASKS`
+
+The default is `false`. Set `MCP_WORKFLOW_TASKS=true` to enable the MCP Tasks
+pilot on modern connections. A client that declares the extension can poll
+and cancel a keyed workflow through its task ID. See [durable workflows](/discord-mcp/operations/workflows/#mcp-tasks-pilot).
 
 ## Logging
 
