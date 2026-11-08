@@ -171,6 +171,7 @@ describe('MCP Tasks pilot over the modern wire', () => {
       return Response.json(role);
     });
     const server = makeHandler(write);
+    const previewOnly = makeHandler(write, { MCP_WRITE_MODE: 'preview' });
     const started = await rpc(server, 'tools/call', {
       name: 'workflow_start',
       arguments: { ...input, steps: [step, step] },
@@ -179,6 +180,14 @@ describe('MCP Tasks pilot over the modern wire', () => {
     const taskId = started.result!.taskId!;
     try {
       await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+      expect((await rpc(server, 'tasks/update', { taskId })).error).toMatchObject({
+        code: -32602,
+        message: expect.stringContaining('inputResponses'),
+      });
+      expect((await rpc(previewOnly, 'tasks/cancel', { taskId })).error).toMatchObject({
+        code: -32602,
+        message: expect.stringContaining('rejected by policy'),
+      });
       const updated = await rpc(server, 'tasks/update', { taskId, inputResponses: {} });
       expect(updated.result?.resultType).toBe('complete');
       const cancelled = await rpc(server, 'tasks/cancel', { taskId });
@@ -193,6 +202,28 @@ describe('MCP Tasks pilot over the modern wire', () => {
       });
     });
     expect(write).toHaveBeenCalledTimes(1);
+    expect((await rpc(server, 'tasks/cancel', { taskId })).result?.resultType).toBe('complete');
+  });
+
+  it('returns a write needing review inside a completed task error', async () => {
+    const forbidden = vi.fn<MakeRequest>(async () =>
+      Response.json({ code: 50013, message: 'Missing Permissions' }, { status: 403 }),
+    );
+    const server = makeHandler(forbidden);
+    const started = await rpc(server, 'tools/call', {
+      name: 'workflow_start',
+      arguments: input,
+    });
+    expect(started.result).toMatchObject({ resultType: 'task', taskId: expect.any(String) });
+    const taskId = started.result!.taskId!;
+    await vi.waitFor(async () => {
+      expect((await rpc(server, 'tasks/get', { taskId })).result).toMatchObject({
+        resultType: 'complete',
+        status: 'completed',
+        result: { isError: true, structuredContent: { id: taskId, status: 'needs_review' } },
+      });
+    });
+    expect(forbidden).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Tasks opt-in and uses the host LLM fallback for modern intelligence calls', async () => {
