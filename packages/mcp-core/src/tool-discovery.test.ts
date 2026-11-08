@@ -1,7 +1,9 @@
 import type { Tool as McpTool } from '@modelcontextprotocol/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createProgressiveToolCatalog,
+  dispatchProgressiveTool,
+  PROGRESSIVE_READ_TOOL_NAME,
   PROGRESSIVE_SEARCH_TOOL,
   searchProgressiveTools,
 } from './tool-discovery.js';
@@ -52,6 +54,23 @@ describe('progressive tool catalog metadata', () => {
     expect(result.structuredContent).toMatchObject({
       matches: [expect.objectContaining({ name: 'channels_list', summary: 'List channels' })],
     });
+  });
+
+  it('rejects a malformed dispatch before selecting or invoking a tool', async () => {
+    const catalog = createProgressiveToolCatalog([], new Map());
+    const invoke = vi.fn();
+    const result = await dispatchProgressiveTool(
+      PROGRESSIVE_READ_TOOL_NAME,
+      { tool: 'messages_read', args: ['wrong shape'] },
+      catalog,
+      invoke,
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'VALIDATION_FAILED' },
+    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('does not touch lazy input schemas for compact multi-match results', () => {

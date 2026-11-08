@@ -17,6 +17,14 @@ Cancellation is cooperative. It stops the next step and aborts the current invoc
 
 A partial or `unverified` composer receipt stops the workflow at `needs_review`, before the next step. Inspect the Discord receipt and live message before approving another attempt; resuming the workflow does not automatically repeat that delivery.
 
-Status responses intentionally contain only the operation ID, target binding, state, step counts, and safe error code. They do not return stored arguments, Discord payloads, tokens, or step results. Job IDs are random `wf_` references; path-like or forged references are rejected.
+Status responses expose the operation ID, target binding, state, step counts, and safe error code. Job IDs are opaque `wf_` references.
 
-The legacy status/resume/cancel tools work on all MCP clients. A future MCP Tasks adapter may add host-native progress, but it is an optional presentation layer over the same durable record and safety rules.
+## Retrying a start
+
+Give `workflow_start` a stable `idempotency_key` of 16 to 128 letters, digits, underscores, or hyphens. Retry with the same key, target, and steps if the start response is lost. The server returns the existing operation and rejects a changed request with the same key. Keep the key for as long as you might retry that operation.
+
+## MCP Tasks pilot
+
+Set `MCP_WORKFLOW_TASKS=true` on the server and connect a client that declares `io.modelcontextprotocol/tasks` on MCP `2026-07-28`. A keyed `workflow_start` can return a task ID for `tasks/get` and `tasks/cancel`. Polling and cancellation use the same caller and target checks as the ordinary workflow tools. After a server process interruption, use `workflow_status` and review the checkpoint before explicitly calling `workflow_resume`.
+
+Clients without the extension receive the regular workflow result. Host support varies across the [MCP extension support matrix](https://modelcontextprotocol.io/extensions/client-matrix).

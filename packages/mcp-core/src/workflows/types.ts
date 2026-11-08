@@ -46,6 +46,7 @@ export interface WorkflowRecord {
   readonly status: WorkflowStatus;
   readonly target: WorkflowTarget;
   readonly target_fingerprint: string;
+  readonly start_fingerprint?: string;
   readonly steps: readonly WorkflowStepCheckpoint[];
   readonly current_step: number;
   readonly cancel_requested: boolean;

@@ -1,11 +1,16 @@
 import { createHmac } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { link, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkflowStore } from './store.js';
 import type { WorkflowRecord } from './types.js';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...original, link: vi.fn(original.link), rename: vi.fn(original.rename) };
+});
 
 const record: WorkflowRecord = {
   schema_version: 'workflow.v1',
@@ -35,6 +40,40 @@ describe('WorkflowStore', () => {
         record.id,
       );
       await expect(store.get('../x')).rejects.toThrow(/Invalid workflow ID/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('cleans up a failed atomic create and leaves no runnable checkpoint', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'discord-mcp-workflow-create-'));
+    try {
+      const store = new WorkflowStore(dir, 'workflow-test-integrity-key-01234567890123456789');
+      await store.init();
+      const error = Object.assign(new Error('I/O error'), { code: 'EIO' });
+      vi.mocked(link).mockRejectedValueOnce(error);
+      await expect(store.create(record)).rejects.toThrow(error);
+      await expect(store.get(record.id)).resolves.toBeUndefined();
+      await expect(readdir(dir)).resolves.toEqual([]);
+      await expect(store.create(record)).resolves.toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('retries a transient busy replacement while keeping an authenticated record', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'discord-mcp-workflow-rename-'));
+    try {
+      const store = new WorkflowStore(dir, 'workflow-test-integrity-key-01234567890123456789');
+      await store.init();
+      await store.put(record);
+      vi.mocked(rename).mockRejectedValueOnce(
+        Object.assign(new Error('File busy'), { code: 'EBUSY' }),
+      );
+      const completed = { ...record, status: 'completed' as const };
+      await store.put(completed);
+      await expect(store.get(record.id)).resolves.toEqual(completed);
+      await expect(readdir(dir)).resolves.toEqual([`${record.id}.json`]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

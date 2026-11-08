@@ -57,13 +57,14 @@
     "@opentelemetry/semantic-conventions": "^1.44.0",
     "cockatiel": "^3.2.1",
     "discord-api-types": "^0.38.57",
+    "franc-min": "6.2.0",
     "ipaddr.js": "^2.5.0",
     "pino": "^9.5.0",
     "standardwebhooks": "^1.1.1"
   },
   "peerDependencies": {
     "@discordjs/rest": "^2.4.0",
-    "@modelcontextprotocol/server": "^2.1.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@sapphire/pieces": "^4.4.1",
     "discord.js": "^14.16.3",
     "zod": "^4.0.0"

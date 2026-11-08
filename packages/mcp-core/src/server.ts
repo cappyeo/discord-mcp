@@ -64,6 +64,7 @@ import {
   PROGRESSIVE_DISPATCH_TOOLS,
   PROGRESSIVE_SEARCH_TOOL,
   PROGRESSIVE_SEARCH_TOOL_NAME,
+  PROGRESSIVE_WRITE_TOOL_NAME,
   type ProgressiveDispatcherName,
   searchProgressiveTools,
 } from './tool-discovery.js';
@@ -293,6 +294,12 @@ import WebhooksListGuild from './tools/webhooks/list_guild.js';
 import WebhooksModify from './tools/webhooks/modify.js';
 import WebhooksModifyWithToken from './tools/webhooks/modify_with_token.js';
 import { WorkflowEngine } from './workflows/engine.js';
+import {
+  registerWorkflowTasks,
+  supportsWorkflowTasks,
+  taskFromWorkflowStart,
+  WORKFLOW_TASKS_EXTENSION,
+} from './workflows/mcp-tasks.js';
 import { WorkflowStore } from './workflows/store.js';
 import type { WorkflowTarget } from './workflows/types.js';
 
@@ -313,6 +320,8 @@ export interface BuildServerDeps {
   onRuntimeAccessWarning?: (message: string) => void;
   /** Advertise and serve legacy resource subscriptions (default: true). */
   enableResourceSubscriptions?: boolean;
+  /** The serving entry binds this instance to the modern MCP wire era. */
+  enableWorkflowTasks?: boolean;
   /**
    * Best-effort, already-sanitized observation of a blueprint lifecycle call.
    * The observer must never be required for the MCP result to succeed.
@@ -1676,6 +1685,7 @@ function getSharedToolStore(): Promise<ToolStore> {
 export async function buildServer(deps: BuildServerDeps): Promise<BuildServerResult> {
   const transport = deps.transport ?? 'stdio';
   const enableResourceSubscriptions = deps.enableResourceSubscriptions ?? true;
+  const enableWorkflowTasks = deps.enableWorkflowTasks === true && deps.config.MCP_WORKFLOW_TASKS;
   await verifyExpectedBotIdentity(deps.rest, deps.config.DISCORD_EXPECTED_BOT_ID);
   // Do not write these dependencies into a process-wide singleton. Every MCP
   // tool still accesses Sapphire's `container`, but its fields are now backed
@@ -1715,11 +1725,12 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     transport === 'http' ? 'http_access_token' : 'stdio_profile',
   );
   const workflowNamespace = createHash('sha256').update(workflowSecret).digest('hex');
+  const workflowStore = new WorkflowStore(
+    join(resolveBlueprintStateDirectory(deps.config), 'workflows', workflowNamespace),
+    workflowSecret,
+  );
   const workflowEngine = new WorkflowEngine({
-    store: new WorkflowStore(
-      join(resolveBlueprintStateDirectory(deps.config), 'workflows', workflowNamespace),
-      workflowSecret,
-    ),
+    store: workflowStore,
     resolvePolicy: (name) => {
       const tool = toolStore.get(name);
       return tool === undefined
@@ -1921,7 +1932,14 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
         tools: {},
         ...(deps.eventBridge ? { events: {} } : {}),
         resources: enableResourceSubscriptions ? { subscribe: true } : {},
-        ...(hasPreviewTools ? { extensions: { 'io.modelcontextprotocol/ui': {} } } : {}),
+        ...(hasPreviewTools || enableWorkflowTasks
+          ? {
+              extensions: {
+                ...(hasPreviewTools ? { 'io.modelcontextprotocol/ui': {} } : {}),
+                ...(enableWorkflowTasks ? { [WORKFLOW_TASKS_EXTENSION]: {} } : {}),
+              },
+            }
+          : {}),
       },
       cacheHints: { 'tools/list': { ttlMs: 3_600_000, cacheScope: 'private' } },
       // Injected into the agent's system context on every initialize. Keep it
@@ -2185,19 +2203,22 @@ export async function buildServer(deps: BuildServerDeps): Promise<BuildServerRes
     return result;
   };
 
-  server.setRequestHandler('tools/call', async (req, ctx) => {
-    const requestId = randomUUID();
-    const requestCtx = {
-      requestId,
-      toolName: req.params.name,
-      transport,
-      signal: ctx.mcpReq.signal,
-    };
-    return runWithCtx(requestCtx, async () =>
-      runWithDiscordRuntime(runtime, async () =>
-        invokeTool(req.params.name, req.params.arguments, ctx.mcpReq.signal),
-      ),
+  const invokeRequestTool = (toolName: string, args: unknown, signal: AbortSignal) =>
+    runWithCtx({ requestId: randomUUID(), toolName, transport, signal }, () =>
+      runWithDiscordRuntime(runtime, () => invokeTool(toolName, args, signal)),
     );
+
+  if (enableWorkflowTasks) registerWorkflowTasks(server, workflowStore, invokeRequestTool);
+
+  server.setRequestHandler('tools/call', async (req, ctx) => {
+    const { name, arguments: args } = req.params;
+    const result = await invokeRequestTool(name, args, ctx.mcpReq.signal);
+    const workflowStart =
+      name === 'workflow_start' ||
+      (name === PROGRESSIVE_WRITE_TOOL_NAME && args?.tool === 'workflow_start');
+    return enableWorkflowTasks && workflowStart && supportsWorkflowTasks(ctx.mcpReq.envelope)
+      ? taskFromWorkflowStart(result, workflowStore)
+      : result;
   });
 
   server.setRequestHandler('resources/list', async () => {

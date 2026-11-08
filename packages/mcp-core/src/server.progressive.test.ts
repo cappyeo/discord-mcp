@@ -334,6 +334,160 @@ describe('progressive tool surface', () => {
     }
   });
 
+  it('ranks equivalent intents across nine languages and keeps read searches on read tools', async () => {
+    const expected = [
+      'messages_read',
+      'messages_search_recent',
+      'roles_list',
+      'members_add_role',
+      'channels_delete',
+      'events_create',
+      'audit_log_get',
+      'guild_blueprint_plan',
+    ];
+    const queries = {
+      en: [
+        'Read the latest 10 messages in the channel',
+        'Search recent messages for tournament in this channel',
+        'List all roles in the Discord server',
+        'Assign the Moderator role to one member',
+        'Delete this test channel',
+        'Create a gaming event in my Discord server',
+        'Read the audit log for this guild',
+        'Build a Discord gaming server with voice channels and moderation',
+      ],
+      vi: [
+        'Đọc 10 tin nhắn mới nhất trong kênh',
+        'Tìm tin nhắn gần đây có chữ giải đấu trong kênh này',
+        'Liệt kê tất cả vai trò trong máy chủ Discord',
+        'Gán vai trò Moderator cho một thành viên',
+        'Xóa kênh thử nghiệm này',
+        'Tạo sự kiện game trong máy chủ Discord của tôi',
+        'Xem nhật ký kiểm toán của máy chủ này',
+        'Dựng máy chủ Discord gaming có kênh thoại và kiểm duyệt',
+      ],
+      ko: [
+        '채널의 최신 메시지 10개 읽어 줘',
+        '채널에서 대회 관련 최근 메시지를 찾아줘',
+        '서버에 있는 역할 목록을 보여 줘',
+        '멤버 한 명에게 관리자 역할을 부여해 줘',
+        '이 테스트 채널을 삭제해 줘',
+        '내 디스코드 서버에 게임 이벤트를 만들어 줘',
+        '이 서버의 감사 로그를 확인해 줘',
+        '게임용 디스코드 서버를 구축해 줘',
+      ],
+      ja: [
+        'このチャンネルの最新メッセージ10件を読んで',
+        '大会についての最近のメッセージを検索して',
+        'Discordサーバーのロール一覧を見せて',
+        'メンバーにモデレーターのロールを付与して',
+        'このテスト用チャンネルを削除して',
+        '自分のDiscordサーバーでゲームイベントを作成して',
+        'このサーバーの監査ログを確認して',
+        'ゲーム用のDiscordサーバーを構築して',
+      ],
+      zh: [
+        '查看这个频道的最新十条消息',
+        '搜索最近提到比赛的消息',
+        '列出服务器里的所有角色',
+        '为一位成员分配版主角色',
+        '删除这个测试频道',
+        '在我的 Discord 服务器里创建一场游戏活动',
+        '查看这个服务器的审计日志',
+        '帮我搭建一个游戏 Discord 服务器',
+      ],
+      es: [
+        'Lee los últimos diez mensajes del canal',
+        'Busca mensajes recientes sobre el torneo',
+        'Enumera todos los roles del servidor de Discord',
+        'Asigna el rol de moderador a un miembro',
+        'Borra este canal de pruebas',
+        'Programa un evento de videojuegos en mi servidor',
+        'Revisa el registro de auditoría del servidor',
+        'Construye un servidor de Discord para videojuegos',
+      ],
+      fr: [
+        'Lis les dix derniers messages du salon',
+        'Cherche les messages récents qui parlent du tournoi',
+        'Liste tous les rôles du serveur Discord',
+        'Attribue le rôle de modérateur à un membre',
+        'Supprime ce salon de test',
+        'Crée un événement de jeu dans mon serveur',
+        'Consulte le journal d’audit du serveur',
+        'Construis un serveur Discord pour les jeux',
+      ],
+      de: [
+        'Lies die letzten zehn Nachrichten im Kanal',
+        'Suche die neuesten Nachrichten über das Turnier',
+        'Zeige alle Rollen auf dem Discord-Server',
+        'Weise einem Mitglied die Rolle Moderator zu',
+        'Lösche diesen Test-Kanal',
+        'Plane eine Veranstaltung für Spiele auf meinem Server',
+        'Prüfe das Prüfprotokoll des Servers',
+        'Baue einen Discord-Server zum Spielen',
+      ],
+      pt: [
+        'Leia as últimas dez mensagens do canal',
+        'Procure mensagens recentes sobre o torneio',
+        'Liste todos os cargos no servidor Discord',
+        'Atribua o cargo de moderador a um membro',
+        'Apague este canal de teste',
+        'Agende um evento de jogos no meu servidor',
+        'Consulte o registro de auditoria do servidor',
+        'Monte um servidor Discord para jogos',
+      ],
+    };
+    let first = 0;
+    for (const [language, examples] of Object.entries(queries)) {
+      for (const [index, query] of examples.entries()) {
+        const result = await progressiveClient.callTool({
+          name: 'mcp_tools_search',
+          arguments: { query, limit: 3 },
+        });
+        const data = result.structuredContent as {
+          query_language: string;
+          matches: { name: string; dispatcher: string }[];
+        };
+        expect(result.isError, query).toBe(false);
+        expect.soft(data.query_language, query).toBe(language);
+        expect
+          .soft(
+            data.matches.map((match) => match.name),
+            query,
+          )
+          .toContain(expected[index]);
+        if (data.matches[0]?.name === expected[index]) first++;
+        if ([0, 1, 2, 6].includes(index)) {
+          expect(
+            data.matches.every((match) => match.dispatcher === 'mcp_tools_read'),
+            query,
+          ).toBe(true);
+        }
+      }
+    }
+    expect(first).toBeGreaterThanOrEqual(65);
+  });
+
+  it.each([
+    ['doc 10 tin nhan moi nhat trong kenh', 'vi', 'messages_read'],
+    ['Gán role Moderator cho thành viên này', 'vi', 'members_add_role'],
+    ['Discord 채널의 latest 메시지를 읽어 줘', 'ko', 'messages_read'],
+    ['列出伺服器內全部身分組', 'zh', 'roles_list'],
+    ['role', 'und', 'roles_list'],
+  ])('handles short, accentless or mixed-language discovery for %s', async (query, language, tool) => {
+    const result = await progressiveClient.callTool({
+      name: 'mcp_tools_search',
+      arguments: { query, limit: 3 },
+    });
+    expect(result.isError).toBe(false);
+    const data = result.structuredContent as {
+      query_language: string;
+      matches: { name: string }[];
+    };
+    expect(data.query_language).toBe(language);
+    if (query !== 'role') expect(data.matches.map((match) => match.name)).toContain(tool);
+  });
+
   it('keeps resource-level requests inside an existing server on their narrow tool', async () => {
     for (const { query, toolName } of [
       { query: 'create a scheduled event in my server', toolName: 'events_create' },
