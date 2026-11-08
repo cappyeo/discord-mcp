@@ -183,7 +183,13 @@ deferred MCP loading.
 This setting is not an authorization control. Search only returns tools allowed
 by `ALLOWED_GUILDS` and `MCP_CATEGORIES`, and every dispatched call still passes
 validation, guild scope, category, confirmation, dry-run, audit, and resilience
-middleware. Keep both allowlists narrow even when progressive discovery is
+middleware. Search accepts the user's original language and can return a
+`query_language` hint. The Discord vocabulary covers English, Vietnamese,
+Korean, Japanese, Chinese, Spanish, French, German, and Portuguese. Use canonical
+tool names and input keys when calling a tool. An exact tool-name lookup still
+returns its full contract.
+
+Keep both allowlists narrow even when progressive discovery is
 enabled.
 
 The current catalogues classify all 222 tools. Fifteen contracts are

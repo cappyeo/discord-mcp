@@ -248,6 +248,7 @@ export async function startStdio(
           const build = await buildServer({
             ...buildServerDeps,
             enableResourceSubscriptions: era === 'legacy',
+            enableWorkflowTasks: era === 'modern',
           });
           serverBuilds.push(build);
           activeBuild = build;

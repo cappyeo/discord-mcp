@@ -1,6 +1,7 @@
 import type { CallToolResult, Tool as McpTool } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { recordProgressiveDiscoveryEvidence } from './telemetry/performance-evidence.js';
+import { type Concept, foldSearchText as normalize, queryIntent } from './tool-search-language.js';
 
 export const PROGRESSIVE_SEARCH_TOOL_NAME = 'mcp_tools_search';
 export const PROGRESSIVE_ARCHITECT_TOOL_NAME = 'build_discord_server';
@@ -47,7 +48,9 @@ const SearchArgsSchema = z
       .string()
       .max(200)
       .optional()
-      .describe('Capability or outcome to find, for example "send a message" or "ban member".'),
+      .describe(
+        'Capability or outcome to find in the user’s language, for example "đọc tin nhắn".',
+      ),
     category: z
       .string()
       .max(64)
@@ -90,6 +93,7 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
     "In this Discord integration, an unqualified request to build, design, or create a gaming or community server means a Discord guild, not a VPS or game-hosting machine, unless the user explicitly says otherwise; search with the user's request before asking which server type they mean.",
     'A single result includes its contract. For multiple compact results, search the selected exact tool name before dispatching.',
     'Set detail:"full" only when several full contracts are necessary. Omit both query and category to list categories.',
+    'Use query_language as a reply-language hint when known. Tool names and schema keys are canonical.',
     'Search results never expand MCP_CATEGORIES permissions.',
   ].join(' '),
   inputSchema: z.toJSONSchema(SearchArgsSchema, {
@@ -104,6 +108,7 @@ export const PROGRESSIVE_SEARCH_TOOL: McpTool = {
         properties: {
           query: { anyOf: [{ type: 'string' }, { type: 'null' }] },
           category: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          query_language: { type: 'string', description: 'Detected query language, or und.' },
           detail: { type: 'string', enum: ['compact', 'full'] },
           total_matches: { type: 'integer' },
           matches: {
@@ -203,14 +208,13 @@ export const PROGRESSIVE_DISPATCH_TOOLS: readonly McpTool[] = [
   ),
 ] as const;
 
-function normalize(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+function searchWords(text: string): string[] {
+  return text
+    .split(' ')
+    .filter(Boolean)
+    .map((word) =>
+      word.length >= 5 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word,
+    );
 }
 
 function normalizeCategory(value: string): string {
@@ -227,6 +231,7 @@ interface SearchableTool {
   normalizedNameTerms: readonly string[];
   normalizedCategory: string;
   normalizedDescription: string;
+  descriptionWords: ReadonlySet<string>;
   summary: string;
 }
 
@@ -238,6 +243,7 @@ interface CachedToolMetadata {
   normalizedNameTerms: readonly string[];
   normalizedCategory: string;
   normalizedDescription: string;
+  descriptionWords: ReadonlySet<string>;
   summary: string;
 }
 
@@ -297,10 +303,46 @@ export interface ProgressiveToolCatalog {
   byName: ReadonlyMap<string, McpTool>;
 }
 
+const TOOL_INTENTS: readonly [tool: string, entity: Concept, ...actions: Concept[]][] = [
+  ['messages_search_recent', 'message', 'search'],
+  ['messages_read', 'message', 'read', 'list', 'recent'],
+  ['messages_send', 'message', 'send'],
+  ['messages_delete', 'message', 'delete'],
+  ['messages_edit', 'message', 'edit'],
+  ['channels_list', 'channel', 'list'],
+  ['channels_get', 'channel', 'read'],
+  ['channels_create_guild_channel', 'channel', 'create'],
+  ['channels_delete', 'channel', 'delete'],
+  ['channels_modify', 'channel', 'edit'],
+  ['roles_list', 'role', 'read', 'list'],
+  ['roles_create', 'role', 'create'],
+  ['roles_delete', 'role', 'delete'],
+  ['roles_modify', 'role', 'edit'],
+  ['members_add_role', 'role', 'assign'],
+  ['members_list', 'member', 'list'],
+  ['members_get', 'member', 'read'],
+  ['members_search', 'member', 'search'],
+  ['events_create', 'event', 'create'],
+  ['events_list', 'event', 'read', 'list'],
+  ['events_delete', 'event', 'delete'],
+  ['events_modify', 'event', 'edit'],
+  ['audit_log_get', 'audit', 'read', 'list', 'search'],
+  ['messages_list_pins', 'pin', 'read', 'list', 'search'],
+  ['invites_create_channel', 'invite', 'create'],
+  ['automod_list_rules', 'automod', 'read', 'list'],
+  ['automod_create_rule', 'automod', 'create'],
+];
+
+const READ_ACTIONS: readonly Concept[] = ['read', 'list', 'search'];
+const WRITE_ACTIONS: readonly Concept[] = ['create', 'build', 'delete', 'assign', 'send', 'edit'];
+
 interface SearchQuery {
   query: string;
   terms: readonly string[];
+  wordWeights: ReadonlyMap<string, number>;
+  preferredTools: ReadonlySet<string>;
   scopedResourceToolNames: ReadonlySet<string>;
+  readOnly: boolean;
   hasCreateIntent: boolean;
   serverArchitectureIntent: boolean;
 }
@@ -308,28 +350,22 @@ interface SearchQuery {
 function scoreTool(tool: SearchableTool, search: SearchQuery): number {
   const { query, terms } = search;
   if (query === '') return 1;
+  if (search.readOnly && tool.tool.annotations?.readOnlyHint !== true) return 0;
 
   let score = 0;
-
-  if (tool.normalizedName === query) score += 200;
-  if (tool.tool.name === 'guild_blueprint_plan' && search.serverArchitectureIntent) {
-    score += 300;
-  }
-  if (search.scopedResourceToolNames.has(tool.tool.name)) score += 220;
-  if (search.hasCreateIntent && tool.normalizedNameTerms.includes('create')) score += 60;
+  if (tool.tool.name === 'guild_blueprint_plan' && search.serverArchitectureIntent) score += 360;
+  if (search.scopedResourceToolNames.has(tool.tool.name)) score += 250;
+  if (search.preferredTools.has(tool.tool.name)) score += 155;
+  if (search.hasCreateIntent && tool.normalizedNameTerms.includes('create')) score += 40;
   if (tool.normalizedName.startsWith(query)) score += 80;
   if (tool.normalizedCategory === query) score += 40;
-  let descriptionMatches = 0;
+  if (terms.length > 1 && ` ${tool.normalizedDescription} `.includes(` ${query} `)) score += 90;
+  const categoryTerms = searchWords(tool.normalizedCategory);
   for (const term of terms) {
-    if (tool.normalizedName.includes(term)) score += 25;
-    if (tool.normalizedCategory.includes(term)) score += 12;
-    if (tool.normalizedDescription.includes(term)) {
-      score += 4;
-      descriptionMatches += 1;
-    }
-  }
-  if (descriptionMatches >= 2 && terms.length >= 2) {
-    score += Math.round((descriptionMatches / terms.length) * 80) + descriptionMatches * 3;
+    const weight = search.wordWeights.get(term) ?? 1;
+    if (tool.normalizedNameTerms.includes(term)) score += 20 * weight;
+    if (categoryTerms.includes(term)) score += 8 * weight;
+    if (tool.descriptionWords.has(term)) score += 2 * weight;
   }
   return score;
 }
@@ -386,14 +422,16 @@ export function createProgressiveToolCatalog(
         metadata.category !== category
       ) {
         const normalizedName = normalize(tool.name);
+        const normalizedDescription = normalize(description);
         metadata = {
           name: tool.name,
           description,
           category,
           normalizedName,
-          normalizedNameTerms: normalizedName.split(' '),
+          normalizedNameTerms: searchWords(normalizedName),
           normalizedCategory: normalize(category),
-          normalizedDescription: normalize(description),
+          normalizedDescription,
+          descriptionWords: new Set(searchWords(normalizedDescription)),
           summary: compactSummary(description),
         };
         cachedToolMetadata.set(tool, metadata);
@@ -405,6 +443,7 @@ export function createProgressiveToolCatalog(
         normalizedNameTerms: metadata.normalizedNameTerms,
         normalizedCategory: metadata.normalizedCategory,
         normalizedDescription: metadata.normalizedDescription,
+        descriptionWords: metadata.descriptionWords,
         summary: metadata.summary,
       };
     });
@@ -455,10 +494,22 @@ export function searchProgressiveTools(
     exact !== undefined && (categoryFilter === undefined || exact.category === categoryFilter)
       ? exact
       : undefined;
-  const terms = [
-    ...new Set(query.split(' ').filter((term) => term !== '' && !SEARCH_STOP_WORDS.has(term))),
-  ];
-  const termSet = new Set(terms);
+  const intent =
+    query === '' || exactInScope !== undefined
+      ? undefined
+      : queryIntent(parsed.data.query ?? '', query);
+  const concepts = intent?.concepts ?? new Set<Concept>();
+  const termSet = new Set(query.split(' ').filter((term) => term && !SEARCH_STOP_WORDS.has(term)));
+  const terms = [...new Set([...searchWords([...termSet].join(' ')), ...concepts])];
+  const preferredTools = new Set(
+    TOOL_INTENTS.filter(
+      ([, entity, ...actions]) =>
+        concepts.has(entity) && actions.some((action) => concepts.has(action)),
+    ).map(([name]) => name),
+  );
+  if (concepts.has('search')) preferredTools.delete('messages_read');
+  if (concepts.has('pin') && concepts.has('message')) preferredTools.delete('messages_read');
+  if (concepts.has('assign')) preferredTools.delete('roles_create');
   const scopedResourceIntent = SCOPED_RESOURCE_INTENT.test(query);
   const scopedResourceToolNames = new Set(
     scopedResourceIntent
@@ -474,17 +525,34 @@ export function searchProgressiveTools(
       ['add', 'build', 'create', 'dung', 'make', 'schedule', 'setup', 'tao'].some((term) =>
         termSet.has(term),
       ));
-  const search: SearchQuery = {
-    query,
-    terms,
-    scopedResourceToolNames,
-    hasCreateIntent,
-    serverArchitectureIntent: isServerArchitectureIntent(query, termSet, scopedResourceIntent),
-  };
   const candidates =
     categoryFilter === undefined
       ? catalog.searchable
       : (catalog.byCategory.get(categoryFilter) ?? []);
+  const wordWeights = new Map<string, number>();
+  if (exactInScope === undefined) {
+    for (const term of terms) {
+      const count = candidates.filter(
+        (entry) => entry.normalizedNameTerms.includes(term) || entry.descriptionWords.has(term),
+      ).length;
+      wordWeights.set(term, 1 + Math.log((candidates.length + 1) / (count + 1)));
+    }
+  }
+  const search: SearchQuery = {
+    query,
+    terms,
+    wordWeights,
+    preferredTools,
+    scopedResourceToolNames,
+    readOnly:
+      READ_ACTIONS.some((action) => concepts.has(action)) &&
+      !WRITE_ACTIONS.some((action) => concepts.has(action)),
+    hasCreateIntent,
+    serverArchitectureIntent:
+      isServerArchitectureIntent(query, termSet, scopedResourceIntent) ||
+      (concepts.has('build') && concepts.has('guild') && !scopedResourceIntent) ||
+      (concepts.has('create') && concepts.has('guild') && preferredTools.size === 0),
+  };
   const ranked = !shouldListMatches
     ? []
     : exactInScope !== undefined
@@ -521,6 +589,7 @@ export function searchProgressiveTools(
     query: parsed.data.query ?? null,
     category: parsed.data.category ?? null,
     detail: parsed.data.detail,
+    ...(intent === undefined ? {} : { query_language: intent.language }),
     total_matches: ranked.length,
     matches,
     ...(isCategoryBrowse ? { categories: catalog.categories } : {}),

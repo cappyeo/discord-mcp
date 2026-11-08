@@ -44,6 +44,11 @@ export default defineTool({
   inputSchema: {
     target: target.describe('Immutable profile and Discord target binding.'),
     steps: z.array(step).min(1).max(128).describe('At most 128 bounded steps.'),
+    idempotency_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{16,128}$/)
+      .optional()
+      .describe('A stable key for this exact workflow. Reuse it after losing the response.'),
   },
   outputSchema: {
     id: z.string(),
@@ -67,7 +72,7 @@ export default defineTool({
     const engine = getWorkflowEngine(run);
     const result = await engine.start(args as never, run);
     return dualResult({
-      text: `Workflow ${result.id} accepted and running asynchronously.`,
+      text: `Workflow ${result.id}: ${result.status}.`,
       data: result,
     });
   },

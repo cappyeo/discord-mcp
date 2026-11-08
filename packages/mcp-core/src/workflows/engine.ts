@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { CallToolResult } from '@modelcontextprotocol/server';
+import { ValidationError } from '../errors/client.js';
+import { fingerprintPayload } from '../tools/_lib/payload-fingerprint.js';
 import { WorkflowBusyError, type WorkflowStore } from './store.js';
 import {
   WORKFLOW_ID_RE,
@@ -20,6 +22,7 @@ export interface WorkflowEngineOptions {
 }
 
 export interface WorkflowStartInput {
+  readonly idempotency_key?: string;
   readonly target: WorkflowTarget;
   readonly steps: readonly {
     readonly id?: string;
@@ -172,21 +175,42 @@ export class WorkflowEngine {
       };
       return { definition, state: 'pending' };
     });
+    const key = input.idempotency_key;
+    const startFingerprint =
+      key === undefined
+        ? undefined
+        : fingerprintPayload({ target: input.target, steps: input.steps });
     const created = now();
     const record: WorkflowRecord = {
       schema_version: 'workflow.v1',
-      id: jobId(),
+      id: key === undefined ? jobId() : this.options.store.idForStartKey(key),
       created_at: created,
       updated_at: created,
       status: 'queued',
       target: structuredClone(input.target),
       target_fingerprint: digest(input.target),
+      ...(startFingerprint === undefined ? {} : { start_fingerprint: startFingerprint }),
       steps,
       current_step: 0,
       cancel_requested: false,
     };
-    await this.options.store.clearCancel(record.id);
-    await this.options.store.put(record);
+    if (key === undefined) {
+      await this.options.store.clearCancel(record.id);
+      await this.options.store.put(record);
+    } else if (!(await this.options.store.create(record))) {
+      const existing = await this.options.store.get(record.id);
+      if (startFingerprint === undefined || existing?.start_fingerprint !== startFingerprint) {
+        throw new ValidationError([
+          {
+            path: 'idempotency_key',
+            code: 'WORKFLOW_KEY_REUSED',
+            message:
+              'Use the original target and steps with this key, or a new key for a new workflow.',
+          },
+        ]);
+      }
+      return summary(existing);
+    }
     // The durable record exists before work is scheduled; callers receive the ID promptly.
     this.schedule(record.id, context);
     return summary(record);

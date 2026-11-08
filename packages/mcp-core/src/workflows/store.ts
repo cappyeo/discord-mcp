@@ -1,5 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { WORKFLOW_ID_RE, type WorkflowRecord } from './types.js';
 
@@ -135,7 +135,24 @@ export class WorkflowStore {
     });
   }
 
+  public idForStartKey(key: string): string {
+    const digest = createHmac('sha256', this.integrityKey)
+      .update('discord-mcp-workflow-start.v1\0')
+      .update(key)
+      .digest('hex');
+    return `wf_${digest.slice(0, 32)}`;
+  }
+
+  /** Publish a complete signed checkpoint before any runner can use it. */
+  public async create(record: WorkflowRecord): Promise<boolean> {
+    return this.writeCheckpoint(record, true);
+  }
+
   public async put(record: WorkflowRecord): Promise<void> {
+    await this.writeCheckpoint(record, false);
+  }
+
+  private async writeCheckpoint(record: WorkflowRecord, createOnly: boolean): Promise<boolean> {
     const destination = this.path(record.id);
     return withCheckpointAccess(destination, async () => {
       const temporary = `${destination}.${randomUUID()}.tmp`;
@@ -143,7 +160,19 @@ export class WorkflowStore {
         .update(JSON.stringify(record))
         .digest('hex');
       await writeFile(temporary, `${JSON.stringify({ record, mac })}\n`, { mode: 0o600 });
-      await atomicRename(temporary, destination);
+      if (!createOnly) {
+        await atomicRename(temporary, destination);
+        return true;
+      }
+      try {
+        await link(temporary, destination);
+        return true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+        throw error;
+      } finally {
+        await rm(temporary, { force: true }).catch(() => undefined);
+      }
     });
   }
 

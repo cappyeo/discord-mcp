@@ -180,7 +180,7 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
     logger.error({ err: error }, 'MCP HTTP request failed');
   };
   const mcpHandler = createMcpHandler(
-    async () =>
+    async ({ era }) =>
       (
         await buildServer({
           rest,
@@ -190,6 +190,7 @@ export async function startHttp(options: StartHttpOptions = {}): Promise<Server>
           transport: 'http',
           // This stateless transport has no Gateway resource-update publisher.
           enableResourceSubscriptions: false,
+          enableWorkflowTasks: era === 'modern',
           auditSink,
           payloadApprovalLedger,
           ...(runtimeAccessResolver === undefined ? {} : { runtimeAccessResolver }),
