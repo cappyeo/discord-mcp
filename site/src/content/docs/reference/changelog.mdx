@@ -9,6 +9,20 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.34.0 - Multilingual tool discovery and workflow tasks
+
+Released 2026-11-08.
+
+- Rank tool searches in nine languages, including Vietnamese, using local
+  language detection, Discord terminology, and corpus-weighted word matching.
+  Exact tool names return full schemas.
+- Raise the Core MCP server SDK peer minimum to `2.4.0` and verify the host LLM
+  fallback for intelligence calls from modern MCP clients.
+- Enable the opt-in MCP Tasks pilot with `MCP_WORKFLOW_TASKS=true`. Clients can
+  start a workflow with an idempotency key, poll its status, and request
+  cancellation. Retried starts reuse the same task checkpoint.
+- See [Workflows](/discord-mcp/operations/workflows/) for setup and pilot limits.
+
 ## v0.33.0 - DM and mention Events, safer Discord reads
 
 Released 2026-11-03.
