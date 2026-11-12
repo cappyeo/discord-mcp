@@ -9,6 +9,17 @@ This page records user-visible changes for each tagged release. For the exact
 commit history and downloadable artifacts, see
 [GitHub releases](https://github.com/cappyeo/discord-mcp/releases).
 
+## v0.34.1 - Dependency maintenance
+
+Released 2026-11-12.
+
+- Update discord.js to 14.28.1, including the upstream fix for interaction-scoped
+  channel permissions. Published Core and CLI retain Node.js 22.12 support.
+- Refresh request interception used by tests and the Astro and Starlight
+  dependencies used to build the documentation site.
+- Update the pinned pnpm setup action to 6.1.1. The project continues to use
+  pnpm 9.15.0.
+
 ## v0.34.0 - Multilingual tool discovery and workflow tasks
 
 Released 2026-11-08.
