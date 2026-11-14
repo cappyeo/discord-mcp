@@ -26,7 +26,7 @@
     "@astrojs/starlight": "^0.42.9",
     "@axe-core/playwright": "^4.14.0",
     "@discord-mcp/core": "workspace:*",
-    "astro": "^7.4.5",
+    "astro": "^7.4.7",
     "parse5": "^7.3.0",
     "playwright": "^1.64.1",
     "sharp": "^0.35.5",
